@@ -1,0 +1,36 @@
+To use these options, modify USE_UNDOC_OPT=TRUE in iordef.h and then recompile.
+For passing arguments to the executable for these options, use this format:
+
+  '-O option1=1,option2=0'
+
+Options:
+
+ * fillTheFileSystem -- limits unnecessary output for showing performance, etc.
+   The command line '-w -k -m -i 123 -F -O fillTheFileSystem=5' has each task
+   creating (and keeping) 123 files, showing the time between every fifth file.
+
+ * includeDeleteTime -- use with '-O includeDeleteTime=1' to have time to
+   delete file included in write performance time.  Note that if this file
+   is deleted after the write, there's nothing available for the read back
+   or checking.
+
+ * multiReRead -- use with '-i 5 -v -k -w -W -O multiReRead=1' to have 1 write
+   of file, followed by 4 reads w/data checking.
+
+ * NFS_serverCount -- use with other NFS_* options, -F, and -o to write/read
+   files across multiple NFS servers.  Set the server count to > 0 to enable.
+   The format is: 'NFS_rootPath/NFS_serverName[0..NFS_serverCount-1]/outFile'.
+   Each file is written round-robin to a different NFS server.
+
+ * NFS_rootPath -- use with NFS_server* options for path to NFS servers.
+
+ * NFS_serverName -- ise with NFS_* options for NFS server prefix.  Specific
+   NFS server number is appended to this name, e.g. nfs123.
+
+ * corruptFile -- corrupts file after writing for determining data-checking
+   reliability.
+
+Note:
+
+ * cbif.c (Change Byte In File) is a simple utility to check the value of
+   a file offset; also allows changing a single byte at an offset.
