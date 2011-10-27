@@ -5,21 +5,9 @@
 *                                                                              *
 ********************************************************************************
 *
-* CVS info:
-*   $RCSfile: aiori-POSIX.c,v $
-*   $Revision: 1.3 $
-*   $Date: 2008/12/02 17:12:14 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       Implementation of abstract I/O interface for POSIX.
+* Implement of abstract I/O interface for POSIX.
 *
 \******************************************************************************/
-/********************* Modifications to IOR-2.10.1 ****************************
-* hodson - 8/18/2008:                                                         *
-* Added fsyncPerWrite option to do POSIX fsync after each POSIX write         *
-* More info on cannot delete file error message                               *
-******************************************************************************/
 
 #include "aiori.h"                                  /* abstract IOR interface */
 #ifdef __linux__

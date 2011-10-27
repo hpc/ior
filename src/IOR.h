@@ -3,18 +3,6 @@
 *        Copyright (c) 2003, The Regents of the University of California       *
 *      See the file COPYRIGHT for a complete copyright notice and license.     *
 *                                                                              *
-********************************************************************************
-*
-* CVS info:
-*   $RCSfile: IOR.h,v $
-*   $Revision: 1.2 $
-*   $Date: 2008/12/02 17:12:14 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       This is a header file that contains the definitions and prototypes
-*       needed for IOR.c.
-*
 \******************************************************************************/
 
 #ifndef _IOR_H

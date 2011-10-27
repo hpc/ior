@@ -5,14 +5,7 @@
 *                                                                              *
 ********************************************************************************
 *
-* CVS info:
-*   $RCSfile: aiori-HDF5.c,v $
-*   $Revision: 1.2 $ 
-*   $Date: 2008/12/02 17:12:14 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       Implementation of abstract I/O interface for HDF5.
+*  Implement abstract I/O interface for HDF5.
 *
 \******************************************************************************/
 

@@ -3,18 +3,6 @@
 *        Copyright (c) 2003, The Regents of the University of California       *
 *      See the file COPYRIGHT for a complete copyright notice and license.     *
 *                                                                              *
-********************************************************************************
-*
-* CVS info:
-*   $RCSfile: iordef.h,v $
-*   $Revision: 1.4 $
-*   $Date: 2010/08/02 16:43:14 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       This is a header file that contains the definitions and macros 
-*       needed for IOR.
-*
 \******************************************************************************/
 
 #ifndef _IORDEF_H

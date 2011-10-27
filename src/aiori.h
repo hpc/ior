@@ -5,27 +5,9 @@
 *                                                                              *
 ********************************************************************************
 *
-* CVS info:
-*   $RCSfile: aiori.h,v $
-*   $Revision: 1.3 $
-*   $Date: 2008/12/02 17:12:14 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       This is a header file that contains the definitions and prototypes
-*       needed for the abstract I/O interfaces necessary for IOR.
+* Definitions and prototypes of abstract I/O interface
 *
 \******************************************************************************/
-/********************* Modifications to IOR-2.10.1 *****************************
-* hodson - 8/18/2008: Added option flags for the following new options         *
-*    int TestNum;                    * test reference number                   *
-*    double * writeVal;              * array to write results - IOPS added     *
-*    double * readVal;               * array to read results  - IOPS added     *
-*    int taskPerNodeOffset;          * task node offset for reading files      *
-*    int reorderTasksRandom;         * reorder tasks for random file read back *
-*    int reorderTasksRandomSeed;     * reorder tasks for random file read seed *
-*    int fsyncPerWrite;              * fsync() after each write                *
-*******************************************************************************/
 
 #ifndef _AIORI_H
 #define _AIORI_H

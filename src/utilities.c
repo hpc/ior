@@ -5,20 +5,9 @@
 *                                                                              *
 ********************************************************************************
 *
-* CVS info:
-*   $RCSfile: utilities.c,v $
-*   $Revision: 1.3 $
-*   $Date: 2008/12/02 17:12:14 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       Additional utilities necessary for both MPIIO and HDF5.
+* Additional utilities
 *
 \******************************************************************************/
-/**********************Modifications to IOR-2.10.1 *****************************
-* hodson, 8/18/2008:                                                           *
-* Removed duplicate regex.h include (thanks to Brian Lucas)                    *
-*******************************************************************************/
 
 #include "aiori.h"                                  /* abstract IOR interface */
 #include "IOR.h"                                    /* IOR functions */

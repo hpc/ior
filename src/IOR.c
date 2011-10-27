@@ -3,67 +3,7 @@
 *        Copyright (c) 2003, The Regents of the University of California       *
 *      See the file COPYRIGHT for a complete copyright notice and license.     *
 *                                                                              *
-********************************************************************************
-*
-* CVS info:
-*   $RCSfile: IOR.c,v $
-*   $Revision: 1.4 $
-*   $Date: 2008/12/03 16:16:02 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       Test file system I/O.
-*
-* Settings and Usage:
-*       View DisplayUsage() for settings.
-*       Usage is with either by commandline or with an input script
-*       file of the form shown in DisplayUsage().
-*
-* History (see CVS log for detailed history):
-*       2001.11.21  wel
-*                   Started initial implementation of code.
-*       2002.02.07  wel
-*                   Added abstract IOR interface for I/O.
-*       2002.03.29  wel
-*                   Added MPI synchronization.
-*       2002.04.15  wel
-*                   Added MPIIO.
-*       2002.08.07  wel
-*                   Added MPI file hints, collective calls, file views, etc.
-*       2002.11.06  wel
-*                   Added HDF5.
-*       2003.10.03  wel
-*                   Added NCMPI.
-*
-* Known problems and limitations:
-*       None known.
-*
 \******************************************************************************/
-/********************* Modifications to IOR-2.10.1 ****************************
-* Hodson, 8/18/2008:                                                          *
-* Documentation updated for the following new option:                         *
-* The modifications to IOR-2.10.1 extend existing random I/O capabilities and *
-* enhance performance output statistics, such as IOPs.                        *
-*                                                                             *
-*  cli        script                  Description                             *
-* -----      -----------------        ----------------------------------------*
-* 1)  -A N   testnum                - test reference number for easier test   *
-*                                     identification in log files             *
-* 2)  -Q N   taskpernodeoffset      - for read tests. Use with -C & -Z options*
-*                                     If -C (reordertasks) specified,         *
-*                                     then node offset read by CONSTANT  N.   *
-*                                     If -Z (reordertasksrandom) specified,   *
-*                                     then node offset read by RANDOM >= N.   *
-* 3)  -Z     reordertasksrandom     - random node task ordering for read tests*
-*                                     In this case, processes read            *
-*                                     data written by other processes with    *
-*                                     node offsets specified by the -Q option *
-*                                     and -X option.                          *
-* 4)  -X N   reordertasksrandomseed - random seed for -Z (reordertasksrandom) *
-*                                     If N>=0, use same seed for all iters    *
-*                                     If N< 0, use different seed for ea. iter*
-* 5)  -Y     fsyncperwrite          - perform fsync after every POSIX write   *
-\*****************************************************************************/
 
 #include "aiori.h"                                    /* IOR I/O interfaces */
 #include "IOR.h"                                      /* IOR definitions

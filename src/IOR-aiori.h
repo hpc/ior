@@ -5,15 +5,7 @@
 *                                                                              *
 ********************************************************************************
 *
-* CVS info:
-*   $RCSfile: IOR-aiori.h,v $
-*   $Revision: 1.1.1.1 $
-*   $Date: 2007/10/15 23:36:54 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       This is a header file that contains the abstract prototypes
-*       needed for IOR.c.
+* Abstract prototypes
 *
 \******************************************************************************/
 

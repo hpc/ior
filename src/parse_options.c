@@ -5,24 +5,9 @@
 *                                                                              *
 ********************************************************************************
 *
-* CVS info:
-*   $RCSfile: parse_options.c,v $
-*   $Revision: 1.3 $
-*   $Date: 2008/12/02 17:12:14 $
-*   $Author: rklundt $
-*
-* Purpose:
-*       Parse commandline functions.
+* Parse commandline functions.
 *
 \******************************************************************************/
-/********************* Modifications to IOR-2.10.1 *****************************
-* hodson - 8/18/2008: Added parsing for  the following variables               *
-*    int TestNum;                    * test reference number                   *
-*    int taskPerNodeOffset;          * task node offset for reading files      *
-*    int reorderTasksRandom;         * reorder tasks for random file read back *
-*    int reorderTasksRandomSeed;     * reorder tasks for random file read seed *
-*    int fsyncPerWrite;              * fsync() after each write                *
-*******************************************************************************/
 
 #include "IOR.h"
 #include "defaults.h"                                 /* IOR defaults */
