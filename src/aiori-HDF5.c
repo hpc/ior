@@ -74,15 +74,35 @@ void         SetHints         (MPI_Info *, char *);
 void         SetupDataSet_HDF5(void *, IOR_param_t *);
 void         ShowHints        (MPI_Info *);
 
+void *       IOR_Create_HDF5       (char *, IOR_param_t *);
+void *       IOR_Open_HDF5         (char *, IOR_param_t *);
+IOR_offset_t IOR_Xfer_HDF5         (int, void *, IOR_size_t *,
+                                    IOR_offset_t, IOR_param_t *);
+void         IOR_Close_HDF5        (void *, IOR_param_t *);
+void         IOR_Delete_HDF5       (char *, IOR_param_t *);
+void         IOR_SetVersion_HDF5   (IOR_param_t *);
+void         IOR_Fsync_HDF5        (void *, IOR_param_t *);
+IOR_offset_t IOR_GetFileSize_HDF5  (IOR_param_t *, MPI_Comm, char *);
 
 /************************** D E C L A R A T I O N S ***************************/
+
+ior_aiori_t hdf5_aiori = {
+    "HDF5",
+    IOR_Create_HDF5,
+    IOR_Open_HDF5,
+    IOR_Xfer_HDF5,
+    IOR_Close_HDF5,
+    IOR_Delete_HDF5,
+    IOR_SetVersion_HDF5,
+    IOR_Fsync_HDF5,
+    IOR_GetFileSize_HDF5
+};
 
 extern int      errno,                                /* error number */
                 rank,
                 rankOffset,
                 verbose;                              /* verbose output */
 extern MPI_Comm testComm;
-
 
 static hid_t xferPropList;       /* xfer property list */
 hid_t        dataSet;            /* data set id */ 

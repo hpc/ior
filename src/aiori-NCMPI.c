@@ -42,7 +42,29 @@ int  GetFileMode(IOR_param_t *);
 void SetHints   (MPI_Info *, char *);
 void ShowHints  (MPI_Info *);
 
+void *       IOR_Create_NCMPI      (char *, IOR_param_t *);
+void *       IOR_Open_NCMPI        (char *, IOR_param_t *);
+IOR_offset_t IOR_Xfer_NCMPI        (int, void *, IOR_size_t *,
+                                    IOR_offset_t, IOR_param_t *);
+void         IOR_Close_NCMPI       (void *, IOR_param_t *);
+void         IOR_Delete_NCMPI      (char *, IOR_param_t *);
+void         IOR_SetVersion_NCMPI  (IOR_param_t *);
+void         IOR_Fsync_NCMPI       (void *, IOR_param_t *);
+IOR_offset_t IOR_GetFileSize_NCMPI (IOR_param_t *, MPI_Comm, char *);
+
 /************************** D E C L A R A T I O N S ***************************/
+
+ior_aiori_t ncmpi_aiori = {
+    "NCMPI",
+    IOR_Create_NCMPI,
+    IOR_Open_NCMPI,
+    IOR_Xfer_NCMPI,
+    IOR_Close_NCMPI,
+    IOR_Delete_NCMPI,
+    IOR_SetVersion_NCMPI,
+    IOR_Fsync_NCMPI,
+    IOR_GetFileSize_NCMPI
+};
 
 extern int      errno,                                /* error number */
                 numTasksWorld,

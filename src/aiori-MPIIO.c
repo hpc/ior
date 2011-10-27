@@ -28,6 +28,16 @@ static IOR_offset_t SeekOffset_MPIIO    (MPI_File, IOR_offset_t,
 void                SetHints            (MPI_Info *, char *);
 void                ShowHints           (MPI_Info *);
 
+void *       IOR_Create_MPIIO      (char *, IOR_param_t *);
+void *       IOR_Open_MPIIO        (char *, IOR_param_t *);
+IOR_offset_t IOR_Xfer_MPIIO        (int, void *, IOR_size_t *,
+                                    IOR_offset_t, IOR_param_t *);
+void         IOR_Close_MPIIO       (void *, IOR_param_t *);
+void         IOR_Delete_MPIIO      (char *, IOR_param_t *);
+void         IOR_SetVersion_MPIIO  (IOR_param_t *);
+void         IOR_Fsync_MPIIO       (void *, IOR_param_t *);
+IOR_offset_t IOR_GetFileSize_MPIIO (IOR_param_t *, MPI_Comm, char *);
+
 /************************** D E C L A R A T I O N S ***************************/
 
 extern int      errno;
@@ -35,6 +45,18 @@ extern int      rank;
 extern int      rankOffset;
 extern int      verbose;
 extern MPI_Comm testComm;
+
+ior_aiori_t mpiio_aiori = {
+    "MPIIO",
+    IOR_Create_MPIIO,
+    IOR_Open_MPIIO,
+    IOR_Xfer_MPIIO,
+    IOR_Close_MPIIO,
+    IOR_Delete_MPIIO,
+    IOR_SetVersion_MPIIO,
+    IOR_Fsync_MPIIO,
+    IOR_GetFileSize_MPIIO
+};
 
 /***************************** F U N C T I O N S ******************************/
 

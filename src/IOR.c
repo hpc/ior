@@ -8,8 +8,6 @@
 #include "aiori.h"                                    /* IOR I/O interfaces */
 #include "IOR.h"                                      /* IOR definitions
                                                          and prototypes */
-#include "IOR-aiori.h"                                /* IOR abstract
-                                                         interfaces */
 #include <ctype.h>                                    /* tolower() */
 #include <errno.h>                                    /* sys_errlist */
 #include <math.h>
@@ -39,6 +37,37 @@ int            verbose               = VERBOSE_0;       /* verbose output */
 double         wall_clock_delta      = 0;
 double         wall_clock_deviation;
 MPI_Comm       testComm;
+
+ior_aiori_t *backend;
+
+#ifdef USE_POSIX_AIORI
+extern ior_aiori_t posix_aiori;
+#endif
+#ifdef USE_MPIIO_AIORI
+extern ior_aiori_t mpiio_aiori;
+#endif
+#ifdef USE_HDF5_AIORI
+extern ior_aiori_t hdf5_aiori;
+#endif
+#ifdef USE_NCMPI_AIORI
+extern ior_aiori_t ncmpi_aiori;
+#endif
+
+ior_aiori_t *available_aiori[] = {
+#ifdef USE_POSIX_AIORI
+    &posix_aiori,
+#endif
+#ifdef USE_MPIIO_AIORI
+    &mpiio_aiori,
+#endif
+#ifdef USE_HDF5_AIORI
+    &hdf5_aiori,
+#endif
+#ifdef USE_NCMPI_AIORI
+    &ncmpi_aiori,
+#endif
+    NULL
+};
 
 /********************************** M A I N ***********************************/
 
@@ -109,51 +138,27 @@ main(int     argc,
 
 /******************************************************************************/
 /*
- * Bind abstract I/O function pointers to API-specific functions.
+ * Bind the global "backend" pointer to the requested backend AIORI's
+ * function table.
  */
 
 void
 AioriBind(char * api)
 {
-    if (strcmp(api, "POSIX") == 0) {
-        IOR_Create      = IOR_Create_POSIX;
-        IOR_Open        = IOR_Open_POSIX;
-        IOR_Xfer        = IOR_Xfer_POSIX;
-        IOR_Close       = IOR_Close_POSIX;
-        IOR_Delete      = IOR_Delete_POSIX;
-        IOR_SetVersion  = IOR_SetVersion_POSIX;
-        IOR_Fsync       = IOR_Fsync_POSIX;
-        IOR_GetFileSize = IOR_GetFileSize_POSIX;
-    } else if (strcmp(api, "MPIIO") == 0) {
-        IOR_Create      = IOR_Create_MPIIO;
-        IOR_Open        = IOR_Open_MPIIO;
-        IOR_Xfer        = IOR_Xfer_MPIIO;
-        IOR_Close       = IOR_Close_MPIIO;
-        IOR_Delete      = IOR_Delete_MPIIO;
-        IOR_SetVersion  = IOR_SetVersion_MPIIO;
-        IOR_Fsync       = IOR_Fsync_MPIIO;
-        IOR_GetFileSize = IOR_GetFileSize_MPIIO;
-    } else if (strcmp(api, "HDF5") == 0) {
-        IOR_Create      = IOR_Create_HDF5;
-        IOR_Open        = IOR_Open_HDF5;
-        IOR_Xfer        = IOR_Xfer_HDF5;
-        IOR_Close       = IOR_Close_HDF5;
-        IOR_Delete      = IOR_Delete_HDF5;
-        IOR_SetVersion  = IOR_SetVersion_HDF5;
-        IOR_Fsync       = IOR_Fsync_HDF5;
-        IOR_GetFileSize = IOR_GetFileSize_HDF5;
-    } else if (strcmp(api, "NCMPI") == 0) {
-        IOR_Create      = IOR_Create_NCMPI;
-        IOR_Open        = IOR_Open_NCMPI;
-        IOR_Xfer        = IOR_Xfer_NCMPI;
-        IOR_Close       = IOR_Close_NCMPI;
-        IOR_Delete      = IOR_Delete_NCMPI;
-        IOR_SetVersion  = IOR_SetVersion_NCMPI;
-        IOR_Fsync       = IOR_Fsync_NCMPI;
-        IOR_GetFileSize = IOR_GetFileSize_NCMPI;
-    } else {
-        WARN("unrecognized IO API");
+    ior_aiori_t **tmp;
+
+    backend = NULL;
+    for (tmp = available_aiori; *tmp != NULL; tmp++) {
+        if (strcmp(api, (*tmp)->name) == 0) {
+            backend = *tmp;
+            break;
+        }
     }
+
+    if (backend == NULL) {
+        ERR("unrecognized IO API");
+    }
+
 } /* AioriBind() */
 
 
@@ -1130,7 +1135,7 @@ ReadCheck(void         *fd,
     IOR_offset_t segmentSize, segmentNum;
 
     memset(buffer, 'a', transfer);
-    *amtXferred = IOR_Xfer(access, fd, buffer, transfer, test);
+    *amtXferred = backend->xfer(access, fd, buffer, transfer, test);
     tmpOffset = test->offset;
     if (test->filePerProc == FALSE) {
         /* offset changes for shared file, not for file-per-proc */
@@ -1159,10 +1164,10 @@ ReadCheck(void         *fd,
 #endif /* USE_UNDOC_OPT - corruptFile */
     MPI_CHECK(MPI_Barrier(testComm), "barrier error");
     if (test->filePerProc) {
-        *amtXferred = IOR_Xfer(access, test->fd_fppReadCheck,
+        *amtXferred = backend->xfer(access, test->fd_fppReadCheck,
                                checkBuffer, transfer, test);
     } else {
-        *amtXferred = IOR_Xfer(access, fd, checkBuffer, transfer, test);
+        *amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
     }
     test->offset = tmpOffset;
     if (*amtXferred != transfer)
@@ -1312,7 +1317,7 @@ RemoveFile(char        * testFileName,
        }
        if (access(testFileName, F_OK) == 0)
        {
-         IOR_Delete(testFileName, test);
+         backend->delete(testFileName, test);
        }
        if (test->reorderTasksRandom == TRUE) 
        {  
@@ -1321,7 +1326,7 @@ RemoveFile(char        * testFileName,
        }
     } else {
         if ((rank == 0) && (access(testFileName, F_OK) == 0)) {
-            IOR_Delete(testFileName, test);
+            backend->delete(testFileName, test);
         }
     }
 } /* RemoveFile() */
@@ -1941,7 +1946,7 @@ TestIoSys(IOR_param_t *test)
             MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             test->open = WRITE;
             timer[0][rep] = GetTimeStamp();
-            fd = IOR_Create(testFileName, test);
+            fd = backend->create(testFileName, test);
             timer[1][rep] = GetTimeStamp();
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
@@ -1955,7 +1960,7 @@ TestIoSys(IOR_param_t *test)
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             timer[4][rep] = GetTimeStamp();
-            IOR_Close(fd, test);
+            backend->close(fd, test);
 
 #if USE_UNDOC_OPT /* includeDeleteTime */
             if (test->includeDeleteTime) {
@@ -1981,7 +1986,7 @@ TestIoSys(IOR_param_t *test)
 
             /* get the size of the file just written */
             test->aggFileSizeFromStat[rep]
-                = IOR_GetFileSize(test, testComm, testFileName);
+                = backend->get_file_size(test, testComm, testFileName);
 
             /* check if stat() of file doesn't equal expected file size,
                use actual amount of byte moved */
@@ -2027,9 +2032,9 @@ TestIoSys(IOR_param_t *test)
             }
             GetTestFileName(testFileName, test);
             test->open = WRITECHECK;
-            fd = IOR_Open(testFileName, test);
+            fd = backend->open(testFileName, test);
             dataMoved = WriteOrRead(test, fd, WRITECHECK);
-            IOR_Close(fd, test);
+            backend->close(fd, test);
             rankOffset = 0;
         }
         /*
@@ -2098,7 +2103,7 @@ TestIoSys(IOR_param_t *test)
             MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             test->open = READ;
             timer[6][rep] = GetTimeStamp();
-            fd = IOR_Open(testFileName, test);
+            fd = backend->open(testFileName, test);
             if (rank == 0 && verbose >= VERBOSE_2) {
                 fprintf(stdout, "[RANK %03d] open for reading file %s XXCEL\n", rank,testFileName);
             }
@@ -2115,12 +2120,12 @@ TestIoSys(IOR_param_t *test)
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             timer[10][rep] = GetTimeStamp();
-            IOR_Close(fd, test);
+            backend->close(fd, test);
             timer[11][rep] = GetTimeStamp();
 
             /* get the size of the file just read */
-            test->aggFileSizeFromStat[rep] = IOR_GetFileSize(test, testComm,
-                                                             testFileName);
+            test->aggFileSizeFromStat[rep] = backend->get_file_size(
+                                              test, testComm, testFileName);
 
             /* check if stat() of file doesn't equal expected file size,
                use actual amount of byte moved */
@@ -2153,7 +2158,7 @@ TestIoSys(IOR_param_t *test)
             GetTestFileName(testFileName, test);
             MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             test->open = READCHECK;
-            fd = IOR_Open(testFileName, test);
+            fd = backend->open(testFileName, test);
             if (test->filePerProc) {
                 int tmpRankOffset;
                 tmpRankOffset = rankOffset;
@@ -2165,17 +2170,17 @@ TestIoSys(IOR_param_t *test)
                 GetTestFileName(test->testFileName_fppReadCheck, test);
                 rankOffset = tmpRankOffset;
                 test->fd_fppReadCheck =
-                    IOR_Open(test->testFileName_fppReadCheck, test);
+                    backend->open(test->testFileName_fppReadCheck, test);
             }
             dataMoved = WriteOrRead(test, fd, READCHECK);
             if (test->filePerProc) {
-                IOR_Close(test->fd_fppReadCheck, test);
+                backend->close(test->fd_fppReadCheck, test);
                 test->fd_fppReadCheck = NULL;
             }
-            IOR_Close(fd, test);
+            backend->close(fd, test);
         }
         /*
-         * this final barrier may not be necessary as IOR_Close should
+         * this final barrier may not be necessary as backend->close should
          * be a collective call -- but to make sure that the file has
          * has not be removed by a task before another finishes writing,
          * the MPI_Barrier() call has been included.
@@ -2256,7 +2261,7 @@ ValidTests(IOR_param_t * test)
     /* get the version of the tests */
 
     AioriBind(test->api);
-    IOR_SetVersion(test);
+    backend->set_version(test);
 
     if (test->repetitions <= 0)
         WARN_RESET("too few test repetitions", repetitions);
@@ -2545,14 +2550,14 @@ WriteOrRead(IOR_param_t * test,
         }
         transfer = test->transferSize;
         if (access == WRITE) {
-            amtXferred = IOR_Xfer(access, fd, buffer, transfer, test);
+            amtXferred = backend->xfer(access, fd, buffer, transfer, test);
             if (amtXferred != transfer) ERR("cannot write to file");
         } else if (access == READ) {
-            amtXferred = IOR_Xfer(access, fd, buffer, transfer, test);
+            amtXferred = backend->xfer(access, fd, buffer, transfer, test);
             if (amtXferred != transfer) ERR("cannot read from file");
         } else if (access == WRITECHECK) {
             memset(checkBuffer, 'a', transfer);
-            amtXferred = IOR_Xfer(access, fd, checkBuffer, transfer, test);
+            amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
             if (amtXferred != transfer)
                 ERR("cannot read from file write check");
             transferCount++;
@@ -2576,7 +2581,7 @@ WriteOrRead(IOR_param_t * test,
     FreeBuffers(access, checkBuffer, readCheckBuffer, buffer, offsetArray);
 
     if (access == WRITE && test->fsync == TRUE) {
-        IOR_Fsync(fd, test); /*fsync after all accesses*/
+        backend->fsync(fd, test); /*fsync after all accesses*/
     }
     return(dataMoved);
 } /* WriteOrRead() */

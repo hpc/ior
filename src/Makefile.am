@@ -2,9 +2,21 @@ SUBDIRS = cbif
 
 bin_PROGRAMS = ior
 
-# N.B. "NCMPI" is an outdated name for pnetcdf (parallel netcdf)
-ior_SOURCES = IOR.c utilities.c parse_options.c \
-	IOR.h aiori.h iordef.h defaults.h IOR-aiori.h \
-	aiori-POSIX.c aiori-noMPIIO.c aiori-noHDF5.c aiori-noNCMPI.c 
-ior_CFLAGS = 
+ior_SOURCES = IOR.c utilities.c parse_options.c
+ior_SOURCES += IOR.h aiori.h iordef.h defaults.h
 ior_LDADD = -lm
+
+if USE_POSIX_AIORI
+ior_SOURCES += aiori-POSIX.c
+endif
+if USE_MPIIO_AIORI
+ior_SOURCES += aiori-MPIIO.c
+endif
+if USE_HDF5_AIORI
+ior_SOURCES += aiori-HDF5.c
+ior_LDADD += -lhdf5 -lz
+endif
+if USE_NCMPI_AIORI
+ior_SOURCES += aiori-NCMPI.c
+ior_LDADD += -lpnetcdf
+endif

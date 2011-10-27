@@ -39,9 +39,29 @@
 
 
 /**************************** P R O T O T Y P E S *****************************/
-
+void *       IOR_Create_POSIX      (char *, IOR_param_t *);
+void *       IOR_Open_POSIX        (char *, IOR_param_t *);
+IOR_offset_t IOR_Xfer_POSIX        (int, void *, IOR_size_t *,
+                                    IOR_offset_t, IOR_param_t *);
+void         IOR_Close_POSIX       (void *, IOR_param_t *);
+void         IOR_Delete_POSIX      (char *, IOR_param_t *);
+void         IOR_SetVersion_POSIX  (IOR_param_t *);
+void         IOR_Fsync_POSIX       (void *, IOR_param_t *);
+IOR_offset_t IOR_GetFileSize_POSIX (IOR_param_t *, MPI_Comm, char *);
 
 /************************** D E C L A R A T I O N S ***************************/
+
+ior_aiori_t posix_aiori = {
+    "POSIX",
+    IOR_Create_POSIX,
+    IOR_Open_POSIX,
+    IOR_Xfer_POSIX,
+    IOR_Close_POSIX,
+    IOR_Delete_POSIX,
+    IOR_SetVersion_POSIX,
+    IOR_Fsync_POSIX,
+    IOR_GetFileSize_POSIX
+};
 
 extern int      errno;
 extern int      rank;

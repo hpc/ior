@@ -8,9 +8,12 @@
 #ifndef _IOR_H
 #define _IOR_H
 
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
+
 #include "aiori.h"                                 /* abstract IOR interfaces */
 #include "iordef.h"                                /* IOR Definitions */
-
 
 /*************************** D E F I N I T I O N S ****************************/
 
@@ -46,8 +49,6 @@ void           GetPlatformName  (char *);
 void           GetTestFileName  (char *, IOR_param_t *);
 double         GetTimeStamp     (void);
 char *         HumanReadable    (IOR_offset_t, int);
-IOR_offset_t   IOR_GetFileSize_POSIX (IOR_param_t *, MPI_Comm, char *);
-IOR_offset_t   IOR_GetFileSize_MPIIO (IOR_param_t *, MPI_Comm, char *);
 char *         LowerCase        (char *);
 void           OutputToRoot     (int, MPI_Comm, char *);
 void           PPDouble         (int, double, char *);

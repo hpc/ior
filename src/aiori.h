@@ -168,49 +168,17 @@ typedef struct
 
 /**************************** P R O T O T Y P E S *****************************/
 
-/* functions for aiori-*.c */
-/* POSIX-specific functions */
-void *       IOR_Create_POSIX      (char *, IOR_param_t *);
-void *       IOR_Open_POSIX        (char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_POSIX        (int, void *, IOR_size_t *,
-                                    IOR_offset_t, IOR_param_t *);
-void         IOR_Close_POSIX       (void *, IOR_param_t *);
-void         IOR_Delete_POSIX      (char *, IOR_param_t *);
-void         IOR_SetVersion_POSIX  (IOR_param_t *);
-void         IOR_Fsync_POSIX       (void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_POSIX (IOR_param_t *, MPI_Comm, char *);
-
-/* MPIIO-specific functions */
-void *       IOR_Create_MPIIO      (char *, IOR_param_t *);
-void *       IOR_Open_MPIIO        (char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_MPIIO        (int, void *, IOR_size_t *,
-                                    IOR_offset_t, IOR_param_t *);
-void         IOR_Close_MPIIO       (void *, IOR_param_t *);
-void         IOR_Delete_MPIIO      (char *, IOR_param_t *);
-void         IOR_SetVersion_MPIIO  (IOR_param_t *);
-void         IOR_Fsync_MPIIO       (void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_MPIIO (IOR_param_t *, MPI_Comm, char *);
-
-/* HDF5-specific functions */
-void *       IOR_Create_HDF5       (char *, IOR_param_t *);
-void *       IOR_Open_HDF5         (char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_HDF5         (int, void *, IOR_size_t *,
-                                    IOR_offset_t, IOR_param_t *);
-void         IOR_Close_HDF5        (void *, IOR_param_t *);
-void         IOR_Delete_HDF5       (char *, IOR_param_t *);
-void         IOR_SetVersion_HDF5   (IOR_param_t *);
-void         IOR_Fsync_HDF5        (void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_HDF5  (IOR_param_t *, MPI_Comm, char *);
-
-/* NCMPI-specific functions */
-void *       IOR_Create_NCMPI      (char *, IOR_param_t *);
-void *       IOR_Open_NCMPI        (char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_NCMPI        (int, void *, IOR_size_t *,
-                                    IOR_offset_t, IOR_param_t *);
-void         IOR_Close_NCMPI       (void *, IOR_param_t *);
-void         IOR_Delete_NCMPI      (char *, IOR_param_t *);
-void         IOR_SetVersion_NCMPI  (IOR_param_t *);
-void         IOR_Fsync_NCMPI       (void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_NCMPI (IOR_param_t *, MPI_Comm, char *);
+typedef struct ior_aiori {
+        char *name;
+        void *(*create)(char *, IOR_param_t *);
+        void *(*open)(char *, IOR_param_t *);
+        IOR_offset_t (*xfer)(int, void *, IOR_size_t *,
+                             IOR_offset_t, IOR_param_t *);
+        void (*close)(void *, IOR_param_t *);
+        void (*delete)(char *, IOR_param_t *);
+        void (*set_version)(IOR_param_t *);
+        void (*fsync)(void *, IOR_param_t *);
+        IOR_offset_t (*get_file_size)(IOR_param_t *, MPI_Comm, char *);
+} ior_aiori_t;
 
 #endif /* not _AIORI_H */
