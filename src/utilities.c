@@ -311,9 +311,8 @@ ShowFileSystemSize(char *fileSystem)
 {
 #ifndef _WIN32 /* FIXME */
     int            error;
-    char           realPath[MAX_STR];
-    char           fileSystemUnitStr[MAX_STR] = "GiB";
-    char           inodeUnitStr[MAX_STR]      = "Mi";
+    char           realPath[PATH_MAX];
+    char          *fileSystemUnitStr = "GiB";
     long long int  fileSystemUnitVal          = 1024 * 1024 * 1024;
     long long int  inodeUnitVal               = 1024 * 1024;
     long long int  totalFileSystemSize,
@@ -354,7 +353,7 @@ ShowFileSystemSize(char *fileSystem)
                             / (double)fileSystemUnitVal;
     if (totalFileSystemSizeHR > 1024) {
         totalFileSystemSizeHR = totalFileSystemSizeHR / 1024;
-        strcpy(fileSystemUnitStr, "TiB");
+        fileSystemUnitStr = "TiB";
     }
 
     /* inodes */
@@ -369,9 +368,8 @@ ShowFileSystemSize(char *fileSystem)
     fprintf(stdout, "Path: %s\n", realPath);
     fprintf(stdout, "FS: %.1f %s   Used FS: %2.1f%%   ", totalFileSystemSizeHR,
             fileSystemUnitStr, usedFileSystemPercentage);
-    fprintf(stdout, "Inodes: %.1f %s   Used Inodes: %2.1f%%\n",
-           (double)totalInodes / (double)inodeUnitVal,
-           inodeUnitStr, usedInodePercentage);
+    fprintf(stdout, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
+            (double)totalInodes / (double)inodeUnitVal, usedInodePercentage);
     fflush(stdout);
 #endif /* _WIN32 */
 
@@ -456,22 +454,32 @@ ModifyByteInFile(char         * fileName,
                  int            byteValue)
 {
     int       fd;
-    char      oldValue[1],
-              value[1];
+    int       rc;
+    char      old;
+    char      new;
 
-    value[0] = (char)byteValue;
+    new = (char)byteValue;
 
     /* open file, show old value, update to new value */
     fd = open(fileName, O_RDWR);
-    lseek(fd, offset, SEEK_SET);
-    read(fd, oldValue, 1);
+    rc = lseek(fd, offset, SEEK_SET);
+    if (rc == -1)
+            goto out;
+    rc = read(fd, &old, 1);
+    if (rc == -1)
+            goto out;
+    rc = lseek(fd, offset, SEEK_SET);
+    if (rc == -1)
+            goto out;
+    rc = write(fd, &new, 1);
+    if (rc == -1)
+            goto out;
     fprintf(stdout,
         "** DEBUG: offset %lld in %s changed from %d to %d **\n", offset,
-        fileName, (unsigned char)oldValue[0], (unsigned char)value[0]);
-    lseek(fd, offset, SEEK_SET);
-    write(fd, value, 1);
-    close(fd);
+        fileName, (unsigned char)old, (unsigned char)new);
 
+out:
+    close(fd);
     return;
 } /* ModifyByteInFile() */
 #endif /* USE_UNDOC_OPT - corruptFile */

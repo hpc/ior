@@ -40,6 +40,7 @@
 #else
 #   include <sys/param.h>                               /* MAXPATHLEN */
 #   include <unistd.h>
+#   include <limits.h>
 #endif
 #include <mpi.h>
 #include <stdio.h>
@@ -99,6 +100,9 @@ extern int numTasks,                           /* MPI variables */
 #define MAX_STR            1024                /* max string length */  
 #define MAX_HINTS          16                  /* max number of hints */  
 #define MAX_RETRY          10000               /* max retries for POSIX xfer */
+#ifndef PATH_MAX
+#define PATH_MAX           4096
+#endif
 
 #define DELIMITERS         " \t\r\n="          /* ReadScript() */
 #define FILENAME_DELIMITER '@'                 /* ParseFileName() */

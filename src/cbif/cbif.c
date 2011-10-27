@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define ERR(MSG) do {                                \
     fprintf(stdout, "** error **\n");                \
@@ -106,7 +107,7 @@ main(int argc, char **argv)
     }
 
     /*   next hex, multiple bytes */
-    fprintf(stdout, "0x%016x    0x", alignedOffset);
+    fprintf(stdout, "0x%016llx    0x", alignedOffset);
     for (i = 0; i < BYTE_BOUNDARY; i++) {
         fprintf(stdout, "%02x", oldBuffer[i]);
     }
