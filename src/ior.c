@@ -6,7 +6,7 @@
 \******************************************************************************/
 
 #include "aiori.h"                                    /* IOR I/O interfaces */
-#include "IOR.h"                                      /* IOR definitions
+#include "ior.h"                                      /* IOR definitions
                                                          and prototypes */
 #include <ctype.h>                                    /* tolower() */
 #include <errno.h>                                    /* sys_errlist */

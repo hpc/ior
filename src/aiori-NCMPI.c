@@ -195,7 +195,7 @@ IOR_Xfer_NCMPI(int            access,
     int            segmentNum,
                    transferNum;
 
-    /* Wei-keng Liao: In IOR.c line 1979 says "block size must be a multiple
+    /* Wei-keng Liao: In ior.c line 1979 says "block size must be a multiple
        of transfer size."  Hence, length should always == param->transferSize
        below.  I leave it here to double check.
     */

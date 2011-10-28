@@ -9,7 +9,7 @@
 *
 \******************************************************************************/
 
-#include "IOR.h"
+#include "ior.h"
 #include "defaults.h"                                 /* IOR defaults */
 
 #include <ctype.h>

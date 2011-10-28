@@ -10,7 +10,7 @@
 \******************************************************************************/
 
 #include "aiori.h"                                  /* abstract IOR interface */
-#include "IOR.h"                                    /* IOR functions */
+#include "ior.h"                                    /* IOR functions */
 #include <errno.h>                                  /* sys_errlist */
 #include <fcntl.h>                                  /* open() */
 #include <math.h>                                   /* pow() */

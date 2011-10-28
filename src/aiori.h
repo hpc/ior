@@ -53,8 +53,8 @@
  *
  * NOTE: If this is changed, also change:
  *         defaultParameters [defaults.h]
- *         DisplayUsage() [IOR.c]
- *         ShowTest() [IOR.c]
+ *         DisplayUsage() [ior.c]
+ *         ShowTest() [ior.c]
  *         DecodeDirective() [parse_options.c]
  *         ParseCommandLine() [parse_options.c]
  *         USER_GUIDE

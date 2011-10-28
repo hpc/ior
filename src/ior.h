@@ -26,7 +26,7 @@ typedef struct IOR_queue_t {
 
 /**************************** P R O T O T Y P E S *****************************/
 
-/* functions used in IOR.c */
+/* functions used in ior.c */
 void           AioriBind        (char *);
 void           CheckForOutliers (IOR_param_t *, double **, int, int);
 void           CheckFileSize    (IOR_param_t *, IOR_offset_t, int);

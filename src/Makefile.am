@@ -2,8 +2,8 @@ SUBDIRS = cbif
 
 bin_PROGRAMS = ior
 
-ior_SOURCES = IOR.c utilities.c parse_options.c
-ior_SOURCES += IOR.h aiori.h iordef.h defaults.h
+ior_SOURCES = ior.c utilities.c parse_options.c
+ior_SOURCES += ior.h aiori.h iordef.h defaults.h
 ior_LDADD = -lm
 
 if USE_POSIX_AIORI
