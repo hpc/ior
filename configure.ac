@@ -1,11 +1,11 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.67])
-AC_INIT()
+AC_INIT
+X_AC_META
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_SRCDIR([src/ior.c])
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_HEADER([src/config.h])
 
 AC_CANONICAL_HOST
 

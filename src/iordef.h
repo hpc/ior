@@ -56,8 +56,6 @@ extern int numTasks,                           /* MPI variables */
 
 /*************************** D E F I N I T I O N S ****************************/
 
-#define IOR_RELEASE        "IOR-2.10.3"
-
 #ifndef FALSE
 #   define FALSE           0
 #endif /* not FALSE */

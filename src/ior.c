@@ -1407,8 +1407,7 @@ ShowInfo(int argc, char **argv, IOR_param_t *test)
     int    i;
     struct utsname unamebuf;
 
-    fprintf(stdout, "%s: MPI Coordinated Test of Parallel I/O\n\n",
-            IOR_RELEASE);
+    fprintf(stdout, "IOR-"META_VERSION": MPI Coordinated Test of Parallel I/O\n\n");
 
     fprintf(stdout, "Run began: %s", CurrentTimeString());
 #if USE_UNDOC_OPT /* NFS */
