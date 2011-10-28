@@ -78,5 +78,6 @@ AM_COND_IF([USE_NCMPI_AIORI],[
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile
-                 src/cbif/Makefile])
+                 src/cbif/Makefile
+                 doc/Makefile])
 AC_OUTPUT
