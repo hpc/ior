@@ -455,7 +455,7 @@ IOR_GetFileSize_MPIIO(IOR_param_t * test,
     MPI_CHECK(MPI_File_open(testComm, testFileName, MPI_MODE_RDONLY,
                             MPI_INFO_NULL, &fd),
               "cannot open file to get file size");
-    MPI_CHECK(MPI_File_get_size(fd, &aggFileSizeFromStat),
+    MPI_CHECK(MPI_File_get_size(fd, (MPI_Offset *)&aggFileSizeFromStat),
               "cannot get file size");
     MPI_CHECK(MPI_File_close(&fd), "cannot close file");
 
