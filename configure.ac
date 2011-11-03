@@ -27,6 +27,8 @@ AC_TYPE_SIZE_T
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([getpagesize gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname])
+AC_SEARCH_LIBS([sqrt], [m], [],
+        [AC_MSG_ERROR([Math library not found])])
 
 # Check for system capabilities
 AC_SYS_LARGEFILE
