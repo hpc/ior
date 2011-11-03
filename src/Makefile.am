@@ -1,5 +1,3 @@
-SUBDIRS = cbif
-
 bin_PROGRAMS = ior
 
 ior_SOURCES = ior.c utilities.c parse_options.c
