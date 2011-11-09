@@ -21,9 +21,9 @@
 #include <stdio.h>                                  /* only for fprintf() */
 #include <stdlib.h>
 #include <sys/stat.h>
-#ifdef _MANUALLY_SET_LUSTRE_STRIPING
+#ifdef HAVE_LUSTRE_LUSTRE_USER_H
 #  include <lustre/lustre_user.h>
-#endif /* _MANUALLY_SET_LUSTRE_STRIPING */
+#endif /* HAVE_LUSTRE_LUSTRE_USER_H */
 
 #ifndef   open64                                    /* necessary for TRU64 -- */
 #  define open64  open                              /* unlikely, but may pose */
@@ -100,7 +100,7 @@ IOR_Create_POSIX(char        * testFileName,
         fd_oflag |= O_DIRECT;
     }
 
-#ifndef _MANUALLY_SET_LUSTRE_STRIPING
+#ifndef HAVE_LUSTRE_LUSTRE_USER_H
     /* If the lustre striping parameters are not the defaults */
     if (param->lustre_stripe_count != 0
         || param->lustre_stripe_size != 0
@@ -111,7 +111,7 @@ IOR_Create_POSIX(char        * testFileName,
     fd_oflag |= O_CREAT | O_RDWR;
     *fd = open64(testFileName, fd_oflag, 0664);
     if (*fd < 0) ERR("cannot open file");
-#else /* _MANUALLY_SET_LUSTRE_STRIPING */
+#else /* HAVE_LUSTRE_LUSTRE_USER_H */
     /* If the lustre striping parameters are not the defaults */
     if (param->lustre_stripe_count != 0
         || param->lustre_stripe_size != 0
@@ -164,7 +164,7 @@ IOR_Create_POSIX(char        * testFileName,
         if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
             ERR("cannot set ioctl");
     }
-#endif /* not _MANUALLY_SET_LUSTRE_STRIPING */
+#endif /* not HAVE_LUSTRE_LUSTRE_USER_H */
 
     return((void *)fd);
 } /* IOR_Create_POSIX() */
@@ -203,7 +203,7 @@ IOR_Open_POSIX(char        * testFileName,
     *fd = open64(testFileName, fd_oflag);
     if (*fd < 0) ERR("cannot open file");
 
-#ifdef _MANUALLY_SET_LUSTRE_STRIPING
+#ifdef HAVE_LUSTRE_LUSTRE_USER_H
     if (param->lustre_ignore_locks) {
         int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
         if (verbose >= VERBOSE_1) {
@@ -212,7 +212,7 @@ IOR_Open_POSIX(char        * testFileName,
         if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
             ERR("cannot set ioctl");
     }
-#endif /* _MANUALLY_SET_LUSTRE_STRIPING */
+#endif /* HAVE_LUSTRE_LUSTRE_USER_H */
 
     return((void *)fd);
 } /* IOR_Open_POSIX() */

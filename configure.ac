@@ -33,6 +33,19 @@ AC_SEARCH_LIBS([sqrt], [m], [],
 # Check for system capabilities
 AC_SYS_LARGEFILE
 
+# Check for lustre availability
+AC_ARG_WITH([lustre],
+        [AS_HELP_STRING([--with-lustre],
+                [support configurable Lustre striping values @<:@default=check@:>@])],
+        [], [with_lustre=check])
+AS_IF([test "x$with_lustre" != xno], [
+        AC_CHECK_HEADERS([lustre/lustre_user.h], [], [
+                if test "x$with_lustre" != xcheck; then
+                        AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
+                fi
+        ])
+])
+
 # POSIX IO support
 AC_ARG_WITH([posix],
         [AS_HELP_STRING([--with-posix],

@@ -1534,7 +1534,7 @@ ShowSetup(IOR_param_t * test)
             HumanReadable(test->blockSize, BASE_TWO));
     fprintf(stdout, "\taggregate filesize = %s\n",
             HumanReadable(aggFileSizeForBW, BASE_TWO));
-#ifdef _MANUALLY_SET_LUSTRE_STRIPING
+#ifdef HAVE_LUSTRE_LUSTRE_USER_H
     fprintf(stdout, "\tLustre stripe size = %s\n",
             ((test->lustre_stripe_size == 0) ? "Use default" :
             HumanReadable(test->lustre_stripe_size, BASE_TWO)));
@@ -1544,7 +1544,7 @@ ShowSetup(IOR_param_t * test)
         fprintf(stdout, "\t      stripe count = %d\n",
                 test->lustre_stripe_count);
     }
-#endif /* _MANUALLY_SET_LUSTRE_STRIPING */
+#endif /* HAVE_LUSTRE_LUSTRE_USER_H */
     if (test->deadlineForStonewalling > 0) {
         fprintf(stdout, "\tUsing stonewalling = %d second(s)\n",
                 test->deadlineForStonewalling);
