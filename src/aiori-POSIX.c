@@ -100,23 +100,8 @@ IOR_Create_POSIX(char        * testFileName,
         fd_oflag |= O_DIRECT;
     }
 
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-    /* If the lustre striping parameters are not the defaults */
-    if (param->lustre_stripe_count != 0
-        || param->lustre_stripe_size != 0
-        || param->lustre_start_ost != -1
-        || param->lustre_ignore_locks) {
-        ERR("This IOR was not compiled with Lustre support!");
-    }    
-    fd_oflag |= O_CREAT | O_RDWR;
-    *fd = open64(testFileName, fd_oflag, 0664);
-    if (*fd < 0) ERR("cannot open file");
-#else /* HAVE_LUSTRE_LUSTRE_USER_H */
-    /* If the lustre striping parameters are not the defaults */
-    if (param->lustre_stripe_count != 0
-        || param->lustre_stripe_size != 0
-        || param->lustre_start_ost != -1) {
-
+#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+    if (param->lustre_set_striping) {
         /* In the single-shared-file case, task 0 has to creat the
            file with the Lustre striping options before any other processes
            open the file */
@@ -154,9 +139,11 @@ IOR_Create_POSIX(char        * testFileName,
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
         }
     } else {
+#endif /* HAVE_LUSTRE_LUSTRE_USER_H */
         fd_oflag |= O_CREAT | O_RDWR;
         *fd = open64(testFileName, fd_oflag, 0664);
         if (*fd < 0) ERR("cannot open file");
+#ifdef HAVE_LUSTRE_LUSTRE_USER_H
     }
     
     if (param->lustre_ignore_locks) {
@@ -164,7 +151,7 @@ IOR_Create_POSIX(char        * testFileName,
         if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
             ERR("cannot set ioctl");
     }
-#endif /* not HAVE_LUSTRE_LUSTRE_USER_H */
+#endif /* HAVE_LUSTRE_LUSTRE_USER_H */
 
     return((void *)fd);
 } /* IOR_Create_POSIX() */

@@ -113,6 +113,7 @@ IOR_param_t defaultParameters = {
     0,               /* lustre_stripe_count */
     0,               /* lustre_stripe_size */
     -1,              /* lustre_start_ost */
+    0,               /* lustre_set_striping */
     0,               /* lustre_ignore_locks */
 
 #if USE_UNDOC_OPT

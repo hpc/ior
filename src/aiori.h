@@ -147,6 +147,7 @@ typedef struct
     int lustre_stripe_count;
     int lustre_stripe_size;
     int lustre_start_ost;
+    int lustre_set_striping;         /* flag that we need to set lustre striping */
     int lustre_ignore_locks;
 
 #if USE_UNDOC_OPT

@@ -160,12 +160,27 @@ void DecodeDirective(char *line, IOR_param_t *test)
     } else if (strcasecmp(option, "randomoffset") == 0) {
         test->randomOffset = atoi(value);
     } else if (strcasecmp(option, "lustrestripecount") == 0) {
+#ifndef HAVE_LUSTRE_LUSTRE_USER_H
+        ERR("ior was not compiled with Lustre support");
+#endif
         test->lustre_stripe_count = atoi(value);
+        test->lustre_set_striping = 1;
     } else if (strcasecmp(option, "lustrestripesize") == 0) {
+#ifndef HAVE_LUSTRE_LUSTRE_USER_H
+        ERR("ior was not compiled with Lustre support");
+#endif
         test->lustre_stripe_size = StringToBytes(value);
+        test->lustre_set_striping = 1;
     } else if (strcasecmp(option, "lustrestartost") == 0) {
+#ifndef HAVE_LUSTRE_LUSTRE_USER_H
+        ERR("ior was not compiled with Lustre support");
+#endif
         test->lustre_start_ost = atoi(value);
+        test->lustre_set_striping = 1;
     } else if (strcasecmp(option, "lustreignorelocks") == 0) {
+#ifndef HAVE_LUSTRE_LUSTRE_USER_H
+        ERR("ior was not compiled with Lustre support");
+#endif
         test->lustre_ignore_locks = atoi(value);
 #if USE_UNDOC_OPT
     } else if (strcasecmp(option, "corruptFile") == 0) {
