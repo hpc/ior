@@ -51,8 +51,8 @@
  * The parameter struct holds all of the "global" data to be passed,
  * as well as results to be parsed.
  *
- * NOTE: If this is changed, also change:
- *         defaultParameters [defaults.h]
+ * NOTE: If IOR_Param_t is changed, also change:
+ *         init_IOR_Param_t() [ior.c]
  *         DisplayUsage() [ior.c]
  *         ShowTest() [ior.c]
  *         DecodeDirective() [parse_options.c]
@@ -181,5 +181,7 @@ typedef struct ior_aiori {
         void (*fsync)(void *, IOR_param_t *);
         IOR_offset_t (*get_file_size)(IOR_param_t *, MPI_Comm, char *);
 } ior_aiori_t;
+
+void init_IOR_Param_t(IOR_param_t *p);
 
 #endif /* not _AIORI_H */

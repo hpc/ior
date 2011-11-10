@@ -24,8 +24,7 @@
 
 /************************** D E C L A R A T I O N S ***************************/
 
-extern IOR_param_t defaultParameters,
-                   initialTestParams;
+extern IOR_param_t initialTestParams;
 extern int     errno;                                   /* error number */
 extern char ** environ;
 int            totalErrorCount       = 0;
@@ -135,6 +134,34 @@ main(int     argc,
 
 
 /***************************** F U N C T I O N S ******************************/
+
+/*
+ * Initialize an IOR_param_t structure to the defaults
+ */
+void init_IOR_Param_t(IOR_param_t *p)
+{
+        memset(p, 0, sizeof(IOR_param_t));
+
+        p->mode = IOR_IRUSR|IOR_IWUSR|IOR_IRGRP|IOR_IWGRP;
+        p->openFlags = IOR_RDWR|IOR_CREAT;
+        p->TestNum = -1;
+        strncpy(p->api, "POSIX", MAX_STR); /* FIXME - use first api in list instead */
+        strncpy(p->platform, "HOST(OSTYPE)", MAX_STR);
+        strncpy(p->testFileName, "testFile", MAXPATHLEN);
+        p->nodes = 1;
+        p->tasksPerNode = 1;
+        p->repetitions = 1;
+        p->repCounter = -1;
+        p->open = WRITE;
+        p->taskPerNodeOffset = 1;
+        p->segmentCount = 1;
+        p->blockSize = 1048576;
+        p->transferSize = 262144;
+        p->randomSeed = -1;
+        p->testComm = MPI_COMM_WORLD;
+        p->setAlignment = 1;
+        p->lustre_start_ost = -1;
+}
 
 /******************************************************************************/
 /*
@@ -2257,18 +2284,21 @@ TimeDeviation(void)
 void
 ValidTests(IOR_param_t * test)
 {
-    /* get the version of the tests */
+    IOR_param_t defaults;
 
+    init_IOR_Param_t(&defaults);
+    /* get the version of the tests */
     AioriBind(test->api);
     backend->set_version(test);
 
     if (test->repetitions <= 0)
-        WARN_RESET("too few test repetitions", repetitions);
+        WARN_RESET("too few test repetitions",
+                   test, &defaults, repetitions);
     if (test->numTasks <= 0)
         ERR("too few tasks for testing");
     if (test->interTestDelay < 0)
         WARN_RESET("inter-test delay must be nonnegative value",
-                   interTestDelay);
+                   test, &defaults, interTestDelay);
     if (test->readFile != TRUE && test->writeFile != TRUE
         && test->checkRead != TRUE && test->checkWrite != TRUE)
         ERR("test must write, read, or check file");
@@ -2316,32 +2346,40 @@ ValidTests(IOR_param_t * test)
         && ((test->numTasks * test->blockSize) > (2*(IOR_offset_t)GIBIBYTE)))
         ERR("segment size must be < 2GiB");
     if ((strcmp(test->api, "POSIX") != 0) && test->singleXferAttempt)
-        WARN_RESET("retry only available in POSIX", singleXferAttempt);
+        WARN_RESET("retry only available in POSIX",
+                   test, &defaults, singleXferAttempt);
     if ((strcmp(test->api, "POSIX") != 0) && test->fsync)
-        WARN_RESET("fsync() only available in POSIX", fsync);
+        WARN_RESET("fsync() only available in POSIX",
+                   test, &defaults, fsync);
     if ((strcmp(test->api, "MPIIO") != 0) && test->preallocate)
-        WARN_RESET("preallocation only available in MPIIO", preallocate);
+        WARN_RESET("preallocation only available in MPIIO",
+                   test, &defaults, preallocate);
     if ((strcmp(test->api, "MPIIO") != 0) && test->useFileView)
-        WARN_RESET("file view only available in MPIIO", useFileView);
+        WARN_RESET("file view only available in MPIIO",
+                   test, &defaults, useFileView);
     if ((strcmp(test->api, "MPIIO") != 0) && test->useSharedFilePointer)
         WARN_RESET("shared file pointer only available in MPIIO",
-                   useSharedFilePointer);
+                   test, &defaults, useSharedFilePointer);
     if ((strcmp(test->api, "MPIIO") == 0) && test->useSharedFilePointer)
-        WARN_RESET("shared file pointer not implemented", useSharedFilePointer);
+        WARN_RESET("shared file pointer not implemented",
+                   test, &defaults, useSharedFilePointer);
     if ((strcmp(test->api, "MPIIO") != 0) && test->useStridedDatatype)
         WARN_RESET("strided datatype only available in MPIIO",
-                   useStridedDatatype);
+                   test, &defaults, useStridedDatatype);
     if ((strcmp(test->api, "MPIIO") == 0) && test->useStridedDatatype)
-        WARN_RESET("strided datatype not implemented", useStridedDatatype);
+        WARN_RESET("strided datatype not implemented",
+                   test, &defaults, useStridedDatatype);
     if ((strcmp(test->api, "MPIIO") == 0)
         && test->useStridedDatatype
         && (test->blockSize < sizeof(IOR_size_t)
             || test->transferSize < sizeof(IOR_size_t)))
         ERR("need larger file size for strided datatype in MPIIO");
     if ((strcmp(test->api, "POSIX") == 0) && test->showHints)
-        WARN_RESET("hints not available in POSIX", showHints);
+        WARN_RESET("hints not available in POSIX",
+                   test, &defaults, showHints);
     if ((strcmp(test->api, "POSIX") == 0) && test->collective)
-        WARN_RESET("collective not available in POSIX", collective);
+        WARN_RESET("collective not available in POSIX",
+                   test, &defaults, collective);
     if (test->reorderTasks == TRUE && test->reorderTasksRandom == TRUE)
         ERR("Both Constant and Random task re-ordering specified. Choose one and resubmit");
     if (test->randomOffset && test->reorderTasksRandom && test->filePerProc == FALSE)
@@ -2362,9 +2400,10 @@ ValidTests(IOR_param_t * test)
         ERR("random offset not available with NCMPI");
     if ((strcmp(test->api, "HDF5") != 0) && test->individualDataSets)
         WARN_RESET("individual datasets only available in HDF5",
-                   individualDataSets);
+                   test, &defaults, individualDataSets);
     if ((strcmp(test->api, "HDF5") == 0) && test->individualDataSets)
-        WARN_RESET("individual data sets not implemented", individualDataSets);
+        WARN_RESET("individual data sets not implemented",
+                   test, &defaults, individualDataSets);
     if ((strcmp(test->api, "NCMPI") == 0) && test->filePerProc)
         ERR("file-per-proc not available in current NCMPI");
     if (test->noFill) {
@@ -2635,3 +2674,4 @@ WriteTimes(IOR_param_t  * test,
                 test->id, iteration, (int)rank, timer[i][iteration], timerName);
     }
 } /* WriteTimes() */
+

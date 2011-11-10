@@ -122,11 +122,11 @@ typedef long long int      IOR_size_t;
 /*
  * WARN_RESET will display a custom error message and set value to default
  */
-#define WARN_RESET(MSG, VAL) do {                                        \
-        test->VAL = defaultParameters.VAL;                               \
+#define WARN_RESET(MSG, TO_STRUCT_PTR, FROM_STRUCT_PTR, MEMBER) do {     \
+        (TO_STRUCT_PTR)->MEMBER = (FROM_STRUCT_PTR)->MEMBER;             \
         if (rank == 0) {                                                 \
             fprintf(stdout, "WARNING: %s.  Using value of %d.\n",        \
-                    MSG, test->VAL);                                     \
+                    MSG, (TO_STRUCT_PTR)->MEMBER);                       \
         }                                                                \
         fflush(stdout);                                                  \
 } while (0)

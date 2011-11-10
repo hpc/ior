@@ -476,8 +476,7 @@ RUN
 IOR STOP
 ===============> stop script <===============
 
-NOTES: * Not all test parameters need be set.  The defaults can be viewed in
-         IOR/src/C/defaults.h. 
+NOTES: * Not all test parameters need be set.
        * White space is ignored in script, as are comments starting with '#'.
 
 

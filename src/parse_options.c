@@ -10,7 +10,6 @@
 \******************************************************************************/
 
 #include "ior.h"
-#include "defaults.h"                                 /* IOR defaults */
 
 #include <ctype.h>
 #include <stdio.h>
@@ -331,7 +330,6 @@ ReadConfigScript(char * scriptName)
     return(head);
 } /* ReadConfigScript() */
 
-
 /******************************************************************************/
 /*
  * Parse Commandline.
@@ -348,7 +346,7 @@ ParseCommandLine(int argc, char ** argv)
     /* suppress getopt() error message when a character is unrecognized */
     opterr = 0;
 
-    initialTestParams = defaultParameters;
+    init_IOR_Param_t(&initialTestParams);
     GetPlatformName(initialTestParams.platform);
     initialTestParams.writeFile  = initialTestParams.readFile  = FALSE;
     initialTestParams.checkWrite = initialTestParams.checkRead = FALSE;
@@ -432,3 +430,4 @@ ParseCommandLine(int argc, char ** argv)
 
     return(tests);
 } /* ParseCommandLine() */
+
