@@ -90,6 +90,13 @@ AM_COND_IF([USE_NCMPI_AIORI],[
         AC_DEFINE([USE_NCMPI_AIORI], [], [Build NCMPI backend AIORI])
 ])
 
+# Enable building "IOR", in all capitals
+AC_ARG_ENABLE([caps],
+        [AS_HELP_STRING([--enable-caps],
+          [build "IOR" binary (name is in all-caps) @<:@default=no@:>@])],
+        [], [enable_caps=no])
+AM_CONDITIONAL([USE_CAPS], [test x$enable_caps = xyes])
+
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile

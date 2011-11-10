@@ -1,4 +1,7 @@
 bin_PROGRAMS = ior
+if USE_CAPS
+bin_PROGRAMS += IOR
+endif
 
 ior_SOURCES = ior.c utilities.c parse_options.c
 ior_SOURCES += ior.h aiori.h iordef.h
@@ -18,3 +21,6 @@ if USE_NCMPI_AIORI
 ior_SOURCES += aiori-NCMPI.c
 ior_LDADD += -lpnetcdf
 endif
+
+IOR_SOURCES = $(ior_SOURCES)
+IOR_LDADD = $(ior_LDADD)
