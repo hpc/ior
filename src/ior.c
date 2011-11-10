@@ -21,6 +21,7 @@
 #   include <sys/time.h>                              /* gettimeofday() */
 #   include <sys/utsname.h>                           /* uname() */
 #endif
+#include <assert.h>
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -98,6 +99,11 @@ main(int     argc,
     /*MPI_CHECK(MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN),
       "cannot set errhandler");*/
     
+    /* Sanity check, we were compiled with SOME backend, right? */
+    if (available_aiori[0] == NULL) {
+        ERR("No IO backends compiled into ior.  That should not have happened.");
+    }
+
     /* setup tests before verifying test validity */
     tests = SetupTests(argc, argv);
     verbose = tests->testParameters.verbose;
@@ -145,7 +151,8 @@ void init_IOR_Param_t(IOR_param_t *p)
         p->mode = IOR_IRUSR|IOR_IWUSR|IOR_IRGRP|IOR_IWGRP;
         p->openFlags = IOR_RDWR|IOR_CREAT;
         p->TestNum = -1;
-        strncpy(p->api, "POSIX", MAX_STR); /* FIXME - use first api in list instead */
+        assert(available_aiori[0] != NULL);
+        strncpy(p->api, available_aiori[0]->name, MAX_STR);
         strncpy(p->platform, "HOST(OSTYPE)", MAX_STR);
         strncpy(p->testFileName, "testFile", MAXPATHLEN);
         p->nodes = 1;
