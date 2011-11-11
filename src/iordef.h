@@ -125,7 +125,7 @@ typedef long long int      IOR_size_t;
 #define WARN_RESET(MSG, TO_STRUCT_PTR, FROM_STRUCT_PTR, MEMBER) do {     \
         (TO_STRUCT_PTR)->MEMBER = (FROM_STRUCT_PTR)->MEMBER;             \
         if (rank == 0) {                                                 \
-            fprintf(stdout, "WARNING: %s.  Using value of %d.\n",        \
+            fprintf(stdout, "ior WARNING: %s.  Using value of %d.\n",    \
                     MSG, (TO_STRUCT_PTR)->MEMBER);                       \
         }                                                                \
         fflush(stdout);                                                  \
@@ -140,10 +140,10 @@ typedef long long int      IOR_size_t;
 
 #define WARN(MSG) do {                                                   \
         if (verbose > VERBOSE_2) {                                       \
-            fprintf(stdout, "WARNING: %s, in %s (line %d).\n",           \
+            fprintf(stdout, "ior WARNING: %s, (%s:%d).\n",               \
                     MSG, __FILE__, __LINE__);                            \
         } else {                                                         \
-            fprintf(stdout, "WARNING: %s.\n", MSG);                      \
+            fprintf(stdout, "ior WARNING: %s.\n", MSG);                  \
         }                                                                \
         fflush(stdout);                                                  \
 } while (0)
@@ -156,11 +156,8 @@ typedef long long int      IOR_size_t;
  */
 
 #define ERR(MSG) do {                                                    \
-        fprintf(stdout, "** error **\n");                                \
-        fprintf(stdout, "ERROR in %s (line %d): %s.\n",                  \
-                __FILE__, __LINE__, MSG);                                \
-        fprintf(stdout, "ERROR: %s\n", strerror(errno));                 \
-        fprintf(stdout, "** exiting **\n");                              \
+        fprintf(stdout, "ior ERROR: %s, errno %d, %s (%s:%d)\n",         \
+                MSG, errno, strerror(errno), __FILE__, __LINE__);        \
         fflush(stdout);                                                  \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
 } while (0)
@@ -177,12 +174,9 @@ typedef long long int      IOR_size_t;
     int resultLength;                                                    \
                                                                          \
     if (MPI_STATUS != MPI_SUCCESS) {                                     \
-        fprintf(stdout, "** error **\n");                                \
-        fprintf(stdout, "ERROR in %s (line %d): %s.\n",                  \
-                __FILE__, __LINE__, MSG);                                \
         MPI_Error_string(MPI_STATUS, resultString, &resultLength);       \
-        fprintf(stdout, "MPI %s\n", resultString);                       \
-        fprintf(stdout, "** exiting **\n");                              \
+        fprintf(stdout, "ior ERROR: %s, MPI %s, (%s:%d)\n",              \
+                MSG, resultString, __FILE__, __LINE__);                  \
         fflush(stdout);                                                  \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
     }                                                                    \
