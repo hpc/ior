@@ -18,11 +18,9 @@
 
 #define NUM_DIMS 3              /* number of dimensions to data set */
 
-/******************************************************************************/
 /*
  * NCMPI_CHECK will display a custom error message and then exit the program
  */
-
 #define NCMPI_CHECK(NCMPI_RETURN, MSG) do {                              \
     char resultString[1024];                                             \
                                                                          \
@@ -38,7 +36,7 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 
-int GetFileMode(IOR_param_t *);
+static int GetFileMode(IOR_param_t *);
 void SetHints(MPI_Info *, char *);
 void ShowHints(MPI_Info *);
 
@@ -66,16 +64,18 @@ ior_aiori_t ncmpi_aiori = {
         IOR_GetFileSize_NCMPI
 };
 
-extern int errno,               /* error number */
- numTasksWorld, rank, rankOffset, verbose;      /* verbose output */
+extern int errno;               /* error number */
+extern int numTasksWorld;
+extern int rank;
+extern int rankOffset;
+extern int verbose;
 extern MPI_Comm testComm;
 
 /***************************** F U N C T I O N S ******************************/
-/******************************************************************************/
+
 /*
  * Create and open a file through the NCMPI interface.
  */
-
 void *IOR_Create_NCMPI(char *testFileName, IOR_param_t * param)
 {
         int *fd;
@@ -116,13 +116,11 @@ void *IOR_Create_NCMPI(char *testFileName, IOR_param_t * param)
 */
 
         return (fd);
-}                               /* IOR_Create_NCMPI() */
+}
 
-/******************************************************************************/
 /*
  * Open a file through the NCMPI interface.
  */
-
 void *IOR_Open_NCMPI(char *testFileName, IOR_param_t * param)
 {
         int *fd;
@@ -163,13 +161,11 @@ void *IOR_Open_NCMPI(char *testFileName, IOR_param_t * param)
 */
 
         return (fd);
-}                               /* IOR_Open_NCMPI() */
+}
 
-/******************************************************************************/
 /*
  * Write or read access to file using the NCMPI interface.
  */
-
 IOR_offset_t
 IOR_Xfer_NCMPI(int access,
                void *fd,
@@ -307,23 +303,19 @@ IOR_Xfer_NCMPI(int access,
         }
 
         return (length);
-}                               /* IOR_Xfer_NCMPI() */
+}
 
-/******************************************************************************/
 /*
  * Perform fsync().
  */
-
 void IOR_Fsync_NCMPI(void *fd, IOR_param_t * param)
 {
         ;
-}                               /* IOR_Fsync_NCMPI() */
+}
 
-/******************************************************************************/
 /*
  * Close a file through the NCMPI interface.
  */
-
 void IOR_Close_NCMPI(void *fd, IOR_param_t * param)
 {
         if (param->collective == FALSE) {
@@ -332,37 +324,29 @@ void IOR_Close_NCMPI(void *fd, IOR_param_t * param)
         }
         NCMPI_CHECK(ncmpi_close(*(int *)fd), "cannot close file");
         free(fd);
-}                               /* IOR_Close_NCMPI() */
+}
 
-/******************************************************************************/
 /*
  * Delete a file through the NCMPI interface.
  */
-
 void IOR_Delete_NCMPI(char *testFileName, IOR_param_t * param)
 {
         if (unlink(testFileName) != 0)
                 WARN("unlink() failed");
-}                               /* IOR_Delete_NCMPI() */
+}
 
-/******************************************************************************/
 /*
  * Determine api version.
  */
-
 void IOR_SetVersion_NCMPI(IOR_param_t * test)
 {
         sprintf(test->apiVersion, "%s (%s)", test->api, ncmpi_inq_libvers());
-}                               /* IOR_SetVersion_NCMPI() */
+}
 
-/************************ L O C A L   F U N C T I O N S ***********************/
-
-/******************************************************************************/
 /*
  * Return the correct file mode for NCMPI.
  */
-
-int GetFileMode(IOR_param_t * param)
+static int GetFileMode(IOR_param_t * param)
 {
         int fd_mode = 0;
 
@@ -397,15 +381,13 @@ int GetFileMode(IOR_param_t * param)
         fd_mode |= NC_64BIT_OFFSET;
 
         return (fd_mode);
-}                               /* GetFileMode() */
+}
 
-/******************************************************************************/
 /*
  * Use MPIIO call to get file size.
  */
-
 IOR_offset_t
 IOR_GetFileSize_NCMPI(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
         return (IOR_GetFileSize_MPIIO(test, testComm, testFileName));
-}                               /* IOR_GetFileSize_NCMPI() */
+}

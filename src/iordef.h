@@ -52,11 +52,10 @@
 
 /************************** D E C L A R A T I O N S ***************************/
 
-extern int numTasks,                           /* MPI variables */
-           rank,
-           rankOffset,
-           verbose;                            /* verbose output */
-
+extern int numTasks;                           /* MPI variables */
+extern int rank;
+extern int rankOffset;
+extern int verbose;                            /* verbose output */
 
 /*************************** D E F I N I T I O N S ****************************/
 

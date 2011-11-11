@@ -87,11 +87,9 @@ void set_o_direct_flag(int *fd)
         *fd |= O_DIRECT;
 }
 
-/******************************************************************************/
 /*
  * Creat and open a file through the POSIX interface.
  */
-
 void *IOR_Create_POSIX(char *testFileName, IOR_param_t * param)
 {
         int fd_oflag = O_BINARY;
@@ -165,13 +163,11 @@ void *IOR_Create_POSIX(char *testFileName, IOR_param_t * param)
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
 
         return ((void *)fd);
-}                               /* IOR_Create_POSIX() */
+}
 
-/******************************************************************************/
 /*
  * Open a file through the POSIX interface.
  */
-
 void *IOR_Open_POSIX(char *testFileName, IOR_param_t * param)
 {
         int fd_oflag = O_BINARY;
@@ -202,13 +198,11 @@ void *IOR_Open_POSIX(char *testFileName, IOR_param_t * param)
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
 
         return ((void *)fd);
-}                               /* IOR_Open_POSIX() */
+}
 
-/******************************************************************************/
 /*
  * Write or read access to file using the POSIX interface.
  */
-
 IOR_offset_t
 IOR_Xfer_POSIX(int access,
                void *file,
@@ -273,36 +267,30 @@ IOR_Xfer_POSIX(int access,
                 xferRetries++;
         }
         return (length);
-}                               /* IOR_Xfer_POSIX() */
+}
 
-/******************************************************************************/
 /*
  * Perform fsync().
  */
-
 void IOR_Fsync_POSIX(void *fd, IOR_param_t * param)
 {
         if (fsync(*(int *)fd) != 0)
                 WARN("fsync() failed");
-}                               /* IOR_Fsync_POSIX() */
+}
 
-/******************************************************************************/
 /*
  * Close a file through the POSIX interface.
  */
-
 void IOR_Close_POSIX(void *fd, IOR_param_t * param)
 {
         if (close(*(int *)fd) != 0)
                 ERR("close() failed");
         free(fd);
-}                               /* IOR_Close_POSIX() */
+}
 
-/******************************************************************************/
 /*
  * Delete a file through the POSIX interface.
  */
-
 void IOR_Delete_POSIX(char *testFileName, IOR_param_t * param)
 {
         char errmsg[256];
@@ -310,23 +298,19 @@ void IOR_Delete_POSIX(char *testFileName, IOR_param_t * param)
                 rank, testFileName);
         if (unlink(testFileName) != 0)
                 WARN(errmsg);
-}                               /* IOR_Delete_POSIX() */
+}
 
-/******************************************************************************/
 /*
  * Determine api version.
  */
-
 void IOR_SetVersion_POSIX(IOR_param_t * test)
 {
         strcpy(test->apiVersion, test->api);
 }                               /* IOR_SetVersion_POSIX() */
 
-/******************************************************************************/
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-
 IOR_offset_t
 IOR_GetFileSize_POSIX(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
@@ -360,4 +344,4 @@ IOR_GetFileSize_POSIX(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
         }
 
         return (aggFileSizeFromStat);
-}                               /* IOR_GetFileSize_POSIX() */
+}

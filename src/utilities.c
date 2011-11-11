@@ -32,17 +32,17 @@
 
 /************************** D E C L A R A T I O N S ***************************/
 
-extern int errno,               /* error number */
- numTasks,                      /* MPI variables */
- rank, rankOffset, verbose;     /* verbose output */
+extern int errno;
+extern int numTasks;
+extern int rank;
+extern int rankOffset;
+extern int verbose;
 
 /***************************** F U N C T I O N S ******************************/
 
-/******************************************************************************/
 /*
  * Returns string containing the current time.
  */
-
 char *CurrentTimeString(void)
 {
         static time_t currentTime;
@@ -55,13 +55,11 @@ char *CurrentTimeString(void)
         }
         /* ctime string ends in \n */
         return (currentTimePtr);
-}                               /* CurrentTimeString() */
+}
 
-/******************************************************************************/
 /*
  * Dump transfer buffer.
  */
-
 void DumpBuffer(void *buffer, size_t size)
 {
         size_t i, j;
@@ -76,11 +74,9 @@ void DumpBuffer(void *buffer, size_t size)
         return;
 }                               /* DumpBuffer() */
 
-/******************************************************************************/
 /*
  * Sends all strings to root nodes and displays.
  */
-
 void OutputToRoot(int numTasks, MPI_Comm comm, char *stringToDisplay)
 {
         int i;
@@ -148,16 +144,16 @@ void OutputToRoot(int numTasks, MPI_Comm comm, char *stringToDisplay)
                 free(stringArray[i]);
         }
         free(stringArray);
-}                               /* OutputToRoot() */
+}
 
-/******************************************************************************/
 /*
  * Set hints for MPIIO, HDF5, or NCMPI.
  */
-
 void SetHints(MPI_Info * mpiHints, char *hintsFileName)
 {
-        char hintString[MAX_STR], settingVal[MAX_STR], valueVal[MAX_STR];
+        char hintString[MAX_STR];
+        char settingVal[MAX_STR];
+        char valueVal[MAX_STR];
         extern char **environ;
         int i;
         FILE *fd;
@@ -209,13 +205,11 @@ void SetHints(MPI_Info * mpiHints, char *hintsFileName)
                                 ERR("cannot close hints file");
                 }
         }
-}                               /* SetHints() */
+}
 
-/******************************************************************************/
 /*
  * Extract key/value pair from hint string.
  */
-
 void ExtractHint(char *settingVal, char *valueVal, char *hintString)
 {
         char *settingPtr, *valuePtr, *tmpPtr1, *tmpPtr2;
@@ -237,16 +231,15 @@ void ExtractHint(char *settingVal, char *valueVal, char *hintString)
         }
         strcpy(settingVal, settingPtr);
         strcpy(valueVal, valuePtr);
-}                               /* ExtractHint() */
+}
 
-/******************************************************************************/
 /*
  * Show all hints (key/value pairs) in an MPI_Info object.
  */
-
 void ShowHints(MPI_Info * mpiHints)
 {
-        char key[MPI_MAX_INFO_VAL], value[MPI_MAX_INFO_VAL];
+        char key[MPI_MAX_INFO_VAL];
+        char value[MPI_MAX_INFO_VAL];
         int flag, i, nkeys;
 
         MPI_CHECK(MPI_Info_get_nkeys(*mpiHints, &nkeys),
@@ -260,13 +253,11 @@ void ShowHints(MPI_Info * mpiHints)
                           "cannot get info object value");
                 fprintf(stdout, "\t%s = %s\n", key, value);
         }
-}                               /* ShowHints() */
+}
 
-/******************************************************************************/
 /*
  * Takes a string of the form 64, 8m, 128k, 4g, etc. and converts to bytes.
  */
-
 IOR_offset_t StringToBytes(char *size_str)
 {
         IOR_offset_t size = 0;
@@ -293,25 +284,24 @@ IOR_offset_t StringToBytes(char *size_str)
                 size = -1;
         }
         return (size);
-}                               /* StringToBytes() */
+}
 
-/******************************************************************************/
 /*
  * Displays size of file system and percent of data blocks and inodes used.
  */
-
 void ShowFileSystemSize(char *fileSystem)
 {
 #ifndef _WIN32                  /* FIXME */
         int error;
         char realPath[PATH_MAX];
-        char *fileSystemUnitStr = "GiB";
-        long long int fileSystemUnitVal = 1024 * 1024 * 1024;
-        long long int inodeUnitVal = 1024 * 1024;
-        long long int totalFileSystemSize,
-            freeFileSystemSize, totalInodes, freeInodes;
-        double totalFileSystemSizeHR,
-            usedFileSystemPercentage, usedInodePercentage;
+        char *fileSystemUnitStr;
+        long long int totalFileSystemSize;
+        long long int freeFileSystemSize;
+        long long int totalInodes;
+        long long int freeInodes;
+        double totalFileSystemSizeHR;
+        double usedFileSystemPercentage;
+        double usedInodePercentage;
 #ifdef __sun                    /* SunOS does not support statfs(), instead uses statvfs() */
         struct statvfs statusBuffer;
 #else                           /* !__sun */
@@ -340,9 +330,10 @@ void ShowFileSystemSize(char *fileSystem)
         usedFileSystemPercentage = (1 - ((double)freeFileSystemSize
                                          / (double)totalFileSystemSize)) * 100;
         totalFileSystemSizeHR =
-            (double)totalFileSystemSize / (double)fileSystemUnitVal;
+                (double)totalFileSystemSize / (double)(1<<30);
+        fileSystemUnitStr = "GiB";
         if (totalFileSystemSizeHR > 1024) {
-                totalFileSystemSizeHR = totalFileSystemSizeHR / 1024;
+                totalFileSystemSizeHR = (double)totalFileSystemSize / (double)(1<<40);
                 fileSystemUnitStr = "TiB";
         }
 
@@ -361,19 +352,17 @@ void ShowFileSystemSize(char *fileSystem)
                 totalFileSystemSizeHR, fileSystemUnitStr,
                 usedFileSystemPercentage);
         fprintf(stdout, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
-                (double)totalInodes / (double)inodeUnitVal,
+                (double)totalInodes / (double)(1<<20),
                 usedInodePercentage);
         fflush(stdout);
-#endif                          /* _WIN32 */
+#endif /* !_WIN32 */
 
         return;
-}                               /* ShowFileSystemSize() */
+}
 
-/******************************************************************************/
 /*
  * Return match of regular expression -- 0 is failure, 1 is success.
  */
-
 int Regex(char *string, char *pattern)
 {
         int retValue = 0;
@@ -389,14 +378,12 @@ int Regex(char *string, char *pattern)
 #endif
 
         return (retValue);
-}                               /* Regex() */
+}
 
 #if USE_UNDOC_OPT               /* corruptFile */
-/******************************************************************************/
 /*
  * Corrupt file to testing data checking options.
  */
-
 void CorruptFile(char *testFileName, IOR_param_t * test, int rep, int access)
 {
         IOR_offset_t tmpOff, range, eof;
@@ -429,13 +416,11 @@ void CorruptFile(char *testFileName, IOR_param_t * test, int rep, int access)
         }
 
         return;
-}                               /* CorruptFile() */
+}
 
-/******************************************************************************/
 /*
  * Modify byte in file - used to testing write/read data checking.
  */
-
 void ModifyByteInFile(char *fileName, IOR_offset_t offset, int byteValue)
 {
         int fd;
@@ -466,14 +451,12 @@ void ModifyByteInFile(char *fileName, IOR_offset_t offset, int byteValue)
  out:
         close(fd);
         return;
-}                               /* ModifyByteInFile() */
+}
 #endif                          /* USE_UNDOC_OPT - corruptFile */
 
-/******************************************************************************/
 /*
  * Seed random generator.
  */
-
 void SeedRandGen(MPI_Comm testComm)
 {
         unsigned int randomSeed;
@@ -490,15 +473,12 @@ void SeedRandGen(MPI_Comm testComm)
         MPI_CHECK(MPI_Bcast(&randomSeed, 1, MPI_INT, 0,
                             testComm), "cannot broadcast random seed value");
         srandom(randomSeed);
+}
 
-}                               /* SeedRandGen() */
-
-/******************************************************************************/
 /*
  * System info for Windows.
  */
 #ifdef _WIN32
-
 int uname(struct utsname *name)
 {
         DWORD nodeNameSize = sizeof(name->nodename) - 1;
@@ -515,5 +495,4 @@ int uname(struct utsname *name)
         strncpy(name->machine, "-", sizeof(name->machine) - 1);
         return 0;
 }
-
-#endif                          /* _WIN32 */
+#endif /* _WIN32 */

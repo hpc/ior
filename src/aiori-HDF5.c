@@ -69,7 +69,7 @@
 #endif                          /* H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6 */
 /**************************** P R O T O T Y P E S *****************************/
 
-IOR_offset_t SeekOffset_HDF5(void *, IOR_offset_t, IOR_param_t *);
+static IOR_offset_t SeekOffset_HDF5(void *, IOR_offset_t, IOR_param_t *);
 void SetHints(MPI_Info *, char *);
 void SetupDataSet_HDF5(void *, IOR_param_t *);
 void ShowHints(MPI_Info *);
@@ -111,21 +111,17 @@ int newlyOpenedFile;            /* newly opened file */
 
 /***************************** F U N C T I O N S ******************************/
 
-/******************************************************************************/
 /*
  * Create and open a file through the HDF5 interface.
  */
-
 void *IOR_Create_HDF5(char *testFileName, IOR_param_t * param)
 {
         return IOR_Open_HDF5(testFileName, param);
-}                               /* IOR_Create_HDF5() */
+}
 
-/******************************************************************************/
 /*
  * Open a file through the HDF5 interface.
  */
-
 void *IOR_Open_HDF5(char *testFileName, IOR_param_t * param)
 {
         hid_t accessPropList, createPropList;
@@ -323,13 +319,11 @@ void *IOR_Open_HDF5(char *testFileName, IOR_param_t * param)
         HDF5_CHECK(dataSpace, "cannot create simple data space");
 
         return (fd);
-}                               /* IOR_Open_HDF5() */
+}
 
-/******************************************************************************/
 /*
  * Write or read access to file using the HDF5 interface.
  */
-
 IOR_offset_t
 IOR_Xfer_HDF5(int access,
               void *fd,
@@ -404,23 +398,19 @@ IOR_Xfer_HDF5(int access,
                            "cannot read from data set");
         }
         return (length);
-}                               /* IOR_Xfer_HDF5() */
+}
 
-/******************************************************************************/
 /*
  * Perform fsync().
  */
-
 void IOR_Fsync_HDF5(void *fd, IOR_param_t * param)
 {
         ;
-}                               /* IOR_Fsync_HDF5() */
+}
 
-/******************************************************************************/
 /*
  * Close a file through the HDF5 interface.
  */
-
 void IOR_Close_HDF5(void *fd, IOR_param_t * param)
 {
         if (param->fd_fppReadCheck == NULL) {
@@ -435,24 +425,20 @@ void IOR_Close_HDF5(void *fd, IOR_param_t * param)
         }
         HDF5_CHECK(H5Fclose(*(hid_t *) fd), "cannot close file");
         free(fd);
-}                               /* IOR_Close_HDF5() */
+}
 
-/******************************************************************************/
 /*
  * Delete a file through the HDF5 interface.
  */
-
 void IOR_Delete_HDF5(char *testFileName, IOR_param_t * param)
 {
         if (unlink(testFileName) != 0)
                 WARN("cannot delete file");
-}                               /* IOR_Delete_HDF5() */
+}
 
-/******************************************************************************/
 /*
  * Determine api version.
  */
-
 void IOR_SetVersion_HDF5(IOR_param_t * test)
 {
         unsigned major, minor, release;
@@ -467,16 +453,13 @@ void IOR_SetVersion_HDF5(IOR_param_t * test)
 #else                           /* H5_HAVE_PARALLEL */
         strcat(test->apiVersion, " (Parallel)");
 #endif                          /* not H5_HAVE_PARALLEL */
-}                               /* IOR_SetVersion_HDF5() */
+}
 
-/************************ L O C A L   F U N C T I O N S ***********************/
-
-/******************************************************************************/
 /*
  * Seek to offset in file using the HDF5 interface and set up hyperslab.
  */
-
-IOR_offset_t SeekOffset_HDF5(void *fd, IOR_offset_t offset, IOR_param_t * param)
+static IOR_offset_t SeekOffset_HDF5(void *fd, IOR_offset_t offset,
+                                    IOR_param_t * param)
 {
         IOR_offset_t segmentSize;
         hsize_t hsStride[NUM_DIMS], hsCount[NUM_DIMS], hsBlock[NUM_DIMS];
@@ -512,12 +495,10 @@ IOR_offset_t SeekOffset_HDF5(void *fd, IOR_offset_t offset, IOR_param_t * param)
         return (offset);
 }                               /* SeekOffset_HDF5() */
 
-/******************************************************************************/
 /*
  * Create HDF5 data set.
  */
-
-void SetupDataSet_HDF5(void *fd, IOR_param_t * param)
+static void SetupDataSet_HDF5(void *fd, IOR_param_t * param)
 {
         char dataSetName[MAX_STR];
         hid_t dataSetPropList;
@@ -573,16 +554,13 @@ void SetupDataSet_HDF5(void *fd, IOR_param_t * param)
                 dataSet = H5Dopen(*(hid_t *) fd, dataSetName);
                 HDF5_CHECK(dataSet, "cannot create data set");
         }
+}
 
-}                               /* SetupDataSet_HDF5() */
-
-/******************************************************************************/
 /*
  * Use MPIIO call to get file size.
  */
-
 IOR_offset_t
 IOR_GetFileSize_HDF5(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
         return (IOR_GetFileSize_MPIIO(test, testComm, testFileName));
-}                               /* IOR_GetFileSize_HDF5() */
+}

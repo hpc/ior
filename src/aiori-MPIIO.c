@@ -58,21 +58,17 @@ ior_aiori_t mpiio_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 
-/******************************************************************************/
 /*
  * Create and open a file through the MPIIO interface.
  */
-
 void *IOR_Create_MPIIO(char *testFileName, IOR_param_t * param)
 {
         return IOR_Open_MPIIO(testFileName, param);
-}                               /* IOR_Create_MPIIO() */
+}
 
-/******************************************************************************/
 /*
  * Open a file through the MPIIO interface.  Setup file view.
  */
-
 void *IOR_Open_MPIIO(char *testFileName, IOR_param_t * param)
 {
         int fd_mode = (int)0,
@@ -211,13 +207,11 @@ void *IOR_Open_MPIIO(char *testFileName, IOR_param_t * param)
                           "cannot set file view");
         }
         return ((void *)fd);
-}                               /* IOR_Open_MPIIO() */
+}
 
-/******************************************************************************/
 /*
  * Write or read access to file using the MPIIO interface.
  */
-
 IOR_offset_t
 IOR_Xfer_MPIIO(int access,
                void *fd,
@@ -338,23 +332,19 @@ IOR_Xfer_MPIIO(int access,
                 }
         }
         return (length);
-}                               /* IOR_Xfer_MPIIO() */
+}
 
-/******************************************************************************/
 /*
  * Perform fsync().
  */
-
 void IOR_Fsync_MPIIO(void *fd, IOR_param_t * param)
 {
         ;
 }                               /* IOR_Fsync_MPIIO() */
 
-/******************************************************************************/
 /*
  * Close a file through the MPIIO interface.
  */
-
 void IOR_Close_MPIIO(void *fd, IOR_param_t * param)
 {
         MPI_CHECK(MPI_File_close((MPI_File *) fd), "cannot close file");
@@ -368,24 +358,20 @@ void IOR_Close_MPIIO(void *fd, IOR_param_t * param)
                           "cannot free MPI transfer datatype");
         }
         free(fd);
-}                               /* IOR_Close_MPIIO() */
+}
 
-/******************************************************************************/
 /*
  * Delete a file through the MPIIO interface.
  */
-
 void IOR_Delete_MPIIO(char *testFileName, IOR_param_t * param)
 {
         MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
                   "cannot delete file");
-}                               /* IOR_Delete_MPIIO() */
+}
 
-/******************************************************************************/
 /*
  * Determine api version.
  */
-
 void IOR_SetVersion_MPIIO(IOR_param_t * test)
 {
         int version, subversion;
@@ -393,15 +379,11 @@ void IOR_SetVersion_MPIIO(IOR_param_t * test)
                   "cannot get MPI version");
         sprintf(test->apiVersion, "%s (version=%d, subversion=%d)",
                 test->api, version, subversion);
-}                               /* IOR_SetVersion_MPIIO() */
+}
 
-/************************ L O C A L   F U N C T I O N S ***********************/
-
-/******************************************************************************/
 /*
  * Seek to offset in file using the MPIIO interface.
  */
-
 static IOR_offset_t
 SeekOffset_MPIIO(MPI_File fd, IOR_offset_t offset, IOR_param_t * param)
 {
@@ -438,13 +420,11 @@ SeekOffset_MPIIO(MPI_File fd, IOR_offset_t offset, IOR_param_t * param)
         MPI_CHECK(MPI_File_seek(fd, tempOffset, MPI_SEEK_SET),
                   "cannot seek offset");
         return (offset);
-}                               /* SeekOffset_MPIIO() */
+}
 
-/******************************************************************************/
 /*
  * Use MPI_File_get_size() to return aggregate file size.
  */
-
 IOR_offset_t
 IOR_GetFileSize_MPIIO(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
@@ -481,4 +461,4 @@ IOR_GetFileSize_MPIIO(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 
         return (aggFileSizeFromStat);
 
-}                               /* IOR_GetFileSize_MPIIO() */
+}

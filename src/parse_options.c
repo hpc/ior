@@ -18,11 +18,9 @@
 
 IOR_param_t initialTestParams;
 
-/******************************************************************************/
 /*
  * Check and correct all settings of each test in queue for correctness.
  */
-
 void CheckRunSettings(IOR_queue_t * tests)
 {
         while (tests != NULL) {
@@ -43,13 +41,11 @@ void CheckRunSettings(IOR_queue_t * tests)
                 }
                 tests = tests->nextTest;
         }
-}                               /* CheckRunSettings() */
+}
 
-/******************************************************************************/
 /*
  * Set flags from commandline string/value pairs.
  */
-
 void DecodeDirective(char *line, IOR_param_t * test)
 {
         char option[MAX_STR];
@@ -207,13 +203,11 @@ void DecodeDirective(char *line, IOR_param_t * test)
                                 option);
                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
         }
-}                               /* DecodeDirective() */
+}
 
-/******************************************************************************/
 /*
  * Parse a single line, which may contain multiple comma-seperated directives
  */
-
 void ParseLine(char *line, IOR_param_t * test)
 {
         char *start, *end;
@@ -227,14 +221,12 @@ void ParseLine(char *line, IOR_param_t * test)
                 start = end + 1;
         } while (end != NULL);
 
-}                               /* ParseLine() */
+}
 
-/******************************************************************************/
 /*
  * Determines if the string "haystack" contains only the string "needle", and
  * possibly whitespace before and after needle.  Function is case insensitive.
  */
-
 int contains_only(char *haystack, char *needle)
 {
         char *ptr, *end;
@@ -255,14 +247,12 @@ int contains_only(char *haystack, char *needle)
         }
 
         return 1;
-}                               /* contains_only() */
+}
 
-/******************************************************************************/
 /*
  * Read the configuration script, allocating and filling in the structure of
  * global parameters.
  */
-
 IOR_queue_t *ReadConfigScript(char *scriptName)
 {
         int test_num = 0;
@@ -326,18 +316,15 @@ IOR_queue_t *ReadConfigScript(char *scriptName)
                 ERR("fclose() of script file failed");
 
         return (head);
-}                               /* ReadConfigScript() */
+}
 
-/******************************************************************************/
 /*
  * Parse Commandline.
  */
-
 IOR_queue_t *ParseCommandLine(int argc, char **argv)
 {
-        static const char *opts
-            =
-            "A:a:b:BcCQ:ZX:d:D:YeEf:FgG:hHi:j:J:IkKlmnN:o:O:pPqrRs:St:T:uU:vVwWxz";
+        static const char *opts =
+          "A:a:b:BcCQ:ZX:d:D:YeEf:FgG:hHi:j:J:IkKlmnN:o:O:pPqrRs:St:T:uU:vVwWxz";
         int c, i;
         static IOR_queue_t *tests = NULL;
 
@@ -521,4 +508,4 @@ IOR_queue_t *ParseCommandLine(int argc, char **argv)
         CheckRunSettings(tests);
 
         return (tests);
-}                               /* ParseCommandLine() */
+}
