@@ -9,14 +9,14 @@
 *
 \******************************************************************************/
 
-#include "aiori.h"                        /* abstract IOR interface */
-#include <errno.h>                        /* sys_errlist */
-#include <stdio.h>                        /* only for fprintf() */
+#include "aiori.h"              /* abstract IOR interface */
+#include <errno.h>              /* sys_errlist */
+#include <stdio.h>              /* only for fprintf() */
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <pnetcdf.h>
 
-#define NUM_DIMS 3                        /* number of dimensions to data set */
+#define NUM_DIMS 3              /* number of dimensions to data set */
 
 /******************************************************************************/
 /*
@@ -38,39 +38,36 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 
-int  GetFileMode(IOR_param_t *);
-void SetHints   (MPI_Info *, char *);
-void ShowHints  (MPI_Info *);
+int GetFileMode(IOR_param_t *);
+void SetHints(MPI_Info *, char *);
+void ShowHints(MPI_Info *);
 
-void *       IOR_Create_NCMPI      (char *, IOR_param_t *);
-void *       IOR_Open_NCMPI        (char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_NCMPI        (int, void *, IOR_size_t *,
-                                    IOR_offset_t, IOR_param_t *);
-void         IOR_Close_NCMPI       (void *, IOR_param_t *);
-void         IOR_Delete_NCMPI      (char *, IOR_param_t *);
-void         IOR_SetVersion_NCMPI  (IOR_param_t *);
-void         IOR_Fsync_NCMPI       (void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_NCMPI (IOR_param_t *, MPI_Comm, char *);
+void *IOR_Create_NCMPI(char *, IOR_param_t *);
+void *IOR_Open_NCMPI(char *, IOR_param_t *);
+IOR_offset_t IOR_Xfer_NCMPI(int, void *, IOR_size_t *,
+                            IOR_offset_t, IOR_param_t *);
+void IOR_Close_NCMPI(void *, IOR_param_t *);
+void IOR_Delete_NCMPI(char *, IOR_param_t *);
+void IOR_SetVersion_NCMPI(IOR_param_t *);
+void IOR_Fsync_NCMPI(void *, IOR_param_t *);
+IOR_offset_t IOR_GetFileSize_NCMPI(IOR_param_t *, MPI_Comm, char *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t ncmpi_aiori = {
-    "NCMPI",
-    IOR_Create_NCMPI,
-    IOR_Open_NCMPI,
-    IOR_Xfer_NCMPI,
-    IOR_Close_NCMPI,
-    IOR_Delete_NCMPI,
-    IOR_SetVersion_NCMPI,
-    IOR_Fsync_NCMPI,
-    IOR_GetFileSize_NCMPI
+        "NCMPI",
+        IOR_Create_NCMPI,
+        IOR_Open_NCMPI,
+        IOR_Xfer_NCMPI,
+        IOR_Close_NCMPI,
+        IOR_Delete_NCMPI,
+        IOR_SetVersion_NCMPI,
+        IOR_Fsync_NCMPI,
+        IOR_GetFileSize_NCMPI
 };
 
-extern int      errno,                                /* error number */
-                numTasksWorld,
-                rank,
-                rankOffset,
-                verbose;                              /* verbose output */
+extern int errno,               /* error number */
+ numTasksWorld, rank, rankOffset, verbose;      /* verbose output */
 extern MPI_Comm testComm;
 
 /***************************** F U N C T I O N S ******************************/
@@ -79,31 +76,29 @@ extern MPI_Comm testComm;
  * Create and open a file through the NCMPI interface.
  */
 
-void *
-IOR_Create_NCMPI(char        * testFileName,
-                 IOR_param_t * param)
+void *IOR_Create_NCMPI(char *testFileName, IOR_param_t * param)
 {
-    int * fd;
-    int   fd_mode;
-    MPI_Info mpiHints = MPI_INFO_NULL;
+        int *fd;
+        int fd_mode;
+        MPI_Info mpiHints = MPI_INFO_NULL;
 
-    /* Wei-keng Liao: read and set MPI file hints from hintsFile */
-    SetHints(&mpiHints, param->hintsFileName);
-    if (rank == 0 && param->showHints) {
-        fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
-        ShowHints(&mpiHints);
-        fprintf(stdout, "}\n");
-    }
+        /* Wei-keng Liao: read and set MPI file hints from hintsFile */
+        SetHints(&mpiHints, param->hintsFileName);
+        if (rank == 0 && param->showHints) {
+                fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
+                ShowHints(&mpiHints);
+                fprintf(stdout, "}\n");
+        }
 
-    fd = (int *)malloc(sizeof(int));
-    if (fd == NULL)
-        ERR("malloc() failed");
+        fd = (int *)malloc(sizeof(int));
+        if (fd == NULL)
+                ERR("malloc() failed");
 
-    fd_mode = GetFileMode(param);
-    NCMPI_CHECK(ncmpi_create(testComm, testFileName, fd_mode,
-                             mpiHints, fd), "cannot create file");
+        fd_mode = GetFileMode(param);
+        NCMPI_CHECK(ncmpi_create(testComm, testFileName, fd_mode,
+                                 mpiHints, fd), "cannot create file");
 
-    /* Wei-keng Liao: print the MPI file hints currently used */
+        /* Wei-keng Liao: print the MPI file hints currently used */
 /* WEL - add when ncmpi_get_file_info() is in current parallel-netcdf release
     if (rank == 0 && param->showHints) {
         MPI_CHECK(ncmpi_get_file_info(*fd, &mpiHints),
@@ -114,46 +109,43 @@ IOR_Create_NCMPI(char        * testFileName,
     }
 */
 
-    /* Wei-keng Liao: free up the mpiHints object */
+        /* Wei-keng Liao: free up the mpiHints object */
 /* WEL - this needs future fix from next release of PnetCDF
     if (mpiHints != MPI_INFO_NULL)
         MPI_CHECK(MPI_Info_free(&mpiHints), "cannot free file info");
 */
 
-    return(fd);
-} /* IOR_Create_NCMPI() */
-
+        return (fd);
+}                               /* IOR_Create_NCMPI() */
 
 /******************************************************************************/
 /*
  * Open a file through the NCMPI interface.
  */
 
-void *
-IOR_Open_NCMPI(char        * testFileName,
-               IOR_param_t * param)
+void *IOR_Open_NCMPI(char *testFileName, IOR_param_t * param)
 {
-    int * fd;
-    int   fd_mode;
-    MPI_Info mpiHints = MPI_INFO_NULL;
+        int *fd;
+        int fd_mode;
+        MPI_Info mpiHints = MPI_INFO_NULL;
 
-    /* Wei-keng Liao: read and set MPI file hints from hintsFile */
-    SetHints(&mpiHints, param->hintsFileName);
-    if (rank == 0 && param->showHints) {
-        fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
-        ShowHints(&mpiHints);
-        fprintf(stdout, "}\n");
-    }
+        /* Wei-keng Liao: read and set MPI file hints from hintsFile */
+        SetHints(&mpiHints, param->hintsFileName);
+        if (rank == 0 && param->showHints) {
+                fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
+                ShowHints(&mpiHints);
+                fprintf(stdout, "}\n");
+        }
 
-    fd = (int *)malloc(sizeof(int));
-    if (fd == NULL)
-        ERR("malloc() failed");
+        fd = (int *)malloc(sizeof(int));
+        if (fd == NULL)
+                ERR("malloc() failed");
 
-    fd_mode = GetFileMode(param);
-    NCMPI_CHECK(ncmpi_open(testComm, testFileName, fd_mode,
-                           mpiHints, fd), "cannot open file");
+        fd_mode = GetFileMode(param);
+        NCMPI_CHECK(ncmpi_open(testComm, testFileName, fd_mode,
+                               mpiHints, fd), "cannot open file");
 
-    /* Wei-keng Liao: print the MPI file hints currently used */
+        /* Wei-keng Liao: print the MPI file hints currently used */
 /* WEL - add when ncmpi_get_file_info() is in current parallel-netcdf release
     if (rank == 0 && param->showHints) {
         MPI_CHECK(ncmpi_get_file_info(*fd, &mpiHints),
@@ -164,15 +156,14 @@ IOR_Open_NCMPI(char        * testFileName,
     }
 */
 
-    /* Wei-keng Liao: free up the mpiHints object */
+        /* Wei-keng Liao: free up the mpiHints object */
 /* WEL - this needs future fix from next release of PnetCDF
     if (mpiHints != MPI_INFO_NULL)
         MPI_CHECK(MPI_Info_free(&mpiHints), "cannot free file info");
 */
 
-    return(fd);
-} /* IOR_Open_NCMPI() */
-
+        return (fd);
+}                               /* IOR_Open_NCMPI() */
 
 /******************************************************************************/
 /*
@@ -180,195 +171,189 @@ IOR_Open_NCMPI(char        * testFileName,
  */
 
 IOR_offset_t
-IOR_Xfer_NCMPI(int            access,
-               void         * fd,
-               IOR_size_t   * buffer,
-               IOR_offset_t   length,
-               IOR_param_t  * param)
+IOR_Xfer_NCMPI(int access,
+               void *fd,
+               IOR_size_t * buffer, IOR_offset_t length, IOR_param_t * param)
 {
-    char         * bufferPtr          = (char *)buffer;
-    static int     firstReadCheck     = FALSE,
-                   startDataSet;
-    int            var_id,
-                   dim_id[NUM_DIMS];
-    MPI_Offset     bufSize[NUM_DIMS],
-                   offset[NUM_DIMS];
-    IOR_offset_t   segmentPosition;
-    int            segmentNum,
-                   transferNum;
+        char *bufferPtr = (char *)buffer;
+        static int firstReadCheck = FALSE, startDataSet;
+        int var_id, dim_id[NUM_DIMS];
+        MPI_Offset bufSize[NUM_DIMS], offset[NUM_DIMS];
+        IOR_offset_t segmentPosition;
+        int segmentNum, transferNum;
 
-    /* Wei-keng Liao: In ior.c line 1979 says "block size must be a multiple
-       of transfer size."  Hence, length should always == param->transferSize
-       below.  I leave it here to double check.
-    */
-    if (length != param->transferSize) {
-        char errMsg[256];
-        sprintf(errMsg,"length(%lld) != param->transferSize(%lld)\n",
-                length, param->transferSize);
-        NCMPI_CHECK(-1, errMsg);
-    }
-
-    /* determine by offset if need to start data set */
-    if (param->filePerProc == TRUE) {
-        segmentPosition = (IOR_offset_t)0;
-    } else {
-        segmentPosition = (IOR_offset_t)((rank + rankOffset) % param->numTasks)
-                                        * param->blockSize;
-    }
-    if ((int)(param->offset - segmentPosition) == 0) {
-        startDataSet = TRUE;
-        /*
-         * this toggle is for the read check operation, which passes through
-         * this function twice; note that this function will open a data set
-         * only on the first read check and close only on the second
+        /* Wei-keng Liao: In ior.c line 1979 says "block size must be a multiple
+           of transfer size."  Hence, length should always == param->transferSize
+           below.  I leave it here to double check.
          */
-        if (access == READCHECK) {
-            if (firstReadCheck == TRUE) {
-                firstReadCheck = FALSE;
-            } else {
-                firstReadCheck = TRUE;
-            }
+        if (length != param->transferSize) {
+                char errMsg[256];
+                sprintf(errMsg, "length(%lld) != param->transferSize(%lld)\n",
+                        length, param->transferSize);
+                NCMPI_CHECK(-1, errMsg);
         }
-    }
 
-    if (startDataSet == TRUE &&
-        (access != READCHECK || firstReadCheck == TRUE)) {
-        if (access == WRITE) {
-            int numTransfers = param->blockSize / param->transferSize;
-
-            /* Wei-keng Liao: change 1D array to 3D array of dimensions:
-               [segmentCount*numTasksWorld][numTransfers][transferSize]
-               Requirement: none of these dimensions should be > 4G,
-            */
-            NCMPI_CHECK(ncmpi_def_dim(*(int *)fd, "segments_times_np",
-                        NC_UNLIMITED, &dim_id[0]),
-                        "cannot define data set dimensions");
-            NCMPI_CHECK(ncmpi_def_dim(*(int *)fd, "number_of_transfers",
-                        numTransfers, &dim_id[1]),
-                        "cannot define data set dimensions");
-            NCMPI_CHECK(ncmpi_def_dim(*(int *)fd, "transfer_size",
-                        param->transferSize, &dim_id[2]),
-                        "cannot define data set dimensions");
-            NCMPI_CHECK(ncmpi_def_var(*(int *)fd, "data_var", NC_BYTE,
-                                      NUM_DIMS, dim_id, &var_id),
-                        "cannot define data set variables");
-            NCMPI_CHECK(ncmpi_enddef(*(int *)fd),
-                        "cannot close data set define mode");
-        
+        /* determine by offset if need to start data set */
+        if (param->filePerProc == TRUE) {
+                segmentPosition = (IOR_offset_t) 0;
         } else {
-            NCMPI_CHECK(ncmpi_inq_varid(*(int *)fd, "data_var", &var_id),
-                        "cannot retrieve data set variable");
+                segmentPosition =
+                    (IOR_offset_t) ((rank + rankOffset) % param->numTasks)
+                    * param->blockSize;
+        }
+        if ((int)(param->offset - segmentPosition) == 0) {
+                startDataSet = TRUE;
+                /*
+                 * this toggle is for the read check operation, which passes through
+                 * this function twice; note that this function will open a data set
+                 * only on the first read check and close only on the second
+                 */
+                if (access == READCHECK) {
+                        if (firstReadCheck == TRUE) {
+                                firstReadCheck = FALSE;
+                        } else {
+                                firstReadCheck = TRUE;
+                        }
+                }
         }
 
-        if (param->collective == FALSE) {
-            NCMPI_CHECK(ncmpi_begin_indep_data(*(int *)fd),
-                        "cannot enable independent data mode");
+        if (startDataSet == TRUE &&
+            (access != READCHECK || firstReadCheck == TRUE)) {
+                if (access == WRITE) {
+                        int numTransfers =
+                            param->blockSize / param->transferSize;
+
+                        /* Wei-keng Liao: change 1D array to 3D array of dimensions:
+                           [segmentCount*numTasksWorld][numTransfers][transferSize]
+                           Requirement: none of these dimensions should be > 4G,
+                         */
+                        NCMPI_CHECK(ncmpi_def_dim
+                                    (*(int *)fd, "segments_times_np",
+                                     NC_UNLIMITED, &dim_id[0]),
+                                    "cannot define data set dimensions");
+                        NCMPI_CHECK(ncmpi_def_dim
+                                    (*(int *)fd, "number_of_transfers",
+                                     numTransfers, &dim_id[1]),
+                                    "cannot define data set dimensions");
+                        NCMPI_CHECK(ncmpi_def_dim
+                                    (*(int *)fd, "transfer_size",
+                                     param->transferSize, &dim_id[2]),
+                                    "cannot define data set dimensions");
+                        NCMPI_CHECK(ncmpi_def_var
+                                    (*(int *)fd, "data_var", NC_BYTE, NUM_DIMS,
+                                     dim_id, &var_id),
+                                    "cannot define data set variables");
+                        NCMPI_CHECK(ncmpi_enddef(*(int *)fd),
+                                    "cannot close data set define mode");
+
+                } else {
+                        NCMPI_CHECK(ncmpi_inq_varid
+                                    (*(int *)fd, "data_var", &var_id),
+                                    "cannot retrieve data set variable");
+                }
+
+                if (param->collective == FALSE) {
+                        NCMPI_CHECK(ncmpi_begin_indep_data(*(int *)fd),
+                                    "cannot enable independent data mode");
+                }
+
+                param->var_id = var_id;
+                startDataSet = FALSE;
         }
 
-        param->var_id = var_id;
-        startDataSet = FALSE;
-    }
+        var_id = param->var_id;
 
-    var_id = param->var_id;
+        /* Wei-keng Liao: calculate the segment number */
+        segmentNum = param->offset / (param->numTasks * param->blockSize);
 
-    /* Wei-keng Liao: calculate the segment number */
-    segmentNum  = param->offset / (param->numTasks * param->blockSize);
+        /* Wei-keng Liao: calculate the transfer number in each block */
+        transferNum = param->offset % param->blockSize / param->transferSize;
 
-    /* Wei-keng Liao: calculate the transfer number in each block */
-    transferNum = param->offset % param->blockSize / param->transferSize;
+        /* Wei-keng Liao: read/write the 3rd dim of the dataset, each is of
+           amount param->transferSize */
+        bufSize[0] = 1;
+        bufSize[1] = 1;
+        bufSize[2] = param->transferSize;
 
-    /* Wei-keng Liao: read/write the 3rd dim of the dataset, each is of
-       amount param->transferSize */
-    bufSize[0] = 1;
-    bufSize[1] = 1;
-    bufSize[2] = param->transferSize;
+        offset[0] = segmentNum * numTasksWorld + rank;
+        offset[1] = transferNum;
+        offset[2] = 0;
 
-    offset[0] = segmentNum * numTasksWorld + rank;
-    offset[1] = transferNum;
-    offset[2] = 0;
-
-    /* access the file */
-    if (access == WRITE) { /* WRITE */
-        if (param->collective) {
-            NCMPI_CHECK(ncmpi_put_vara_all(*(int *)fd, var_id, offset, bufSize,
-                                           bufferPtr, length, MPI_BYTE),
-                        "cannot write to data set");
-        } else {
-            NCMPI_CHECK(ncmpi_put_vara(*(int *)fd, var_id, offset, bufSize,
-                                       bufferPtr, length, MPI_BYTE),
-                        "cannot write to data set");
+        /* access the file */
+        if (access == WRITE) {  /* WRITE */
+                if (param->collective) {
+                        NCMPI_CHECK(ncmpi_put_vara_all
+                                    (*(int *)fd, var_id, offset, bufSize,
+                                     bufferPtr, length, MPI_BYTE),
+                                    "cannot write to data set");
+                } else {
+                        NCMPI_CHECK(ncmpi_put_vara
+                                    (*(int *)fd, var_id, offset, bufSize,
+                                     bufferPtr, length, MPI_BYTE),
+                                    "cannot write to data set");
+                }
+        } else {                /* READ or CHECK */
+                if (param->collective == TRUE) {
+                        NCMPI_CHECK(ncmpi_get_vara_all
+                                    (*(int *)fd, var_id, offset, bufSize,
+                                     bufferPtr, length, MPI_BYTE),
+                                    "cannot read from data set");
+                } else {
+                        NCMPI_CHECK(ncmpi_get_vara
+                                    (*(int *)fd, var_id, offset, bufSize,
+                                     bufferPtr, length, MPI_BYTE),
+                                    "cannot read from data set");
+                }
         }
-    } else {               /* READ or CHECK */
-        if (param->collective == TRUE) {
-            NCMPI_CHECK(ncmpi_get_vara_all(*(int *)fd, var_id, offset, bufSize,
-                                           bufferPtr, length, MPI_BYTE),
-                        "cannot read from data set");
-        } else {
-            NCMPI_CHECK(ncmpi_get_vara(*(int *)fd, var_id, offset, bufSize,
-                                       bufferPtr, length, MPI_BYTE),
-                        "cannot read from data set");
-        }
-    }
 
-    return(length);
-} /* IOR_Xfer_NCMPI() */
-
+        return (length);
+}                               /* IOR_Xfer_NCMPI() */
 
 /******************************************************************************/
 /*
  * Perform fsync().
  */
 
-void
-IOR_Fsync_NCMPI(void * fd, IOR_param_t * param)
+void IOR_Fsync_NCMPI(void *fd, IOR_param_t * param)
 {
-    ;
-} /* IOR_Fsync_NCMPI() */
-
+        ;
+}                               /* IOR_Fsync_NCMPI() */
 
 /******************************************************************************/
 /*
  * Close a file through the NCMPI interface.
  */
 
-void
-IOR_Close_NCMPI(void       * fd,
-               IOR_param_t * param)
+void IOR_Close_NCMPI(void *fd, IOR_param_t * param)
 {
-    if (param->collective == FALSE) {
-        NCMPI_CHECK(ncmpi_end_indep_data(*(int *)fd),
-                    "cannot disable independent data mode");
-    }
-    NCMPI_CHECK(ncmpi_close(*(int *)fd), "cannot close file");
-    free(fd);
-} /* IOR_Close_NCMPI() */
-
+        if (param->collective == FALSE) {
+                NCMPI_CHECK(ncmpi_end_indep_data(*(int *)fd),
+                            "cannot disable independent data mode");
+        }
+        NCMPI_CHECK(ncmpi_close(*(int *)fd), "cannot close file");
+        free(fd);
+}                               /* IOR_Close_NCMPI() */
 
 /******************************************************************************/
 /*
  * Delete a file through the NCMPI interface.
  */
 
-void
-IOR_Delete_NCMPI(char * testFileName, IOR_param_t * param)
+void IOR_Delete_NCMPI(char *testFileName, IOR_param_t * param)
 {
-    if (unlink(testFileName) != 0)
-        WARN("unlink() failed");
-} /* IOR_Delete_NCMPI() */
-
+        if (unlink(testFileName) != 0)
+                WARN("unlink() failed");
+}                               /* IOR_Delete_NCMPI() */
 
 /******************************************************************************/
 /*
  * Determine api version.
  */
 
-void
-IOR_SetVersion_NCMPI(IOR_param_t * test)
+void IOR_SetVersion_NCMPI(IOR_param_t * test)
 {
-    sprintf(test->apiVersion, "%s (%s)",
-            test->api, ncmpi_inq_libvers());
-} /* IOR_SetVersion_NCMPI() */
-
+        sprintf(test->apiVersion, "%s (%s)", test->api, ncmpi_inq_libvers());
+}                               /* IOR_SetVersion_NCMPI() */
 
 /************************ L O C A L   F U N C T I O N S ***********************/
 
@@ -377,38 +362,42 @@ IOR_SetVersion_NCMPI(IOR_param_t * test)
  * Return the correct file mode for NCMPI.
  */
 
-int
-GetFileMode(IOR_param_t * param)
+int GetFileMode(IOR_param_t * param)
 {
-    int fd_mode = 0;
+        int fd_mode = 0;
 
-    /* set IOR file flags to NCMPI flags */
-    /* -- file open flags -- */
-    if (param->openFlags & IOR_RDONLY) {fd_mode |= NC_NOWRITE;}
-    if (param->openFlags & IOR_WRONLY) {
-        fprintf(stdout, "File write only not implemented in NCMPI\n");
-    }
-    if (param->openFlags & IOR_RDWR)   {fd_mode |= NC_WRITE;}
-    if (param->openFlags & IOR_APPEND) {
-        fprintf(stdout, "File append not implemented in NCMPI\n");
-    }
-    if (param->openFlags & IOR_CREAT)  {fd_mode |= NC_CLOBBER;}
-    if (param->openFlags & IOR_EXCL)   {
-        fprintf(stdout, "Exclusive access not implemented in NCMPI\n");
-    }
-    if (param->openFlags & IOR_TRUNC)  {
-        fprintf(stdout, "File truncation not implemented in NCMPI\n");
-    }
-    if (param->openFlags & IOR_DIRECT) {
-        fprintf(stdout, "O_DIRECT not implemented in NCMPI\n");
-    }
+        /* set IOR file flags to NCMPI flags */
+        /* -- file open flags -- */
+        if (param->openFlags & IOR_RDONLY) {
+                fd_mode |= NC_NOWRITE;
+        }
+        if (param->openFlags & IOR_WRONLY) {
+                fprintf(stdout, "File write only not implemented in NCMPI\n");
+        }
+        if (param->openFlags & IOR_RDWR) {
+                fd_mode |= NC_WRITE;
+        }
+        if (param->openFlags & IOR_APPEND) {
+                fprintf(stdout, "File append not implemented in NCMPI\n");
+        }
+        if (param->openFlags & IOR_CREAT) {
+                fd_mode |= NC_CLOBBER;
+        }
+        if (param->openFlags & IOR_EXCL) {
+                fprintf(stdout, "Exclusive access not implemented in NCMPI\n");
+        }
+        if (param->openFlags & IOR_TRUNC) {
+                fprintf(stdout, "File truncation not implemented in NCMPI\n");
+        }
+        if (param->openFlags & IOR_DIRECT) {
+                fprintf(stdout, "O_DIRECT not implemented in NCMPI\n");
+        }
 
-    /* Wei-keng Liao: to enable > 4GB file size */
-    fd_mode |= NC_64BIT_OFFSET;
+        /* Wei-keng Liao: to enable > 4GB file size */
+        fd_mode |= NC_64BIT_OFFSET;
 
-    return(fd_mode);
-} /* GetFileMode() */
-
+        return (fd_mode);
+}                               /* GetFileMode() */
 
 /******************************************************************************/
 /*
@@ -416,9 +405,7 @@ GetFileMode(IOR_param_t * param)
  */
 
 IOR_offset_t
-IOR_GetFileSize_NCMPI(IOR_param_t * test,
-                      MPI_Comm      testComm,
-                      char        * testFileName)
+IOR_GetFileSize_NCMPI(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
-    return(IOR_GetFileSize_MPIIO(test, testComm, testFileName));
-} /* IOR_GetFileSize_NCMPI() */
+        return (IOR_GetFileSize_MPIIO(test, testComm, testFileName));
+}                               /* IOR_GetFileSize_NCMPI() */
