@@ -72,6 +72,22 @@ extern MPI_Comm testComm;
 
 /***************************** F U N C T I O N S ******************************/
 
+void set_o_direct_flag(int *fd)
+{
+/* note that TRU64 needs O_DIRECTIO, SunOS uses directio(),
+   and everyone else needs O_DIRECT */
+#ifndef O_DIRECT
+#  ifndef O_DIRECTIO
+    WARN("cannot use O_DIRECT");
+#    define O_DIRECT 000000
+#  else /* O_DIRECTIO */
+#    define O_DIRECT O_DIRECTIO
+#  endif /* not O_DIRECTIO */
+#endif /* not O_DIRECT */
+
+    *fd |= O_DIRECT;
+}
+
 /******************************************************************************/
 /*
  * Creat and open a file through the POSIX interface.
@@ -87,19 +103,8 @@ IOR_Create_POSIX(char        * testFileName,
     fd = (int *)malloc(sizeof(int));
     if (fd == NULL) ERR("Unable to malloc file descriptor");
 
-    if (param->useO_DIRECT == TRUE) {
-/* note that TRU64 needs O_DIRECTIO, SunOS uses directio(),
-   and everyone else needs O_DIRECT */
-#ifndef O_DIRECT
-#  ifndef O_DIRECTIO
-     WARN("cannot use O_DIRECT");
-#    define O_DIRECT 000000
-#  else /* O_DIRECTIO */
-#    define O_DIRECT O_DIRECTIO
-#  endif /* not O_DIRECTIO */
-#endif /* not O_DIRECT */
-        fd_oflag |= O_DIRECT;
-    }
+    if (param->useO_DIRECT == TRUE)
+        set_o_direct_flag(&fd_oflag);
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
     if (param->lustre_set_striping) {
@@ -173,19 +178,8 @@ IOR_Open_POSIX(char        * testFileName,
     fd = (int *)malloc(sizeof(int));
     if (fd == NULL) ERR("Unable to malloc file descriptor");
 
-    if (param->useO_DIRECT == TRUE) {
-/* note that TRU64 needs O_DIRECTIO, SunOS uses directio(),
-   and everyone else needs O_DIRECT */
-#ifndef O_DIRECT
-#  ifndef O_DIRECTIO
-     WARN("cannot use O_DIRECT");
-#    define O_DIRECT 000000
-#  else /* O_DIRECTIO */
-#    define O_DIRECT O_DIRECTIO
-#  endif /* not O_DIRECTIO */
-#endif /* not O_DIRECT */
-        fd_oflag |= O_DIRECT;
-    }
+    if (param->useO_DIRECT == TRUE)
+        set_o_direct_flag(&fd_oflag);
 
     fd_oflag |= O_RDWR;
     *fd = open64(testFileName, fd_oflag);
