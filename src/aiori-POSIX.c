@@ -21,6 +21,7 @@
 #include <stdio.h>                                  /* only for fprintf() */
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <assert.h>
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
 #  include <lustre/lustre_user.h>
 #endif /* HAVE_LUSTRE_LUSTRE_USER_H */
@@ -109,7 +110,7 @@ IOR_Create_POSIX(char        * testFileName,
             MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             fd_oflag |= O_RDWR;
             *fd = open64(testFileName, fd_oflag, 0664);
-            if (*fd < 0) ERR("cannot open file");
+            if (*fd < 0) ERR("open64() failed");
         } else {
             struct lov_user_md opts = { 0 };
 
@@ -142,14 +143,14 @@ IOR_Create_POSIX(char        * testFileName,
 #endif /* HAVE_LUSTRE_LUSTRE_USER_H */
         fd_oflag |= O_CREAT | O_RDWR;
         *fd = open64(testFileName, fd_oflag, 0664);
-        if (*fd < 0) ERR("cannot open file");
+        if (*fd < 0) ERR("open64() failed");
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
     }
     
     if (param->lustre_ignore_locks) {
         int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
         if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
-            ERR("cannot set ioctl");
+            ERR("ioctl(LL_IOC_SETFLAGS) failed");
     }
 #endif /* HAVE_LUSTRE_LUSTRE_USER_H */
 
@@ -188,7 +189,7 @@ IOR_Open_POSIX(char        * testFileName,
 
     fd_oflag |= O_RDWR;
     *fd = open64(testFileName, fd_oflag);
-    if (*fd < 0) ERR("cannot open file");
+    if (*fd < 0) ERR("open64 failed");
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
     if (param->lustre_ignore_locks) {
@@ -197,7 +198,7 @@ IOR_Open_POSIX(char        * testFileName,
             fprintf(stdout, "** Disabling lustre range locking **\n");
         }
         if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
-            ERR("cannot set ioctl");
+            ERR("ioctl(LL_IOC_SETFLAGS) failed");
     }
 #endif /* HAVE_LUSTRE_LUSTRE_USER_H */
 
@@ -227,7 +228,7 @@ IOR_Xfer_POSIX(int            access,
 
     /* seek to offset */
     if (lseek64(fd, param->offset, SEEK_SET) == -1)
-        ERR("seek failed");
+        ERR("lseek64() failed");
 
     while (remaining > 0) {
         /* write/read file */
@@ -237,7 +238,10 @@ IOR_Xfer_POSIX(int            access,
                         rank, param->offset + length - remaining);
             }
             rc = write(fd, ptr, remaining);
-            if (param->fsyncPerWrite == TRUE) IOR_Fsync_POSIX(&fd, param);
+            if (param->fsyncPerWrite == TRUE)
+                IOR_Fsync_POSIX(&fd, param);
+            if (rc == -1)
+                ERR("write() failed");
         } else {               /* READ or CHECK */
             if (verbose >= VERBOSE_4) {
                 fprintf(stdout, "task %d reading from offset %lld\n",
@@ -245,40 +249,24 @@ IOR_Xfer_POSIX(int            access,
             }
             rc = read(fd, ptr, remaining);
             if (rc == 0)
-                ERR("hit EOF prematurely");
-        }
-        if (rc == -1)
-            ERR("transfer failed");
-        if (rc != remaining) {
-            fprintf(stdout,
-                    "WARNING: Task %d requested transfer of %lld bytes,\n",
-                    rank, remaining);
-            fprintf(stdout,
-                    "         but transferred %lld bytes at offset %lld\n",
-                    rc, param->offset + length - remaining);
-            if (param->singleXferAttempt == TRUE)
-                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "barrier error");
+                ERR("read() returned EOF prematurely");
+            if (rc == -1)
+                ERR("read() failed");
         }
         if (rc < remaining) {
+            fprintf(stdout,
+                    "WARNING: Task %d, partial %s, %lld of %lld bytes at offset %lld\n",
+                    rank,
+                    access == WRITE ? "write()" : "read()",
+                    rc, remaining,
+                    param->offset+length-remaining);
+            if (param->singleXferAttempt == TRUE)
+                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "barrier error");
             if (xferRetries > MAX_RETRY)
                 ERR("too many retries -- aborting");
-            if (xferRetries == 0) {
-                if (access == WRITE) {
-                  WARN("This file system requires support of partial write()s");
-                } else {
-                  WARN("This file system requires support of partial read()s");
-                }
-                fprintf(stdout,
-              "WARNING: Requested xfer of %lld bytes, but xferred %lld bytes\n",
-                        remaining, rc);
-            }
-            if (verbose >= VERBOSE_2) {
-                fprintf(stdout, "Only transferred %lld of %lld bytes\n",
-                        rc, remaining);
-            }
         }
-        if (rc > remaining) /* this should never happen */
-            ERR("too many bytes transferred!?!");
+        assert(rc >= 0);
+        assert(rc <= remaining);
         remaining -= rc;
         ptr += rc;
         xferRetries++;
@@ -295,7 +283,8 @@ IOR_Xfer_POSIX(int            access,
 void
 IOR_Fsync_POSIX(void * fd, IOR_param_t * param)
 {
-    if (fsync(*(int *)fd) != 0) WARN("cannot perform fsync on file");
+    if (fsync(*(int *)fd) != 0)
+        WARN("fsync() failed");
 } /* IOR_Fsync_POSIX() */
 
 
@@ -308,7 +297,8 @@ void
 IOR_Close_POSIX(void *fd,
                 IOR_param_t * param)
 {
-    if (close(*(int *)fd) != 0) ERR("cannot close file");
+    if (close(*(int *)fd) != 0)
+        ERR("close() failed");
     free(fd);
 } /* IOR_Close_POSIX() */
 
@@ -322,7 +312,8 @@ void
 IOR_Delete_POSIX(char * testFileName, IOR_param_t * param)
 {
     char errmsg[256];
-    sprintf(errmsg,"[RANK %03d]:cannot delete file %s\n",rank,testFileName);
+    sprintf(errmsg,"[RANK %03d]: unlink() of file \"%s\" failed\n",
+            rank, testFileName);
     if (unlink(testFileName) != 0) WARN(errmsg);
 } /* IOR_Delete_POSIX() */
 
@@ -354,7 +345,7 @@ IOR_GetFileSize_POSIX(IOR_param_t * test,
                  tmpMin, tmpMax, tmpSum;
 
     if (stat(testFileName, &stat_buf) != 0) {
-        ERR("cannot get status of written file");
+        ERR("stat() failed");
     }
     aggFileSizeFromStat = stat_buf.st_size;
 

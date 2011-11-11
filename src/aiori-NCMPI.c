@@ -96,7 +96,8 @@ IOR_Create_NCMPI(char        * testFileName,
     }
 
     fd = (int *)malloc(sizeof(int));
-    if (fd == NULL) ERR("Unable to malloc file descriptor");
+    if (fd == NULL)
+        ERR("malloc() failed");
 
     fd_mode = GetFileMode(param);
     NCMPI_CHECK(ncmpi_create(testComm, testFileName, fd_mode,
@@ -145,7 +146,8 @@ IOR_Open_NCMPI(char        * testFileName,
     }
 
     fd = (int *)malloc(sizeof(int));
-    if (fd == NULL) ERR("Unable to malloc file descriptor");
+    if (fd == NULL)
+        ERR("malloc() failed");
 
     fd_mode = GetFileMode(param);
     NCMPI_CHECK(ncmpi_open(testComm, testFileName, fd_mode,
@@ -350,7 +352,8 @@ IOR_Close_NCMPI(void       * fd,
 void
 IOR_Delete_NCMPI(char * testFileName, IOR_param_t * param)
 {
-    if (unlink(testFileName) != 0) WARN("cannot delete file");
+    if (unlink(testFileName) != 0)
+        WARN("unlink() failed");
 } /* IOR_Delete_NCMPI() */
 
 

@@ -2433,10 +2433,7 @@ ValidTests(IOR_param_t * test)
             #endif
         }
     }
-    if (test->useExistingTestFile
-        && (test->lustre_stripe_count != 0
-            || test->lustre_stripe_size != 0
-            || test->lustre_start_ost != -1))
+    if (test->useExistingTestFile && test->lustre_set_striping)
         ERR("Lustre stripe options are incompatible with useExistingTestFile");
 } /* ValidTests() */
 
@@ -2452,7 +2449,8 @@ GetOffsetArraySequential(IOR_param_t *test, int pretendRank)
 
     /* setup empty array */
     offsetArray = (IOR_offset_t *)malloc((offsets+1) * sizeof(IOR_offset_t));
-    if (offsetArray == NULL) ERR("out of memory");
+    if (offsetArray == NULL)
+        ERR("malloc() failed");
     offsetArray[offsets] = -1; /* set last offset with -1 */
 
     /* fill with offsets */
@@ -2508,7 +2506,8 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access)
 
     /* setup empty array */
     offsetArray = (IOR_offset_t *)malloc((offsets+1) * sizeof(IOR_offset_t));
-    if (offsetArray == NULL) ERR("out of memory");
+    if (offsetArray == NULL)
+        ERR("malloc() failed");
     offsetArray[offsets] = -1; /* set last offset with -1 */
 
     if (test->filePerProc) {
@@ -2596,10 +2595,12 @@ WriteOrRead(IOR_param_t * test,
         transfer = test->transferSize;
         if (access == WRITE) {
             amtXferred = backend->xfer(access, fd, buffer, transfer, test);
-            if (amtXferred != transfer) ERR("cannot write to file");
+            if (amtXferred != transfer)
+                ERR("cannot write to file");
         } else if (access == READ) {
             amtXferred = backend->xfer(access, fd, buffer, transfer, test);
-            if (amtXferred != transfer) ERR("cannot read from file");
+            if (amtXferred != transfer)
+                ERR("cannot read from file");
         } else if (access == WRITECHECK) {
             memset(checkBuffer, 'a', transfer);
             amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);

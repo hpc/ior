@@ -151,7 +151,8 @@ IOR_Open_HDF5(char        * testFileName,
     MPI_Info         mpiHints                    = MPI_INFO_NULL;
 
     fd = (hid_t *)malloc(sizeof(hid_t));
-    if (fd == NULL) ERR("Unable to malloc file descriptor");
+    if (fd == NULL)
+        ERR("malloc() failed");
     /*
      * HDF5 uses different flags than those for POSIX/MPIIO
      */
@@ -563,7 +564,8 @@ SetupDataSet_HDF5(void        * fd,
                 }
             #else
                 char errorString[MAX_STR];
-                sprintf(errorString, "'no fill' option not available in %s",                            test->apiVersion);
+                sprintf(errorString, "'no fill' option not available in %s",
+                        test->apiVersion);
                 ERR(errorString);
             #endif
         #else

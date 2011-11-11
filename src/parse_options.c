@@ -284,7 +284,7 @@ ReadConfigScript(char * scriptName)
     /* open the script */
     file = fopen(scriptName, "r");
     if (file == NULL)
-        ERR("cannot open file");
+        ERR("fopen() failed");
 
     /* search for the "IOR START" line */
     while(fgets(linebuf, MAX_STR, file) != NULL) {
@@ -311,7 +311,7 @@ ReadConfigScript(char * scriptName)
             if (runflag) {
                 newTest = (IOR_queue_t *)malloc(sizeof(IOR_queue_t));
                 if (newTest == NULL)
-                    ERR("malloc failed");
+                    ERR("malloc() failed");
                 newTest->testParameters = tail->testParameters;
                 newTest->testParameters.id = test_num++;
                 tail->nextTest = newTest;
@@ -325,7 +325,7 @@ ReadConfigScript(char * scriptName)
 
     /* close the script */
     if (fclose(file) != 0)
-        ERR("cannot close script file");
+        ERR("fclose() of script file failed");
 
     return(head);
 } /* ReadConfigScript() */
@@ -421,7 +421,7 @@ ParseCommandLine(int argc, char ** argv)
     if (tests == NULL) {
         tests = (IOR_queue_t *) malloc (sizeof(IOR_queue_t));
         if (!tests)
-            ERR("malloc failed");
+            ERR("malloc() failed");
         tests->testParameters = initialTestParams;
         tests->nextTest = NULL;
     }

@@ -97,7 +97,8 @@ IOR_Open_MPIIO(char        * testFileName,
     MPI_Info     mpiHints                = MPI_INFO_NULL;
 
     fd = (MPI_File *)malloc(sizeof(MPI_File));
-    if (fd == NULL) ERR("Unable to malloc MPI_File");
+    if (fd == NULL)
+        ERR("malloc failed()");
 
     *fd = 0;
 
