@@ -23,8 +23,6 @@
 /**************************** P R O T O T Y P E S *****************************/
 
 static IOR_offset_t SeekOffset_MPIIO(MPI_File, IOR_offset_t, IOR_param_t *);
-void SetHints(MPI_Info *, char *);
-void ShowHints(MPI_Info *);
 
 void *IOR_Create_MPIIO(char *, IOR_param_t *);
 void *IOR_Open_MPIIO(char *, IOR_param_t *);

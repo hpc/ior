@@ -382,6 +382,40 @@ int Regex(char *string, char *pattern)
 
 #if USE_UNDOC_OPT               /* corruptFile */
 /*
+ * Modify byte in file - used to testing write/read data checking.
+ */
+static void ModifyByteInFile(char *fileName, IOR_offset_t offset, int byteValue)
+{
+        int fd;
+        int rc;
+        char old;
+        char new;
+
+        new = (char)byteValue;
+
+        /* open file, show old value, update to new value */
+        fd = open(fileName, O_RDWR);
+        rc = lseek(fd, offset, SEEK_SET);
+        if (rc == -1)
+                goto out;
+        rc = read(fd, &old, 1);
+        if (rc == -1)
+                goto out;
+        rc = lseek(fd, offset, SEEK_SET);
+        if (rc == -1)
+                goto out;
+        rc = write(fd, &new, 1);
+        if (rc == -1)
+                goto out;
+        fprintf(stdout,
+                "** DEBUG: offset %lld in %s changed from %d to %d **\n",
+                offset, fileName, (unsigned char)old, (unsigned char)new);
+
+ out:
+        close(fd);
+        return;
+}
+/*
  * Corrupt file to testing data checking options.
  */
 void CorruptFile(char *testFileName, IOR_param_t * test, int rep, int access)
@@ -415,41 +449,6 @@ void CorruptFile(char *testFileName, IOR_param_t * test, int rep, int access)
                 ModifyByteInFile(fileName, tmpOff, 121);
         }
 
-        return;
-}
-
-/*
- * Modify byte in file - used to testing write/read data checking.
- */
-void ModifyByteInFile(char *fileName, IOR_offset_t offset, int byteValue)
-{
-        int fd;
-        int rc;
-        char old;
-        char new;
-
-        new = (char)byteValue;
-
-        /* open file, show old value, update to new value */
-        fd = open(fileName, O_RDWR);
-        rc = lseek(fd, offset, SEEK_SET);
-        if (rc == -1)
-                goto out;
-        rc = read(fd, &old, 1);
-        if (rc == -1)
-                goto out;
-        rc = lseek(fd, offset, SEEK_SET);
-        if (rc == -1)
-                goto out;
-        rc = write(fd, &new, 1);
-        if (rc == -1)
-                goto out;
-        fprintf(stdout,
-                "** DEBUG: offset %lld in %s changed from %d to %d **\n",
-                offset, fileName, (unsigned char)old, (unsigned char)new);
-
- out:
-        close(fd);
         return;
 }
 #endif                          /* USE_UNDOC_OPT - corruptFile */

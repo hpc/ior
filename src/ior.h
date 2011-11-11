@@ -81,13 +81,10 @@ void           WriteTimes       (IOR_param_t *, double **, int, int);
 char *         CurrentTimeString(void);
 void           DumpBuffer       (void *, size_t);
 void           ExtractHint      (char *, char *, char *);
-void           SetHints         (MPI_Info *, char *);
-void           ShowHints        (MPI_Info *);
 IOR_offset_t   StringToBytes    (char *);
 
 #if USE_UNDOC_OPT
 void           CorruptFile      (char *, IOR_param_t *, int, int);
-void           ModifyByteInFile (char *, IOR_offset_t, int);
 #endif /* USE_UNDOC_OPTS */
 void           SeedRandGen      (MPI_Comm);
 

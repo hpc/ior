@@ -183,5 +183,7 @@ typedef struct ior_aiori {
 } ior_aiori_t;
 
 void init_IOR_Param_t(IOR_param_t *p);
+void SetHints (MPI_Info *, char *);
+void ShowHints (MPI_Info *);
 
 #endif /* not _AIORI_H */

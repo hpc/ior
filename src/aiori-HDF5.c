@@ -70,9 +70,7 @@
 /**************************** P R O T O T Y P E S *****************************/
 
 static IOR_offset_t SeekOffset_HDF5(void *, IOR_offset_t, IOR_param_t *);
-void SetHints(MPI_Info *, char *);
 void SetupDataSet_HDF5(void *, IOR_param_t *);
-void ShowHints(MPI_Info *);
 
 void *IOR_Create_HDF5(char *, IOR_param_t *);
 void *IOR_Open_HDF5(char *, IOR_param_t *);

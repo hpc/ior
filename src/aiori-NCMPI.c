@@ -37,8 +37,6 @@
 /**************************** P R O T O T Y P E S *****************************/
 
 static int GetFileMode(IOR_param_t *);
-void SetHints(MPI_Info *, char *);
-void ShowHints(MPI_Info *);
 
 void *IOR_Create_NCMPI(char *, IOR_param_t *);
 void *IOR_Open_NCMPI(char *, IOR_param_t *);
