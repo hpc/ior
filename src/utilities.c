@@ -9,13 +9,15 @@
 *
 \******************************************************************************/
 
-#include "aiori.h"              /* abstract IOR interface */
-#include "ior.h"                /* IOR functions */
-#include <errno.h>              /* sys_errlist */
-#include <fcntl.h>              /* open() */
-#include <math.h>               /* pow() */
-#include <stdio.h>              /* only for fprintf() */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <math.h>               /* pow() */
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -29,6 +31,10 @@
 #endif                          /* __sun */
 #include <sys/time.h>           /* gettimeofday() */
 #endif
+
+#include "utilities.h"
+#include "aiori.h"
+#include "ior.h"
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -147,6 +153,32 @@ void OutputToRoot(int numTasks, MPI_Comm comm, char *stringToDisplay)
 }
 
 /*
+ * Extract key/value pair from hint string.
+ */
+void ExtractHint(char *settingVal, char *valueVal, char *hintString)
+{
+        char *settingPtr, *valuePtr, *tmpPtr1, *tmpPtr2;
+
+        settingPtr = (char *)strtok(hintString, "=");
+        valuePtr = (char *)strtok(NULL, " \t\r\n");
+        tmpPtr1 = settingPtr;
+        tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__MPI__");
+        if (tmpPtr1 == tmpPtr2) {
+                settingPtr += strlen("IOR_HINT__MPI__");
+
+        } else {
+                tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__GPFS__");
+                if (tmpPtr1 == tmpPtr2) {
+                        settingPtr += strlen("IOR_HINT__GPFS__");
+                        fprintf(stdout,
+                                "WARNING: Unable to set GPFS hints (not implemented.)\n");
+                }
+        }
+        strcpy(settingVal, settingPtr);
+        strcpy(valueVal, valuePtr);
+}
+
+/*
  * Set hints for MPIIO, HDF5, or NCMPI.
  */
 void SetHints(MPI_Info * mpiHints, char *hintsFileName)
@@ -205,32 +237,6 @@ void SetHints(MPI_Info * mpiHints, char *hintsFileName)
                                 ERR("cannot close hints file");
                 }
         }
-}
-
-/*
- * Extract key/value pair from hint string.
- */
-void ExtractHint(char *settingVal, char *valueVal, char *hintString)
-{
-        char *settingPtr, *valuePtr, *tmpPtr1, *tmpPtr2;
-
-        settingPtr = (char *)strtok(hintString, "=");
-        valuePtr = (char *)strtok(NULL, " \t\r\n");
-        tmpPtr1 = settingPtr;
-        tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__MPI__");
-        if (tmpPtr1 == tmpPtr2) {
-                settingPtr += strlen("IOR_HINT__MPI__");
-
-        } else {
-                tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__GPFS__");
-                if (tmpPtr1 == tmpPtr2) {
-                        settingPtr += strlen("IOR_HINT__GPFS__");
-                        fprintf(stdout,
-                                "WARNING: Unable to set GPFS hints (not implemented.)\n");
-                }
-        }
-        strcpy(settingVal, settingPtr);
-        strcpy(valueVal, valuePtr);
 }
 
 /*
@@ -333,7 +339,7 @@ void ShowFileSystemSize(char *fileSystem)
                 (double)totalFileSystemSize / (double)(1<<30);
         fileSystemUnitStr = "GiB";
         if (totalFileSystemSizeHR > 1024) {
-                totalFileSystemSizeHR = (double)totalFileSystemSize / (double)(1<<40);
+                totalFileSystemSizeHR = (double)totalFileSystemSize / (double)((long long)1<<40);
                 fileSystemUnitStr = "TiB";
         }
 

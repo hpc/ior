@@ -9,22 +9,29 @@
 *
 \******************************************************************************/
 
-#include "aiori.h"              /* abstract IOR interface */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
 #ifdef __linux__
 #include <sys/ioctl.h>          /* necessary for: */
 #define __USE_GNU               /* O_DIRECT and */
 #include <fcntl.h>              /* IO operations */
 #undef __USE_GNU
 #endif                          /* __linux__ */
-#include <errno.h>              /* sys_errlist */
+#include <errno.h>
 #include <fcntl.h>              /* IO operations */
-#include <stdio.h>              /* only for fprintf() */
-#include <stdlib.h>
 #include <sys/stat.h>
 #include <assert.h>
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
 #include <lustre/lustre_user.h>
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif
+
+#include "ior.h"
+#include "aiori.h"
+#include "iordef.h"
 
 #ifndef   open64                /* necessary for TRU64 -- */
 #define open64  open            /* unlikely, but may pose */
@@ -39,35 +46,29 @@
 #endif
 
 /**************************** P R O T O T Y P E S *****************************/
-void *IOR_Create_POSIX(char *, IOR_param_t *);
-void *IOR_Open_POSIX(char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_POSIX(int, void *, IOR_size_t *,
-                            IOR_offset_t, IOR_param_t *);
-void IOR_Close_POSIX(void *, IOR_param_t *);
-void IOR_Delete_POSIX(char *, IOR_param_t *);
-void IOR_SetVersion_POSIX(IOR_param_t *);
-void IOR_Fsync_POSIX(void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_POSIX(IOR_param_t *, MPI_Comm, char *);
+static void *POSIX_Create(char *, IOR_param_t *);
+static void *POSIX_Open(char *, IOR_param_t *);
+static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
+                               IOR_offset_t, IOR_param_t *);
+static void POSIX_Close(void *, IOR_param_t *);
+static void POSIX_Delete(char *, IOR_param_t *);
+static void POSIX_SetVersion(IOR_param_t *);
+static void POSIX_Fsync(void *, IOR_param_t *);
+static IOR_offset_t POSIX_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t posix_aiori = {
         "POSIX",
-        IOR_Create_POSIX,
-        IOR_Open_POSIX,
-        IOR_Xfer_POSIX,
-        IOR_Close_POSIX,
-        IOR_Delete_POSIX,
-        IOR_SetVersion_POSIX,
-        IOR_Fsync_POSIX,
-        IOR_GetFileSize_POSIX
+        POSIX_Create,
+        POSIX_Open,
+        POSIX_Xfer,
+        POSIX_Close,
+        POSIX_Delete,
+        POSIX_SetVersion,
+        POSIX_Fsync,
+        POSIX_GetFileSize
 };
-
-extern int errno;
-extern int rank;
-extern int rankOffset;
-extern int verbose;
-extern MPI_Comm testComm;
 
 /***************************** F U N C T I O N S ******************************/
 
@@ -90,7 +91,7 @@ void set_o_direct_flag(int *fd)
 /*
  * Creat and open a file through the POSIX interface.
  */
-void *IOR_Create_POSIX(char *testFileName, IOR_param_t * param)
+static void *POSIX_Create(char *testFileName, IOR_param_t * param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
@@ -168,7 +169,7 @@ void *IOR_Create_POSIX(char *testFileName, IOR_param_t * param)
 /*
  * Open a file through the POSIX interface.
  */
-void *IOR_Open_POSIX(char *testFileName, IOR_param_t * param)
+static void *POSIX_Open(char *testFileName, IOR_param_t * param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
@@ -203,10 +204,8 @@ void *IOR_Open_POSIX(char *testFileName, IOR_param_t * param)
 /*
  * Write or read access to file using the POSIX interface.
  */
-IOR_offset_t
-IOR_Xfer_POSIX(int access,
-               void *file,
-               IOR_size_t * buffer, IOR_offset_t length, IOR_param_t * param)
+static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
+                               IOR_offset_t length, IOR_param_t * param)
 {
         int xferRetries = 0;
         long long remaining = (long long)length;
@@ -231,7 +230,7 @@ IOR_Xfer_POSIX(int access,
                         }
                         rc = write(fd, ptr, remaining);
                         if (param->fsyncPerWrite == TRUE)
-                                IOR_Fsync_POSIX(&fd, param);
+                                POSIX_Fsync(&fd, param);
                         if (rc == -1)
                                 ERR("write() failed");
                 } else {        /* READ or CHECK */
@@ -272,7 +271,7 @@ IOR_Xfer_POSIX(int access,
 /*
  * Perform fsync().
  */
-void IOR_Fsync_POSIX(void *fd, IOR_param_t * param)
+static void POSIX_Fsync(void *fd, IOR_param_t * param)
 {
         if (fsync(*(int *)fd) != 0)
                 WARN("fsync() failed");
@@ -281,7 +280,7 @@ void IOR_Fsync_POSIX(void *fd, IOR_param_t * param)
 /*
  * Close a file through the POSIX interface.
  */
-void IOR_Close_POSIX(void *fd, IOR_param_t * param)
+static void POSIX_Close(void *fd, IOR_param_t * param)
 {
         if (close(*(int *)fd) != 0)
                 ERR("close() failed");
@@ -291,7 +290,7 @@ void IOR_Close_POSIX(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the POSIX interface.
  */
-void IOR_Delete_POSIX(char *testFileName, IOR_param_t * param)
+static void POSIX_Delete(char *testFileName, IOR_param_t * param)
 {
         char errmsg[256];
         sprintf(errmsg, "[RANK %03d]: unlink() of file \"%s\" failed\n",
@@ -303,16 +302,16 @@ void IOR_Delete_POSIX(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-void IOR_SetVersion_POSIX(IOR_param_t * test)
+static void POSIX_SetVersion(IOR_param_t * test)
 {
         strcpy(test->apiVersion, test->api);
-}                               /* IOR_SetVersion_POSIX() */
+}
 
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-IOR_offset_t
-IOR_GetFileSize_POSIX(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
+static IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
+                                      char *testFileName)
 {
         struct stat stat_buf;
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;

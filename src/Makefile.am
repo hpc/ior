@@ -4,7 +4,7 @@ bin_PROGRAMS += IOR
 endif
 
 ior_SOURCES = ior.c utilities.c parse_options.c
-ior_SOURCES += ior.h aiori.h iordef.h
+ior_SOURCES += ior.h utilities.h parse_options.h aiori.h iordef.h
 ior_LDADD =
 
 if USE_POSIX_AIORI

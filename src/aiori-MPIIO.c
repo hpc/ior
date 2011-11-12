@@ -9,12 +9,18 @@
 *
 \******************************************************************************/
 
-#include "aiori.h"              /* abstract IOR interface */
-#include <errno.h>              /* sys_errlist */
-#include <stdio.h>              /* only for fprintf() */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/stat.h>
+
+#include "ior.h"
+#include "iordef.h"
+#include "aiori.h"
+#include "utilities.h"
 
 #ifndef MPIAPI
 #define MPIAPI                  /* defined as __stdcall on Windows */
@@ -22,36 +28,29 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 
-static IOR_offset_t SeekOffset_MPIIO(MPI_File, IOR_offset_t, IOR_param_t *);
+static IOR_offset_t SeekOffset(MPI_File, IOR_offset_t, IOR_param_t *);
 
-void *IOR_Create_MPIIO(char *, IOR_param_t *);
-void *IOR_Open_MPIIO(char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_MPIIO(int, void *, IOR_size_t *,
-                            IOR_offset_t, IOR_param_t *);
-void IOR_Close_MPIIO(void *, IOR_param_t *);
-void IOR_Delete_MPIIO(char *, IOR_param_t *);
-void IOR_SetVersion_MPIIO(IOR_param_t *);
-void IOR_Fsync_MPIIO(void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_MPIIO(IOR_param_t *, MPI_Comm, char *);
+static void *MPIIO_Create(char *, IOR_param_t *);
+static void *MPIIO_Open(char *, IOR_param_t *);
+static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
+                                   IOR_offset_t, IOR_param_t *);
+static void MPIIO_Close(void *, IOR_param_t *);
+static void MPIIO_Delete(char *, IOR_param_t *);
+static void MPIIO_SetVersion(IOR_param_t *);
+static void MPIIO_Fsync(void *, IOR_param_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
-extern int errno;
-extern int rank;
-extern int rankOffset;
-extern int verbose;
-extern MPI_Comm testComm;
-
 ior_aiori_t mpiio_aiori = {
         "MPIIO",
-        IOR_Create_MPIIO,
-        IOR_Open_MPIIO,
-        IOR_Xfer_MPIIO,
-        IOR_Close_MPIIO,
-        IOR_Delete_MPIIO,
-        IOR_SetVersion_MPIIO,
-        IOR_Fsync_MPIIO,
-        IOR_GetFileSize_MPIIO
+        MPIIO_Create,
+        MPIIO_Open,
+        MPIIO_Xfer,
+        MPIIO_Close,
+        MPIIO_Delete,
+        MPIIO_SetVersion,
+        MPIIO_Fsync,
+        MPIIO_GetFileSize
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -59,15 +58,15 @@ ior_aiori_t mpiio_aiori = {
 /*
  * Create and open a file through the MPIIO interface.
  */
-void *IOR_Create_MPIIO(char *testFileName, IOR_param_t * param)
+static void *MPIIO_Create(char *testFileName, IOR_param_t * param)
 {
-        return IOR_Open_MPIIO(testFileName, param);
+        return MPIIO_Open(testFileName, param);
 }
 
 /*
  * Open a file through the MPIIO interface.  Setup file view.
  */
-void *IOR_Open_MPIIO(char *testFileName, IOR_param_t * param)
+static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
 {
         int fd_mode = (int)0,
             offsetFactor,
@@ -210,10 +209,8 @@ void *IOR_Open_MPIIO(char *testFileName, IOR_param_t * param)
 /*
  * Write or read access to file using the MPIIO interface.
  */
-IOR_offset_t
-IOR_Xfer_MPIIO(int access,
-               void *fd,
-               IOR_size_t * buffer, IOR_offset_t length, IOR_param_t * param)
+static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
+                               IOR_offset_t length, IOR_param_t * param)
 {
         int (MPIAPI * Access) (MPI_File, void *, int,
                                MPI_Datatype, MPI_Status *);
@@ -259,7 +256,7 @@ IOR_Xfer_MPIIO(int access,
          */
         if (param->useFileView) {
                 /* find offset in file */
-                if (SeekOffset_MPIIO(*(MPI_File *) fd, param->offset, param) <
+                if (SeekOffset(*(MPI_File *) fd, param->offset, param) <
                     0) {
                         /* if unsuccessful */
                         length = -1;
@@ -297,7 +294,7 @@ IOR_Xfer_MPIIO(int access,
                  */
                 if (param->useSharedFilePointer) {
                         /* find offset in file */
-                        if (SeekOffset_MPIIO
+                        if (SeekOffset
                             (*(MPI_File *) fd, param->offset, param) < 0) {
                                 /* if unsuccessful */
                                 length = -1;
@@ -335,15 +332,15 @@ IOR_Xfer_MPIIO(int access,
 /*
  * Perform fsync().
  */
-void IOR_Fsync_MPIIO(void *fd, IOR_param_t * param)
+static void MPIIO_Fsync(void *fd, IOR_param_t * param)
 {
         ;
-}                               /* IOR_Fsync_MPIIO() */
+}
 
 /*
  * Close a file through the MPIIO interface.
  */
-void IOR_Close_MPIIO(void *fd, IOR_param_t * param)
+static void MPIIO_Close(void *fd, IOR_param_t * param)
 {
         MPI_CHECK(MPI_File_close((MPI_File *) fd), "cannot close file");
         if ((param->useFileView == TRUE) && (param->fd_fppReadCheck == NULL)) {
@@ -361,7 +358,7 @@ void IOR_Close_MPIIO(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the MPIIO interface.
  */
-void IOR_Delete_MPIIO(char *testFileName, IOR_param_t * param)
+static void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 {
         MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
                   "cannot delete file");
@@ -370,7 +367,7 @@ void IOR_Delete_MPIIO(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-void IOR_SetVersion_MPIIO(IOR_param_t * test)
+static void MPIIO_SetVersion(IOR_param_t * test)
 {
         int version, subversion;
         MPI_CHECK(MPI_Get_version(&version, &subversion),
@@ -382,8 +379,8 @@ void IOR_SetVersion_MPIIO(IOR_param_t * test)
 /*
  * Seek to offset in file using the MPIIO interface.
  */
-static IOR_offset_t
-SeekOffset_MPIIO(MPI_File fd, IOR_offset_t offset, IOR_param_t * param)
+static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
+                               IOR_param_t * param)
 {
         int offsetFactor, tasksPerFile;
         IOR_offset_t tempOffset;
@@ -422,9 +419,10 @@ SeekOffset_MPIIO(MPI_File fd, IOR_offset_t offset, IOR_param_t * param)
 
 /*
  * Use MPI_File_get_size() to return aggregate file size.
+ * NOTE: This function is used by the HDF5 and NCMPI backends.
  */
-IOR_offset_t
-IOR_GetFileSize_MPIIO(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
+IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
+                               char *testFileName)
 {
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
         MPI_File fd;
@@ -458,5 +456,4 @@ IOR_GetFileSize_MPIIO(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
         }
 
         return (aggFileSizeFromStat);
-
 }

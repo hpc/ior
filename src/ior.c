@@ -5,15 +5,16 @@
 *                                                                              *
 \******************************************************************************/
 
-#include "aiori.h"              /* IOR I/O interfaces */
-#include "ior.h"                /* IOR definitions
-                                   and prototypes */
-#include <ctype.h>              /* tolower() */
-#include <errno.h>              /* sys_errlist */
-#include <math.h>
-#include <mpi.h>
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>              /* tolower() */
+#include <errno.h>
+#include <math.h>
+#include <mpi.h>
 #include <string.h>
 #include <sys/stat.h>           /* struct stat */
 #include <time.h>
@@ -23,36 +24,26 @@
 #endif
 #include <assert.h>
 
-/************************** D E C L A R A T I O N S ***************************/
+#include "ior.h"
+#include "aiori.h"
+#include "utilities.h"
+#include "parse_options.h"
 
-extern IOR_param_t initialTestParams;
-extern int errno;               /* error number */
-extern char **environ;
-int totalErrorCount = 0;
+/* globals used by other files, also defined "extern" in ior.h */
 int numTasksWorld = 0;
 int rank = 0;
 int rankOffset = 0;
 int tasksPerNode = 0;           /* tasks per node */
 int verbose = VERBOSE_0;        /* verbose output */
-double wall_clock_delta = 0;
-double wall_clock_deviation;
 MPI_Comm testComm;
 
+/* file scope globals */
+extern char **environ;
+int totalErrorCount = 0;
+double wall_clock_delta = 0;
+double wall_clock_deviation;
+
 ior_aiori_t *backend;
-
-#ifdef USE_POSIX_AIORI
-extern ior_aiori_t posix_aiori;
-#endif
-#ifdef USE_MPIIO_AIORI
-extern ior_aiori_t mpiio_aiori;
-#endif
-#ifdef USE_HDF5_AIORI
-extern ior_aiori_t hdf5_aiori;
-#endif
-#ifdef USE_NCMPI_AIORI
-extern ior_aiori_t ncmpi_aiori;
-#endif
-
 ior_aiori_t *available_aiori[] = {
 #ifdef USE_POSIX_AIORI
         &posix_aiori,
@@ -68,6 +59,47 @@ ior_aiori_t *available_aiori[] = {
 #endif
         NULL
 };
+
+static void AioriBind(char *);
+static void CheckForOutliers(IOR_param_t *, double **, int, int);
+static void CheckFileSize(IOR_param_t *, IOR_offset_t, int);
+static char *CheckTorF(char *);
+static size_t CompareBuffers(void *, void *, size_t,
+                             IOR_offset_t, IOR_param_t *, int);
+static int CountErrors(IOR_param_t *, int, int);
+static int CountTasksPerNode(int, MPI_Comm);
+static void *CreateBuffer(size_t);
+static void DelaySecs(int);
+static void DisplayFreespace(IOR_param_t *);
+static void DisplayOutliers(int, double, char *, int, int);
+static void DisplayUsage(char **);
+static void DistributeHints(void);
+static void FillBuffer(void *, IOR_param_t *, unsigned long long, int);
+static void FreeBuffers(int, void *, void *, void *, IOR_offset_t *);
+static void GetTestFileName(char *, IOR_param_t *);
+static double GetTimeStamp(void);
+static char *HumanReadable(IOR_offset_t, int);
+static char *LowerCase(char *);
+static void PPDouble(int, double, char *);
+static char *PrependDir(IOR_param_t *, char *);
+static char **ParseFileName(char *, int *);
+static void ReadCheck(void *, void *, void *, void *, IOR_param_t *,
+                      IOR_offset_t, IOR_offset_t, IOR_offset_t *,
+                      IOR_offset_t *, int, int *);
+static void ReduceIterResults(IOR_param_t *, double **, int, int);
+static void RemoveFile(char *, int, IOR_param_t *);
+static void SetupXferBuffers(void **, void **, void **,
+                             IOR_param_t *, int, int);
+static IOR_queue_t *SetupTests(int, char **);
+static void ShowInfo(int, char **, IOR_param_t *);
+static void ShowSetup(IOR_param_t *);
+static void ShowTest(IOR_param_t *);
+static void SummarizeResults(IOR_param_t *);
+static void TestIoSys(IOR_param_t *);
+static double TimeDeviation(void);
+static void ValidTests(IOR_param_t *);
+static IOR_offset_t WriteOrRead(IOR_param_t *, void *, int);
+static void WriteTimes(IOR_param_t *, double **, int, int);
 
 /********************************** M A I N ***********************************/
 
@@ -170,7 +202,7 @@ void init_IOR_Param_t(IOR_param_t * p)
  * Bind the global "backend" pointer to the requested backend AIORI's
  * function table.
  */
-void AioriBind(char *api)
+static void AioriBind(char *api)
 {
         ior_aiori_t **tmp;
 
@@ -186,9 +218,9 @@ void AioriBind(char *api)
                 ERR("unrecognized IO API");
         }
 
-}                               /* AioriBind() */
+}
 
-void
+static void
 DisplayOutliers(int numTasks,
                 double timerVal,
                 char *timeString, int access, int outlierThreshold)
@@ -221,12 +253,13 @@ DisplayOutliers(int numTasks,
                 fprintf(stdout, "         (mean=%f, stddev=%f)\n", mean, sd);
                 fflush(stdout);
         }
-}                               /* DisplayOutliers() */
+}
 
 /*
  * Check for outliers in start/end times and elapsed create/xfer/close times.
  */
-void CheckForOutliers(IOR_param_t * test, double **timer, int rep, int access)
+static void CheckForOutliers(IOR_param_t * test, double **timer, int rep,
+                             int access)
 {
         int shift;
 
@@ -251,13 +284,13 @@ void CheckForOutliers(IOR_param_t * test, double **timer, int rep, int access)
         DisplayOutliers(test->numTasks, timer[shift + 5][rep], "end time",
                         access, test->outlierThreshold);
 
-}                               /* CheckForOutliers() */
+}
 
 /*
  * Check if actual file size equals expected size; if not use actual for
  * calculating performance rate.
  */
-void CheckFileSize(IOR_param_t * test, IOR_offset_t dataMoved, int rep)
+static void CheckFileSize(IOR_param_t * test, IOR_offset_t dataMoved, int rep)
 {
         MPI_CHECK(MPI_Allreduce(&dataMoved, &test->aggFileSizeFromXfer[rep],
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
@@ -286,12 +319,12 @@ void CheckFileSize(IOR_param_t * test, IOR_offset_t dataMoved, int rep)
         }
         test->aggFileSizeForBW[rep] = test->aggFileSizeFromXfer[rep];
 
-}                               /* CheckFileSize() */
+}
 
 /*
  * Check if string is true or false.
  */
-char *CheckTorF(char *string)
+static char *CheckTorF(char *string)
 {
         string = LowerCase(string);
         if (strcmp(string, "false") == 0) {
@@ -300,13 +333,13 @@ char *CheckTorF(char *string)
                 strcpy(string, "1");
         }
         return (string);
-}                               /* CheckTorF() */
+}
 
 /*
  * Compare buffers after reading/writing each transfer.  Displays only first
  * difference in buffers and returns total errors counted.
  */
-size_t
+static size_t
 CompareBuffers(void *expectedBuffer,
                void *unknownBuffer,
                size_t size,
@@ -412,7 +445,7 @@ CompareBuffers(void *expectedBuffer,
 /*
  * Count all errors across all tasks; report errors found.
  */
-int CountErrors(IOR_param_t * test, int access, int errors)
+static int CountErrors(IOR_param_t * test, int access, int errors)
 {
         int allErrors = 0;
 
@@ -455,7 +488,7 @@ int CountErrors(IOR_param_t * test, int access, int errors)
 /*
  * Compares hostnames to determine the number of tasks per node
  */
-int CountTasksPerNode(int numTasks, MPI_Comm comm)
+static int CountTasksPerNode(int numTasks, MPI_Comm comm)
 {
         char localhost[MAX_STR], hostname[MAX_STR], taskOnNode[MAX_STR];
         int count = 1, resultsLen = MAX_STR, i;
@@ -493,12 +526,12 @@ int CountTasksPerNode(int numTasks, MPI_Comm comm)
         }
 
         return (count);
-}                               /* CountTasksPerNode() */
+}
 
 /*
  * Allocate a page-aligned (required by O_DIRECT) buffer.
  */
-void *CreateBuffer(size_t size)
+static void *CreateBuffer(size_t size)
 {
         size_t pageSize;
         size_t pageMask;
@@ -544,19 +577,19 @@ IOR_queue_t *CreateNewTest(int test_num)
 /*
  * Sleep for 'delay' seconds.
  */
-void DelaySecs(int delay)
+static void DelaySecs(int delay)
 {
         if (rank == 0 && delay > 0) {
                 if (verbose >= VERBOSE_1)
                         fprintf(stdout, "delaying %d seconds . . .\n", delay);
                 sleep(delay);
         }
-}                               /* DelaySecs() */
+}
 
 /*
  * Display freespace (df).
  */
-void DisplayFreespace(IOR_param_t * test)
+static void DisplayFreespace(IOR_param_t * test)
 {
         char fileName[MAX_STR] = { 0 };
         int i;
@@ -588,12 +621,12 @@ void DisplayFreespace(IOR_param_t * test)
         ShowFileSystemSize(fileName);
 
         return;
-}                               /* DisplayFreespace() */
+}
 
 /*
  * Display usage of script file.
  */
-void DisplayUsage(char **argv)
+static void DisplayUsage(char **argv)
 {
         char *opts[] = {
                 "OPTIONS:",
@@ -708,7 +741,7 @@ void DistributeHints(void)
  * ints, store transfer offset.  If storeFileOffset option is used, the file
  * (not transfer) offset is stored instead.
  */
-void
+static void
 FillBuffer(void *buffer,
            IOR_param_t * test, unsigned long long offset, int fillrank)
 {
@@ -732,7 +765,7 @@ FillBuffer(void *buffer,
 /*
  * Free transfer buffers.
  */
-void
+static void
 FreeBuffers(int access,
             void *checkBuffer,
             void *readCheckBuffer, void *buffer, IOR_offset_t * offsetArray)
@@ -795,7 +828,7 @@ void GetPlatformName(char *platformName)
  * Return test file name to access.
  * for single shared file, fileNames[0] is returned in testFileName
  */
-void GetTestFileName(char *testFileName, IOR_param_t * test)
+static void GetTestFileName(char *testFileName, IOR_param_t * test)
 {
         char **fileNames,
             initialTestFileName[MAXPATHLEN],
@@ -851,7 +884,7 @@ void GetTestFileName(char *testFileName, IOR_param_t * test)
  * Get time stamp.  Use MPI_Timer() unless _NO_MPI_TIMER is defined,
  * in which case use gettimeofday().
  */
-double GetTimeStamp(void)
+static double GetTimeStamp(void)
 {
         double timeVal;
 #ifdef _NO_MPI_TIMER
@@ -875,7 +908,7 @@ double GetTimeStamp(void)
 /*
  * Convert IOR_offset_t value to human readable string.
  */
-char *HumanReadable(IOR_offset_t value, int base)
+static char *HumanReadable(IOR_offset_t value, int base)
 {
         char *valueStr;
         int m = 0, g = 0;
@@ -922,7 +955,7 @@ char *HumanReadable(IOR_offset_t value, int base)
 /*
  * Change string to lower case.
  */
-char *LowerCase(char *string)
+static char *LowerCase(char *string)
 {
         char *nextChar = string;
 
@@ -936,7 +969,7 @@ char *LowerCase(char *string)
 /*
  * Parse file name.
  */
-char **ParseFileName(char *name, int *count)
+static char **ParseFileName(char *name, int *count)
 {
         char **fileNames, *tmp, *token;
         char delimiterString[3] = { FILENAME_DELIMITER, '\n', '\0' };
@@ -977,7 +1010,7 @@ char **ParseFileName(char *name, int *count)
  * justification should be used.  The third parameter a null-terminated string
  * that should be appended to the number field.
  */
-void PPDouble(int leftjustify, double number, char *append)
+static void PPDouble(int leftjustify, double number, char *append)
 {
         if (number < 0) {
                 fprintf(stdout, "   -      %s", append);
@@ -1004,7 +1037,7 @@ void PPDouble(int leftjustify, double number, char *append)
  * From absolute directory, insert rank as subdirectory.  Allows each task
  * to write to its own directory.  E.g., /dir/file => /dir/<rank>/file.
  */
-char *PrependDir(IOR_param_t * test, char *rootDir)
+static char *PrependDir(IOR_param_t * test, char *rootDir)
 {
         char *dir;
         char fname[MAX_STR + 1];
@@ -1063,7 +1096,7 @@ char *PrependDir(IOR_param_t * test, char *rootDir)
 /*
  * Read and then reread buffer to confirm data read twice matches.
  */
-void
+static void
 ReadCheck(void *fd,
           void *buffer,
           void *checkBuffer,
@@ -1125,8 +1158,8 @@ ReadCheck(void *fd,
             % test->numTasks;
         readCheckFromRank = (rank + (test->numTasks
                                      -
-                                     (test->reorderTasks ? test->
-                                      tasksPerNode : 0)))
+                                     (test->
+                                      reorderTasks ? test->tasksPerNode : 0)))
             % test->numTasks;
         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
         MPI_Sendrecv(checkBuffer, transfer, MPI_CHAR, readCheckToRank, 1,
@@ -1143,7 +1176,8 @@ ReadCheck(void *fd,
  * Reduce test results, and show if verbose set.
  */
 
-void ReduceIterResults(IOR_param_t * test, double **timer, int rep, int access)
+static void ReduceIterResults(IOR_param_t * test, double **timer, int rep,
+                              int access)
 {
         double reduced[12] = { 0 },
             diff[6], currentWrite, currentRead, totalWriteTime, totalReadTime;
@@ -1244,7 +1278,7 @@ void ReduceIterResults(IOR_param_t * test, double **timer, int rep, int access)
 /*
  * Check for file(s), then remove all files if file-per-proc, else single file.
  */
-void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
+static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
 {
         int tmpRankOffset;
         if (filePerProc) {
@@ -1271,7 +1305,7 @@ void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
 /*
  * Setup tests by parsing commandline and creating test script.
  */
-IOR_queue_t *SetupTests(int argc, char **argv)
+static IOR_queue_t *SetupTests(int argc, char **argv)
 {
         IOR_queue_t *tests, *testsHead;
 
@@ -1304,7 +1338,7 @@ IOR_queue_t *SetupTests(int argc, char **argv)
 /*
  * Setup transfer buffers, creating and filling as needed.
  */
-void
+static void
 SetupXferBuffers(void **buffer,
                  void **checkBuffer,
                  void **readCheckBuffer,
@@ -1326,7 +1360,7 @@ SetupXferBuffers(void **buffer,
 /*
  * Print header information for test output.
  */
-void ShowInfo(int argc, char **argv, IOR_param_t * test)
+static void ShowInfo(int argc, char **argv, IOR_param_t * test)
 {
         int i;
         struct utsname unamebuf;
@@ -1392,7 +1426,7 @@ void ShowInfo(int argc, char **argv, IOR_param_t * test)
 /*
  * Show simple test output with max results for iterations.
  */
-void ShowSetup(IOR_param_t * test)
+static void ShowSetup(IOR_param_t * test)
 {
         IOR_offset_t aggFileSizeForBW;
 
@@ -1480,7 +1514,7 @@ void ShowSetup(IOR_param_t * test)
 /*
  * Show test description.
  */
-void ShowTest(IOR_param_t * test)
+static void ShowTest(IOR_param_t * test)
 {
         fprintf(stdout, "\n\n  ================================\n\n");
         fprintf(stdout, "TEST:\t%s=%d\n", "id", test->id);
@@ -1551,7 +1585,7 @@ void ShowTest(IOR_param_t * test)
 /*
  * Summarize results, showing max rates (and min, mean, stddev if verbose)
  */
-void SummarizeResults(IOR_param_t * test)
+static void SummarizeResults(IOR_param_t * test)
 {
         int rep, ival;
         double maxWrite[2], minWrite[2], maxRead[2], minRead[2];
@@ -1720,7 +1754,7 @@ void SummarizeResults(IOR_param_t * test)
 /*
  * Using the test parameters, run iteration(s) of single test.
  */
-void TestIoSys(IOR_param_t * test)
+static void TestIoSys(IOR_param_t * test)
 {
         char testFileName[MAX_STR];
         double *timer[12];
@@ -2066,7 +2100,8 @@ void TestIoSys(IOR_param_t * test)
                                                         filecont[(ifile +
                                                                   rankoffs
                                                                   [ifile]) %
-                                                                 test->numTasks]++;
+                                                                 test->
+                                                                 numTasks]++;
                                                 }
                                                 memset((void *)filehits, 0,
                                                        test->numTasks *
@@ -2199,8 +2234,9 @@ void TestIoSys(IOR_param_t * test)
                                                 test);
                                 rankOffset = tmpRankOffset;
                                 test->fd_fppReadCheck =
-                                    backend->
-                                    open(test->testFileName_fppReadCheck, test);
+                                    backend->open(test->
+                                                  testFileName_fppReadCheck,
+                                                  test);
                         }
                         dataMoved = WriteOrRead(test, fd, READCHECK);
                         if (test->filePerProc) {
@@ -2252,7 +2288,7 @@ void TestIoSys(IOR_param_t * test)
 /*
  * Determine any spread (range) between node times.
  */
-double TimeDeviation(void)
+static double TimeDeviation(void)
 {
         double timestamp;
         double min = 0;
@@ -2280,7 +2316,7 @@ double TimeDeviation(void)
 /*
  * Determine if valid tests from parameters.
  */
-void ValidTests(IOR_param_t * test)
+static void ValidTests(IOR_param_t * test)
 {
         IOR_param_t defaults;
 
@@ -2434,7 +2470,8 @@ void ValidTests(IOR_param_t * test)
                 ERR("Lustre stripe options are incompatible with useExistingTestFile");
 }
 
-IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank)
+static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
+                                              int pretendRank)
 {
         IOR_offset_t i, j, k = 0;
         IOR_offset_t offsets;
@@ -2468,8 +2505,8 @@ IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank)
         return (offsetArray);
 }
 
-IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
-                                   int access)
+static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
+                                          int access)
 {
         int seed;
         IOR_offset_t i, value, tmp;
@@ -2540,7 +2577,7 @@ IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
  * Write or Read data to file(s).  This loops through the strides, writing
  * out the data to each block in transfer sizes, until the remainder left is 0.
  */
-IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
+static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
 {
         int errors = 0;
         IOR_offset_t amtXferred,
@@ -2629,7 +2666,7 @@ IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
 /*
  * Write times taken during each iteration of the test.
  */
-void
+static void
 WriteTimes(IOR_param_t * test, double **timer, int iteration, int writeOrRead)
 {
         char accessType[MAX_STR];

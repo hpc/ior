@@ -12,6 +12,12 @@
 #  include "config.h"
 #endif
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <mpi.h>
+
 #ifdef _WIN32
 #   define _CRT_SECURE_NO_WARNINGS
 #   define _CRT_RAND_S
@@ -20,10 +26,8 @@
 #   pragma warning(4 : 4244)    /* 'function' : conversion from 'IOR_offset_t' to 'int' */
 
 #   include <Windows.h>
-#   include <stdlib.h>
 #   include <io.h>
 #   include <direct.h>
-#   include <string.h>
 #   include "win/getopt.h"
 
 #   define MAXPATHLEN 1024
@@ -46,9 +50,6 @@
 #   include <unistd.h>
 #   include <limits.h>
 #endif
-#include <mpi.h>
-#include <stdio.h>
-#include <errno.h>
 
 /************************** D E C L A R A T I O N S ***************************/
 

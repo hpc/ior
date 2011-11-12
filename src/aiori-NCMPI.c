@@ -9,12 +9,19 @@
 *
 \******************************************************************************/
 
-#include "aiori.h"              /* abstract IOR interface */
-#include <errno.h>              /* sys_errlist */
-#include <stdio.h>              /* only for fprintf() */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <pnetcdf.h>
+
+#include "ior.h"
+#include "iordef.h"
+#include "aiori.h"
+#include "utilities.h"
 
 #define NUM_DIMS 3              /* number of dimensions to data set */
 
@@ -38,43 +45,36 @@
 
 static int GetFileMode(IOR_param_t *);
 
-void *IOR_Create_NCMPI(char *, IOR_param_t *);
-void *IOR_Open_NCMPI(char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_NCMPI(int, void *, IOR_size_t *,
-                            IOR_offset_t, IOR_param_t *);
-void IOR_Close_NCMPI(void *, IOR_param_t *);
-void IOR_Delete_NCMPI(char *, IOR_param_t *);
-void IOR_SetVersion_NCMPI(IOR_param_t *);
-void IOR_Fsync_NCMPI(void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_NCMPI(IOR_param_t *, MPI_Comm, char *);
+static void *NCMPI_Create(char *, IOR_param_t *);
+static void *NCMPI_Open(char *, IOR_param_t *);
+static IOR_offset_t NCMPI_Xfer(int, void *, IOR_size_t *,
+                               IOR_offset_t, IOR_param_t *);
+static void NCMPI_Close(void *, IOR_param_t *);
+static void NCMPI_Delete(char *, IOR_param_t *);
+static void NCMPI_SetVersion(IOR_param_t *);
+static void NCMPI_Fsync(void *, IOR_param_t *);
+static IOR_offset_t NCMPI_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t ncmpi_aiori = {
         "NCMPI",
-        IOR_Create_NCMPI,
-        IOR_Open_NCMPI,
-        IOR_Xfer_NCMPI,
-        IOR_Close_NCMPI,
-        IOR_Delete_NCMPI,
-        IOR_SetVersion_NCMPI,
-        IOR_Fsync_NCMPI,
-        IOR_GetFileSize_NCMPI
+        NCMPI_Create,
+        NCMPI_Open,
+        NCMPI_Xfer,
+        NCMPI_Close,
+        NCMPI_Delete,
+        NCMPI_SetVersion,
+        NCMPI_Fsync,
+        NCMPI_GetFileSize
 };
-
-extern int errno;               /* error number */
-extern int numTasksWorld;
-extern int rank;
-extern int rankOffset;
-extern int verbose;
-extern MPI_Comm testComm;
 
 /***************************** F U N C T I O N S ******************************/
 
 /*
  * Create and open a file through the NCMPI interface.
  */
-void *IOR_Create_NCMPI(char *testFileName, IOR_param_t * param)
+static void *NCMPI_Create(char *testFileName, IOR_param_t * param)
 {
         int *fd;
         int fd_mode;
@@ -119,7 +119,7 @@ void *IOR_Create_NCMPI(char *testFileName, IOR_param_t * param)
 /*
  * Open a file through the NCMPI interface.
  */
-void *IOR_Open_NCMPI(char *testFileName, IOR_param_t * param)
+static void *NCMPI_Open(char *testFileName, IOR_param_t * param)
 {
         int *fd;
         int fd_mode;
@@ -164,10 +164,8 @@ void *IOR_Open_NCMPI(char *testFileName, IOR_param_t * param)
 /*
  * Write or read access to file using the NCMPI interface.
  */
-IOR_offset_t
-IOR_Xfer_NCMPI(int access,
-               void *fd,
-               IOR_size_t * buffer, IOR_offset_t length, IOR_param_t * param)
+static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
+                               IOR_offset_t length, IOR_param_t * param)
 {
         char *bufferPtr = (char *)buffer;
         static int firstReadCheck = FALSE, startDataSet;
@@ -306,7 +304,7 @@ IOR_Xfer_NCMPI(int access,
 /*
  * Perform fsync().
  */
-void IOR_Fsync_NCMPI(void *fd, IOR_param_t * param)
+static void NCMPI_Fsync(void *fd, IOR_param_t * param)
 {
         ;
 }
@@ -314,7 +312,7 @@ void IOR_Fsync_NCMPI(void *fd, IOR_param_t * param)
 /*
  * Close a file through the NCMPI interface.
  */
-void IOR_Close_NCMPI(void *fd, IOR_param_t * param)
+static void NCMPI_Close(void *fd, IOR_param_t * param)
 {
         if (param->collective == FALSE) {
                 NCMPI_CHECK(ncmpi_end_indep_data(*(int *)fd),
@@ -327,7 +325,7 @@ void IOR_Close_NCMPI(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the NCMPI interface.
  */
-void IOR_Delete_NCMPI(char *testFileName, IOR_param_t * param)
+static void NCMPI_Delete(char *testFileName, IOR_param_t * param)
 {
         if (unlink(testFileName) != 0)
                 WARN("unlink() failed");
@@ -336,7 +334,7 @@ void IOR_Delete_NCMPI(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-void IOR_SetVersion_NCMPI(IOR_param_t * test)
+static void NCMPI_SetVersion(IOR_param_t * test)
 {
         sprintf(test->apiVersion, "%s (%s)", test->api, ncmpi_inq_libvers());
 }
@@ -384,8 +382,8 @@ static int GetFileMode(IOR_param_t * param)
 /*
  * Use MPIIO call to get file size.
  */
-IOR_offset_t
-IOR_GetFileSize_NCMPI(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
+static IOR_offset_t NCMPI_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
+                                      char *testFileName)
 {
-        return (IOR_GetFileSize_MPIIO(test, testComm, testFileName));
+        return (MPIIO_GetFileSize(test, testComm, testFileName));
 }

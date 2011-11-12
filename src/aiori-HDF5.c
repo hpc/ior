@@ -9,12 +9,19 @@
 *
 \******************************************************************************/
 
-#include "aiori.h"              /* abstract IOR interface */
-#include <errno.h>              /* sys_errlist */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <stdio.h>              /* only for fprintf() */
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <hdf5.h>
+#include <mpi.h>
+
+#include "aiori.h"              /* abstract IOR interface */
+#include "utilities.h"
+#include "iordef.h"
 
 #define NUM_DIMS 1              /* number of dimensions to data set */
 
@@ -69,36 +76,31 @@
 #endif                          /* H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6 */
 /**************************** P R O T O T Y P E S *****************************/
 
-static IOR_offset_t SeekOffset_HDF5(void *, IOR_offset_t, IOR_param_t *);
-void SetupDataSet_HDF5(void *, IOR_param_t *);
-
-void *IOR_Create_HDF5(char *, IOR_param_t *);
-void *IOR_Open_HDF5(char *, IOR_param_t *);
-IOR_offset_t IOR_Xfer_HDF5(int, void *, IOR_size_t *,
+static IOR_offset_t SeekOffset(void *, IOR_offset_t, IOR_param_t *);
+static void SetupDataSet(void *, IOR_param_t *);
+static void *HDF5_Create(char *, IOR_param_t *);
+static void *HDF5_Open(char *, IOR_param_t *);
+static IOR_offset_t HDF5_Xfer(int, void *, IOR_size_t *,
                            IOR_offset_t, IOR_param_t *);
-void IOR_Close_HDF5(void *, IOR_param_t *);
-void IOR_Delete_HDF5(char *, IOR_param_t *);
-void IOR_SetVersion_HDF5(IOR_param_t *);
-void IOR_Fsync_HDF5(void *, IOR_param_t *);
-IOR_offset_t IOR_GetFileSize_HDF5(IOR_param_t *, MPI_Comm, char *);
+static void HDF5_Close(void *, IOR_param_t *);
+static void HDF5_Delete(char *, IOR_param_t *);
+static void HDF5_SetVersion(IOR_param_t *);
+static void HDF5_Fsync(void *, IOR_param_t *);
+static IOR_offset_t HDF5_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t hdf5_aiori = {
         "HDF5",
-        IOR_Create_HDF5,
-        IOR_Open_HDF5,
-        IOR_Xfer_HDF5,
-        IOR_Close_HDF5,
-        IOR_Delete_HDF5,
-        IOR_SetVersion_HDF5,
-        IOR_Fsync_HDF5,
-        IOR_GetFileSize_HDF5
+        HDF5_Create,
+        HDF5_Open,
+        HDF5_Xfer,
+        HDF5_Close,
+        HDF5_Delete,
+        HDF5_SetVersion,
+        HDF5_Fsync,
+        HDF5_GetFileSize
 };
-
-extern int errno,               /* error number */
- rank, rankOffset, verbose;     /* verbose output */
-extern MPI_Comm testComm;
 
 static hid_t xferPropList;      /* xfer property list */
 hid_t dataSet;                  /* data set id */
@@ -112,15 +114,15 @@ int newlyOpenedFile;            /* newly opened file */
 /*
  * Create and open a file through the HDF5 interface.
  */
-void *IOR_Create_HDF5(char *testFileName, IOR_param_t * param)
+static void *HDF5_Create(char *testFileName, IOR_param_t * param)
 {
-        return IOR_Open_HDF5(testFileName, param);
+        return HDF5_Open(testFileName, param);
 }
 
 /*
  * Open a file through the HDF5 interface.
  */
-void *IOR_Open_HDF5(char *testFileName, IOR_param_t * param)
+static void *HDF5_Open(char *testFileName, IOR_param_t * param)
 {
         hid_t accessPropList, createPropList;
         hsize_t memStart[NUM_DIMS],
@@ -322,10 +324,8 @@ void *IOR_Open_HDF5(char *testFileName, IOR_param_t * param)
 /*
  * Write or read access to file using the HDF5 interface.
  */
-IOR_offset_t
-IOR_Xfer_HDF5(int access,
-              void *fd,
-              IOR_size_t * buffer, IOR_offset_t length, IOR_param_t * param)
+static IOR_offset_t HDF5_Xfer(int access, void *fd, IOR_size_t * buffer,
+                              IOR_offset_t length, IOR_param_t * param)
 {
         static int firstReadCheck = FALSE, startNewDataSet;
         IOR_offset_t segmentPosition, segmentSize;
@@ -374,10 +374,10 @@ IOR_Xfer_HDF5(int access,
                         HDF5_CHECK(H5Sclose(fileDataSpace),
                                    "cannot close file data space");
                 }
-                SetupDataSet_HDF5(fd, param);
+                SetupDataSet(fd, param);
         }
 
-        SeekOffset_HDF5(fd, param->offset, param);
+        SeekOffset(fd, param->offset, param);
 
         /* this is necessary to reset variables for reaccessing file */
         startNewDataSet = FALSE;
@@ -401,7 +401,7 @@ IOR_Xfer_HDF5(int access,
 /*
  * Perform fsync().
  */
-void IOR_Fsync_HDF5(void *fd, IOR_param_t * param)
+static void HDF5_Fsync(void *fd, IOR_param_t * param)
 {
         ;
 }
@@ -409,7 +409,7 @@ void IOR_Fsync_HDF5(void *fd, IOR_param_t * param)
 /*
  * Close a file through the HDF5 interface.
  */
-void IOR_Close_HDF5(void *fd, IOR_param_t * param)
+static void HDF5_Close(void *fd, IOR_param_t * param)
 {
         if (param->fd_fppReadCheck == NULL) {
                 HDF5_CHECK(H5Dclose(dataSet), "cannot close data set");
@@ -428,7 +428,7 @@ void IOR_Close_HDF5(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the HDF5 interface.
  */
-void IOR_Delete_HDF5(char *testFileName, IOR_param_t * param)
+static void HDF5_Delete(char *testFileName, IOR_param_t * param)
 {
         if (unlink(testFileName) != 0)
                 WARN("cannot delete file");
@@ -437,7 +437,7 @@ void IOR_Delete_HDF5(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-void IOR_SetVersion_HDF5(IOR_param_t * test)
+static void HDF5_SetVersion(IOR_param_t * test)
 {
         unsigned major, minor, release;
         if (H5get_libversion(&major, &minor, &release) < 0) {
@@ -456,8 +456,8 @@ void IOR_SetVersion_HDF5(IOR_param_t * test)
 /*
  * Seek to offset in file using the HDF5 interface and set up hyperslab.
  */
-static IOR_offset_t SeekOffset_HDF5(void *fd, IOR_offset_t offset,
-                                    IOR_param_t * param)
+static static HDF5_offset_t SeekOffset(void *fd, IOR_offset_t offset,
+                                            IOR_param_t * param)
 {
         IOR_offset_t segmentSize;
         hsize_t hsStride[NUM_DIMS], hsCount[NUM_DIMS], hsBlock[NUM_DIMS];
@@ -491,12 +491,12 @@ static IOR_offset_t SeekOffset_HDF5(void *fd, IOR_offset_t offset,
                                        hsStart, hsStride, hsCount, hsBlock),
                    "cannot select hyperslab");
         return (offset);
-}                               /* SeekOffset_HDF5() */
+}
 
 /*
  * Create HDF5 data set.
  */
-static void SetupDataSet_HDF5(void *fd, IOR_param_t * param)
+static static void SetupDataSet(void *fd, IOR_param_t * param)
 {
         char dataSetName[MAX_STR];
         hid_t dataSetPropList;
@@ -557,8 +557,8 @@ static void SetupDataSet_HDF5(void *fd, IOR_param_t * param)
 /*
  * Use MPIIO call to get file size.
  */
-IOR_offset_t
-IOR_GetFileSize_HDF5(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
+static IOR_offset_t
+HDF5_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
-        return (IOR_GetFileSize_MPIIO(test, testComm, testFileName));
+        return (MPIIO_GetFileSize(test, testComm, testFileName));
 }

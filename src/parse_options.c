@@ -9,19 +9,25 @@
 *
 \******************************************************************************/
 
-#include "ior.h"
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <string.h>
+
+#include "ior.h"
+#include "aiori.h"
+#include "parse_options.h"
 
 IOR_param_t initialTestParams;
 
 /*
  * Check and correct all settings of each test in queue for correctness.
  */
-void CheckRunSettings(IOR_queue_t * tests)
+static void CheckRunSettings(IOR_queue_t * tests)
 {
         while (tests != NULL) {
                 /* If no write/read/check action requested, set both write and read */
