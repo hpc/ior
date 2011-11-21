@@ -1475,11 +1475,11 @@ static void ShowSetup(IOR_param_t * test)
                 fprintf(stdout, " no tasks offsets\n");
         }
         if (test->reorderTasks == TRUE) {
-                fprintf(stdout, "constant task offsets = %d\n",
+                fprintf(stdout, " constant task offsets = %d\n",
                         test->taskPerNodeOffset);
         }
         if (test->reorderTasksRandom == TRUE) {
-                fprintf(stdout, "random task offsets >= %d, seed=%d\n",
+                fprintf(stdout, " random task offsets >= %d, seed=%d\n",
                         test->taskPerNodeOffset, test->reorderTasksRandomSeed);
         }
         fprintf(stdout, "\tclients            = %d (%d per node)\n",
