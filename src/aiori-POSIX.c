@@ -229,10 +229,10 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                                         param->offset + length - remaining);
                         }
                         rc = write(fd, ptr, remaining);
-                        if (param->fsyncPerWrite == TRUE)
-                                POSIX_Fsync(&fd, param);
                         if (rc == -1)
                                 ERR("write() failed");
+                        if (param->fsyncPerWrite == TRUE)
+                                POSIX_Fsync(&fd, param);
                 } else {        /* READ or CHECK */
                         if (verbose >= VERBOSE_4) {
                                 fprintf(stdout,
