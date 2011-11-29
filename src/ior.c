@@ -1253,7 +1253,7 @@ static void ReduceIterResults(IOR_param_t * test, double **timer, int rep,
                                 PPDouble(LEFT, diff[2], " \0");
                                 PPDouble(LEFT, totalWriteTime, " \0");
                         }
-                        fprintf(stdout, "%-4d XXCEL\n", rep);
+                        fprintf(stdout, "%-4d\n", rep);
                 }
                 if (access == READ) {
                         fprintf(stdout, "read      ");
@@ -1268,7 +1268,7 @@ static void ReduceIterResults(IOR_param_t * test, double **timer, int rep,
                                 PPDouble(LEFT, diff[5], " \0");
                                 PPDouble(LEFT, totalReadTime, " \0");
                         }
-                        fprintf(stdout, "%-4d XXCEL\n", rep);
+                        fprintf(stdout, "%-4d\n", rep);
                 }
                 fflush(stdout);
         }
@@ -2135,7 +2135,7 @@ static void TestIoSys(IOR_param_t * test)
                                                             filehits[ifile],
                                                             ifile++;
                                                 }
-                                                fprintf(stdout, " XXCEL\n");
+                                                fprintf(stdout, "\n");
                                                 free(rankoffs);
                                                 free(filecont);
                                                 free(filehits);
@@ -2156,7 +2156,7 @@ static void TestIoSys(IOR_param_t * test)
                         fd = backend->open(testFileName, test);
                         if (rank == 0 && verbose >= VERBOSE_2) {
                                 fprintf(stdout,
-                                        "[RANK %03d] open for reading file %s XXCEL\n",
+                                        "[RANK %03d] open for reading file %s\n",
                                         rank, testFileName);
                         }
                         timer[7][rep] = GetTimeStamp();
