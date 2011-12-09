@@ -1659,10 +1659,10 @@ static void SummarizeResults(IOR_param_t * test)
 
         if (rank == 0 && verbose >= VERBOSE_0) {
                 fprintf(stdout,
-                        "Operation  Max (MiB)  Min (MiB)  Mean (MiB)   Std Dev  Max (OPs)  Min (OPs)  Mean (OPs)   Std Dev  Mean (s)  ");
+                        "Operation  Max(MiB)   Min(MiB)   Mean(MiB)    StdDev   Max(OPs)   Min(OPs)   Mean(OPs)    StdDev   Mean(s)   ");
                 if (verbose >= VERBOSE_1)
                         fprintf(stdout,
-                                "Op grep #Tasks tPN reps  fPP reord reordoff reordrand seed segcnt blksiz xsize aggsize\n");
+                                "#Tasks tPN reps  fPP reord reordoff reordrand seed segcnt blksiz xsize aggsize TestNum API\n");
                 fprintf(stdout, "\n");
                 fprintf(stdout,
                         "---------  ---------  ---------  ----------   -------  ---------  ---------  ----------   -------  --------\n");
@@ -1697,7 +1697,6 @@ static void SummarizeResults(IOR_param_t * test)
                                 fprintf(stdout, "%d ", test->TestNum);
                                 fprintf(stdout, "%s ", test->api);
                         }
-                        fprintf(stdout, "EXCEL\n");
                 }
                 if (maxRead[0] > 0.) {
                         fprintf(stdout, "%s      ", "read");
@@ -1730,7 +1729,6 @@ static void SummarizeResults(IOR_param_t * test)
                                 fprintf(stdout, "%d ", test->TestNum);
                                 fprintf(stdout, "%s ", test->api);
                         }
-                        fprintf(stdout, "EXCEL\n");
                 }
                 fflush(stdout);
         }
