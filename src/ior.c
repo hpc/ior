@@ -83,6 +83,7 @@ static char *LowerCase(char *);
 static void PPDouble(int, double, char *);
 static char *PrependDir(IOR_param_t *, char *);
 static char **ParseFileName(char *, int *);
+static void PrintHeader(int argc, char **argv);
 static void ReadCheck(void *, void *, void *, void *, IOR_param_t *,
                       IOR_offset_t, IOR_offset_t, IOR_offset_t *,
                       IOR_offset_t *, int, int *);
@@ -91,7 +92,7 @@ static void RemoveFile(char *, int, IOR_param_t *);
 static void SetupXferBuffers(void **, void **, void **,
                              IOR_param_t *, int, int);
 static IOR_queue_t *SetupTests(int, char **);
-static void ShowInfo(int, char **, IOR_param_t *);
+static void ShowTestInfo(IOR_param_t *);
 static void ShowSetup(IOR_param_t *);
 static void ShowTest(IOR_param_t *);
 static void SummarizeResults(IOR_param_t *);
@@ -144,11 +145,13 @@ int main(int argc, char **argv)
                 DisplayUsage(argv);
         }
 
+	PrintHeader(argc, argv);
+
         /* perform each test */
         while (tests != NULL) {
                 verbose = tests->testParameters.verbose;
                 if (rank == 0 && verbose >= VERBOSE_0) {
-                        ShowInfo(argc, argv, &tests->testParameters);
+                        ShowTestInfo(&tests->testParameters);
                 }
                 if (rank == 0 && verbose >= VERBOSE_3) {
                         ShowTest(&tests->testParameters);
@@ -159,7 +162,7 @@ int main(int argc, char **argv)
 
         /* display finish time */
         if (rank == 0 && verbose >= VERBOSE_0) {
-                fprintf(stdout, "Run finished: %s", CurrentTimeString());
+                fprintf(stdout, "Finish: %s", CurrentTimeString());
         }
 
         MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
@@ -1333,25 +1336,18 @@ SetupXferBuffers(void **buffer,
         return;
 }
 
-/*
- * Print header information for test output.
- */
-static void ShowInfo(int argc, char **argv, IOR_param_t * test)
+static void PrintHeader(int argc, char **argv)
 {
-        int i;
         struct utsname unamebuf;
+	int i;
 
-        fprintf(stdout,
-                "IOR-" META_VERSION
-                ": MPI Coordinated Test of Parallel I/O\n\n");
+	if (rank != 0)
+		return;
 
-        fprintf(stdout, "Run began: %s", CurrentTimeString());
-#if USE_UNDOC_OPT               /* NFS */
-        if (test->NFS_serverCount) {
-                fprintf(stdout, "NFS path: %s%s[0..%d]\n", test->NFS_rootPath,
-                        test->NFS_serverName, test->NFS_serverCount - 1);
-        }
-#endif                          /* USE_UNDOC_OPT - NFS */
+	printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
+	printf("\n");
+
+        fprintf(stdout, "Begin: %s", CurrentTimeString());
         fprintf(stdout, "Command line used:");
         for (i = 0; i < argc; i++) {
                 fprintf(stdout, " %s", argv[i]);
@@ -1384,10 +1380,6 @@ static void ShowInfo(int argc, char **argv, IOR_param_t * test)
         if (verbose >= VERBOSE_1) {
                 fprintf(stdout, "Start time skew across all tasks: %.02f sec\n",
                         wall_clock_deviation);
-                /* if pvfs2:, then skip */
-                if (Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
-                        DisplayFreespace(test);
-                }
         }
         if (verbose >= VERBOSE_3) {     /* show env */
                 fprintf(stdout, "STARTING ENVIRON LOOP\n");
@@ -1395,6 +1387,30 @@ static void ShowInfo(int argc, char **argv, IOR_param_t * test)
                         fprintf(stdout, "%s\n", environ[i]);
                 }
                 fprintf(stdout, "ENDING ENVIRON LOOP\n");
+        }
+	printf("\n");
+	fflush(stdout);
+}
+
+/*
+ * Print header information for test output.
+ */
+static void ShowTestInfo(IOR_param_t * test)
+{
+        int i;
+
+        fprintf(stdout, "Test start: %s", CurrentTimeString());
+#if USE_UNDOC_OPT               /* NFS */
+        if (test->NFS_serverCount) {
+                fprintf(stdout, "NFS path: %s%s[0..%d]\n", test->NFS_rootPath,
+                        test->NFS_serverName, test->NFS_serverCount - 1);
+        }
+#endif                          /* USE_UNDOC_OPT - NFS */
+        if (verbose >= VERBOSE_1) {
+                /* if pvfs2:, then skip */
+                if (Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
+                        DisplayFreespace(test);
+                }
         }
         fflush(stdout);
 }
