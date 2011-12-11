@@ -1188,7 +1188,6 @@ static void ReduceIterResults(IOR_param_t * test, double **timer, int rep,
 	double bw;
         enum { RIGHT, LEFT };
         int i;
-        static int firstIteration = TRUE;
         MPI_Op op;
 
 	assert(access == WRITE || access == READ);
@@ -1221,8 +1220,7 @@ static void ReduceIterResults(IOR_param_t * test, double **timer, int rep,
 	}
 
 #if USE_UNDOC_OPT               /* fillTheFileSystem */
-        if (test->fillTheFileSystem && firstIteration && rep == 0
-	    && verbose >= VERBOSE_1) {
+        if (test->fillTheFileSystem && rep == 0 && verbose >= VERBOSE_1) {
                 fprintf(stdout, " . . . skipping iteration results output . . .\n");
                 fflush(stdout);
         }
@@ -1232,12 +1230,6 @@ static void ReduceIterResults(IOR_param_t * test, double **timer, int rep,
         if (verbose < VERBOSE_0) {
 #endif
 		return;
-	}
-
-	if (firstIteration && rep == 0) {
-		firstIteration = FALSE;
-		fprintf(stdout, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
-		fprintf(stdout, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
 	}
 
 	fprintf(stdout, "%-10s", access == WRITE ? "write" : "read");
@@ -1912,6 +1904,10 @@ static void TestIoSys(IOR_param_t * test)
                                         test->timeStampSignatureValue,
                                         test->timeStampSignatureValue);
                         }
+			if (rep == 0) {
+				fprintf(stdout, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
+				fprintf(stdout, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
+			}
                 }
                 MPI_CHECK(MPI_Bcast
                           (&test->timeStampSignatureValue, 1, MPI_UNSIGNED, 0,
