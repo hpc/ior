@@ -318,7 +318,6 @@ static void CheckFileSize(IOR_param_t * test, IOR_offset_t dataMoved, int rep)
                 }
         }
         test->aggFileSizeForBW[rep] = test->aggFileSizeFromXfer[rep];
-
 }
 
 /*
@@ -1179,13 +1178,17 @@ ReadCheck(void *fd,
 static void ReduceIterResults(IOR_param_t * test, double **timer, int rep,
                               int access)
 {
-        double reduced[12] = { 0 },
-            diff[6], currentWrite, currentRead, totalWriteTime, totalReadTime;
+        double reduced[12] = { 0 };
+	double diff[6];
+	double *diff_subset;
+	double totalTime;
+	double bw;
         enum { RIGHT, LEFT };
         int i;
         static int firstIteration = TRUE;
-        IOR_offset_t aggFileSizeForBW;
         MPI_Op op;
+
+	assert(access == WRITE || access == READ);
 
         /* Find the minimum start time of the even numbered timers, and the
            maximum finish time for the odd numbered timers */
@@ -1195,84 +1198,57 @@ static void ReduceIterResults(IOR_param_t * test, double **timer, int rep,
                                      op, 0, testComm), "MPI_Reduce()");
         }
 
-        if (rank == 0) {
-                /* Calculate elapsed times and throughput numbers */
-                for (i = 0; i < 6; i++)
-                        diff[i] = reduced[2 * i + 1] - reduced[2 * i];
-                totalReadTime = reduced[11] - reduced[6];
-                totalWriteTime = reduced[5] - reduced[0];
-                aggFileSizeForBW = test->aggFileSizeForBW[rep];
-                if (access == WRITE) {
-                        currentWrite =
-                            (double)((double)aggFileSizeForBW / totalWriteTime);
-                        test->writeVal[0][rep] = currentWrite;
-                        test->writeVal[1][rep] = totalWriteTime;
-                }
-                if (access == READ) {
-                        currentRead =
-                            (double)((double)aggFileSizeForBW / totalReadTime);
-                        test->readVal[0][rep] = currentRead;
-                        test->readVal[1][rep] = totalReadTime;
-                }
-        }
-#if USE_UNDOC_OPT               /* fillTheFileSystem */
-        if (test->fillTheFileSystem && rank == 0 && firstIteration
-            && rep == 0 && verbose >= VERBOSE_1) {
-                fprintf(stdout,
-                        " . . . skipping iteration results output . . .\n");
-                fflush(stdout);
-        }
-#endif                          /* USE_UNDOC_OPT - fillTheFileSystem */
+        if (rank != 0) {
+		/* Only rank 0 tallies and prints the results. */
+		return;
+	}
 
-        if (rank == 0 && verbose >= VERBOSE_2
+	/* Calculate elapsed times and throughput numbers */
+	for (i = 0; i < 6; i++) {
+		diff[i] = reduced[2 * i + 1] - reduced[2 * i];
+	}
+	if (access == WRITE) {
+		totalTime = reduced[5] - reduced[0];
+		test->writeTime[rep] = totalTime;
+		diff_subset = &diff[0];
+	} else { /* READ */
+		totalTime = reduced[11] - reduced[6];
+		test->readTime[rep] = totalTime;
+		diff_subset = &diff[4];
+	}
+
 #if USE_UNDOC_OPT               /* fillTheFileSystem */
-            && test->fillTheFileSystem == FALSE
-#endif                          /* USE_UNDOC_OPT - fillTheFileSystem */
-            ) {
-                /* print out the results */
-                if (firstIteration && rep == 0) {
-                        fprintf(stdout,
-                                "access    bw(MiB/s)  block(KiB) xfer(KiB)");
-                        fprintf(stdout,
-                                "  open(s)    wr/rd(s)   close(s) total(s)  iter\n");
-                        fprintf(stdout,
-                                "------    ---------  ---------- ---------");
-                        fprintf(stdout,
-                                "  --------   --------   --------  --------   ----\n");
-                }
-                if (access == WRITE) {
-                        fprintf(stdout, "write     ");
-                        PPDouble(LEFT, (currentWrite / MEBIBYTE), " \0");
-                        PPDouble(LEFT, (double)test->blockSize / KIBIBYTE,
-                                 " \0");
-                        PPDouble(LEFT, (double)test->transferSize / KIBIBYTE,
-                                 " \0");
-                        if (test->writeFile) {
-                                PPDouble(LEFT, diff[0], " \0");
-                                PPDouble(LEFT, diff[1], " \0");
-                                PPDouble(LEFT, diff[2], " \0");
-                                PPDouble(LEFT, totalWriteTime, " \0");
-                        }
-                        fprintf(stdout, "%-4d\n", rep);
-                }
-                if (access == READ) {
-                        fprintf(stdout, "read      ");
-                        PPDouble(LEFT, (currentRead / MEBIBYTE), " \0");
-                        PPDouble(LEFT, (double)test->blockSize / KIBIBYTE,
-                                 " \0");
-                        PPDouble(LEFT, (double)test->transferSize / KIBIBYTE,
-                                 " \0");
-                        if (test->readFile) {
-                                PPDouble(LEFT, diff[3], " \0");
-                                PPDouble(LEFT, diff[4], " \0");
-                                PPDouble(LEFT, diff[5], " \0");
-                                PPDouble(LEFT, totalReadTime, " \0");
-                        }
-                        fprintf(stdout, "%-4d\n", rep);
-                }
+        if (test->fillTheFileSystem && firstIteration && rep == 0
+	    && verbose >= VERBOSE_1) {
+                fprintf(stdout, " . . . skipping iteration results output . . .\n");
                 fflush(stdout);
         }
-        firstIteration = FALSE; /* set to TRUE to repeat this header */
+
+        if (verbose < VERBOSE_0 || test->fillTheFileSystem) {
+#else
+        if (verbose < VERBOSE_0) {
+#endif
+		return;
+	}
+
+	if (firstIteration && rep == 0) {
+		firstIteration = FALSE;
+		fprintf(stdout, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
+		fprintf(stdout, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
+	}
+
+	fprintf(stdout, "%-10s", access == WRITE ? "write" : "read");
+	bw = (double)test->aggFileSizeForBW[rep] / totalTime;
+	PPDouble(LEFT, bw / MEBIBYTE, " ");
+	PPDouble(LEFT, (double)test->blockSize / KIBIBYTE, " ");
+	PPDouble(LEFT, (double)test->transferSize / KIBIBYTE, " ");
+	PPDouble(LEFT, diff_subset[0], " ");
+	PPDouble(LEFT, diff_subset[1], " ");
+	PPDouble(LEFT, diff_subset[2], " ");
+	PPDouble(LEFT, totalTime, " ");
+	fprintf(stdout, "%-4d\n", rep);
+
+	fflush(stdout);
 }
 
 /*
@@ -1428,11 +1404,6 @@ static void ShowInfo(int argc, char **argv, IOR_param_t * test)
  */
 static void ShowSetup(IOR_param_t * test)
 {
-        IOR_offset_t aggFileSizeForBW;
-
-        /* use expected file size of iteration #0 for display */
-        aggFileSizeForBW = test->aggFileSizeFromCalc[0];
-
         if (strcmp(test->debug, "") != 0) {
                 fprintf(stdout, "\n*** DEBUG MODE ***\n");
                 fprintf(stdout, "*** %s ***\n\n", test->debug);
@@ -1490,7 +1461,7 @@ static void ShowSetup(IOR_param_t * test)
         fprintf(stdout, "\tblocksize          = %s\n",
                 HumanReadable(test->blockSize, BASE_TWO));
         fprintf(stdout, "\taggregate filesize = %s\n",
-                HumanReadable(aggFileSizeForBW, BASE_TWO));
+                HumanReadable(test->aggFileSizeFromCalc[0], BASE_TWO));
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
         fprintf(stdout, "\tLustre stripe size = %s\n",
                 ((test->lustre_stripe_size == 0) ? "Use default" :
@@ -1582,102 +1553,143 @@ static void ShowTest(IOR_param_t * test)
         fprintf(stdout, "\t%s=%lld\n", "blockSize", test->blockSize);
 }
 
+static double mean_of_array_of_doubles(double *values, int len)
+{
+	double tot = 0.0;
+	int i;
+
+	for (i = 0; i < len; i++) {
+		tot += values[i];
+	}
+
+	return tot / len;
+}
+
+struct results {
+	double min;
+	double max;
+	double mean;
+	double var;
+	double sd;
+	double sum;
+	double *val;
+};
+
+static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *vals)
+{
+	struct results *r;
+	int i;
+
+	r = (struct results *)malloc(sizeof(struct results)
+				     + (reps * sizeof(double)));
+	if (r == NULL)
+		ERR("malloc failed");
+	r->val = (double *)&r[1];
+
+	for (i = 0; i < reps; i++) {
+		r->val[i] = (double)agg_file_size[i] / vals[i];
+		if (i == 0) {
+			r->min = r->val[i];
+			r->max = r->val[i];
+			r->sum = 0.0;
+		}
+		r->min = MIN(r->min, r->val[i]);
+		r->max = MAX(r->max, r->val[i]);
+		r->sum += r->val[i];
+	}
+	r->mean = r->sum / reps;
+	r->var = 0.0;
+	for (i = 0; i < reps; i++) {
+		r->var += pow((r->mean - r->val[i]), 2);
+	}
+	r->var = r->var / reps;
+	r->sd = sqrt(r->var);
+
+	return r;
+}
+
+static struct results *ops_values(int reps, int num_tasks,
+				  IOR_offset_t block_size,
+				  IOR_offset_t transfer_size,
+				  double *vals)
+{
+	struct results *r;
+	unsigned long long op_count;
+	int i;
+
+	r = (struct results *)malloc(sizeof(struct results)
+				     + (reps * sizeof(double)));
+	if (r == NULL)
+		ERR("malloc failed");
+	r->val = (double *)&r[1];
+
+	op_count = num_tasks * (block_size / transfer_size);
+	for (i = 0; i < reps; i++) {
+		r->val[i] = (double)op_count / vals[i];
+		if (i == 0) {
+			r->min = r->val[i];
+			r->max = r->val[i];
+			r->sum = 0.0;
+		}
+		r->min = MIN(r->min, r->val[i]);
+		r->max = MAX(r->max, r->val[i]);
+		r->sum += r->val[i];
+	}
+	r->mean = r->sum / reps;
+	r->var = 0.0;
+	for (i = 0; i < reps; i++) {
+		r->var += pow((r->mean - r->val[i]), 2);
+	}
+	r->var = r->var / reps;
+	r->sd = sqrt(r->var);
+
+	return r;
+}
+
 /*
  * Summarize results, showing max rates (and min, mean, stddev if verbose)
  */
 static void SummarizeResults(IOR_param_t * test)
 {
-        int rep, ival;
-        double maxWrite[2], minWrite[2], maxRead[2], minRead[2];
-        double meanWrite[2], meanRead[2];
-        double varWrite[2], varRead[2];
-        double sdWrite[2], sdRead[2];
-        double sumWrite[2], sumRead[2], writeTimeSum, readTimeSum;
+	struct results *write_bw;
+	struct results *read_bw;
+	struct results *write_ops;
+	struct results *read_ops;
+	int reps;
+	int i, j;
+	
+	reps = test->repetitions;
 
-        for (ival = 0; ival < 2; ival++) {
-                varWrite[ival] = 0;
-                varRead[ival] = 0;
-                sdWrite[ival] = 0;
-                sdRead[ival] = 0;
-                sumWrite[ival] = 0;
-                sumRead[ival] = 0;
-                writeTimeSum = 0;
-                readTimeSum = 0;
+	write_bw = bw_values(reps, test->aggFileSizeForBW, test->writeTime);
+	read_bw = bw_values(reps, test->aggFileSizeForBW, test->readTime);
+	write_ops = ops_values(reps, test->numTasks, test->blockSize,
+			       test->transferSize, test->writeTime);
+	read_ops = ops_values(reps, test->numTasks, test->blockSize,
+			       test->transferSize, test->readTime);
 
-                if (ival == 1) {
-                        for (rep = 0; rep < test->repetitions; rep++) {
-                                writeTimeSum += test->writeVal[ival][rep];
-                                readTimeSum += test->readVal[ival][rep];
-                                test->writeVal[ival][rep] =
-                                    (double)test->numTasks *
-                                    ((double)test->blockSize /
-                                     (double)test->transferSize) /
-                                    test->writeVal[ival][rep];
-                                test->readVal[ival][rep] =
-                                    (double)test->numTasks *
-                                    ((double)test->blockSize /
-                                     (double)test->transferSize) /
-                                    test->readVal[ival][rep];
-                        }
-                }
-
-                maxWrite[ival] = minWrite[ival] = test->writeVal[ival][0];
-                maxRead[ival] = minRead[ival] = test->readVal[ival][0];
-
-                for (rep = 0; rep < test->repetitions; rep++) {
-                        if (maxWrite[ival] < test->writeVal[ival][rep]) {
-                                maxWrite[ival] = test->writeVal[ival][rep];
-                        }
-                        if (maxRead[ival] < test->readVal[ival][rep]) {
-                                maxRead[ival] = test->readVal[ival][rep];
-                        }
-                        if (minWrite[ival] > test->writeVal[ival][rep]) {
-                                minWrite[ival] = test->writeVal[ival][rep];
-                        }
-                        if (minRead[ival] > test->readVal[ival][rep]) {
-                                minRead[ival] = test->readVal[ival][rep];
-                        }
-                        sumWrite[ival] += test->writeVal[ival][rep];
-                        sumRead[ival] += test->readVal[ival][rep];
-                }
-
-                meanWrite[ival] = sumWrite[ival] / test->repetitions;
-                meanRead[ival] = sumRead[ival] / test->repetitions;
-
-                for (rep = 0; rep < test->repetitions; rep++) {
-                        varWrite[ival] +=
-                            pow((meanWrite[ival] - test->writeVal[ival][rep]),
-                                2);
-                        varRead[ival] +=
-                            pow((meanRead[ival] - test->readVal[ival][rep]), 2);
-                }
-                varWrite[ival] = varWrite[ival] / test->repetitions;
-                varRead[ival] = varRead[ival] / test->repetitions;
-                sdWrite[ival] = sqrt(varWrite[ival]);
-                sdRead[ival] = sqrt(varRead[ival]);
-        }
-
-        if (rank == 0 && verbose >= VERBOSE_0) {
+        if (rank == 0 && verbose >= VERBOSE_1) {
+                fprintf(stdout, "\n");
                 fprintf(stdout,
                         "Operation  Max(MiB)   Min(MiB)   Mean(MiB)    StdDev   Max(OPs)   Min(OPs)   Mean(OPs)    StdDev   Mean(s)   ");
                 if (verbose >= VERBOSE_1)
                         fprintf(stdout,
-                                "#Tasks tPN reps  fPP reord reordoff reordrand seed segcnt blksiz xsize aggsize TestNum API\n");
+                                "#Tasks tPN reps fPP reord reordoff reordrand seed segcnt blksiz xsize aggsize TestNum API");
                 fprintf(stdout, "\n");
                 fprintf(stdout,
                         "---------  ---------  ---------  ----------   -------  ---------  ---------  ----------   -------  --------\n");
-                if (maxWrite[0] > 0.) {
+                if (test->writeFile) {
                         fprintf(stdout, "%s     ", "write");
-                        fprintf(stdout, "%10.2f ", maxWrite[0] / MEBIBYTE);
-                        fprintf(stdout, "%10.2f  ", minWrite[0] / MEBIBYTE);
-                        fprintf(stdout, "%10.2f", meanWrite[0] / MEBIBYTE);
-                        fprintf(stdout, "%10.2f ", sdWrite[0] / MEBIBYTE);
-                        fprintf(stdout, "%10.2f ", maxWrite[1]);
-                        fprintf(stdout, "%10.2f  ", minWrite[1]);
-                        fprintf(stdout, "%10.2f", meanWrite[1]);
-                        fprintf(stdout, "%10.2f", sdWrite[1]);
+                        fprintf(stdout, "%10.2f ", write_bw->max / MEBIBYTE);
+                        fprintf(stdout, "%10.2f  ", write_bw->min / MEBIBYTE);
+                        fprintf(stdout, "%10.2f", write_bw->mean / MEBIBYTE);
+                        fprintf(stdout, "%10.2f ", write_bw->sd / MEBIBYTE);
+                        fprintf(stdout, "%10.2f ", write_ops->max);
+                        fprintf(stdout, "%10.2f  ", write_ops->min);
+                        fprintf(stdout, "%10.2f", write_ops->mean);
+                        fprintf(stdout, "%10.2f", write_ops->sd);
                         fprintf(stdout, "%10.5f   ",
-                                writeTimeSum / (double)(test->repetitions));
+                                mean_of_array_of_doubles(test->writeTime,
+							 test->repetitions));
                         if (verbose >= VERBOSE_1) {
                                 fprintf(stdout, "%d ", test->numTasks);
                                 fprintf(stdout, "%d ", test->tasksPerNode);
@@ -1697,19 +1709,21 @@ static void SummarizeResults(IOR_param_t * test)
                                 fprintf(stdout, "%d ", test->TestNum);
                                 fprintf(stdout, "%s ", test->api);
                         }
+			fprintf(stdout, "\n");
                 }
-                if (maxRead[0] > 0.) {
+                if (test->readFile) {
                         fprintf(stdout, "%s      ", "read");
-                        fprintf(stdout, "%10.2f ", maxRead[0] / MEBIBYTE);
-                        fprintf(stdout, "%10.2f  ", minRead[0] / MEBIBYTE);
-                        fprintf(stdout, "%10.2f", meanRead[0] / MEBIBYTE);
-                        fprintf(stdout, "%10.2f ", sdRead[0] / MEBIBYTE);
-                        fprintf(stdout, "%10.2f ", maxRead[1]);
-                        fprintf(stdout, "%10.2f  ", minRead[1]);
-                        fprintf(stdout, "%10.2f", meanRead[1]);
-                        fprintf(stdout, "%10.2f", sdRead[1]);
+                        fprintf(stdout, "%10.2f ", read_bw->max / MEBIBYTE);
+                        fprintf(stdout, "%10.2f  ", read_bw->min / MEBIBYTE);
+                        fprintf(stdout, "%10.2f", read_bw->mean / MEBIBYTE);
+                        fprintf(stdout, "%10.2f ", read_bw->sd / MEBIBYTE);
+                        fprintf(stdout, "%10.2f ", read_ops->max);
+                        fprintf(stdout, "%10.2f  ", read_ops->min);
+                        fprintf(stdout, "%10.2f", read_ops->mean);
+                        fprintf(stdout, "%10.2f", read_ops->sd);
                         fprintf(stdout, "%10.5f   ",
-                                readTimeSum / (double)(test->repetitions));
+                                mean_of_array_of_doubles(test->readTime,
+							 test->repetitions));
                         if (verbose >= VERBOSE_1) {
                                 fprintf(stdout, "%d ", test->numTasks);
                                 fprintf(stdout, "%d ", test->tasksPerNode);
@@ -1729,6 +1743,7 @@ static void SummarizeResults(IOR_param_t * test)
                                 fprintf(stdout, "%d ", test->TestNum);
                                 fprintf(stdout, "%s ", test->api);
                         }
+			fprintf(stdout, "\n");
                 }
                 fflush(stdout);
         }
@@ -1736,17 +1751,20 @@ static void SummarizeResults(IOR_param_t * test)
         if (rank == 0 && verbose >= VERBOSE_0) {
                 fprintf(stdout, "\n");
                 if (test->writeFile) {
-                        fprintf(stdout,
-                                "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
-                                maxWrite[0] / MEBIBYTE, maxWrite[0] / MEGABYTE);
+                        fprintf(stdout, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
+                                write_bw->max/MEBIBYTE, write_bw->max / MEGABYTE);
                 }
                 if (test->readFile) {
-                        fprintf(stdout,
-                                "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
-                                maxRead[0] / MEBIBYTE, maxRead[0] / MEGABYTE);
+                        fprintf(stdout, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
+                                read_bw->max/MEBIBYTE, read_bw->max/MEGABYTE);
                 }
                 fprintf(stdout, "\n");
         }
+
+	free(write_bw);
+	free(write_ops);
+	free(read_bw);
+	free(read_ops);
 }
 
 /*
@@ -1804,37 +1822,34 @@ static void TestIoSys(IOR_param_t * test)
         for (i = 0; i < 12; i++) {
                 timer[i] = (double *)malloc(test->repetitions * sizeof(double));
                 if (timer[i] == NULL)
-                        ERR("out of memory");
+                        ERR("malloc failed");
         }
-        for (i = 0; i < 2; i++) {
-                test->writeVal[i] =
-                    (double *)malloc(test->repetitions * sizeof(double));
-                if (test->writeVal[i] == NULL)
-                        ERR("out of memory");
-                test->readVal[i] =
-                    (double *)malloc(test->repetitions * sizeof(double));
-                if (test->readVal[i] == NULL)
-                        ERR("out of memory");
-                for (rep = 0; rep < test->repetitions; rep++) {
-                        test->writeVal[i][rep] = test->readVal[i][rep] = 0.0;
-                }
-        }
+
+	test->writeTime = (double *)malloc(test->repetitions * sizeof(double));
+	if (test->writeTime == NULL)
+		ERR("malloc failed");
+	memset(test->writeTime, 0, test->repetitions * sizeof(double));
+	test->readTime = (double *)malloc(test->repetitions * sizeof(double));
+	if (test->readTime == NULL)
+		ERR("malloc failed");
+	memset(test->readTime, 0, test->repetitions * sizeof(double));
+
         test->aggFileSizeFromCalc =
             (IOR_offset_t *) malloc(test->repetitions * sizeof(IOR_offset_t));
         if (test->aggFileSizeFromCalc == NULL)
-                ERR("out of memory");
+                ERR("malloc failed");
         test->aggFileSizeFromStat =
             (IOR_offset_t *) malloc(test->repetitions * sizeof(IOR_offset_t));
         if (test->aggFileSizeFromStat == NULL)
-                ERR("out of memory");
+                ERR("malloc failed");
         test->aggFileSizeFromXfer =
             (IOR_offset_t *) malloc(test->repetitions * sizeof(IOR_offset_t));
         if (test->aggFileSizeFromXfer == NULL)
-                ERR("out of memory");
+                ERR("malloc failed");
         test->aggFileSizeForBW =
             (IOR_offset_t *) malloc(test->repetitions * sizeof(IOR_offset_t));
         if (test->aggFileSizeForBW == NULL)
-                ERR("out of memory");
+                ERR("malloc failed");
 
         /* bind I/O calls to specific API */
         AioriBind(test->api);
@@ -2268,10 +2283,8 @@ static void TestIoSys(IOR_param_t * test)
         SummarizeResults(test);
 
         MPI_CHECK(MPI_Comm_free(&testComm), "MPI_Comm_free() error");
-        for (i = 0; i < 2; i++) {
-                free(test->writeVal[i]);
-                free(test->readVal[i]);
-        }
+	free(test->writeTime);
+	free(test->readTime);
         free(test->aggFileSizeFromCalc);
         free(test->aggFileSizeFromStat);
         free(test->aggFileSizeFromXfer);

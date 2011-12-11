@@ -55,8 +55,8 @@ typedef struct
     int repCounter;                  /* rep counter */
     int multiFile;                   /* multiple files */
     int interTestDelay;              /* delay between reps in seconds */
-    double * writeVal[2];            /* array to write results */
-    double * readVal[2];             /* array to read results */
+    double *writeTime;               /* array of write time results for each rep */
+    double *readTime;                /* array to read time results for each rep */
     int open;                        /* flag for writing or reading */
     int readFile;                    /* read of existing file */
     int writeFile;                   /* write of file */
