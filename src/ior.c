@@ -166,7 +166,8 @@ int main(int argc, char **argv)
 
         /* display finish time */
         if (rank == 0 && verbose >= VERBOSE_0) {
-                fprintf(stdout, "Finish: %s", CurrentTimeString());
+		fprintf(stdout, "\n");
+		fprintf(stdout, "Finished: %s", CurrentTimeString());
         }
 
 	DestroyTests(tests_head);
@@ -1415,7 +1416,7 @@ static void PrintHeader(int argc, char **argv)
 	printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
 	printf("\n");
 
-        fprintf(stdout, "Begin: %s", CurrentTimeString());
+        fprintf(stdout, "Began: %s", CurrentTimeString());
         fprintf(stdout, "Command line used:");
         for (i = 0; i < argc; i++) {
                 fprintf(stdout, " %s", argv[i]);
@@ -1493,7 +1494,7 @@ static void ShowSetup(IOR_param_t *params)
                 fprintf(stdout, "\n*** DEBUG MODE ***\n");
                 fprintf(stdout, "*** %s ***\n\n", params->debug);
         }
-        fprintf(stdout, "\nSummary:\n");
+        fprintf(stdout, "Summary:\n");
         fprintf(stdout, "\tapi                = %s\n", params->apiVersion);
         fprintf(stdout, "\ttest filename      = %s\n", params->testFileName);
         fprintf(stdout, "\taccess             = ");
@@ -1562,8 +1563,6 @@ static void ShowSetup(IOR_param_t *params)
                 fprintf(stdout, "\tUsing stonewalling = %d second(s)\n",
                         params->deadlineForStonewalling);
         }
-        fprintf(stdout, "\n");
-        /*fprintf(stdout, "\n  ================================\n\n"); */
         fflush(stdout);
 }
 
@@ -1572,7 +1571,6 @@ static void ShowSetup(IOR_param_t *params)
  */
 static void ShowTest(IOR_param_t * test)
 {
-        fprintf(stdout, "\n\n  ================================\n\n");
         fprintf(stdout, "TEST:\t%s=%d\n", "id", test->id);
         fprintf(stdout, "\t%s=%d\n", "testnum", test->TestNum);
         fprintf(stdout, "\t%s=%s\n", "api", test->api);
@@ -1850,8 +1848,6 @@ static void PrintSummaryAllTests(IOR_test_t *tests_head)
 	for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
 		PrintSummaryOneTest(tptr);
 	}	
-
-	fprintf(stdout, "\n");
 }
 
 static void PrintShortSummary(IOR_test_t * test)
@@ -1989,6 +1985,7 @@ static void TestIoSys(IOR_test_t *test)
                                         params->timeStampSignatureValue);
                         }
 			if (rep == 0) {
+				fprintf(stdout, "\n");
 				fprintf(stdout, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
 				fprintf(stdout, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
 			}
@@ -2041,9 +2038,9 @@ static void TestIoSys(IOR_test_t *test)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
-                                fprintf(stdout,
-                                        "Commencing write performance test.\n");
-                                fprintf(stdout, "%s\n", CurrentTimeString());
+                                fprintf(stderr,
+                                        "Commencing write performance test: %s",
+					CurrentTimeString());
                         }
                         timer[2][rep] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, fd, WRITE);
@@ -2263,19 +2260,14 @@ static void TestIoSys(IOR_test_t *test)
                         params->open = READ;
                         timer[6][rep] = GetTimeStamp();
                         fd = backend->open(testFileName, params);
-                        if (rank == 0 && verbose >= VERBOSE_2) {
-                                fprintf(stdout,
-                                        "[RANK %03d] open for reading file %s\n",
-                                        rank, testFileName);
-                        }
                         timer[7][rep] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
-                                fprintf(stdout,
-                                        "Commencing read performance test.\n");
-                                fprintf(stdout, "%s\n", CurrentTimeString());
+                                fprintf(stderr,
+                                        "Commencing read performance test: %s",
+					CurrentTimeString());
                         }
                         timer[8][rep] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, fd, READ);
