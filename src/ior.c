@@ -1293,7 +1293,7 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
 	} else { /* READ */
 		totalTime = reduced[11] - reduced[6];
 		test->results->readTime[rep] = totalTime;
-		diff_subset = &diff[4];
+		diff_subset = &diff[3];
 	}
 
 #if USE_UNDOC_OPT               /* fillTheFileSystem */
