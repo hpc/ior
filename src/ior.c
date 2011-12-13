@@ -1432,7 +1432,7 @@ static void PrintHeader(int argc, char **argv)
                                 unamebuf.version, unamebuf.machine);
                 }
         }
-        fprintf(stdout, "\n");
+	fprintf(stdout, "\n");
 #ifdef _NO_MPI_TIMER
         if (verbose >= VERBOSE_2)
                 fprintf(stdout, "Using unsynchronized POSIX timer\n");
@@ -1456,28 +1456,28 @@ static void PrintHeader(int argc, char **argv)
                 }
                 fprintf(stdout, "ENDING ENVIRON LOOP\n");
         }
-	printf("\n");
 	fflush(stdout);
 }
 
 /*
  * Print header information for test output.
  */
-static void ShowTestInfo(IOR_param_t * test)
+static void ShowTestInfo(IOR_param_t *params)
 {
         int i;
 
-        fprintf(stdout, "Test start: %s", CurrentTimeString());
+	fprintf(stdout, "\n");
+        fprintf(stdout, "Test %d started: %s", params->id, CurrentTimeString());
 #if USE_UNDOC_OPT               /* NFS */
-        if (test->NFS_serverCount) {
-                fprintf(stdout, "NFS path: %s%s[0..%d]\n", test->NFS_rootPath,
-                        test->NFS_serverName, test->NFS_serverCount - 1);
+        if (params->NFS_serverCount) {
+                fprintf(stdout, "NFS path: %s%s[0..%d]\n", params->NFS_rootPath,
+                        params->NFS_serverName, params->NFS_serverCount - 1);
         }
 #endif                          /* USE_UNDOC_OPT - NFS */
         if (verbose >= VERBOSE_1) {
                 /* if pvfs2:, then skip */
-                if (Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
-                        DisplayFreespace(test);
+                if (Regex(params->testFileName, "^[a-z][a-z].*:") == 0) {
+                        DisplayFreespace(params);
                 }
         }
         fflush(stdout);
