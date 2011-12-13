@@ -55,8 +55,6 @@ typedef struct
     int repCounter;                  /* rep counter */
     int multiFile;                   /* multiple files */
     int interTestDelay;              /* delay between reps in seconds */
-    double *writeTime;               /* array of write time results for each rep */
-    double *readTime;                /* array to read time results for each rep */
     int open;                        /* flag for writing or reading */
     int readFile;                    /* read of existing file */
     int writeFile;                   /* write of file */
@@ -76,10 +74,7 @@ typedef struct
     IOR_offset_t blockSize;          /* contiguous bytes to write per task */
     IOR_offset_t transferSize;       /* size of transfer in bytes */
     IOR_offset_t offset;             /* offset for read/write */
-    IOR_offset_t * aggFileSizeFromCalc; /* calculated aggregate file size */
-    IOR_offset_t * aggFileSizeFromStat; /* stat() aggregate file size */
-    IOR_offset_t * aggFileSizeFromXfer; /* transfered aggregate file size */
-    IOR_offset_t * aggFileSizeForBW; /* aggregate file size used for b/w */
+    IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
     int preallocate;                 /* preallocate file size */
     int useFileView;                 /* use MPI_File_set_view */
     int useSharedFilePointer;        /* use shared file pointer */
@@ -141,13 +136,25 @@ typedef struct
     int intraTestBarriers;           /* barriers between open/op and op/close */
 } IOR_param_t;
 
-/* define the queuing structure for the test parameters */
-typedef struct IOR_queue_t {
-        IOR_param_t testParameters;
-        struct IOR_queue_t *nextTest;
-} IOR_queue_t;
+/* each pointer is to an array, each of length equal to the number of
+   repetitions in the test */
+typedef struct {
+	double *writeTime;
+	double *readTime;
+	IOR_offset_t *aggFileSizeFromStat;
+	IOR_offset_t *aggFileSizeFromXfer;
+	IOR_offset_t *aggFileSizeForBW;
+} IOR_results_t;
 
-IOR_queue_t *CreateNewTest(int);
+/* define the queuing structure for the test parameters */
+typedef struct IOR_test_t {
+        IOR_param_t params;
+	IOR_results_t *results;
+        struct IOR_test_t *next;
+} IOR_test_t;
+
+IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
+void AllocResults(IOR_test_t *test);
 void GetPlatformName(char *);
 void init_IOR_Param_t(IOR_param_t *p);
 

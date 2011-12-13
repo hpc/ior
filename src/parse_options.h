@@ -12,6 +12,6 @@
 
 extern IOR_param_t initialTestParams;
 
-IOR_queue_t *ParseCommandLine(int argc, char **argv);
+IOR_test_t *ParseCommandLine(int argc, char **argv);
 
 #endif  /* !_PARSE_OPTIONS_H */

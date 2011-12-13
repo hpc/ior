@@ -421,37 +421,38 @@ static void ModifyByteInFile(char *fileName, IOR_offset_t offset, int byteValue)
         close(fd);
         return;
 }
+
 /*
  * Corrupt file to testing data checking options.
  */
-void CorruptFile(char *testFileName, IOR_param_t * test, int rep, int access)
+void CorruptFile(char *testFileName, IOR_param_t *params, int rep, int access)
 {
         IOR_offset_t tmpOff, range, eof;
         char fileName[MAX_STR];
 
         /* determine file name */
         strcpy(fileName, testFileName);
-        if (access == READCHECK && test->filePerProc) {
-                strcpy(fileName, test->testFileName_fppReadCheck);
+        if (access == READCHECK && params->filePerProc) {
+                strcpy(fileName, params->testFileName_fppReadCheck);
         }
 
         /* determine offset to modify */
-        SeedRandGen(test->testComm);
-        eof = test->aggFileSizeFromCalc[rep]
-            / (test->filePerProc ? test->numTasks : 1);
+        SeedRandGen(params->testComm);
+        eof = params->expectedAggFileSize
+		/ (params->filePerProc ? params->numTasks : 1);
         if (access == WRITECHECK) {
-                range = eof - test->offset;
+                range = eof - params->offset;
         } else {                /* READCHECK */
-                range = test->transferSize;
+                range = params->transferSize;
         }
         tmpOff =
-            (IOR_offset_t) ((rand() / (float)RAND_MAX) * range) + test->offset;
+            (IOR_offset_t) ((rand() / (float)RAND_MAX) * range) + params->offset;
 
         if (tmpOff >= eof)
                 tmpOff = tmpOff / 2;
 
         /* corrupt <fileName> at <offset> with <value> */
-        if (rank == 0 || test->filePerProc) {
+        if (rank == 0 || params->filePerProc) {
                 ModifyByteInFile(fileName, tmpOff, 121);
         }
 

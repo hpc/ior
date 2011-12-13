@@ -24,35 +24,44 @@
 
 IOR_param_t initialTestParams;
 
+static void RecalculateExpectedFileSize(IOR_param_t *params)
+{
+	params->expectedAggFileSize =
+		params->blockSize * params->segmentCount * params->numTasks;
+}
+
 /*
  * Check and correct all settings of each test in queue for correctness.
  */
-static void CheckRunSettings(IOR_queue_t * tests)
+static void CheckRunSettings(IOR_test_t *tests)
 {
-        while (tests != NULL) {
+	IOR_test_t *ptr;
+	IOR_param_t *params;
+
+	for (ptr = tests; ptr != NULL; ptr = ptr->next) {
+		params = &ptr->params;
                 /* If no write/read/check action requested, set both write and read */
-                if (tests->testParameters.writeFile == FALSE
-                    && tests->testParameters.readFile == FALSE
-                    && tests->testParameters.checkWrite == FALSE
-                    && tests->testParameters.checkRead == FALSE) {
-                        tests->testParameters.readFile = TRUE;
-                        tests->testParameters.writeFile = TRUE;
+                if (params->writeFile == FALSE
+                    && params->readFile == FALSE
+                    && params->checkWrite == FALSE
+                    && params->checkRead == FALSE) {
+                        params->readFile = TRUE;
+                        params->writeFile = TRUE;
                 }
                 /* If numTasks set to 0, use all tasks */
-                if (tests->testParameters.numTasks == 0) {
+                if (params->numTasks == 0) {
                         MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD,
-                                                &tests->
-                                                testParameters.numTasks),
+						&params->numTasks),
                                   "MPI_Comm_size() error");
+			RecalculateExpectedFileSize(params);
                 }
-                tests = tests->nextTest;
         }
 }
 
 /*
  * Set flags from commandline string/value pairs.
  */
-void DecodeDirective(char *line, IOR_param_t * test)
+void DecodeDirective(char *line, IOR_param_t *params)
 {
         char option[MAX_STR];
         char value[MAX_STR];
@@ -65,144 +74,147 @@ void DecodeDirective(char *line, IOR_param_t * test)
                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
         }
         if (strcasecmp(option, "api") == 0) {
-                strcpy(test->api, value);
+                strcpy(params->api, value);
         } else if (strcasecmp(option, "testnum") == 0) {
-                test->TestNum = atoi(value);
+                params->TestNum = atoi(value);
         } else if (strcasecmp(option, "debug") == 0) {
-                strcpy(test->debug, value);
+                strcpy(params->debug, value);
         } else if (strcasecmp(option, "platform") == 0) {
-                strcpy(test->platform, value);
+                strcpy(params->platform, value);
         } else if (strcasecmp(option, "testfile") == 0) {
-                strcpy(test->testFileName, value);
+                strcpy(params->testFileName, value);
         } else if (strcasecmp(option, "hintsfilename") == 0) {
-                strcpy(test->hintsFileName, value);
+                strcpy(params->hintsFileName, value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
-                test->deadlineForStonewalling = atoi(value);
+                params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "maxtimeduration") == 0) {
-                test->maxTimeDuration = atoi(value);
+                params->maxTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {
-                test->outlierThreshold = atoi(value);
+                params->outlierThreshold = atoi(value);
         } else if (strcasecmp(option, "nodes") == 0) {
-                test->nodes = atoi(value);
+                params->nodes = atoi(value);
         } else if (strcasecmp(option, "repetitions") == 0) {
-                test->repetitions = atoi(value);
+                params->repetitions = atoi(value);
         } else if (strcasecmp(option, "intertestdelay") == 0) {
-                test->interTestDelay = atoi(value);
+                params->interTestDelay = atoi(value);
         } else if (strcasecmp(option, "readfile") == 0) {
-                test->readFile = atoi(value);
+                params->readFile = atoi(value);
         } else if (strcasecmp(option, "writefile") == 0) {
-                test->writeFile = atoi(value);
+                params->writeFile = atoi(value);
         } else if (strcasecmp(option, "fileperproc") == 0) {
-                test->filePerProc = atoi(value);
+                params->filePerProc = atoi(value);
         } else if (strcasecmp(option, "reordertasksconstant") == 0) {
-                test->reorderTasks = atoi(value);
+                params->reorderTasks = atoi(value);
         } else if (strcasecmp(option, "taskpernodeoffset") == 0) {
-                test->taskPerNodeOffset = atoi(value);
+                params->taskPerNodeOffset = atoi(value);
         } else if (strcasecmp(option, "reordertasksrandom") == 0) {
-                test->reorderTasksRandom = atoi(value);
+                params->reorderTasksRandom = atoi(value);
         } else if (strcasecmp(option, "reordertasksrandomSeed") == 0) {
-                test->reorderTasksRandomSeed = atoi(value);
+                params->reorderTasksRandomSeed = atoi(value);
         } else if (strcasecmp(option, "checkwrite") == 0) {
-                test->checkWrite = atoi(value);
+                params->checkWrite = atoi(value);
         } else if (strcasecmp(option, "checkread") == 0) {
-                test->checkRead = atoi(value);
+                params->checkRead = atoi(value);
         } else if (strcasecmp(option, "keepfile") == 0) {
-                test->keepFile = atoi(value);
+                params->keepFile = atoi(value);
         } else if (strcasecmp(option, "keepfilewitherror") == 0) {
-                test->keepFileWithError = atoi(value);
+                params->keepFileWithError = atoi(value);
         } else if (strcasecmp(option, "multiFile") == 0) {
-                test->multiFile = atoi(value);
+                params->multiFile = atoi(value);
         } else if (strcasecmp(option, "quitonerror") == 0) {
-                test->quitOnError = atoi(value);
+                params->quitOnError = atoi(value);
         } else if (strcasecmp(option, "segmentcount") == 0) {
-                test->segmentCount = StringToBytes(value);
+                params->segmentCount = StringToBytes(value);
+		RecalculateExpectedFileSize(params);
         } else if (strcasecmp(option, "blocksize") == 0) {
-                test->blockSize = StringToBytes(value);
+                params->blockSize = StringToBytes(value);
+		RecalculateExpectedFileSize(params);
         } else if (strcasecmp(option, "transfersize") == 0) {
-                test->transferSize = StringToBytes(value);
+                params->transferSize = StringToBytes(value);
         } else if (strcasecmp(option, "setalignment") == 0) {
-                test->setAlignment = StringToBytes(value);
+                params->setAlignment = StringToBytes(value);
         } else if (strcasecmp(option, "singlexferattempt") == 0) {
-                test->singleXferAttempt = atoi(value);
+                params->singleXferAttempt = atoi(value);
         } else if (strcasecmp(option, "individualdatasets") == 0) {
-                test->individualDataSets = atoi(value);
+                params->individualDataSets = atoi(value);
         } else if (strcasecmp(option, "intraTestBarriers") == 0) {
-                test->intraTestBarriers = atoi(value);
+                params->intraTestBarriers = atoi(value);
         } else if (strcasecmp(option, "nofill") == 0) {
-                test->noFill = atoi(value);
+                params->noFill = atoi(value);
         } else if (strcasecmp(option, "verbose") == 0) {
-                test->verbose = atoi(value);
+                params->verbose = atoi(value);
         } else if (strcasecmp(option, "settimestampsignature") == 0) {
-                test->setTimeStampSignature = atoi(value);
+                params->setTimeStampSignature = atoi(value);
         } else if (strcasecmp(option, "collective") == 0) {
-                test->collective = atoi(value);
+                params->collective = atoi(value);
         } else if (strcasecmp(option, "preallocate") == 0) {
-                test->preallocate = atoi(value);
+                params->preallocate = atoi(value);
         } else if (strcasecmp(option, "storefileoffset") == 0) {
-                test->storeFileOffset = atoi(value);
+                params->storeFileOffset = atoi(value);
         } else if (strcasecmp(option, "usefileview") == 0) {
-                test->useFileView = atoi(value);
+                params->useFileView = atoi(value);
         } else if (strcasecmp(option, "usesharedfilepointer") == 0) {
-                test->useSharedFilePointer = atoi(value);
+                params->useSharedFilePointer = atoi(value);
         } else if (strcasecmp(option, "useo_direct") == 0) {
-                test->useO_DIRECT = atoi(value);
+                params->useO_DIRECT = atoi(value);
         } else if (strcasecmp(option, "usestrideddatatype") == 0) {
-                test->useStridedDatatype = atoi(value);
+                params->useStridedDatatype = atoi(value);
         } else if (strcasecmp(option, "showhints") == 0) {
-                test->showHints = atoi(value);
+                params->showHints = atoi(value);
         } else if (strcasecmp(option, "showhelp") == 0) {
-                test->showHelp = atoi(value);
+                params->showHelp = atoi(value);
         } else if (strcasecmp(option, "uniqueDir") == 0) {
-                test->uniqueDir = atoi(value);
+                params->uniqueDir = atoi(value);
         } else if (strcasecmp(option, "useexistingtestfile") == 0) {
-                test->useExistingTestFile = atoi(value);
+                params->useExistingTestFile = atoi(value);
         } else if (strcasecmp(option, "fsyncperwrite") == 0) {
-                test->fsyncPerWrite = atoi(value);
+                params->fsyncPerWrite = atoi(value);
         } else if (strcasecmp(option, "fsync") == 0) {
-                test->fsync = atoi(value);
+                params->fsync = atoi(value);
         } else if (strcasecmp(option, "randomoffset") == 0) {
-                test->randomOffset = atoi(value);
+                params->randomOffset = atoi(value);
         } else if (strcasecmp(option, "lustrestripecount") == 0) {
 #ifndef HAVE_LUSTRE_LUSTRE_USER_H
                 ERR("ior was not compiled with Lustre support");
 #endif
-                test->lustre_stripe_count = atoi(value);
-                test->lustre_set_striping = 1;
+                params->lustre_stripe_count = atoi(value);
+                params->lustre_set_striping = 1;
         } else if (strcasecmp(option, "lustrestripesize") == 0) {
 #ifndef HAVE_LUSTRE_LUSTRE_USER_H
                 ERR("ior was not compiled with Lustre support");
 #endif
-                test->lustre_stripe_size = StringToBytes(value);
-                test->lustre_set_striping = 1;
+                params->lustre_stripe_size = StringToBytes(value);
+                params->lustre_set_striping = 1;
         } else if (strcasecmp(option, "lustrestartost") == 0) {
 #ifndef HAVE_LUSTRE_LUSTRE_USER_H
                 ERR("ior was not compiled with Lustre support");
 #endif
-                test->lustre_start_ost = atoi(value);
-                test->lustre_set_striping = 1;
+                params->lustre_start_ost = atoi(value);
+                params->lustre_set_striping = 1;
         } else if (strcasecmp(option, "lustreignorelocks") == 0) {
 #ifndef HAVE_LUSTRE_LUSTRE_USER_H
                 ERR("ior was not compiled with Lustre support");
 #endif
-                test->lustre_ignore_locks = atoi(value);
+                params->lustre_ignore_locks = atoi(value);
 #if USE_UNDOC_OPT
         } else if (strcasecmp(option, "corruptFile") == 0) {
-                test->corruptFile = atoi(value);
+                params->corruptFile = atoi(value);
         } else if (strcasecmp(option, "fillTheFileSystem") == 0) {
-                test->fillTheFileSystem = atoi(value);
+                params->fillTheFileSystem = atoi(value);
         } else if (strcasecmp(option, "includeDeleteTime") == 0) {
-                test->includeDeleteTime = atoi(value);
+                params->includeDeleteTime = atoi(value);
         } else if (strcasecmp(option, "multiReRead") == 0) {
-                test->multiReRead = atoi(value);
+                params->multiReRead = atoi(value);
         } else if (strcasecmp(option, "nfs_rootpath") == 0) {
-                strcpy(test->NFS_rootPath, value);
+                strcpy(params->NFS_rootPath, value);
         } else if (strcasecmp(option, "nfs_servername") == 0) {
-                strcpy(test->NFS_serverName, value);
+                strcpy(params->NFS_serverName, value);
         } else if (strcasecmp(option, "nfs_servercount") == 0) {
-                test->NFS_serverCount = atoi(value);
+                params->NFS_serverCount = atoi(value);
 #endif                          /* USE_UNDOC_OPT */
         } else if (strcasecmp(option, "numtasks") == 0) {
-                test->numTasks = atoi(value);
+                params->numTasks = atoi(value);
+		RecalculateExpectedFileSize(params);
         } else {
                 if (rank == 0)
                         fprintf(stdout, "Unrecognized parameter \"%s\"\n",
@@ -259,19 +271,19 @@ int contains_only(char *haystack, char *needle)
  * Read the configuration script, allocating and filling in the structure of
  * global parameters.
  */
-IOR_queue_t *ReadConfigScript(char *scriptName)
+IOR_test_t *ReadConfigScript(char *scriptName)
 {
         int test_num = 0;
         int runflag = 0;
         char linebuf[MAX_STR];
         char empty[MAX_STR];
         FILE *file;
-        IOR_queue_t *head = NULL;
-        IOR_queue_t *tail = NULL;
-        IOR_queue_t *newTest = NULL;
+        IOR_test_t *head = NULL;
+        IOR_test_t *tail = NULL;
+        IOR_test_t *newTest = NULL;
 
         /* Initialize the first test */
-        head = CreateNewTest(test_num++);
+        head = CreateTest(&initialTestParams, test_num++);
         tail = head;
 
         /* open the script */
@@ -295,25 +307,20 @@ IOR_queue_t *ReadConfigScript(char *scriptName)
                 if (sscanf(linebuf, " #%s", empty) == 1)
                         continue;
                 if (contains_only(linebuf, "ior stop")) {
+			AllocResults(tail);
                         break;
                 } else if (contains_only(linebuf, "run")) {
+			AllocResults(tail);
                         runflag = 1;
-                } else {
+                } else if (runflag) {
                         /* If this directive was preceded by a "run" line, then
                            create and initialize a new test structure */
-                        if (runflag) {
-                                newTest =
-                                    (IOR_queue_t *) malloc(sizeof(IOR_queue_t));
-                                if (newTest == NULL)
-                                        ERR("malloc() failed");
-                                newTest->testParameters = tail->testParameters;
-                                newTest->testParameters.id = test_num++;
-                                tail->nextTest = newTest;
-                                tail = newTest;
-                                tail->nextTest = NULL;
-                                runflag = 0;
-                        }
-                        ParseLine(linebuf, &tail->testParameters);
+			runflag = 0;
+			tail->next = CreateTest(&tail->params, test_num++);
+			tail = tail->next;
+                        ParseLine(linebuf, &tail->params);
+		} else {
+                        ParseLine(linebuf, &tail->params);
                 }
         }
 
@@ -321,18 +328,18 @@ IOR_queue_t *ReadConfigScript(char *scriptName)
         if (fclose(file) != 0)
                 ERR("fclose() of script file failed");
 
-        return (head);
+        return head;
 }
 
 /*
  * Parse Commandline.
  */
-IOR_queue_t *ParseCommandLine(int argc, char **argv)
+IOR_test_t *ParseCommandLine(int argc, char **argv)
 {
         static const char *opts =
           "A:a:b:BcCQ:ZX:d:D:YeEf:FgG:hHi:j:J:IkKlmnN:o:O:pPqrRs:St:T:uU:vVwWxz";
         int c, i;
-        static IOR_queue_t *tests = NULL;
+        static IOR_test_t *tests = NULL;
 
         /* suppress getopt() error message when a character is unrecognized */
         opterr = 0;
@@ -352,6 +359,7 @@ IOR_queue_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 'b':
                         initialTestParams.blockSize = StringToBytes(optarg);
+			RecalculateExpectedFileSize(&initialTestParams);
                         break;
                 case 'B':
                         initialTestParams.useO_DIRECT = TRUE;
@@ -434,6 +442,7 @@ IOR_queue_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 'N':
                         initialTestParams.numTasks = atoi(optarg);
+			RecalculateExpectedFileSize(&initialTestParams);
                         break;
                 case 'o':
                         strcpy(initialTestParams.testFileName, optarg);
@@ -458,6 +467,7 @@ IOR_queue_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 's':
                         initialTestParams.segmentCount = atoi(optarg);
+			RecalculateExpectedFileSize(&initialTestParams);
                         break;
                 case 'S':
                         initialTestParams.useStridedDatatype = TRUE;
@@ -504,11 +514,8 @@ IOR_queue_t *ParseCommandLine(int argc, char **argv)
 
         /* If an IOR script was not used, initialize test queue to the defaults */
         if (tests == NULL) {
-                tests = (IOR_queue_t *) malloc(sizeof(IOR_queue_t));
-                if (!tests)
-                        ERR("malloc() failed");
-                tests->testParameters = initialTestParams;
-                tests->nextTest = NULL;
+                tests = CreateTest(&initialTestParams, 0);
+		AllocResults(tests);
         }
 
         CheckRunSettings(tests);
