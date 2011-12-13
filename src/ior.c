@@ -1732,14 +1732,12 @@ static struct results *ops_values(int reps, int num_tasks,
 /*
  * Summarize results, showing max rates (and min, mean, stddev if verbose)
  */
-static void PrintSummaryOneTest(IOR_test_t *test)
+static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *operation)
 {
 	IOR_param_t *params = &test->params;
 	IOR_results_t *results = test->results;
-	struct results *write_bw;
-	struct results *read_bw;
-	struct results *write_ops;
-	struct results *read_ops;
+	struct results *bw;
+	struct results *ops;
 	int reps;
 	int i, j;
 	
@@ -1748,94 +1746,48 @@ static void PrintSummaryOneTest(IOR_test_t *test)
 
 	reps = params->repetitions;
 
-	write_bw = bw_values(reps, results->aggFileSizeForBW, results->writeTime);
-	read_bw = bw_values(reps, results->aggFileSizeForBW, results->readTime);
-	write_ops = ops_values(reps, params->numTasks, params->blockSize,
-			       params->transferSize, results->writeTime);
-	read_ops = ops_values(reps, params->numTasks, params->blockSize,
-			       params->transferSize, results->readTime);
+	bw = bw_values(reps, results->aggFileSizeForBW, times);
+	ops = ops_values(reps, params->numTasks, params->blockSize,
+                         params->transferSize, times);
 
-	if (params->writeFile) {
-		fprintf(stdout, "%s     ", "write");
-		fprintf(stdout, "%10.2f ", write_bw->max / MEBIBYTE);
-		fprintf(stdout, "%10.2f  ", write_bw->min / MEBIBYTE);
-		fprintf(stdout, "%10.2f", write_bw->mean / MEBIBYTE);
-		fprintf(stdout, "%10.2f ", write_bw->sd / MEBIBYTE);
-		fprintf(stdout, "%10.2f ", write_ops->max);
-		fprintf(stdout, "%10.2f  ", write_ops->min);
-		fprintf(stdout, "%10.2f", write_ops->mean);
-		fprintf(stdout, "%10.2f", write_ops->sd);
-		fprintf(stdout, "%10.5f   ",
-			mean_of_array_of_doubles(results->writeTime,
-						 params->repetitions));
-		if (verbose >= VERBOSE_0) {
-			fprintf(stdout, "%d ", params->numTasks);
-			fprintf(stdout, "%d ", params->tasksPerNode);
-			fprintf(stdout, "%d ", params->repetitions);
-			fprintf(stdout, "%d ", params->filePerProc);
-			fprintf(stdout, "%d ", params->reorderTasks);
-			fprintf(stdout, "%d ", params->taskPerNodeOffset);
-			fprintf(stdout, "%d ",
-				params->reorderTasksRandom);
-			fprintf(stdout, "%d ",
-				params->reorderTasksRandomSeed);
-			fprintf(stdout, "%lld ", params->segmentCount);
-			fprintf(stdout, "%lld ", params->blockSize);
-			fprintf(stdout, "%lld ", params->transferSize);
-			fprintf(stdout, "%lld ",
-				results->aggFileSizeForBW[0]);
-			fprintf(stdout, "%d ", params->TestNum);
-			fprintf(stdout, "%s ", params->api);
-		}
-		fprintf(stdout, "\n");
-	}
-	if (params->readFile) {
-		fprintf(stdout, "%s      ", "read");
-		fprintf(stdout, "%10.2f ", read_bw->max / MEBIBYTE);
-		fprintf(stdout, "%10.2f  ", read_bw->min / MEBIBYTE);
-		fprintf(stdout, "%10.2f", read_bw->mean / MEBIBYTE);
-		fprintf(stdout, "%10.2f ", read_bw->sd / MEBIBYTE);
-		fprintf(stdout, "%10.2f ", read_ops->max);
-		fprintf(stdout, "%10.2f  ", read_ops->min);
-		fprintf(stdout, "%10.2f", read_ops->mean);
-		fprintf(stdout, "%10.2f", read_ops->sd);
-		fprintf(stdout, "%10.5f   ",
-			mean_of_array_of_doubles(results->readTime,
-						 params->repetitions));
-		if (verbose >= VERBOSE_0) {
-			fprintf(stdout, "%d ", params->numTasks);
-			fprintf(stdout, "%d ", params->tasksPerNode);
-			fprintf(stdout, "%d ", params->repetitions);
-			fprintf(stdout, "%d ", params->filePerProc);
-			fprintf(stdout, "%d ", params->reorderTasks);
-			fprintf(stdout, "%d ", params->taskPerNodeOffset);
-			fprintf(stdout, "%d ",
-				params->reorderTasksRandom);
-			fprintf(stdout, "%d ",
-				params->reorderTasksRandomSeed);
-			fprintf(stdout, "%lld ", params->segmentCount);
-			fprintf(stdout, "%lld ", params->blockSize);
-			fprintf(stdout, "%lld ", params->transferSize);
-			fprintf(stdout, "%lld ",
-				results->aggFileSizeForBW[0]);
-			fprintf(stdout, "%d ", params->TestNum);
-			fprintf(stdout, "%s ", params->api);
-		}
-		fprintf(stdout, "\n");
-	}
+        fprintf(stdout, "%-10s ", operation);
+        fprintf(stdout, "%10.2f ", bw->max / MEBIBYTE);
+        fprintf(stdout, "%10.2f  ", bw->min / MEBIBYTE);
+        fprintf(stdout, "%10.2f", bw->mean / MEBIBYTE);
+        fprintf(stdout, "%10.2f ", bw->sd / MEBIBYTE);
+        fprintf(stdout, "%10.2f ", ops->max);
+        fprintf(stdout, "%10.2f  ", ops->min);
+        fprintf(stdout, "%10.2f", ops->mean);
+        fprintf(stdout, "%10.2f", ops->sd);
+        fprintf(stdout, "%10.5f   ",
+                mean_of_array_of_doubles(times, reps));
+        fprintf(stdout, "%d ", params->numTasks);
+        fprintf(stdout, "%d ", params->tasksPerNode);
+        fprintf(stdout, "%d ", params->repetitions);
+        fprintf(stdout, "%d ", params->filePerProc);
+        fprintf(stdout, "%d ", params->reorderTasks);
+        fprintf(stdout, "%d ", params->taskPerNodeOffset);
+        fprintf(stdout, "%d ", params->reorderTasksRandom);
+        fprintf(stdout, "%d ", params->reorderTasksRandomSeed);
+        fprintf(stdout, "%lld ", params->segmentCount);
+        fprintf(stdout, "%lld ", params->blockSize);
+        fprintf(stdout, "%lld ", params->transferSize);
+        fprintf(stdout, "%lld ", results->aggFileSizeForBW[0]);
+        fprintf(stdout, "%d ", params->TestNum);
+        fprintf(stdout, "%s ", params->api);
+        fprintf(stdout, "\n");
 	fflush(stdout);
 
-	free(write_bw);
-	free(write_ops);
-	free(read_bw);
-	free(read_ops);
+	free(bw);
+	free(ops);
 }
 
 static void PrintSummaryAllTests(IOR_test_t *tests_head)
 {
+	IOR_param_t *params = &tests_head->params;
+	IOR_results_t *results = tests_head->results;
         IOR_test_t *tptr;
 	int i;
-
 
 	if (rank !=0)
 		return;
@@ -1846,8 +1798,11 @@ static void PrintSummaryAllTests(IOR_test_t *tests_head)
 	fprintf(stdout, "Operation  Max(MiB)   Min(MiB)   Mean(MiB)    StdDev   Max(OPs)   Min(OPs)   Mean(OPs)    StdDev   Mean(s)   #Tasks tPN reps fPP reord reordoff reordrand seed segcnt blksiz xsize aggsize TestNum API\n");
 
 	for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-		PrintSummaryOneTest(tptr);
-	}	
+                if (params->writeFile)
+                        PrintSummaryOneOperation(tptr, results->writeTime, "write");
+                if (params->readFile)
+                        PrintSummaryOneOperation(tptr, results->readTime, "read");
+	}
 }
 
 static void PrintShortSummary(IOR_test_t * test)
