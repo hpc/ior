@@ -1750,16 +1750,16 @@ static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *oper
 	ops = ops_values(reps, params->numTasks, params->blockSize,
                          params->transferSize, times);
 
-        fprintf(stdout, "%-10s ", operation);
+        fprintf(stdout, "%-9s ", operation);
         fprintf(stdout, "%10.2f ", bw->max / MEBIBYTE);
-        fprintf(stdout, "%10.2f  ", bw->min / MEBIBYTE);
-        fprintf(stdout, "%10.2f", bw->mean / MEBIBYTE);
+        fprintf(stdout, "%10.2f ", bw->min / MEBIBYTE);
+        fprintf(stdout, "%10.2f ", bw->mean / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->sd / MEBIBYTE);
         fprintf(stdout, "%10.2f ", ops->max);
-        fprintf(stdout, "%10.2f  ", ops->min);
-        fprintf(stdout, "%10.2f", ops->mean);
-        fprintf(stdout, "%10.2f", ops->sd);
-        fprintf(stdout, "%10.5f   ",
+        fprintf(stdout, "%10.2f ", ops->min);
+        fprintf(stdout, "%10.2f ", ops->mean);
+        fprintf(stdout, "%10.2f ", ops->sd);
+        fprintf(stdout, "%10.5f ",
                 mean_of_array_of_doubles(times, reps));
         fprintf(stdout, "%d ", params->numTasks);
         fprintf(stdout, "%d ", params->tasksPerNode);
@@ -1774,7 +1774,7 @@ static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *oper
         fprintf(stdout, "%lld ", params->transferSize);
         fprintf(stdout, "%lld ", results->aggFileSizeForBW[0]);
         fprintf(stdout, "%d ", params->TestNum);
-        fprintf(stdout, "%s ", params->api);
+        fprintf(stdout, "%s", params->api);
         fprintf(stdout, "\n");
 	fflush(stdout);
 
@@ -1795,7 +1795,11 @@ static void PrintSummaryAllTests(IOR_test_t *tests_head)
 	fprintf(stdout, "\n");
 	fprintf(stdout, "Summary of all tests:");
 	fprintf(stdout, "\n");
-	fprintf(stdout, "Operation  Max(MiB)   Min(MiB)   Mean(MiB)    StdDev   Max(OPs)   Min(OPs)   Mean(OPs)    StdDev   Mean(s)   #Tasks tPN reps fPP reord reordoff reordrand seed segcnt blksiz xsize aggsize TestNum API\n");
+	fprintf(stdout, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s",
+                "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
+                "Max(OPs)", "Min(OPs)", "Mean(OPs)", "StdDev", "Mean(s)");
+        fprintf(stdout, " #Tasks tPN reps fPP reord reordoff reordrand seed"
+                " segcnt blksiz xsize aggsize TestNum API\n");
 
 	for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
                 if (params->writeFile)
