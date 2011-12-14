@@ -315,16 +315,13 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                                 != results->aggFileSizeFromXfer[rep])) {
                                 fprintf(stdout,
                                         "WARNING: Expected aggregate file size       = %lld.\n",
-                                        (long long)
-                                        params->expectedAggFileSize);
+                                        (long long) params->expectedAggFileSize);
                                 fprintf(stdout,
                                         "WARNING: Stat() of aggregate file size      = %lld.\n",
-                                        (long long)
-                                        results->aggFileSizeFromStat[rep]);
+                                        (long long) results->aggFileSizeFromStat[rep]);
                                 fprintf(stdout,
                                         "WARNING: Using actual aggregate bytes moved = %lld.\n",
-                                        (long long)
-                                        results->aggFileSizeFromXfer[rep]);
+                                        (long long) results->aggFileSizeFromXfer[rep]);
                         }
                 }
         }
@@ -390,11 +387,9 @@ CompareBuffers(void *expectedBuffer,
                                         rank, transferCount - 1, (long long)i,
                                         test->offset +
                                         (IOR_size_t) (i * sizeof(IOR_size_t)));
-                                fprintf(stdout, "[%d] %s0x", rank,
-                                        bufferLabel1);
+                                fprintf(stdout, "[%d] %s0x", rank, bufferLabel1);
                                 fprintf(stdout, "%016llx\n", goodbuf[i]);
-                                fprintf(stdout, "[%d] %s0x", rank,
-                                        bufferLabel2);
+                                fprintf(stdout, "[%d] %s0x", rank, bufferLabel2);
                                 fprintf(stdout, "%016llx\n", testbuf[i]);
                         }
                         if (!inError) {
@@ -473,19 +468,8 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
                                 WARN("overflow in errors counted");
                                 allErrors = -1;
                         }
-                        if (access == WRITECHECK) {
-                                fprintf(stdout,
-                                        "WARNING: incorrect data on write.\n");
-                                fprintf(stdout,
-                                        "         %d errors found on write check.\n",
-                                        allErrors);
-                        } else {
-                                fprintf(stdout,
-                                        "WARNING: incorrect data on read.\n");
-                                fprintf(stdout,
-                                        "         %d errors found on read check.\n",
-                                        allErrors);
-                        }
+			fprintf(stdout, "WARNING: incorrect data on %s (%d errors found).\n",
+				access == WRITECHECK ? "write" : "read", allErrors);
                         fprintf(stdout,
                                 "Used Time Stamp %u (0x%x) for Data Signature\n",
                                 test->timeStampSignatureValue,
@@ -1489,26 +1473,18 @@ static void ShowSetup(IOR_param_t *params)
 {
 
         if (strcmp(params->debug, "") != 0) {
-                fprintf(stdout, "\n*** DEBUG MODE ***\n");
-                fprintf(stdout, "*** %s ***\n\n", params->debug);
+                printf("\n*** DEBUG MODE ***\n");
+                printf("*** %s ***\n\n", params->debug);
         }
-        fprintf(stdout, "Summary:\n");
-        fprintf(stdout, "\tapi                = %s\n", params->apiVersion);
-        fprintf(stdout, "\ttest filename      = %s\n", params->testFileName);
-        fprintf(stdout, "\taccess             = ");
-        if (params->filePerProc) {
-                fprintf(stdout, "file-per-process");
-        } else {
-                fprintf(stdout, "single-shared-file");
-        }
+        printf("Summary:\n");
+        printf("\tapi                = %s\n", params->apiVersion);
+        printf("\ttest filename      = %s\n", params->testFileName);
+        printf("\taccess             = ");
+	printf(params->filePerProc ? "file-per-process" : "single-shared-file");
         if (verbose >= VERBOSE_1 && strcmp(params->api, "POSIX") != 0) {
-                if (params->collective == FALSE) {
-                        fprintf(stdout, ", independent");
-                } else {
-                        fprintf(stdout, ", collective");
-                }
+                printf(params->collective == FALSE ? ", independent" : ", collective");
         }
-        fprintf(stdout, "\n");
+        printf("\n");
         if (verbose >= VERBOSE_1) {
                 if (params->segmentCount > 1) {
                         fprintf(stdout,
@@ -1519,25 +1495,25 @@ static void ShowSetup(IOR_param_t *params)
                                 "\tpattern            = segmented (1 segment)\n");
                 }
         }
-        fprintf(stdout, "\tordering in a file =");
+        printf("\tordering in a file =");
         if (params->randomOffset == FALSE) {
-                fprintf(stdout, " sequential offsets\n");
+                printf(" sequential offsets\n");
         } else {
-                fprintf(stdout, " random offsets\n");
+                printf(" random offsets\n");
         }
-        fprintf(stdout, "\tordering inter file=");
+        printf("\tordering inter file=");
         if (params->reorderTasks == FALSE && params->reorderTasksRandom == FALSE) {
-                fprintf(stdout, " no tasks offsets\n");
+                printf(" no tasks offsets\n");
         }
         if (params->reorderTasks == TRUE) {
-                fprintf(stdout, " constant task offsets = %d\n",
+                printf(" constant task offsets = %d\n",
                         params->taskPerNodeOffset);
         }
         if (params->reorderTasksRandom == TRUE) {
-                fprintf(stdout, " random task offsets >= %d, seed=%d\n",
+                printf(" random task offsets >= %d, seed=%d\n",
                         params->taskPerNodeOffset, params->reorderTasksRandomSeed);
         }
-        fprintf(stdout, "\tclients            = %d (%d per node)\n",
+        printf("\tclients            = %d (%d per node)\n",
                 params->numTasks, params->tasksPerNode);
         if (params->memoryPerTask != 0)
                 printf("\tmemoryPerTask      = %s\n",
@@ -1548,23 +1524,23 @@ static void ShowSetup(IOR_param_t *params)
         printf("\trepetitions        = %d\n", params->repetitions);
         printf("\txfersize           = %s\n",
                 HumanReadable(params->transferSize, BASE_TWO));
-        fprintf(stdout, "\tblocksize          = %s\n",
+        printf("\tblocksize          = %s\n",
                 HumanReadable(params->blockSize, BASE_TWO));
-        fprintf(stdout, "\taggregate filesize = %s\n",
+        printf("\taggregate filesize = %s\n",
                 HumanReadable(params->expectedAggFileSize, BASE_TWO));
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
-        fprintf(stdout, "\tLustre stripe size = %s\n",
+        printf("\tLustre stripe size = %s\n",
                 ((params->lustre_stripe_size == 0) ? "Use default" :
                  HumanReadable(params->lustre_stripe_size, BASE_TWO)));
         if (params->lustre_stripe_count == 0) {
-                fprintf(stdout, "\t      stripe count = %s\n", "Use default");
+                printf("\t      stripe count = %s\n", "Use default");
         } else {
-                fprintf(stdout, "\t      stripe count = %d\n",
+                printf("\t      stripe count = %d\n",
                         params->lustre_stripe_count);
         }
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
         if (params->deadlineForStonewalling > 0) {
-                fprintf(stdout, "\tUsing stonewalling = %d second(s)\n",
+                printf("\tUsing stonewalling = %d second(s)\n",
                         params->deadlineForStonewalling);
         }
         fflush(stdout);
