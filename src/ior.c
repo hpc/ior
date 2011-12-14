@@ -1780,7 +1780,6 @@ static void PrintShortSummary(IOR_test_t * test)
 	}
 }
 
-
 /*
  * malloc a buffer, touching every page in an attempt to defeat lazy allocation.
  */
@@ -1805,6 +1804,51 @@ static void *malloc_and_touch(size_t size)
 
         return (void *)buf;
 }
+
+static void file_hits_histogram(IOR_param_t *params)
+{
+	int *rankoffs;
+	int *filecont;
+	int *filehits;
+	int ifile;
+	int jfile;
+
+	if (rank == 0) {
+		rankoffs = (int *)malloc(params->numTasks * sizeof(int));
+		filecont = (int *)malloc(params->numTasks * sizeof(int));
+		filehits = (int *)malloc(params->numTasks * sizeof(int));
+	}
+
+	MPI_CHECK(MPI_Gather(&rankOffset, 1, MPI_INT, rankoffs,
+			     1, MPI_INT, 0, MPI_COMM_WORLD),
+		  "MPI_Gather error");
+
+	if (rank != 0)
+		return;
+
+	memset((void *)filecont, 0, params->numTasks * sizeof(int));
+	for (ifile = 0; ifile < params->numTasks; ifile++) {
+		filecont[(ifile + rankoffs[ifile]) % params->numTasks]++;
+	}
+	memset((void *)filehits, 0, params->numTasks * sizeof(int));
+	for (ifile = 0; ifile < params->numTasks; ifile++)
+		for (jfile = 0; jfile < params->numTasks; jfile++) {
+			if (ifile == filecont[jfile])
+				filehits[ifile]++;
+		}
+	fprintf(stdout, "#File Hits Dist:");
+	jfile = 0;
+	ifile = 0;
+	while (jfile < params->numTasks && ifile < params->numTasks) {
+		fprintf(stdout, " %d", filehits[ifile]);
+		jfile += filehits[ifile], ifile++;
+	}
+	fprintf(stdout, "\n");
+	free(rankoffs);
+	free(filecont);
+	free(filehits);
+}
+
 
 /*
  * hog some memory as a rough simulation of a real application's memory use
@@ -1947,8 +1991,7 @@ static void TestIoSys(IOR_test_t *test)
                           (&params->timeStampSignatureValue, 1, MPI_UNSIGNED, 0,
                            testComm), "cannot broadcast start time value");
 #if USE_UNDOC_OPT               /* fillTheFileSystem */
-                if (params->fillTheFileSystem &&
-                    rep > 0
+                if (params->fillTheFileSystem && rep > 0
                     && rep % (params->fillTheFileSystem / params->numTasks) == 0) {
                         if (rank == 0 && verbose >= VERBOSE_0) {
                                 fprintf(stdout, "at file #%d, time: %s",
@@ -2107,18 +2150,14 @@ static void TestIoSys(IOR_test_t *test)
                         if (params->reorderTasksRandom) {
                                 /* this should not intefere with randomOffset within a file because GetOffsetArrayRandom */
                                 /* seeds every random() call  */
-                                int *rankoffs, *filecont, *filehits, ifile,
-                                    jfile, nodeoffset;
+				int nodeoffset;
                                 unsigned int iseed0;
                                 nodeoffset = params->taskPerNodeOffset;
-                                nodeoffset =
-                                    (nodeoffset <
-                                     params->nodes) ? nodeoffset : params->nodes -
-                                    1;
-                                iseed0 =
-                                    (params->reorderTasksRandomSeed <
-                                     0) ? (-1 * params->reorderTasksRandomSeed +
-                                           rep) : params->reorderTasksRandomSeed;
+                                nodeoffset = (nodeoffset < params->nodes) ? nodeoffset : params->nodes - 1;
+                                if (params->reorderTasksRandomSeed < 0)
+					iseed0 = -1 * params->reorderTasksRandomSeed + rep;
+				else
+					iseed0 = params->reorderTasksRandomSeed;
                                 srand(rank + iseed0);
                                 {
                                         rankOffset = rand() % params->numTasks;
@@ -2129,76 +2168,7 @@ static void TestIoSys(IOR_test_t *test)
                                 }
                                 /* Get more detailed stats if requested by verbose level */
                                 if (verbose >= VERBOSE_2) {
-                                        if (rank == 0) {
-                                                rankoffs =
-                                                    (int *)malloc(params->numTasks
-                                                                  *
-                                                                  sizeof(int));
-                                                filecont =
-                                                    (int *)malloc(params->numTasks
-                                                                  *
-                                                                  sizeof(int));
-                                                filehits =
-                                                    (int *)malloc(params->numTasks
-                                                                  *
-                                                                  sizeof(int));
-                                        }
-                                        MPI_CHECK(MPI_Gather
-                                                  (&rankOffset, 1, MPI_INT,
-                                                   rankoffs, 1, MPI_INT, 0,
-                                                   MPI_COMM_WORLD),
-                                                  "MPI_Gather error");
-                                        /*file hits histogram */
-                                        if (rank == 0) {
-                                                memset((void *)filecont, 0,
-                                                       params->numTasks *
-                                                       sizeof(int));
-                                                for (ifile = 0;
-                                                     ifile < params->numTasks;
-                                                     ifile++) {
-                                                        filecont[(ifile +
-                                                                  rankoffs
-                                                                  [ifile]) %
-                                                                 params->
-                                                                 numTasks]++;
-                                                }
-                                                memset((void *)filehits, 0,
-                                                       params->numTasks *
-                                                       sizeof(int));
-                                                for (ifile = 0;
-                                                     ifile < params->numTasks;
-                                                     ifile++)
-                                                        for (jfile = 0;
-                                                             jfile <
-                                                             params->numTasks;
-                                                             jfile++) {
-                                                                if (ifile ==
-                                                                    filecont
-                                                                    [jfile])
-                                                                        filehits
-                                                                            [ifile]++;
-                                                        }
-                                                /*                                             fprintf(stdout, "File Contention Dist:");
-                                                   for (ifile=0; ifile<params->numTasks; ifile++) { fprintf(stdout," %d",filecont[ifile]); }
-                                                   fprintf(stdout,"\n"); */
-                                                fprintf(stdout,
-                                                        "#File Hits Dist:");
-                                                jfile = 0;
-                                                ifile = 0;
-                                                while (jfile < params->numTasks &&
-                                                       ifile < params->numTasks) {
-                                                        fprintf(stdout, " %d",
-                                                                filehits
-                                                                [ifile]);
-                                                        jfile +=
-                                                            filehits[ifile],
-                                                            ifile++;
-                                                }
-                                                fprintf(stdout, "\n");
-                                                free(rankoffs);
-                                                free(filecont);
-                                                free(filehits);
-                                        }
+					file_hits_histogram(params);
                                 }
                         }
                         /* Using globally passed rankOffset, following function generates testFileName to read */
@@ -2259,16 +2229,13 @@ static void TestIoSys(IOR_test_t *test)
                         ? (GetTimeStamp() - startTime < maxTimeDuration) : 1)) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
-                                fprintf(stdout,
-                                        "Re-reading the file(s) twice to ");
-                                fprintf(stdout,
-                                        "verify that reads are consistent.\n");
+                                fprintf(stdout, "Re-reading the file(s) twice to ");
+                                fprintf(stdout, "verify that reads are consistent.\n");
                                 fprintf(stdout, "%s\n", CurrentTimeString());
                         }
                         if (params->reorderTasks) {
                                 /* move three nodes away from reading node */
-                                rankOffset =
-                                    (3 * params->tasksPerNode) % params->numTasks;
+                                rankOffset = (3 * params->tasksPerNode) % params->numTasks;
                         }
                         GetTestFileName(testFileName, params);
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
@@ -2280,17 +2247,11 @@ static void TestIoSys(IOR_test_t *test)
                                 /* increment rankOffset to open comparison file on other node */
                                 if (params->reorderTasks) {
                                         /* move four nodes away from reading node */
-                                        rankOffset =
-                                            (4 * params->tasksPerNode) %
-                                            params->numTasks;
+                                        rankOffset = (4 * params->tasksPerNode) % params->numTasks;
                                 }
-                                GetTestFileName(params->testFileName_fppReadCheck,
-                                                params);
+                                GetTestFileName(params->testFileName_fppReadCheck, params);
                                 rankOffset = tmpRankOffset;
-                                params->fd_fppReadCheck =
-                                    backend->open(params->
-                                                  testFileName_fppReadCheck,
-                                                  params);
+                                params->fd_fppReadCheck = backend->open(params->testFileName_fppReadCheck, params);
                         }
                         dataMoved = WriteOrRead(params, fd, READCHECK);
                         if (params->filePerProc) {
