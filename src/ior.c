@@ -1697,44 +1697,6 @@ static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *
 	return r;
 }
 
-static struct results *ops_values(int reps, int num_tasks,
-				  IOR_offset_t block_size,
-				  IOR_offset_t transfer_size,
-				  double *vals)
-{
-	struct results *r;
-	unsigned long long op_count;
-	int i;
-
-	r = (struct results *)malloc(sizeof(struct results)
-				     + (reps * sizeof(double)));
-	if (r == NULL)
-		ERR("malloc failed");
-	r->val = (double *)&r[1];
-
-	op_count = num_tasks * (block_size / transfer_size);
-	for (i = 0; i < reps; i++) {
-		r->val[i] = (double)op_count / vals[i];
-		if (i == 0) {
-			r->min = r->val[i];
-			r->max = r->val[i];
-			r->sum = 0.0;
-		}
-		r->min = MIN(r->min, r->val[i]);
-		r->max = MAX(r->max, r->val[i]);
-		r->sum += r->val[i];
-	}
-	r->mean = r->sum / reps;
-	r->var = 0.0;
-	for (i = 0; i < reps; i++) {
-		r->var += pow((r->mean - r->val[i]), 2);
-	}
-	r->var = r->var / reps;
-	r->sd = sqrt(r->var);
-
-	return r;
-}
-
 /*
  * Summarize results, showing max rates (and min, mean, stddev if verbose)
  */
@@ -1743,7 +1705,6 @@ static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *oper
 	IOR_param_t *params = &test->params;
 	IOR_results_t *results = test->results;
 	struct results *bw;
-	struct results *ops;
 	int reps;
 	int i, j;
 	
@@ -1753,18 +1714,12 @@ static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *oper
 	reps = params->repetitions;
 
 	bw = bw_values(reps, results->aggFileSizeForBW, times);
-	ops = ops_values(reps, params->numTasks, params->blockSize,
-                         params->transferSize, times);
 
         fprintf(stdout, "%-9s ", operation);
         fprintf(stdout, "%10.2f ", bw->max / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->min / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->mean / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->sd / MEBIBYTE);
-        fprintf(stdout, "%10.2f ", ops->max);
-        fprintf(stdout, "%10.2f ", ops->min);
-        fprintf(stdout, "%10.2f ", ops->mean);
-        fprintf(stdout, "%10.2f ", ops->sd);
         fprintf(stdout, "%10.5f ",
                 mean_of_array_of_doubles(times, reps));
         fprintf(stdout, "%d ", params->numTasks);
@@ -1785,7 +1740,6 @@ static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *oper
 	fflush(stdout);
 
 	free(bw);
-	free(ops);
 }
 
 static void PrintSummaryAllTests(IOR_test_t *tests_head)
@@ -1801,9 +1755,9 @@ static void PrintSummaryAllTests(IOR_test_t *tests_head)
 	fprintf(stdout, "\n");
 	fprintf(stdout, "Summary of all tests:");
 	fprintf(stdout, "\n");
-	fprintf(stdout, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s",
+	fprintf(stdout, "%-9s %10s %10s %10s %10s %10s",
                 "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
-                "Max(OPs)", "Min(OPs)", "Mean(OPs)", "StdDev", "Mean(s)");
+		"Mean(s)");
         fprintf(stdout, " #Tasks tPN reps fPP reord reordoff reordrand seed"
                 " segcnt blksiz xsize aggsize TestNum API\n");
 
