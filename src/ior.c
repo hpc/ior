@@ -872,7 +872,7 @@ void GetPlatformName(char *platformName)
         struct utsname name;
 
         if (uname(&name) != 0) {
-                WARN("cannot get platform name");
+                EWARN("cannot get platform name");
                 sprintf(sysName, "%s", "Unknown");
                 sprintf(nodeName, "%s", "Unknown");
         } else {
@@ -1423,7 +1423,7 @@ static void PrintHeader(int argc, char **argv)
         }
         fprintf(stdout, "\n");
         if (uname(&unamebuf) != 0) {
-                WARN("uname failed");
+                EWARN("uname failed");
                 fprintf(stdout, "Machine: Unknown");
         } else {
                 fprintf(stdout, "Machine: %s %s", unamebuf.sysname,

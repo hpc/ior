@@ -274,7 +274,7 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
 static void POSIX_Fsync(void *fd, IOR_param_t * param)
 {
         if (fsync(*(int *)fd) != 0)
-                WARN("fsync() failed");
+                EWARN("fsync() failed");
 }
 
 /*
@@ -296,7 +296,7 @@ static void POSIX_Delete(char *testFileName, IOR_param_t * param)
         sprintf(errmsg, "[RANK %03d]: unlink() of file \"%s\" failed\n",
                 rank, testFileName);
         if (unlink(testFileName) != 0)
-                WARN(errmsg);
+                EWARN(errmsg);
 }
 
 /*

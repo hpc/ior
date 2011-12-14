@@ -136,12 +136,6 @@ typedef long long int      IOR_size_t;
 } while (0)
 
 
-/******************************************************************************/
-/*
- * WARN will display a custom error message as well as an error string from
- * sys_errlist, but will not exit the program
- */
-
 #define WARN(MSG) do {                                                   \
         if (verbose > VERBOSE_2) {                                       \
             fprintf(stdout, "ior WARNING: %s, (%s:%d).\n",               \
@@ -152,13 +146,20 @@ typedef long long int      IOR_size_t;
         fflush(stdout);                                                  \
 } while (0)
 
+/* warning with errno printed */
+#define EWARN(MSG) do {                                                  \
+        if (verbose > VERBOSE_2) {                                       \
+            fprintf(stdout, "ior WARNING: %s, errno %d, %s (%s:%d).\n",  \
+                    MSG, errno, strerror(errno), __FILE__, __LINE__);    \
+        } else {                                                         \
+            fprintf(stdout, "ior WARNING: %s, errno %d, %s \n",          \
+                    MSG, errno, strerror(errno));                        \
+        }                                                                \
+        fflush(stdout);                                                  \
+} while (0)
 
-/******************************************************************************/
-/*
- * ERR will display a custom error message as well as an error string from
- * sys_errlist and then exit the program
- */
 
+/* display error message and terminate execution */
 #define ERR(MSG) do {                                                    \
         fprintf(stdout, "ior ERROR: %s, errno %d, %s (%s:%d)\n",         \
                 MSG, errno, strerror(errno), __FILE__, __LINE__);        \
