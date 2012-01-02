@@ -21,6 +21,7 @@
 #include "ior.h"
 #include "aiori.h"
 #include "parse_options.h"
+#include "utilities.h"
 
 IOR_param_t initialTestParams;
 
