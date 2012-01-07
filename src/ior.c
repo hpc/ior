@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <ctype.h>              /* tolower() */
 #include <errno.h>
 #include <math.h>
@@ -1541,6 +1542,8 @@ static void ShowSetup(IOR_param_t *params)
         }
         fprintf(stdout, "\tclients            = %d (%d per node)\n",
                 params->numTasks, params->tasksPerNode);
+        fprintf(stdout, "\tmemoryPerTask      = %s\n",
+                HumanReadable(params->memoryPerTask, BASE_TWO));
         fprintf(stdout, "\trepetitions        = %d\n", params->repetitions);
         fprintf(stdout, "\txfersize           = %s\n",
                 HumanReadable(params->transferSize, BASE_TWO));
@@ -1584,6 +1587,7 @@ static void ShowTest(IOR_param_t * test)
                 test->outlierThreshold);
         fprintf(stdout, "\t%s=%s\n", "options", test->options);
         fprintf(stdout, "\t%s=%d\n", "nodes", test->nodes);
+        fprintf(stdout, "\t%s=%lu\n", "memoryPerTask", (unsigned long) test->memoryPerTask);
         fprintf(stdout, "\t%s=%d\n", "tasksPerNode", tasksPerNode);
         fprintf(stdout, "\t%s=%d\n", "repetitions", test->repetitions);
         fprintf(stdout, "\t%s=%d\n", "multiFile", test->multiFile);
@@ -1844,6 +1848,32 @@ static void PrintShortSummary(IOR_test_t * test)
 	}
 }
 
+
+/*
+ * malloc a buffer, touching every page in an attempt to defeat lazy allocation.
+ */
+static void *malloc_and_touch(size_t size)
+{
+        size_t page_size;
+        char *buf;
+        char *ptr;
+
+        if (size == 0)
+                return NULL;
+
+	page_size = sysconf(_SC_PAGESIZE);
+
+        buf = (char *)malloc(size);
+        if (buf == NULL)
+                ERR("malloc failed");
+
+        for (ptr = buf; ptr < buf+size; ptr += page_size) {
+                *ptr = (char)1;
+        }
+
+        return (void *)buf;
+}
+
 /*
  * Using the test parameters, run iteration(s) of single test.
  */
@@ -1859,6 +1889,7 @@ static void TestIoSys(IOR_test_t *test)
         MPI_Group orig_group, new_group;
         int range[3];
         IOR_offset_t dataMoved; /* for data rate calculation */
+        void *hog_buf;
 
         /* set up communicator for test */
         if (params->numTasks > numTasksWorld) {
@@ -1910,6 +1941,10 @@ static void TestIoSys(IOR_test_t *test)
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
+
+        /* hog some memory as a rough simulation of a real application's
+           memory use */
+        hog_buf = malloc_and_touch(params->memoryPerTask);
 
         startTime = GetTimeStamp();
         maxTimeDuration = params->maxTimeDuration * 60;   /* convert to seconds */
@@ -2331,11 +2366,15 @@ static void TestIoSys(IOR_test_t *test)
 
 	PrintShortSummary(test);
 
+	if (hog_buf != NULL)
+		free(hog_buf);
         for (i = 0; i < 12; i++) {
                 free(timer[i]);
         }
+
         /* Sync with the tasks that did not participate in this test */
         MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
+
 }
 
 /*
