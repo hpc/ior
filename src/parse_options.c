@@ -160,14 +160,18 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->writeFile = atoi(value);
         } else if (strcasecmp(option, "fileperproc") == 0) {
                 params->filePerProc = atoi(value);
-        } else if (strcasecmp(option, "reordertasksconstant") == 0) {
-                params->reorderTasks = atoi(value);
         } else if (strcasecmp(option, "taskpernodeoffset") == 0) {
                 params->taskPerNodeOffset = atoi(value);
+        } else if (strcasecmp(option, "reordertasksconstant") == 0) {
+                params->reorderTasks = atoi(value);
         } else if (strcasecmp(option, "reordertasksrandom") == 0) {
                 params->reorderTasksRandom = atoi(value);
         } else if (strcasecmp(option, "reordertasksrandomSeed") == 0) {
                 params->reorderTasksRandomSeed = atoi(value);
+        } else if (strcasecmp(option, "reordertasks") == 0) {
+                /* Backwards compatibility for the "reorderTasks" option.
+                   MUST follow the other longer reordertasks checks. */
+                params->reorderTasks = atoi(value);
         } else if (strcasecmp(option, "checkwrite") == 0) {
                 params->checkWrite = atoi(value);
         } else if (strcasecmp(option, "checkread") == 0) {
