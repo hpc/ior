@@ -1,3 +1,6 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
 /******************************************************************************\
 *                                                                              *
 *        Copyright (c) 2003, The Regents of the University of California       *

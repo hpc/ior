@@ -1,3 +1,6 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
 /* getopt.h */
 /* Declarations for getopt.
    Copyright (C) 1989-1994, 1996-1999, 2001 Free Software 
