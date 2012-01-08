@@ -301,7 +301,6 @@ IOR_offset_t StringToBytes(char *size_str)
 void ShowFileSystemSize(char *fileSystem)
 {
 #ifndef _WIN32                  /* FIXME */
-        int error;
         char realPath[PATH_MAX];
         char *fileSystemUnitStr;
         long long int totalFileSystemSize;

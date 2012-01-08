@@ -331,7 +331,6 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         FILE *file;
         IOR_test_t *head = NULL;
         IOR_test_t *tail = NULL;
-        IOR_test_t *newTest = NULL;
 
         /* Initialize the first test */
         head = CreateTest(&initialTestParams, test_num++);

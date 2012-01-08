@@ -67,7 +67,6 @@ ior_aiori_t *available_aiori[] = {
 static void AioriBind(char *);
 static void CheckForOutliers(IOR_param_t *, double **, int, int);
 static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep);
-static char *CheckTorF(char *);
 static size_t CompareBuffers(void *, void *, size_t,
                              IOR_offset_t, IOR_param_t *, int);
 static int CountErrors(IOR_param_t *, int, int);
@@ -83,7 +82,6 @@ static void FreeBuffers(int, void *, void *, void *, IOR_offset_t *);
 static void GetTestFileName(char *, IOR_param_t *);
 static double GetTimeStamp(void);
 static char *HumanReadable(IOR_offset_t, int);
-static char *LowerCase(char *);
 static void PPDouble(int, double, char *);
 static char *PrependDir(IOR_param_t *, char *);
 static char **ParseFileName(char *, int *);
@@ -329,20 +327,6 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                 }
         }
         results->aggFileSizeForBW[rep] = results->aggFileSizeFromXfer[rep];
-}
-
-/*
- * Check if string is true or false.
- */
-static char *CheckTorF(char *string)
-{
-        string = LowerCase(string);
-        if (strcmp(string, "false") == 0) {
-                strcpy(string, "0");
-        } else if (strcmp(string, "true") == 0) {
-                strcpy(string, "1");
-        }
-        return (string);
 }
 
 /*
@@ -1003,20 +987,6 @@ static char *HumanReadable(IOR_offset_t value, int base)
 }
 
 /*
- * Change string to lower case.
- */
-static char *LowerCase(char *string)
-{
-        char *nextChar = string;
-
-        while (*nextChar != '\0') {
-                *nextChar = (char)tolower((int)*nextChar);
-                nextChar++;
-        }
-        return (string);
-}
-
-/*
  * Parse file name.
  */
 static char **ParseFileName(char *name, int *count)
@@ -1420,8 +1390,6 @@ static void PrintHeader(int argc, char **argv)
  */
 static void ShowTestInfo(IOR_param_t *params)
 {
-        int i;
-
 	fprintf(stdout, "\n");
         fprintf(stdout, "Test %d started: %s", params->id, CurrentTimeString());
         if (verbose >= VERBOSE_1) {
@@ -1649,7 +1617,6 @@ static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *oper
 	IOR_results_t *results = test->results;
 	struct results *bw;
 	int reps;
-	int i, j;
 	
         if (rank != 0)
 		return;
@@ -1690,7 +1657,6 @@ static void PrintSummaryAllTests(IOR_test_t *tests_head)
 	IOR_param_t *params = &tests_head->params;
 	IOR_results_t *results = tests_head->results;
         IOR_test_t *tptr;
-	int i;
 
 	if (rank !=0)
 		return;
