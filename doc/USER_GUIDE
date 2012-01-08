@@ -1,57 +1,27 @@
-/*****************************************************************************\
-*                                                                             *
-*       Copyright (c) 2003, The Regents of the University of California       *
-*     See the file COPYRIGHT for a complete copyright notice and license.     *
-*                                                                             *
-\*****************************************************************************/
-/********************* Modifications to IOR-2.10.1 ****************************
-* Hodson, 8/18/2008:                                                          *
-* Documentation updated for the following new option:                         *
-* The modifications to IOR-2.10.1 extend existing random I/O capabilities and *
-* enhance performance output statistics.                                      *
-*                                                                             *
-*  cli        script                  Description                             *
-* -----      -----------------        ----------------------------------------*
-* 1)  -A N   testnum                - test reference number for easier test   *
-*                                     identification in log files             *
-* 2)  -Q N   taskpernodeoffset      - for read tests. Use with -C & -Z options*
-*                                     If -C (reordertasks) specified,         *
-*                                     then node offset read by CONSTANT  N.   *
-*                                     If -Z (reordertasksrandom) specified,   *
-*                                     then node offset read by RANDOM >= N.   *
-* 3)  -Z     reordertasksrandom     - random node task ordering for read tests*
-*                                     In this case, processes read            *
-*                                     data written by other processes with    *
-*                                     node offsets specified by the -Q option *
-*                                     and -X option.                          *
-* 4)  -X N   reordertasksrandomseed - random seed for -Z (reordertasksrandom) *
-*                                     If N>=0, use same seed for all iters    *
-*                                     If N< 0, use different seed for ea. iter*
-* 5)  -Y     fsyncperwrite          - perform fsync after every POSIX write   *
-\*****************************************************************************/
+Copyright (c) 2003, The Regents of the University of California
+See the file COPYRIGHT for a complete copyright notice and license.
 
                                  IOR USER GUIDE
 
 Index:
   * Basics
       1.  Description
-      2.  Building IOR
-      3.  Running IOR
-      4.  Options
+      2.  Running IOR
+      3.  Options
 
   * More Information
-      5.  Option details
-      6.  Verbosity levels
-      7.  Using Scripts
+      4.  Option details
+      5.  Verbosity levels
+      6.  Using Scripts
 
   * Troubleshooting
-      8.  Compatibility with older versions
+      7.  Compatibility with older versions
 
   * Frequently Asked Questions
-      9.  How do I . . . ?
+      8.  How do I . . . ?
 
   * Output
-     10.  Enhanced output description
+      9.  Enhanced output description
 
 
 *******************
@@ -63,37 +33,8 @@ IOR version 2 is a complete rewrite of the original IOR (Interleaved-Or-Random)
 version 1 code.  
 
 
-*******************
-* 2. BUILDING IOR *
-*******************
-Build Instructions:
-
-  Type 'gmake [posix|mpiio|hdf5|ncmpi|all]' from the IOR/ directory. 
-  On some platforms, e.g., Cray XT, specify "CC=cc" to build using "cc" instead of "mpicc".
-  In IOR/src/C, the file Makefile.config currently has settings for AIX, Linux,
-  OSF1 (TRU64), and IRIX64 to model on.  Note that MPI must be present for
-  building/running IOR, and that MPI I/O must be available for MPI I/O, HDF5,
-  and Parallel netCDF builds.  As well, HDF5 and Parallel netCDF libraries are
-  necessary for those builds.  All IOR builds include the POSIX interface.
-
-  You can build IOR as a native Windows application. One way to do this is to 
-  use the "Microsoft Windows SDK", which is available as a free download and 
-  includes development tools like the Visual C++ compiler. To build IOR with 
-  MPI-IO support, also download and install the "Microsoft HPC Pack SDK". 
-  Once these packages are installed on your Windows build system, follow these 
-  steps:
-    1. Open a "CMD Shell" under the Start menu Microsoft Windows SDK group.
-    2. cd to the IOR directory containing ior.vcproj
-    3. Run: vcbuild ior.vcproj "Release|x64"
-
-  ior.exe will be created in the directory IOR/x64/Release. "Debug|x64",
-  "Release|Win32", and "Debug|Win32" configurations can also be built.  
-  To build IOR without MPI-IO support, first edit ior.vcproj and replace 
-  aiori-MPIIO.c with aiori-noMPIIO.c.
-
-
 ******************
-* 3. RUNNING IOR *
+* 2. RUNNING IOR *
 ******************
 Two ways to run IOR:
 
@@ -112,7 +53,7 @@ Two ways to run IOR:
 
 
 **************
-* 4. OPTIONS *
+* 3. OPTIONS *
 **************
 These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -A N  testNum -- test number for reference in some output
@@ -120,7 +61,7 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
   -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers
   -c    collective -- collective I/O
-  -C    reorderTasks -- changes task ordering to n+1 ordering for readback
+  -C    reorderTasksConstant -- changes task ordering to n+1 ordering for readback
   -Q N  taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N) [!HDF5]
   -Z    reorderTasksRandom -- changes task ordering to random ordering for readback
   -X N  reorderTasksRandomSeed -- random seed for -Z option
@@ -173,7 +114,7 @@ NOTES: * S is a string, N is an integer number.
 
 
 *********************
-* 5. OPTION DETAILS *
+* 4. OPTION DETAILS *
 *********************
 For each of the general settings, note the default is shown in brackets.
 IMPORTANT NOTE: For all true/false options below [1]=true, [0]=false
@@ -402,7 +343,7 @@ LUSTRE-SPECIFIC:
 
 
 ***********************
-* 6. VERBOSITY LEVELS *
+* 5. VERBOSITY LEVELS *
 ***********************
 The verbosity of output for IOR can be set with -v.  Increasing the number of
 -v instances on a command line sets the verbosity higher.
@@ -422,7 +363,7 @@ Here is an overview of the information shown for different verbosity levels:
 
 
 ********************
-* 7. USING SCRIPTS *
+* 6. USING SCRIPTS *
 ********************
 
 IOR can use a script with the command line.  Any options on the command line
@@ -491,7 +432,7 @@ NOTES: * Not all test parameters need be set.
 
 
 ****************************************
-* 8. COMPATIBILITY WITH OLDER VERSIONS *
+* 7. COMPATIBILITY WITH OLDER VERSIONS *
 ****************************************
 1)  IOR version 1 (c. 1996-2002) and IOR version 2 (c. 2003-present) are
     incompatible.  Input decks from one will not work on the other.  As version
@@ -512,7 +453,7 @@ NOTES: * Not all test parameters need be set.
 
 
 *********************************
-* 9. FREQUENTLY ASKED QUESTIONS *
+* 8. FREQUENTLY ASKED QUESTIONS *
 *********************************
 HOW DO I PERFORM MULTIPLE DATA CHECKS ON AN EXISTING FILE?
 
@@ -618,13 +559,13 @@ HOW DO I BYPASS CACHING WHEN READING BACK A FILE I'VE JUST WRITTEN?
   performance or data integrity checking, it may be reading from its own cache
   rather from the file system.
 
-  The reorderTasks '-C' option attempts to address this by having a different
-  node read back data than wrote it.  For example, node N writes the data to
-  file, node N+1 reads back the data for read performance, node N+2 reads back
-  the data for write data checking, and node N+3 reads the data for read data
-  checking, comparing this with the reread data from node N+4.  The objective
-  is to make sure on file access that the data is not being read from cached
-  data.
+  The reorderTasksConstant '-C' option attempts to address this by having a
+  different node read back data than wrote it.  For example, node N writes the
+  data to file, node N+1 reads back the data for read performance, node N+2
+  reads back the data for write data checking, and node N+3 reads the data for
+  read data checking, comparing this with the reread data from node N+4.  The
+  objective is to make sure on file access that the data is not being read from
+  cached data.
 
     Node 0: writes data
     Node 1: reads data
@@ -684,34 +625,22 @@ HOW DO I CORRECT FOR CLOCK SKEW BETWEEN NODES IN A CLUSTER?
   to set this value high enough to only show a node outside a certain time
   from the mean.
 
-
-WHAT HAPPENED TO THE GUI?
-
-  In versions of IOR earlier than 2.9.x, there was a GUI available.  Over time
-  it became clear that it wasn't find enough use to warrant maintenance.  It
-  was retired in IOR-2.10.x.
-
 **************************
-* 10. OUTPUT DESCRIPTION *
+* 9. OUTPUT DESCRIPTION *
 **************************
-(FIXME -- this section needs updating and some rewrite.)
 
 Output Statistics:
 
 The quantity "aggregate operations/sec" was added to the existing "aggregate data rate" test log print file.
 An "operation" is defined to be a write or read within an open/close [open/write|read/close]. 
 Multiple writes or reads within an open/close are also counted as multiple operations. 
-Also various other test relevant quantities are printed on a single "grepable" line using the pattern EXCEL. 
-This way, output from large parameter space runs can easily be imported to excel for analysis. Below is an example.
-
-grep EXCEL :IOR.o406550     
 
 Operation  Max (MiB)  Min (MiB)  Mean (MiB)   Std Dev  Max (OPs)  Min (OPs)  Mean (OPs)   Std Dev   Mean(s)
 ---------  ---------  ---------  ----------   -------  ---------  ---------  ----------   -------   -------
 read          309.30      17.20      164.67     73.80     309.30      17.20      164.67     73.80   0.06581
 (line-continued)
 #Tasks tPN reps  fPP reord reordoff reordrand seed segcnt blksiz   xsize   aggsize
-   8     2 100     1     0     1     0         0     1     1048576 1048576 8388608 5 EXCEL
+   8     2 100     1     0     1     0         0     1     1048576 1048576 8388608 5
 
 Where:
 Max (MiB) - Maximum aggregate data rate of 100 iterations (reps)
@@ -737,8 +666,6 @@ blksiz    - total MBytes written/read per process
 xsize     - total MBytes written/read per process per operation
 aggsize   - total Mbytes written/read by all processes per operations
 5         - testnum
-EXCEL     - grep pattern for this summary print
 
-More detail information can be obtained with AT LEAST "-v -v" [verbose=0] level and grepping "XXCEL". 
 This includes a file "contention" histogram showing the number of files accessed 0,1,2,3,... times for a specified random pattern.
 
