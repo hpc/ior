@@ -1032,25 +1032,27 @@ static char **ParseFileName(char *name, int *count)
  */
 static void PPDouble(int leftjustify, double number, char *append)
 {
+        char format[16];
+        int width = 10;
+        int precision;
+
         if (number < 0) {
                 fprintf(stdout, "   -      %s", append);
-        } else {
-                if (leftjustify) {
-                        if (number < 1)
-                                fprintf(stdout, "%-10.6f%s", number, append);
-                        else if (number < 3600)
-                                fprintf(stdout, "%-10.2f%s", number, append);
-                        else
-                                fprintf(stdout, "%-10.0f%s", number, append);
-                } else {
-                        if (number < 1)
-                                fprintf(stdout, "%10.6f%s", number, append);
-                        else if (number < 3600)
-                                fprintf(stdout, "%10.2f%s", number, append);
-                        else
-                                fprintf(stdout, "%10.0f%s", number, append);
-                }
+                return;
         }
+
+        if (number < 1)
+                precision = 6;
+        else if (number < 3600)
+                precision = 2;
+        else
+                precision = 0;
+
+        sprintf(format, "%%%s%d.%df%%s",
+                leftjustify ? "-" : "",
+                width, precision);
+
+        printf(format, number, append);
 }
 
 /*
