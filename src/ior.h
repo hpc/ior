@@ -122,18 +122,6 @@ typedef struct
     int lustre_set_striping;         /* flag that we need to set lustre striping */
     int lustre_ignore_locks;
 
-#if USE_UNDOC_OPT
-    int corruptFile;
-    int fillTheFileSystem;
-    int includeDeleteTime;
-    int multiReRead;
-
-    /* NFS variables */
-    char NFS_rootPath[MAXPATHLEN];   /* absolute path to NFS servers */
-    char NFS_serverName[MAXPATHLEN]; /* prefix for NFS server name */
-    int NFS_serverCount;             /* number of NFS servers to be used */
-#endif /* USE_UNDOC_OPT */
-
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
 } IOR_param_t;

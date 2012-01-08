@@ -256,22 +256,6 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 ERR("ior was not compiled with Lustre support");
 #endif
                 params->lustre_ignore_locks = atoi(value);
-#if USE_UNDOC_OPT
-        } else if (strcasecmp(option, "corruptFile") == 0) {
-                params->corruptFile = atoi(value);
-        } else if (strcasecmp(option, "fillTheFileSystem") == 0) {
-                params->fillTheFileSystem = atoi(value);
-        } else if (strcasecmp(option, "includeDeleteTime") == 0) {
-                params->includeDeleteTime = atoi(value);
-        } else if (strcasecmp(option, "multiReRead") == 0) {
-                params->multiReRead = atoi(value);
-        } else if (strcasecmp(option, "nfs_rootpath") == 0) {
-                strcpy(params->NFS_rootPath, value);
-        } else if (strcasecmp(option, "nfs_servername") == 0) {
-                strcpy(params->NFS_serverName, value);
-        } else if (strcasecmp(option, "nfs_servercount") == 0) {
-                params->NFS_serverCount = atoi(value);
-#endif                          /* USE_UNDOC_OPT */
         } else if (strcasecmp(option, "numtasks") == 0) {
                 params->numTasks = atoi(value);
 		RecalculateExpectedFileSize(params);

@@ -673,11 +673,6 @@ static void DisplayFreespace(IOR_param_t * test)
         if (directoryFound == FALSE) {
                 strcpy(fileName, ".");
         }
-#if USE_UNDOC_OPT               /* NFS */
-        if (test->NFS_serverCount) {
-                strcpy(fileName, test->NFS_rootPath);
-        }
-#endif                          /* USE_UNDOC_OPT - NFS */
 
         ShowFileSystemSize(fileName);
 
@@ -919,15 +914,6 @@ static void GetTestFileName(char *testFileName, IOR_param_t * test)
                         strcpy(testFileNameRoot,
                                PrependDir(test, testFileNameRoot));
                 }
-#if USE_UNDOC_OPT               /* NFS */
-                if (test->NFS_serverCount) {
-                        sprintf(tmpString, "%s/%s%d/%s", test->NFS_rootPath,
-                                test->NFS_serverName,
-                                rank % (test->NFS_serverCount),
-                                testFileNameRoot);
-                        strcpy(testFileNameRoot, tmpString);
-                }
-#endif                          /* USE_UNDOC_OPT - NFS */
                 sprintf(testFileName, "%s.%08d", testFileNameRoot,
                         (rank + rankOffset) % test->numTasks);
         } else {
@@ -1194,13 +1180,6 @@ ReadCheck(void *fd,
         if (*amtXferred != transfer)
                 ERR("cannot read from file on read check");
         memset(checkBuffer, 'a', transfer);     /* empty buffer */
-#if USE_UNDOC_OPT               /* corruptFile */
-        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-        /* intentionally corrupt file to determine if check works */
-        if (params->corruptFile) {
-                CorruptFile(params->testFileName, params, 0, READCHECK);
-        }
-#endif                          /* USE_UNDOC_OPT - corruptFile */
         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
         if (params->filePerProc) {
                 *amtXferred = backend->xfer(access, params->fd_fppReadCheck,
@@ -1278,16 +1257,7 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
 		diff_subset = &diff[3];
 	}
 
-#if USE_UNDOC_OPT               /* fillTheFileSystem */
-        if (test->params.fillTheFileSystem && rep == 0 && verbose >= VERBOSE_1) {
-                fprintf(stdout, " . . . skipping iteration results output . . .\n");
-                fflush(stdout);
-        }
-
-        if (verbose < VERBOSE_0 || test->params.fillTheFileSystem) {
-#else
         if (verbose < VERBOSE_0) {
-#endif
 		return;
 	}
 
@@ -1451,12 +1421,6 @@ static void ShowTestInfo(IOR_param_t *params)
 
 	fprintf(stdout, "\n");
         fprintf(stdout, "Test %d started: %s", params->id, CurrentTimeString());
-#if USE_UNDOC_OPT               /* NFS */
-        if (params->NFS_serverCount) {
-                fprintf(stdout, "NFS path: %s%s[0..%d]\n", params->NFS_rootPath,
-                        params->NFS_serverName, params->NFS_serverCount - 1);
-        }
-#endif                          /* USE_UNDOC_OPT - NFS */
         if (verbose >= VERBOSE_1) {
                 /* if pvfs2:, then skip */
                 if (Regex(params->testFileName, "^[a-z][a-z].*:") == 0) {
@@ -1952,12 +1916,6 @@ static void TestIoSys(IOR_test_t *test)
         startTime = GetTimeStamp();
         maxTimeDuration = params->maxTimeDuration * 60;   /* convert to seconds */
 
-#if USE_UNDOC_OPT               /* fillTheFileSystem */
-        if (rank == 0 && params->fillTheFileSystem && verbose >= VERBOSE_0) {
-                fprintf(stdout, "Run started: %s", CurrentTimeString());
-        }
-#endif                          /* USE_UNDOC_OPT - fillTheFileSystem */
-
         /* loop over test iterations */
         for (rep = 0; rep < params->repetitions; rep++) {
 
@@ -1990,17 +1948,6 @@ static void TestIoSys(IOR_test_t *test)
                 MPI_CHECK(MPI_Bcast
                           (&params->timeStampSignatureValue, 1, MPI_UNSIGNED, 0,
                            testComm), "cannot broadcast start time value");
-#if USE_UNDOC_OPT               /* fillTheFileSystem */
-                if (params->fillTheFileSystem && rep > 0
-                    && rep % (params->fillTheFileSystem / params->numTasks) == 0) {
-                        if (rank == 0 && verbose >= VERBOSE_0) {
-                                fprintf(stdout, "at file #%d, time: %s",
-                                        rep * params->numTasks,
-                                        CurrentTimeString());
-                                fflush(stdout);
-                        }
-                }
-#endif                          /* USE_UNDOC_OPT - fillTheFileSystem */
                 /* use repetition count for number of multiple files */
                 if (params->multiFile)
                         params->repCounter = rep;
@@ -2010,9 +1957,6 @@ static void TestIoSys(IOR_test_t *test)
                  */
 
                 if (params->writeFile
-#if USE_UNDOC_OPT               /* multiReRead */
-                    && (!params->multiReRead || !rep)
-#endif                          /* USE_UNDOC_OPT - multiReRead */
                     && (maxTimeDuration
                         ? (GetTimeStamp() - startTime < maxTimeDuration) : 1)) {
                         GetTestFileName(testFileName, params);
@@ -2047,46 +1991,16 @@ static void TestIoSys(IOR_test_t *test)
                         timer[4][rep] = GetTimeStamp();
                         backend->close(fd, params);
 
-#if USE_UNDOC_OPT               /* includeDeleteTime */
-                        if (params->includeDeleteTime) {
-                                if (rank == 0 && verbose >= VERBOSE_1) {
-                                        fprintf(stdout,
-                                                "** including delete time **\n");
-                                }
-                                MPI_CHECK(MPI_Barrier(testComm),
-                                          "barrier error");
-                                RemoveFile(testFileName, params->filePerProc,
-                                           params);
-                        }
-#endif                          /* USE_UNDOC_OPT - includeDeleteTime */
-
                         timer[5][rep] = GetTimeStamp();
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
-#if USE_UNDOC_OPT               /* includeDeleteTime */
-                        if (params->includeDeleteTime) {
-                                /* not accurate, but no longer a test file to examine */
-                                results->aggFileSizeFromStat[rep] =
-					params->expectedAggFileSize;
-                                results->aggFileSizeFromXfer[rep] =
-					params->expectedAggFileSize;
-                                results->aggFileSizeForBW[rep] =
-					params->expectedAggFileSize;
-                        } else {
-#endif                          /* USE_UNDOC_OPT - includeDeleteTime */
+			/* get the size of the file just written */
+			results->aggFileSizeFromStat[rep] =
+				backend->get_file_size(params, testComm, testFileName);
 
-                                /* get the size of the file just written */
-                                results->aggFileSizeFromStat[rep]
-                                    = backend->get_file_size(params, testComm,
-                                                             testFileName);
-
-                                /* check if stat() of file doesn't equal expected file size,
-                                   use actual amount of byte moved */
-                                CheckFileSize(test, dataMoved, rep);
-
-#if USE_UNDOC_OPT               /* includeDeleteTime */
-                        }
-#endif                          /* USE_UNDOC_OPT - includeDeleteTime */
+			/* check if stat() of file doesn't equal expected file size,
+			   use actual amount of byte moved */
+			CheckFileSize(test, dataMoved, rep);
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, WRITE);
@@ -2101,19 +2015,8 @@ static void TestIoSys(IOR_test_t *test)
                  * against what was expected to be written
                  */
                 if (params->checkWrite
-#if USE_UNDOC_OPT               /* multiReRead */
-                    && (!params->multiReRead || rep)
-#endif                          /* USE_UNDOC_OPT - multiReRead */
                     && (maxTimeDuration
                         ? (GetTimeStamp() - startTime < maxTimeDuration) : 1)) {
-#if USE_UNDOC_OPT               /* corruptFile */
-                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-                        /* intentionally corrupt file to determine if check works */
-                        if (params->corruptFile) {
-                                CorruptFile(testFileName, params, rep,
-                                            WRITECHECK);
-                        }
-#endif                          /* USE_UNDOC_OPT - corruptFile */
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
                                 fprintf(stdout,
@@ -2275,12 +2178,6 @@ static void TestIoSys(IOR_test_t *test)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                 rankOffset = 0;
         }
-
-#if USE_UNDOC_OPT               /* fillTheFileSystem */
-        if (rank == 0 && params->fillTheFileSystem && verbose >= VERBOSE_0) {
-                fprintf(stdout, "Run ended: %s", CurrentTimeString());
-        }
-#endif                          /* USE_UNDOC_OPT - fillTheFileSystem */
 
         MPI_CHECK(MPI_Comm_free(&testComm), "MPI_Comm_free() error");
 

@@ -22,9 +22,6 @@ int Regex(char *, char *);
 void ShowFileSystemSize(char *);
 void DumpBuffer(void *, size_t);
 void SeedRandGen(MPI_Comm);
-#if USE_UNDOC_OPT
-void CorruptFile(char *, IOR_param_t *, int, int);
-#endif
 void SetHints (MPI_Info *, char *);
 void ShowHints (MPI_Info *);
 

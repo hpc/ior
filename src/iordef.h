@@ -113,9 +113,6 @@ extern int verbose;                            /* verbose output */
 #define HERE               fprintf(stdout, "** LINE %d (TASK=%d) **\n", \
                                    __LINE__, rank);
 
-/* Other MACROs */
-#define USE_UNDOC_OPT      TRUE                /* USE UNDOCumented OPTion */
-
 typedef long long int      IOR_offset_t;
 typedef long long int      IOR_size_t;
 
