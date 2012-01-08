@@ -726,7 +726,7 @@ static void DisplayUsage(char **argv)
                 " -s N  segmentCount -- number of segments",
                 " -S    useStridedDatatype -- put strided access into datatype [not working]",
                 " -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)",
-                " -T N  maxTimeDuration -- max time in minutes to run tests",
+                " -T N  maxTimeDuration -- max time in minutes for each test",
                 " -u    uniqueDir -- use unique directory name for each file-per-process",
                 " -U S  hintsFileName -- full name for hints file",
                 " -v    verbose -- output information (repeating flag increases level)",
@@ -1814,6 +1814,18 @@ static void file_hits_histogram(IOR_param_t *params)
 }
 
 
+int test_time_elapsed(IOR_param_t *params, double startTime)
+{
+	double endTime;
+
+	if (params->maxTimeDuration == 0)
+		return 0;
+
+	endTime = startTime + (params->maxTimeDuration * 60);
+
+	return GetTimeStamp() >= endTime;
+}
+
 /*
  * hog some memory as a rough simulation of a real application's memory use
  */
@@ -1853,7 +1865,7 @@ static void TestIoSys(IOR_test_t *test)
         char testFileName[MAX_STR];
         double *timer[12];
         double startTime;
-        int i, rep, maxTimeDuration;
+        int i, rep;
         void *fd;
         MPI_Group orig_group, new_group;
         int range[3];
@@ -1914,7 +1926,6 @@ static void TestIoSys(IOR_test_t *test)
         hog_buf = HogMemory(params);
 
         startTime = GetTimeStamp();
-        maxTimeDuration = params->maxTimeDuration * 60;   /* convert to seconds */
 
         /* loop over test iterations */
         for (rep = 0; rep < params->repetitions; rep++) {
@@ -1956,9 +1967,7 @@ static void TestIoSys(IOR_test_t *test)
                  * write the file(s), getting timing between I/O calls
                  */
 
-                if (params->writeFile
-                    && (maxTimeDuration
-                        ? (GetTimeStamp() - startTime < maxTimeDuration) : 1)) {
+                if (params->writeFile && !test_time_elapsed(params, startTime)) {
                         GetTestFileName(testFileName, params);
                         if (verbose >= VERBOSE_3) {
                                 fprintf(stdout, "task %d writing %s\n", rank,
@@ -2014,9 +2023,7 @@ static void TestIoSys(IOR_test_t *test)
                  * perform a check of data, reading back data and comparing
                  * against what was expected to be written
                  */
-                if (params->checkWrite
-                    && (maxTimeDuration
-                        ? (GetTimeStamp() - startTime < maxTimeDuration) : 1)) {
+                if (params->checkWrite && !test_time_elapsed(params, startTime)) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
                                 fprintf(stdout,
@@ -2038,9 +2045,7 @@ static void TestIoSys(IOR_test_t *test)
                 /*
                  * read the file(s), getting timing between I/O calls
                  */
-                if (params->readFile
-                    && (maxTimeDuration
-                        ? (GetTimeStamp() - startTime < maxTimeDuration) : 1)) {
+                if (params->readFile && !test_time_elapsed(params, startTime)) {
                         /* Get rankOffset [file offset] for this process to read, based on -C,-Z,-Q,-X options */
                         /* Constant process offset reading */
                         if (params->reorderTasks) {
@@ -2127,9 +2132,7 @@ static void TestIoSys(IOR_test_t *test)
                  * perform a check of data, reading back data twice and
                  * comparing against what was expected to be read
                  */
-                if (params->checkRead
-                    && (maxTimeDuration
-                        ? (GetTimeStamp() - startTime < maxTimeDuration) : 1)) {
+                if (params->checkRead && !test_time_elapsed(params, startTime)) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
                                 fprintf(stdout, "Re-reading the file(s) twice to ");

@@ -86,7 +86,7 @@ typedef struct
     int useExistingTestFile;         /* do not delete test file before access */
     int storeFileOffset;             /* use file offset as stored signature */
     int deadlineForStonewalling; /* max time in seconds to run any test phase */
-    int maxTimeDuration;             /* max time in minutes to run tests */
+    int maxTimeDuration;             /* max time in minutes to run each test */
     int outlierThreshold;            /* warn on outlier N seconds from mean */
     int verbose;                     /* verbosity */
     int setTimeStampSignature;       /* set time stamp signature */
