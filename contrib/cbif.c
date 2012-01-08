@@ -8,12 +8,6 @@
 *                                                                              *
 ********************************************************************************
 *
-* CVS info:
-*   $RCSfile: cbif.c,v $
-*   $Revision: 1.1.1.1 $
-*   $Date: 2007/10/15 23:36:54 $
-*   $Author: rklundt $
-*
 * Purpose:
 *       Changes a specific Byte offset In File
 *

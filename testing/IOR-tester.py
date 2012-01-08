@@ -8,12 +8,6 @@
 #*     See the file COPYRIGHT for a complete copyright notice and license.     *
 #*                                                                             *
 #\*****************************************************************************/
-#
-# CVS info:
-#   $RCSfile: IOR-tester.py,v $
-#   $Revision: 1.1.1.1 $
-#   $Date: 2007/10/15 23:36:54 $
-#   $Author: rklundt $
 
 import sys
 import os.path
