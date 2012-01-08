@@ -1,3 +1,12 @@
+Changes in IOR-3.0.0
+
+ * Reorganization of the build system.  Now uses autoconf/automake.
+   N.B. Windows suport is not included.  Patches welcome.
+ * Much code refactoring.
+ * Final summary table is printed after all tests have finished.
+ * Error messages significantly improved.
+ * Drop all "undocumented changes".  If they are worth having, they
+   need to be implemented well and documented.
 
 Changes in IOR-2.10.3
  * bug 2962326 "Segmentation Fault When Summarizing Results" fixed
@@ -19,27 +28,8 @@ Contributed by demyn@users.sourceforge.net
 Changes in IOR-2.10.2:
 Hodson, 8/18/2008:                                                          
 
-The modifications to IOR-2.10.1 extend existing random I/O capabilities and 
-enhance performance output statistics.                                      
-
-   cli        script                  Description                             
------      -----------------        ----------------------------------------
-1)  -A N   testnum                - test reference number for easier test   
-                                      identification in log files             
-2)  -Q N   taskpernodeoffset      - for read tests. Use with -C & -Z options
-                                      If -C (reordertasks) specified,         
-                                      then node offset read by CONSTANT  N.   
-                                      If -Z (reordertasksrandom) specified,   
-                                      then node offset read by RANDOM >= N.   
-3)  -Z     reordertasksrandom     - random node task ordering for read tests
-                                      In this case, processes read            
-                                      data written by other processes with    
-                                      node offsets specified by the -Q option 
-                                      and -X option.                          
-4)  -X N   reordertasksrandomseed - random seed for -Z (reordertasksrandom) 
-                                      If N>=0, use same seed for all iters    
-                                      If N< 0, use different seed for ea. iter
-5)  -Y     fsyncperwrite          - perform fsync after every POSIX write
+ * extend existing random I/O capabilities and enhance performance
+   output statistics.                                      
 
 Fixes in IOR-2.10.1:
  * added '-J' setAlignment option for HDF5 alignment in bytes; default value
