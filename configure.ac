@@ -11,7 +11,7 @@ AC_CONFIG_HEADER([src/config.h])
 AC_CANONICAL_HOST
 
 # Automake support
-AM_INIT_AUTOMAKE([$PACKAGE], [$VERSION], [check-news dist-bzip2 gnu no-define])
+AM_INIT_AUTOMAKE([$META_NAME], [$META_VERSION], [check-news dist-bzip2 gnu no-define])
 AM_MAINTAINER_MODE
 
 # Checks for programs.

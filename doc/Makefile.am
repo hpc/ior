@@ -1,1 +1,1 @@
-data_DATA = USER_GUIDE
+dist_data_DATA = USER_GUIDE
