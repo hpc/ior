@@ -21,9 +21,62 @@
 #include "ior.h"
 #include "aiori.h"
 #include "parse_options.h"
-#include "utilities.h"
 
 IOR_param_t initialTestParams;
+
+/*
+ * Takes a string of the form 64, 8m, 128k, 4g, etc. and converts to bytes.
+ */
+static IOR_offset_t StringToBytes(char *size_str)
+{
+        IOR_offset_t size = 0;
+        char range;
+        int rc;
+
+        rc = sscanf(size_str, " %lld %c ", &size, &range);
+        if (rc == 2) {
+                switch ((int)range) {
+                case 'k':
+                case 'K':
+                        size <<= 10;
+                        break;
+                case 'm':
+                case 'M':
+                        size <<= 20;
+                        break;
+                case 'g':
+                case 'G':
+                        size <<= 30;
+                        break;
+                }
+        } else if (rc == 0) {
+                size = -1;
+        }
+        return (size);
+}
+
+static size_t NodeMemoryStringToBytes(char *size_str)
+{
+        int percent;
+        int rc;
+        long page_size;
+        long num_pages;
+        long long mem;
+
+        rc = sscanf(size_str, " %d %% ", &percent);
+        if (rc == 0)
+                return (size_t)StringToBytes(size_str);
+        if (percent > 100 || percent < 0)
+                ERR("percentage must be between 0 and 100");
+
+        page_size = sysconf(_SC_PAGESIZE);
+        num_pages = sysconf(_SC_PHYS_PAGES);
+        if (num_pages == -1)
+                ERR("sysconf(_SC_PHYS_PAGES) is not supported");
+        mem = page_size * num_pages;
+
+        return mem / 100 * percent;
+}
 
 static void RecalculateExpectedFileSize(IOR_param_t *params)
 {
@@ -176,6 +229,10 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->randomOffset = atoi(value);
         } else if (strcasecmp(option, "memoryPerTask") == 0) {
                 params->memoryPerTask = StringToBytes(value);
+                params->memoryPerNode = 0;
+        } else if (strcasecmp(option, "memoryPerNode") == 0) {
+                params->memoryPerNode = NodeMemoryStringToBytes(value);
+                params->memoryPerTask = 0;
         } else if (strcasecmp(option, "lustrestripecount") == 0) {
 #ifndef HAVE_LUSTRE_LUSTRE_USER_H
                 ERR("ior was not compiled with Lustre support");
@@ -340,7 +397,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 IOR_test_t *ParseCommandLine(int argc, char **argv)
 {
         static const char *opts =
-          "A:a:b:BcCQ:ZX:d:D:YeEf:FgG:hHi:j:J:IkKlmnN:o:O:pPqrRs:St:T:uU:vVwWxz";
+          "A:a:b:BcCQ:ZX:d:D:YeEf:FgG:hHi:j:J:IkKlmM:nN:o:O:pPqrRs:St:T:uU:vVwWxz";
         int c, i;
         static IOR_test_t *tests = NULL;
 
@@ -438,7 +495,8 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         initialTestParams.storeFileOffset = TRUE;
                         break;
 		case 'M':
-                        initialTestParams.memoryPerTask = StringToBytes(optarg);
+                        initialTestParams.memoryPerNode =
+                                NodeMemoryStringToBytes(optarg);
                         break;
                 case 'm':
                         initialTestParams.multiFile = TRUE;

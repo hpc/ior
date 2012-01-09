@@ -95,7 +95,8 @@ typedef struct
     int randomSeed;                  /* random seed for write/read check */
     int randomOffset;                /* access is to random offsets */
     MPI_Comm testComm;               /* MPI communicator */
-    size_t memoryPerTask;        /* additional memory used per task */
+    size_t memoryPerTask;            /* additional memory used per task */
+    size_t memoryPerNode;            /* additional memory used per node */
 
     /* POSIX variables */
     int singleXferAttempt;           /* do not retry transfer if incomplete */

@@ -142,6 +142,7 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -k    keepFile -- don't remove the test file(s) on program exit
   -K    keepFileWithError  -- keep error-filled file(s) after data-checking
   -l    storeFileOffset -- use file offset as stored signature
+  -M S  memoryPerNode -- hog memory on the node
   -m    multiFile -- use number of reps (-i) for multiple file count
   -n    noFill -- no fill in HDF5 file creation
   -N N  numTasks -- number of tasks that should participate in the test
@@ -303,6 +304,15 @@ GENERAL:
   * storeFileOffset      - use file offset as stored signature when writing
                            file [0=FALSE]
                            NOTE: this will affect performance measurements
+
+  * memoryPerNode        - Allocate memory on each node to simulate real
+                           application memory usage.  Accepts a percentage of
+                           node memory (e.g. "50%") on machines that support
+                           sysconf(_SC_PHYS_PAGES) or a size.  Allocation will
+                           be split between tasks that share the node.
+
+  * memoryPerTask        - Allocate secified amount of memory per task to
+                           simulate real application memory usage.
 
   * maxTimeDuration      - max time in minutes to run tests [0]
                            NOTES: * setting this to zero (0) unsets this option

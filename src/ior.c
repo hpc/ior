@@ -68,7 +68,6 @@ static char *CheckTorF(char *);
 static size_t CompareBuffers(void *, void *, size_t,
                              IOR_offset_t, IOR_param_t *, int);
 static int CountErrors(IOR_param_t *, int, int);
-static int CountTasksPerNode(int, MPI_Comm);
 static void *CreateBuffer(size_t);
 static void DelaySecs(int);
 static void DestroyTests(IOR_test_t *tests_head);
@@ -89,8 +88,6 @@ static void PrintHeader(int argc, char **argv);
 static void ReadCheck(void *, void *, void *, void *, IOR_param_t *,
                       IOR_offset_t, IOR_offset_t, IOR_offset_t *,
                       IOR_offset_t *, int, int *);
-static void ReduceIterResults(IOR_test_t *test, double **timer,
-			      int rep, int access);
 static void RemoveFile(char *, int, IOR_param_t *);
 static void SetupXferBuffers(void **, void **, void **,
                              IOR_param_t *, int, int);
@@ -1542,10 +1539,14 @@ static void ShowSetup(IOR_param_t *params)
         }
         fprintf(stdout, "\tclients            = %d (%d per node)\n",
                 params->numTasks, params->tasksPerNode);
-        fprintf(stdout, "\tmemoryPerTask      = %s\n",
-                HumanReadable(params->memoryPerTask, BASE_TWO));
-        fprintf(stdout, "\trepetitions        = %d\n", params->repetitions);
-        fprintf(stdout, "\txfersize           = %s\n",
+        if (params->memoryPerTask != 0)
+                printf("\tmemoryPerTask      = %s\n",
+                       HumanReadable(params->memoryPerTask, BASE_TWO));
+        if (params->memoryPerNode != 0)
+                printf("\tmemoryPerNode      = %s\n",
+                       HumanReadable(params->memoryPerNode, BASE_TWO));
+        printf("\trepetitions        = %d\n", params->repetitions);
+        printf("\txfersize           = %s\n",
                 HumanReadable(params->transferSize, BASE_TWO));
         fprintf(stdout, "\tblocksize          = %s\n",
                 HumanReadable(params->blockSize, BASE_TWO));
@@ -1588,6 +1589,7 @@ static void ShowTest(IOR_param_t * test)
         fprintf(stdout, "\t%s=%s\n", "options", test->options);
         fprintf(stdout, "\t%s=%d\n", "nodes", test->nodes);
         fprintf(stdout, "\t%s=%lu\n", "memoryPerTask", (unsigned long) test->memoryPerTask);
+        fprintf(stdout, "\t%s=%lu\n", "memoryPerNode", (unsigned long) test->memoryPerNode);
         fprintf(stdout, "\t%s=%d\n", "tasksPerNode", tasksPerNode);
         fprintf(stdout, "\t%s=%d\n", "repetitions", test->repetitions);
         fprintf(stdout, "\t%s=%d\n", "multiFile", test->multiFile);
@@ -1865,13 +1867,42 @@ static void *malloc_and_touch(size_t size)
 
         buf = (char *)malloc(size);
         if (buf == NULL)
-                ERR("malloc failed");
+                return NULL;
 
         for (ptr = buf; ptr < buf+size; ptr += page_size) {
                 *ptr = (char)1;
         }
 
         return (void *)buf;
+}
+
+/*
+ * hog some memory as a rough simulation of a real application's memory use
+ */
+static void *HogMemory(IOR_param_t *params)
+{
+        size_t size;
+        void *buf;
+
+        if (params->memoryPerTask != 0) {
+                size = params->memoryPerTask;
+        } else if (params->memoryPerNode != 0) {
+                if (verbose >= VERBOSE_3)
+                        fprintf(stderr, "This node hogging %ld bytes of memory\n",
+                                params->memoryPerNode);
+                size = params->memoryPerNode / params->tasksPerNode;
+        } else {
+                return NULL;
+        }
+
+        if (verbose >= VERBOSE_3)
+                fprintf(stderr, "This task hogging %ld bytes of memory\n", size);
+
+        buf = malloc_and_touch(size);
+        if (buf == NULL)
+                ERR("malloc of simulated applciation buffer failed");
+
+        return buf;
 }
 
 /*
@@ -1942,9 +1973,7 @@ static void TestIoSys(IOR_test_t *test)
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
 
-        /* hog some memory as a rough simulation of a real application's
-           memory use */
-        hog_buf = malloc_and_touch(params->memoryPerTask);
+        hog_buf = HogMemory(params);
 
         startTime = GetTimeStamp();
         maxTimeDuration = params->maxTimeDuration * 60;   /* convert to seconds */
