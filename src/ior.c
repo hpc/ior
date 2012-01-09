@@ -1250,6 +1250,16 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
 	fflush(stdout);
 }
 
+static void PrintRemoveTiming(double start, double finish, int rep)
+{
+        if (rank != 0)
+		return;
+
+        printf("remove    -          -          -          -          -          -          ");
+        PPDouble(1, finish-start, " ");
+        printf("%-4d\n", rep);
+}
+
 /*
  * Check for file(s), then remove all files if file-per-proc, else single file.
  */
@@ -2137,19 +2147,19 @@ static void TestIoSys(IOR_test_t *test)
                         }
                         backend->close(fd, params);
                 }
-                /*
-                 * this final barrier may not be necessary as backend->close should
-                 * be a collective call -- but to make sure that the file has
-                 * has not be removed by a task before another finishes writing,
-                 * the MPI_Barrier() call has been included.
-                 */
-                MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                 if (!params->keepFile
-                    && !(params->keepFileWithError && params->errorFound)) {
+                    && !(params->errorFound && params->keepFileWithError)) {
+                        double start, finish;
+                        start = GetTimeStamp();
+                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         RemoveFile(testFileName, params->filePerProc, params);
+                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+                        finish = GetTimeStamp();
+                        PrintRemoveTiming(start, finish, rep);
+                } else {
+                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                 }
                 params->errorFound = FALSE;
-                MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                 rankOffset = 0;
         }
 
