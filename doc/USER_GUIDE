@@ -451,6 +451,8 @@ NOTES: * Not all test parameters need be set.
     IOR versions 2.8.8 and later, if not one of the -w -r -W or -R options is
     set, then -w and -r are set implicitly.
 
+4)  IOR version 3 (Jan 2012-present) has changed the output of IOR somewhat,
+    and the "testNum" option was renamed "refNum".
 
 *********************************
 * 8. FREQUENTLY ASKED QUESTIONS *
