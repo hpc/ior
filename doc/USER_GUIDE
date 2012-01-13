@@ -76,7 +76,7 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -K    keepFileWithError  -- keep error-filled file(s) after data-checking
   -l    storeFileOffset -- use file offset as stored signature
   -m    multiFile -- use number of reps (-i) for multiple file count
-  -M S  memoryPerNode -- hog memory on the node
+  -M N  memoryPerNode -- hog memory on the node (e.g.: 2g, 75%)
   -n    noFill -- no fill in HDF5 file creation
   -N N  numTasks -- number of tasks that should participate in the test
   -o S  testFile -- full name for test
