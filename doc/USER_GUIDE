@@ -56,18 +56,14 @@ Two ways to run IOR:
 * 3. OPTIONS *
 **************
 These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
-  -A N  testNum -- test number for reference in some output
   -a S  api --  API for I/O [POSIX|MPIIO|HDF5|NCMPI]
+  -A N  testNum -- test number for reference in some output
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
   -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers
   -c    collective -- collective I/O
   -C    reorderTasksConstant -- changes task ordering to n+1 ordering for readback
-  -Q N  taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N) [!HDF5]
-  -Z    reorderTasksRandom -- changes task ordering to random ordering for readback
-  -X N  reorderTasksRandomSeed -- random seed for -Z option
   -d N  interTestDelay -- delay between reps in seconds
   -D N  deadlineForStonewalling -- seconds before stopping write or read phase
-  -Y    fsyncPerWrite -- perform fsync after each POSIX write
   -e    fsync -- perform fsync upon POSIX write close
   -E    useExistingTestFile -- do not remove test file before write access
   -f S  scriptFile -- test script name
@@ -83,8 +79,8 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -k    keepFile -- don't remove the test file(s) on program exit
   -K    keepFileWithError  -- keep error-filled file(s) after data-checking
   -l    storeFileOffset -- use file offset as stored signature
-  -M S  memoryPerNode -- hog memory on the node
   -m    multiFile -- use number of reps (-i) for multiple file count
+  -M S  memoryPerNode -- hog memory on the node
   -n    noFill -- no fill in HDF5 file creation
   -N N  numTasks -- number of tasks that should participate in the test
   -o S  testFile -- full name for test
@@ -92,6 +88,7 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -p    preallocate -- preallocate file size
   -P    useSharedFilePointer -- use shared file pointer [not working]
   -q    quitOnError -- during file error-checking, abort on error
+  -Q N  taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N) [!HDF5]
   -r    readFile -- read existing file
   -R    checkRead -- check read after read
   -s N  segmentCount -- number of segments
@@ -105,7 +102,10 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -w    writeFile -- write file
   -W    checkWrite -- check read after write
   -x    singleXferAttempt -- do not retry transfer if incomplete
+  -X N  reorderTasksRandomSeed -- random seed for -Z option
+  -Y    fsyncPerWrite -- perform fsync after each POSIX write
   -z    randomOffset -- access is to random, not sequential, offsets within a file
+  -Z    reorderTasksRandom -- changes task ordering to random ordering for readback
 
 
 NOTES: * S is a string, N is an integer number.

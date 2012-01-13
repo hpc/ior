@@ -387,7 +387,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 IOR_test_t *ParseCommandLine(int argc, char **argv)
 {
         static const char *opts =
-          "A:a:b:BcCQ:ZX:d:D:YeEf:FgG:hHi:j:J:IkKlmM:nN:o:O:pPqrRs:St:T:uU:vVwWxz";
+          "a:A:b:BcCd:D:eEf:FgG:hHi:Ij:J:kKlmM:nN:o:O:pPqQ:rRs:St:T:uU:vVwWxX:YzZ";
         int c, i;
         static IOR_test_t *tests = NULL;
 
