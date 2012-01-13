@@ -138,6 +138,9 @@ int main(int argc, char **argv)
                 TestIoSys(tptr);
         }
 
+        if (verbose < 0)
+                /* always print final summary */
+                verbose = 0;
 	PrintLongSummaryAllTests(tests_head);
 
         /* display finish time */
@@ -1217,7 +1220,7 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
 
 static void PrintRemoveTiming(double start, double finish, int rep)
 {
-        if (rank != 0)
+        if (rank != 0 || verbose < VERBOSE_0)
 		return;
 
         printf("remove    -          -          -          -          -          -          ");
@@ -1639,7 +1642,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
 	struct results *bw;
 	int reps;
 	
-        if (rank != 0)
+	if (rank != 0 || verbose < VERBOSE_0)
 		return;
 
 	reps = params->repetitions;
@@ -1686,6 +1689,9 @@ static void PrintLongSummaryOneTest(IOR_test_t *test)
 
 static void PrintLongSummaryHeader()
 {
+	if (rank != 0 || verbose < VERBOSE_0)
+		return;
+
 	fprintf(stdout, "\n");
 	fprintf(stdout, "%-9s %10s %10s %10s %10s %10s",
                 "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
@@ -1698,7 +1704,7 @@ static void PrintLongSummaryAllTests(IOR_test_t *tests_head)
 {
         IOR_test_t *tptr;
 
-	if (rank !=0)
+	if (rank != 0 || verbose < VERBOSE_0)
 		return;
 
 	fprintf(stdout, "\n");
@@ -1951,7 +1957,7 @@ static void TestIoSys(IOR_test_t *test)
                                         params->timeStampSignatureValue,
                                         params->timeStampSignatureValue);
                         }
-			if (rep == 0) {
+			if (rep == 0 && verbose >= VERBOSE_0) {
 				fprintf(stdout, "\n");
 				fprintf(stdout, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
 				fprintf(stdout, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
