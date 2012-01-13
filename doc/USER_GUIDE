@@ -280,6 +280,9 @@ GENERAL:
                                     -storeFileOffset
                                     -MPIIO collective or useFileView
                                     -HDF5 or NCMPI
+  * summaryAlways        - Always print the long summary for each test.
+                           Useful for long runs that may be interrupted, preventing
+                           the final long summary for ALL tests to be printed.
 
 
 POSIX-ONLY:

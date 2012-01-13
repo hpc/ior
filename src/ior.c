@@ -74,7 +74,7 @@ static IOR_test_t *SetupTests(int, char **);
 static void ShowTestInfo(IOR_param_t *);
 static void ShowSetup(IOR_param_t *params);
 static void ShowTest(IOR_param_t *);
-static void PrintSummaryAllTests(IOR_test_t *tests_head);
+static void PrintLongSummaryAllTests(IOR_test_t *tests_head);
 static void TestIoSys(IOR_test_t *);
 static void ValidTests(IOR_param_t *);
 static IOR_offset_t WriteOrRead(IOR_param_t *, void *, int);
@@ -138,7 +138,7 @@ int main(int argc, char **argv)
                 TestIoSys(tptr);
         }
 
-	PrintSummaryAllTests(tests_head);
+	PrintLongSummaryAllTests(tests_head);
 
         /* display finish time */
         if (rank == 0 && verbose >= VERBOSE_0) {
@@ -1580,8 +1580,8 @@ static double mean_of_array_of_doubles(double *values, int len)
 	for (i = 0; i < len; i++) {
 		tot += values[i];
 	}
-
 	return tot / len;
+
 }
 
 struct results {
@@ -1628,9 +1628,11 @@ static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *
 }
 
 /*
- * Summarize results, showing max rates (and min, mean, stddev if verbose)
+ * Summarize results
+ *
+ * operation is typically "write" or "read"
  */
-static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *operation)
+static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *operation)
 {
 	IOR_param_t *params = &test->params;
 	IOR_results_t *results = test->results;
@@ -1671,10 +1673,29 @@ static void PrintSummaryOneOperation(IOR_test_t *test, double *times, char *oper
 	free(bw);
 }
 
-static void PrintSummaryAllTests(IOR_test_t *tests_head)
+static void PrintLongSummaryOneTest(IOR_test_t *test)
 {
-	IOR_param_t *params = &tests_head->params;
-	IOR_results_t *results = tests_head->results;
+	IOR_param_t *params = &test->params;
+	IOR_results_t *results = test->results;
+
+        if (params->writeFile)
+                PrintLongSummaryOneOperation(test, results->writeTime, "write");
+        if (params->readFile)
+                PrintLongSummaryOneOperation(test, results->readTime, "read");
+}
+
+static void PrintLongSummaryHeader()
+{
+	fprintf(stdout, "\n");
+	fprintf(stdout, "%-9s %10s %10s %10s %10s %10s",
+                "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
+		"Mean(s)");
+        fprintf(stdout, " #Tasks tPN reps fPP reord reordoff reordrand seed"
+                " segcnt blksiz xsize aggsize TestNum API\n");
+}
+
+static void PrintLongSummaryAllTests(IOR_test_t *tests_head)
+{
         IOR_test_t *tptr;
 
 	if (rank !=0)
@@ -1682,18 +1703,10 @@ static void PrintSummaryAllTests(IOR_test_t *tests_head)
 
 	fprintf(stdout, "\n");
 	fprintf(stdout, "Summary of all tests:");
-	fprintf(stdout, "\n");
-	fprintf(stdout, "%-9s %10s %10s %10s %10s %10s",
-                "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
-		"Mean(s)");
-        fprintf(stdout, " #Tasks tPN reps fPP reord reordoff reordrand seed"
-                " segcnt blksiz xsize aggsize TestNum API\n");
+        PrintLongSummaryHeader();
 
 	for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-                if (params->writeFile)
-                        PrintSummaryOneOperation(tptr, results->writeTime, "write");
-                if (params->readFile)
-                        PrintSummaryOneOperation(tptr, results->readTime, "read");
+                PrintLongSummaryOneTest(tptr);
 	}
 }
 
@@ -2172,7 +2185,12 @@ static void TestIoSys(IOR_test_t *test)
 
         MPI_CHECK(MPI_Comm_free(&testComm), "MPI_Comm_free() error");
 
-	PrintShortSummary(test);
+        if (params->summary_every_test) {
+                PrintLongSummaryHeader();
+                PrintLongSummaryOneTest(test);
+        } else {
+                PrintShortSummary(test);
+        }
 
 	if (hog_buf != NULL)
 		free(hog_buf);

@@ -85,6 +85,7 @@ typedef struct
     int useO_DIRECT;                 /* use O_DIRECT, bypassing I/O buffers */
     int showHints;                   /* show hints */
     int showHelp;                    /* show options and help */
+    int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
     int useExistingTestFile;         /* do not delete test file before access */
     int storeFileOffset;             /* use file offset as stored signature */

@@ -266,6 +266,8 @@ void DecodeDirective(char *line, IOR_param_t *params)
         } else if (strcasecmp(option, "numtasks") == 0) {
                 params->numTasks = atoi(value);
 		RecalculateExpectedFileSize(params);
+        } else if (strcasecmp(option, "summaryalways") == 0) {
+                params->summary_every_test = atoi(value);
         } else {
                 if (rank == 0)
                         fprintf(stdout, "Unrecognized parameter \"%s\"\n",
