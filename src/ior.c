@@ -64,41 +64,18 @@ ior_aiori_t *available_aiori[] = {
         NULL
 };
 
-static void AioriBind(char *);
-static void CheckForOutliers(IOR_param_t *, double **, int, int);
-static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep);
-static size_t CompareBuffers(void *, void *, size_t,
-                             IOR_offset_t, IOR_param_t *, int);
-static int CountErrors(IOR_param_t *, int, int);
-static void *CreateBuffer(size_t);
-static void DelaySecs(int);
 static void DestroyTests(IOR_test_t *tests_head);
-static void DisplayFreespace(IOR_param_t *);
-static void DisplayOutliers(int, double, char *, int, int);
 static void DisplayUsage(char **);
-static void DistributeHints(void);
-static void FillBuffer(void *, IOR_param_t *, unsigned long long, int);
-static void FreeBuffers(int, void *, void *, void *, IOR_offset_t *);
 static void GetTestFileName(char *, IOR_param_t *);
-static double GetTimeStamp(void);
-static char *HumanReadable(IOR_offset_t, int);
-static void PPDouble(int, double, char *);
 static char *PrependDir(IOR_param_t *, char *);
 static char **ParseFileName(char *, int *);
 static void PrintHeader(int argc, char **argv);
-static void ReadCheck(void *, void *, void *, void *, IOR_param_t *,
-                      IOR_offset_t, IOR_offset_t, IOR_offset_t *,
-                      IOR_offset_t *, int, int *);
-static void RemoveFile(char *, int, IOR_param_t *);
-static void SetupXferBuffers(void **, void **, void **,
-                             IOR_param_t *, int, int);
 static IOR_test_t *SetupTests(int, char **);
 static void ShowTestInfo(IOR_param_t *);
 static void ShowSetup(IOR_param_t *params);
 static void ShowTest(IOR_param_t *);
 static void PrintSummaryAllTests(IOR_test_t *tests_head);
 static void TestIoSys(IOR_test_t *);
-static double TimeDeviation(void);
 static void ValidTests(IOR_param_t *);
 static IOR_offset_t WriteOrRead(IOR_param_t *, void *, int);
 static void WriteTimes(IOR_param_t *, double **, int, int);
@@ -512,7 +489,7 @@ static int CountTasksPerNode(int numTasks, MPI_Comm comm)
 /*
  * Allocate a page-aligned (required by O_DIRECT) buffer.
  */
-static void *CreateBuffer(size_t size)
+static void *aligned_buffer_alloc(size_t size)
 {
         size_t pageSize;
         size_t pageMask;
@@ -533,6 +510,14 @@ static void *CreateBuffer(size_t size)
         *(void **)tmp = buf;
 
         return (void *)aligned;
+}
+
+/*
+ * Free a buffer allocated by aligned_buffer_alloc().
+ */
+static void aligned_buffer_free(void *buf)
+{
+        free(*(void **)((char *)buf - sizeof(char *)));
 }
 
 void AllocResults(IOR_test_t *test)
@@ -803,28 +788,6 @@ FillBuffer(void *buffer,
                         buf[i] = offset + (i * sizeof(unsigned long long));
                 }
         }
-}
-
-/*
- * Free transfer buffers.
- */
-static void
-FreeBuffers(int access,
-            void *checkBuffer,
-            void *readCheckBuffer, void *buffer, IOR_offset_t * offsetArray)
-{
-        /* free() aligned buffers */
-        if (access == WRITECHECK || access == READCHECK) {
-                free(*(void **)((char *)checkBuffer - sizeof(char *)));
-        }
-        if (access == READCHECK) {
-                free(*(void **)((char *)readCheckBuffer - sizeof(char *)));
-        }
-        free(*(void **)((char *)buffer - sizeof(char *)));
-
-        /* nothing special needed to free() this unaligned buffer */
-        free(offsetArray);
-        return;
 }
 
 /*
@@ -1129,10 +1092,12 @@ ReadCheck(void *fd,
           IOR_offset_t *amtXferred,
           IOR_offset_t *transferCount, int access, int *errors)
 {
-        int readCheckToRank, readCheckFromRank;
+        int readCheckToRank;
+        int readCheckFromRank;
         MPI_Status status;
         IOR_offset_t tmpOffset;
-        IOR_offset_t segmentSize, segmentNum;
+        IOR_offset_t segmentSize;
+        IOR_offset_t segmentNum;
 
         memset(buffer, 'a', transfer);
         *amtXferred = backend->xfer(access, fd, buffer, transfer, params);
@@ -1184,7 +1149,7 @@ ReadCheck(void *fd,
         *errors += CompareBuffers(buffer, readCheckBuffer, transfer,
                                   *transferCount, params, READCHECK);
         return;
-}                               /* ReadCheck() */
+}
 
 /******************************************************************************/
 /*
@@ -1288,6 +1253,34 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
 }
 
 /*
+ * Determine any spread (range) between node times.
+ */
+static double TimeDeviation(void)
+{
+        double timestamp;
+        double min = 0;
+        double max = 0;
+        double roottimestamp;
+
+        MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
+        timestamp = GetTimeStamp();
+        MPI_CHECK(MPI_Reduce(&timestamp, &min, 1, MPI_DOUBLE,
+                             MPI_MIN, 0, MPI_COMM_WORLD),
+                  "cannot reduce tasks' times");
+        MPI_CHECK(MPI_Reduce(&timestamp, &max, 1, MPI_DOUBLE,
+                             MPI_MAX, 0, MPI_COMM_WORLD),
+                  "cannot reduce tasks' times");
+
+        /* delta between individual nodes' time and root node's time */
+        roottimestamp = timestamp;
+        MPI_CHECK(MPI_Bcast(&roottimestamp, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD),
+                  "cannot broadcast root's time");
+        wall_clock_delta = timestamp - roottimestamp;
+
+        return max - min;
+}
+
+/*
  * Setup tests by parsing commandline and creating test script.
  */
 static IOR_test_t *SetupTests(int argc, char **argv)
@@ -1323,22 +1316,36 @@ static IOR_test_t *SetupTests(int argc, char **argv)
 /*
  * Setup transfer buffers, creating and filling as needed.
  */
-static void
-SetupXferBuffers(void **buffer,
-                 void **checkBuffer,
-                 void **readCheckBuffer,
-                 IOR_param_t * test, int pretendRank, int access)
+static void XferBuffersSetup(void **buffer, void **checkBuffer,
+                             void **readCheckBuffer, int access,
+                             IOR_param_t * test, int pretendRank)
 {
-        /* create buffer of filled data */
-        *buffer = CreateBuffer(test->transferSize);
+        *buffer = aligned_buffer_alloc(test->transferSize);
         FillBuffer(*buffer, test, 0, pretendRank);
         if (access == WRITECHECK || access == READCHECK) {
-                /* this allocates buffer only */
-                *checkBuffer = CreateBuffer(test->transferSize);
-                if (access == READCHECK) {
-                        *readCheckBuffer = CreateBuffer(test->transferSize);
-                }
+                *checkBuffer = aligned_buffer_alloc(test->transferSize);
         }
+        if (access == READCHECK) {
+                *readCheckBuffer = aligned_buffer_alloc(test->transferSize);
+        }
+
+        return;
+}
+
+/*
+ * Free transfer buffers.
+ */
+static void XferBuffersFree(void *buffer, void *checkBuffer,
+                            void *readCheckBuffer, int access)
+{
+        aligned_buffer_free(buffer);
+        if (access == WRITECHECK || access == READCHECK) {
+                aligned_buffer_free(checkBuffer);
+        }
+        if (access == READCHECK) {
+                aligned_buffer_free(readCheckBuffer);
+        }
+
         return;
 }
 
@@ -2179,34 +2186,6 @@ static void TestIoSys(IOR_test_t *test)
 }
 
 /*
- * Determine any spread (range) between node times.
- */
-static double TimeDeviation(void)
-{
-        double timestamp;
-        double min = 0;
-        double max = 0;
-        double roottimestamp;
-
-        MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
-        timestamp = GetTimeStamp();
-        MPI_CHECK(MPI_Reduce(&timestamp, &min, 1, MPI_DOUBLE,
-                             MPI_MIN, 0, MPI_COMM_WORLD),
-                  "cannot reduce tasks' times");
-        MPI_CHECK(MPI_Reduce(&timestamp, &max, 1, MPI_DOUBLE,
-                             MPI_MAX, 0, MPI_COMM_WORLD),
-                  "cannot reduce tasks' times");
-
-        /* delta between individual nodes' time and root node's time */
-        roottimestamp = timestamp;
-        MPI_CHECK(MPI_Bcast(&roottimestamp, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD),
-                  "cannot broadcast root's time");
-        wall_clock_delta = timestamp - roottimestamp;
-
-        return max - min;
-}
-
-/*
  * Determine if valid tests from parameters.
  */
 static void ValidTests(IOR_param_t * test)
@@ -2473,8 +2452,11 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
 static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
 {
         int errors = 0;
-        IOR_offset_t amtXferred,
-            transfer, transferCount = 0, pairCnt = 0, *offsetArray;
+        IOR_offset_t amtXferred;
+        IOR_offset_t transfer;
+        IOR_offset_t transferCount = 0;
+        IOR_offset_t pairCnt = 0;
+        IOR_offset_t *offsetArray;
         int pretendRank;
         void *buffer = NULL;
         void *checkBuffer = NULL;
@@ -2492,8 +2474,8 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
                 offsetArray = GetOffsetArraySequential(test, pretendRank);
         }
 
-        SetupXferBuffers(&buffer, &checkBuffer, &readCheckBuffer,
-                         test, pretendRank, access);
+        XferBuffersSetup(&buffer, &checkBuffer, &readCheckBuffer,
+                         access, test, pretendRank);
 
         /* check for stonewall */
         startForStonewall = GetTimeStamp();
@@ -2548,7 +2530,9 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
 
         totalErrorCount += CountErrors(test, access, errors);
 
-        FreeBuffers(access, checkBuffer, readCheckBuffer, buffer, offsetArray);
+        XferBuffersFree(buffer, checkBuffer, readCheckBuffer, access);
+
+        free(offsetArray);
 
         if (access == WRITE && test->fsync == TRUE) {
                 backend->fsync(fd, test);       /*fsync after all accesses */
