@@ -167,7 +167,6 @@ void init_IOR_Param_t(IOR_param_t * p)
 
         p->mode = IOR_IRUSR | IOR_IWUSR | IOR_IRGRP | IOR_IWGRP;
         p->openFlags = IOR_RDWR | IOR_CREAT;
-        p->TestNum = -1;
         assert(available_aiori[0] != NULL);
         strncpy(p->api, available_aiori[0]->name, MAX_STR);
         strncpy(p->platform, "HOST(OSTYPE)", MAX_STR);
@@ -662,7 +661,7 @@ static void DisplayUsage(char **argv)
         char *opts[] = {
                 "OPTIONS:",
                 " -a S  api --  API for I/O [POSIX|MPIIO|HDF5|NCMPI]",
-                " -A N  testNum -- test number for reference in some output",
+                " -A N  refNum -- user supplied reference number to include in the summary",
                 " -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)",
                 " -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers",
                 " -c    collective -- collective I/O",
@@ -1509,7 +1508,7 @@ static void ShowSetup(IOR_param_t *params)
 static void ShowTest(IOR_param_t * test)
 {
         fprintf(stdout, "TEST:\t%s=%d\n", "id", test->id);
-        fprintf(stdout, "\t%s=%d\n", "testnum", test->TestNum);
+        fprintf(stdout, "\t%s=%d\n", "refnum", test->referenceNumber);
         fprintf(stdout, "\t%s=%s\n", "api", test->api);
         fprintf(stdout, "\t%s=%s\n", "platform", test->platform);
         fprintf(stdout, "\t%s=%s\n", "testFileName", test->testFileName);
@@ -1656,6 +1655,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(stdout, "%10.2f ", bw->sd / MEBIBYTE);
         fprintf(stdout, "%10.5f ",
                 mean_of_array_of_doubles(times, reps));
+        fprintf(stdout, "%d ", params->id);
         fprintf(stdout, "%d ", params->numTasks);
         fprintf(stdout, "%d ", params->tasksPerNode);
         fprintf(stdout, "%d ", params->repetitions);
@@ -1668,8 +1668,8 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(stdout, "%lld ", params->blockSize);
         fprintf(stdout, "%lld ", params->transferSize);
         fprintf(stdout, "%lld ", results->aggFileSizeForBW[0]);
-        fprintf(stdout, "%d ", params->TestNum);
-        fprintf(stdout, "%s", params->api);
+        fprintf(stdout, "%s ", params->api);
+        fprintf(stdout, "%d", params->referenceNumber);
         fprintf(stdout, "\n");
 	fflush(stdout);
 
@@ -1696,8 +1696,8 @@ static void PrintLongSummaryHeader()
 	fprintf(stdout, "%-9s %10s %10s %10s %10s %10s",
                 "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
 		"Mean(s)");
-        fprintf(stdout, " #Tasks tPN reps fPP reord reordoff reordrand seed"
-                " segcnt blksiz xsize aggsize TestNum API\n");
+        fprintf(stdout, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
+                " segcnt blksiz xsize aggsize API RefNum\n");
 }
 
 static void PrintLongSummaryAllTests(IOR_test_t *tests_head)

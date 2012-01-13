@@ -132,8 +132,8 @@ void DecodeDirective(char *line, IOR_param_t *params)
         }
         if (strcasecmp(option, "api") == 0) {
                 strcpy(params->api, value);
-        } else if (strcasecmp(option, "testnum") == 0) {
-                params->TestNum = atoi(value);
+        } else if (strcasecmp(option, "refnum") == 0) {
+                params->referenceNumber = atoi(value);
         } else if (strcasecmp(option, "debug") == 0) {
                 strcpy(params->debug, value);
         } else if (strcasecmp(option, "platform") == 0) {
@@ -410,7 +410,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         while ((c = getopt(argc, argv, opts)) != -1) {
                 switch (c) {
                 case 'A':
-                        initialTestParams.TestNum = atoi(optarg);
+                        initialTestParams.referenceNumber = atoi(optarg);
                         break;
                 case 'a':
                         strcpy(initialTestParams.api, optarg);

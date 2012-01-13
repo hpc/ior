@@ -43,7 +43,7 @@ typedef struct
     char debug[MAX_STR];             /* debug info string */
     unsigned int mode;               /* file permissions */
     unsigned int openFlags;          /* open flags */
-    int TestNum;                     /* test reference number */
+    int referenceNumber;             /* user supplied reference number */
     char api[MAX_STR];               /* API for I/O */
     char apiVersion[MAX_STR];        /* API version */
     char platform[MAX_STR];          /* platform type */

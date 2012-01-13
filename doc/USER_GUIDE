@@ -20,10 +20,6 @@ Index:
   * Frequently Asked Questions
       8.  How do I . . . ?
 
-  * Output
-      9.  Enhanced output description
-
-
 *******************
 * 1.  DESCRIPTION *
 *******************
@@ -57,7 +53,7 @@ Two ways to run IOR:
 **************
 These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -a S  api --  API for I/O [POSIX|MPIIO|HDF5|NCMPI]
-  -A N  testNum -- test number for reference in some output
+  -A N  refNum -- user reference number to include in long summary
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
   -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers
   -c    collective -- collective I/O
@@ -122,7 +118,8 @@ IMPORTANT NOTE: Contrary to appearance, the script options below are NOT case se
 
 GENERAL:
 ========
-  * testNum              - test reference number for some output [-1]
+  * refNum               - user supplied reference number, included in
+                           long summary [0]
 
   * api                  - must be set to one of POSIX, MPIIO, HDF5, or NCMPI
                            depending on test [POSIX]
@@ -627,48 +624,3 @@ HOW DO I CORRECT FOR CLOCK SKEW BETWEEN NODES IN A CLUSTER?
   difference.  To see an egregious outlier, use the '-j' option.  Be sure
   to set this value high enough to only show a node outside a certain time
   from the mean.
-
-**************************
-* 9. OUTPUT DESCRIPTION *
-**************************
-
-Output Statistics:
-
-The quantity "aggregate operations/sec" was added to the existing "aggregate data rate" test log print file.
-An "operation" is defined to be a write or read within an open/close [open/write|read/close]. 
-Multiple writes or reads within an open/close are also counted as multiple operations. 
-
-Operation  Max (MiB)  Min (MiB)  Mean (MiB)   Std Dev  Max (OPs)  Min (OPs)  Mean (OPs)   Std Dev   Mean(s)
----------  ---------  ---------  ----------   -------  ---------  ---------  ----------   -------   -------
-read          309.30      17.20      164.67     73.80     309.30      17.20      164.67     73.80   0.06581
-(line-continued)
-#Tasks tPN reps  fPP reord reordoff reordrand seed segcnt blksiz   xsize   aggsize
-   8     2 100     1     0     1     0         0     1     1048576 1048576 8388608 5
-
-Where:
-Max (MiB) - Maximum aggregate data rate of 100 iterations (reps)
-Min (MiB) - Minumum aggregate data rate of 100 iterations (reps)
-Mean(MiB) - Mean    aggregate data rate of 100 iterations (reps) 
-Std Dev   - Standard deviation aggregate data rate of 100 iterations (reps)
-Max (OPs) - Maximum aggregate operations per second of 100 iterations (reps)
-Min (OPs) - Minimum aggregate operations per second of 100 iterations (reps)
-Mean (OPs)- Mean    aggregate operations per second of 100 iterations (reps)
-Std Dev   - Standard deviation aggregate operations per second of 100 iteration (reps)
-Mean(s)   - Mean time per iteration (seconds)
-#Tasks    - number of I/O processes
-tPN       - number of I/O processes per node (per shared memory environment)
-reps      - number of times (iterations) each test is run.
-            The max,min,mean,ave,sdev above are calculated over "reps" tests
-fPP       - files per process
-reord     - constant node offset flag for reads
-reordoff  -          node offset      for reads
-reordrand - random   node offset flag for reads
-seed      - random seed for node random node offset
-segcnt    - number of seqments per file
-blksiz    - total MBytes written/read per process
-xsize     - total MBytes written/read per process per operation
-aggsize   - total Mbytes written/read by all processes per operations
-5         - testnum
-
-This includes a file "contention" histogram showing the number of files accessed 0,1,2,3,... times for a specified random pattern.
-
