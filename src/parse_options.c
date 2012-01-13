@@ -411,7 +411,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 'b':
                         initialTestParams.blockSize = StringToBytes(optarg);
-			RecalculateExpectedFileSize(&initialTestParams);
+                        RecalculateExpectedFileSize(&initialTestParams);
                         break;
                 case 'B':
                         initialTestParams.useO_DIRECT = TRUE;
@@ -498,7 +498,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 'N':
                         initialTestParams.numTasks = atoi(optarg);
-			RecalculateExpectedFileSize(&initialTestParams);
+                        RecalculateExpectedFileSize(&initialTestParams);
                         break;
                 case 'o':
                         strcpy(initialTestParams.testFileName, optarg);
@@ -523,7 +523,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 's':
                         initialTestParams.segmentCount = atoi(optarg);
-			RecalculateExpectedFileSize(&initialTestParams);
+                        RecalculateExpectedFileSize(&initialTestParams);
                         break;
                 case 'S':
                         initialTestParams.useStridedDatatype = TRUE;
