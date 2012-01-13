@@ -362,6 +362,12 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 			AllocResults(tail);
                         break;
                 } else if (contains_only(linebuf, "run")) {
+                        if (runflag) {
+                                /* previous line was a "run" as well
+                                   create duplicate test */
+                                tail->next = CreateTest(&tail->params, test_num++);
+                                tail = tail->next;
+                        }
 			AllocResults(tail);
                         runflag = 1;
                 } else if (runflag) {
