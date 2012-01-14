@@ -1486,16 +1486,18 @@ static void ShowSetup(IOR_param_t *params)
         printf("\taggregate filesize = %s\n",
                 HumanReadable(params->expectedAggFileSize, BASE_TWO));
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
-        printf("\tLustre stripe size = %s\n",
-                ((params->lustre_stripe_size == 0) ? "Use default" :
-                 HumanReadable(params->lustre_stripe_size, BASE_TWO)));
-        if (params->lustre_stripe_count == 0) {
-                printf("\t      stripe count = %s\n", "Use default");
-        } else {
-                printf("\t      stripe count = %d\n",
-                        params->lustre_stripe_count);
+        if (params->lustre_set_striping) {
+                printf("\tLustre stripe size = %s\n",
+                       ((params->lustre_stripe_size == 0) ? "Use default" :
+                        HumanReadable(params->lustre_stripe_size, BASE_TWO)));
+                if (params->lustre_stripe_count == 0) {
+                        printf("\t      stripe count = %s\n", "Use default");
+                } else {
+                        printf("\t      stripe count = %d\n",
+                               params->lustre_stripe_count);
+                }
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif /* HAVE_LUSTRE_LUSTRE_USER_H */
         if (params->deadlineForStonewalling > 0) {
                 printf("\tUsing stonewalling = %d second(s)\n",
                         params->deadlineForStonewalling);
