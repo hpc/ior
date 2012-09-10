@@ -69,6 +69,7 @@ static void DisplayUsage(char **);
 static void GetTestFileName(char *, IOR_param_t *);
 static char *PrependDir(IOR_param_t *, char *);
 static char **ParseFileName(char *, int *);
+static void PrintEarlyHeader();
 static void PrintHeader(int argc, char **argv);
 static IOR_test_t *SetupTests(int, char **);
 static void ShowTestInfo(IOR_param_t *);
@@ -105,6 +106,8 @@ int main(int argc, char **argv)
         MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &numTasksWorld),
                   "cannot get number of tasks");
         MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank), "cannot get rank");
+        PrintEarlyHeader();
+
         /* set error-handling */
         /*MPI_CHECK(MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN),
            "cannot set errhandler"); */
@@ -1352,6 +1355,21 @@ static void XferBuffersFree(void *buffer, void *checkBuffer,
         return;
 }
 
+
+/*
+ * Message to print immediately after MPI_Init so we know that
+ * ior has started.
+ */
+static void PrintEarlyHeader()
+{
+	if (rank != 0)
+		return;
+
+	printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
+	printf("\n");
+	fflush(stdout);
+}
+
 static void PrintHeader(int argc, char **argv)
 {
         struct utsname unamebuf;
@@ -1359,9 +1377,6 @@ static void PrintHeader(int argc, char **argv)
 
 	if (rank != 0)
 		return;
-
-	printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
-	printf("\n");
 
         fprintf(stdout, "Began: %s", CurrentTimeString());
         fprintf(stdout, "Command line used:");
