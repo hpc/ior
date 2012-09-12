@@ -459,7 +459,7 @@ static void HDF5_SetVersion(IOR_param_t * test)
 /*
  * Seek to offset in file using the HDF5 interface and set up hyperslab.
  */
-static static HDF5_offset_t SeekOffset(void *fd, IOR_offset_t offset,
+static IOR_offset_t SeekOffset(void *fd, IOR_offset_t offset,
                                             IOR_param_t * param)
 {
         IOR_offset_t segmentSize;
@@ -499,7 +499,7 @@ static static HDF5_offset_t SeekOffset(void *fd, IOR_offset_t offset,
 /*
  * Create HDF5 data set.
  */
-static static void SetupDataSet(void *fd, IOR_param_t * param)
+static void SetupDataSet(void *fd, IOR_param_t * param)
 {
         char dataSetName[MAX_STR];
         hid_t dataSetPropList;
