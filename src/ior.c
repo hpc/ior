@@ -2302,10 +2302,6 @@ static void ValidTests(IOR_param_t * test)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
                 ERR("block/transfer size may not be smaller than IOR_size_t for NCMPI");
-        if ((strcmp(test->api, "NCMPI") == 0)
-            && ((test->numTasks * test->blockSize * test->segmentCount)
-                > (2 * (IOR_offset_t) GIBIBYTE)))
-                ERR("file size must be < 2GiB");
         if ((test->useFileView == TRUE)
             && (sizeof(MPI_Aint) < 8)   /* used for 64-bit datatypes */
             &&((test->numTasks * test->blockSize) >
