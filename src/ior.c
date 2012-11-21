@@ -471,13 +471,6 @@ static int CountTasksPerNode(int numTasks, MPI_Comm comm)
         unsigned flag;
         int rc;
 
-        if (verbose >= VERBOSE_2 && firstPass) {
-                char tmp[MAX_STR];
-                sprintf(tmp, "task %d on %s", rank, localhost);
-                OutputToRoot(numTasks, comm, tmp);
-                firstPass = FALSE;
-        }
-
         rc = gethostname(localhost, MAX_STR);
         if (rc == -1) {
                 /* This node won't match task 0's hostname...expect in the
@@ -487,6 +480,13 @@ static int CountTasksPerNode(int numTasks, MPI_Comm comm)
                 localhost[0] = '\0';
                 if (rank == 0)
                         perror("gethostname() failed");
+        }
+
+        if (verbose >= VERBOSE_2 && firstPass) {
+                char tmp[MAX_STR];
+                sprintf(tmp, "task %d on %s", rank, localhost);
+                OutputToRoot(numTasks, comm, tmp);
+                firstPass = FALSE;
         }
 
         /* send task 0's hostname to all tasks */
