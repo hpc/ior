@@ -19,6 +19,9 @@
 #include <stdio.h>              /* only for fprintf() */
 #include <stdlib.h>
 #include <sys/stat.h>
+/* HDF5 routines here still use the old 1.6 style.  Nothing wrong with that but
+ * save users the trouble of  passing this flag through configure */
+#define H5_USE_16_API
 #include <hdf5.h>
 #include <mpi.h>
 
