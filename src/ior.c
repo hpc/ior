@@ -1601,6 +1601,10 @@ static void ShowTest(IOR_param_t * test)
                 test->setTimeStampSignature);
         fprintf(stdout, "\t%s=%d\n", "collective", test->collective);
         fprintf(stdout, "\t%s=%lld", "segmentCount", test->segmentCount);
+#ifdef HAVE_GPFS_FCNTL_H
+        fprintf(stdout, "\t%s=%d\n", "gpfsHintAccess", test->gpfs_hint_access);
+        fprintf(stdout, "\t%s=%d\n", "gpfsReleaseToken", test->gpfs_release_token);
+#endif
         if (strcmp(test->api, "HDF5") == 0) {
                 fprintf(stdout, " (datasets)");
         }

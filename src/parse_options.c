@@ -263,6 +263,16 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 ERR("ior was not compiled with Lustre support");
 #endif
                 params->lustre_ignore_locks = atoi(value);
+        } else if (strcasecmp(option, "gpfshintaccess") == 0) {
+#ifndef HAVE_GPFS_FCNTL_H
+                ERR("ior was not compiled with GPFS hint support");
+#endif
+                params->gpfs_hint_access = atoi(value);
+        } else if (strcasecmp(option, "gpfsreleasetoken") == 0) {
+#ifndef HAVE_GPFS_FCNTL_H
+                ERR("ior was not compiled with GPFS hint support");
+#endif
+                params->gpfs_release_token = atoi(value);
         } else if (strcasecmp(option, "numtasks") == 0) {
                 params->numTasks = atoi(value);
 		RecalculateExpectedFileSize(params);

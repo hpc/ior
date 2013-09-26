@@ -126,6 +126,11 @@ typedef struct
     int lustre_set_striping;         /* flag that we need to set lustre striping */
     int lustre_ignore_locks;
 
+    /* gpfs variables */
+    int gpfs_hint_access;          /* use gpfs "access range" hint */
+    int gpfs_release_token;        /* immediately release GPFS tokens after
+                                      creating or opening a file */
+
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
 } IOR_param_t;

@@ -32,6 +32,13 @@
 #include <lustre/lustre_user.h>
 #endif
 
+#ifdef HAVE_GPFS_H
+#include <gpfs.h>
+#endif
+#ifdef HAVE_GPFS_FCNTL_H
+#include <gpfs_fcntl.h>
+#endif
+
 #include "ior.h"
 #include "aiori.h"
 #include "iordef.h"
@@ -90,6 +97,78 @@ void set_o_direct_flag(int *fd)
 
         *fd |= O_DIRECT;
 }
+
+#ifdef HAVE_GPFS_FCNTL_H
+void gpfs_free_all_locks(int fd)
+{
+        int rc;
+        struct {
+                gpfsFcntlHeader_t header;
+                gpfsFreeRange_t release;
+        } release_all;
+        release_all.header.totalLength = sizeof(release_all);
+        release_all.header.fcntlVersion = GPFS_FCNTL_CURRENT_VERSION;
+        release_all.header.fcntlReserved = 0;
+
+        release_all.release.structLen = sizeof(release_all.release);
+        release_all.release.structType = GPFS_FREE_RANGE;
+        release_all.release.start = 0;
+        release_all.release.length = 0;
+
+        rc = gpfs_fcntl(fd, &release_all);
+        if (verbose >= VERBOSE_0 && rc != 0) {
+                EWARN("gpfs_fcntl release all locks hint failed.");
+        }
+}
+void gpfs_access_start(int fd, IOR_offset_t length, IOR_param_t *param, int access)
+{
+        int rc;
+        struct {
+                gpfsFcntlHeader_t header;
+                gpfsAccessRange_t access;
+        } take_locks;
+
+        take_locks.header.totalLength = sizeof(take_locks);
+        take_locks.header.fcntlVersion = GPFS_FCNTL_CURRENT_VERSION;
+        take_locks.header.fcntlReserved = 0;
+
+        take_locks.access.structLen = sizeof(take_locks.access);
+        take_locks.access.structType = GPFS_ACCESS_RANGE;
+        take_locks.access.start = param->offset;
+        take_locks.access.length = length;
+        take_locks.access.isWrite = (access == WRITE);
+
+        rc = gpfs_fcntl(fd, &take_locks);
+        if (verbose >= VERBOSE_2 && rc != 0) {
+                EWARN("gpfs_fcntl access range hint failed.");
+        }
+}
+
+void gpfs_access_end(int fd, IOR_offset_t length, IOR_param_t *param, int access)
+{
+        int rc;
+        struct {
+                gpfsFcntlHeader_t header;
+                gpfsFreeRange_t free;
+        } free_locks;
+
+
+        free_locks.header.totalLength = sizeof(free_locks);
+        free_locks.header.fcntlVersion = GPFS_FCNTL_CURRENT_VERSION;
+        free_locks.header.fcntlReserved = 0;
+
+        free_locks.free.structLen = sizeof(free_locks.free);
+        free_locks.free.structType = GPFS_FREE_RANGE;
+        free_locks.free.start = param->offset;
+        free_locks.free.length = length;
+
+        rc = gpfs_fcntl(fd, &free_locks);
+        if (verbose >= VERBOSE_2 && rc != 0) {
+                EWARN("gpfs_fcntl free range hint failed.");
+        }
+}
+
+#endif
 
 /*
  * Creat and open a file through the POSIX interface.
@@ -166,6 +245,14 @@ static void *POSIX_Create(char *testFileName, IOR_param_t * param)
         }
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
 
+#ifdef HAVE_GPFS_FCNTL_H
+        /* in the single shared file case, immediately release all locks, with
+         * the intent that we can avoid some byte range lock revocation:
+         * everyone will be writing/reading from individual regions */
+        if (param->gpfs_release_token ) {
+                gpfs_free_all_locks(*fd);
+        }
+#endif
         return ((void *)fd);
 }
 
@@ -201,6 +288,11 @@ static void *POSIX_Open(char *testFileName, IOR_param_t * param)
         }
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
 
+#ifdef HAVE_GPFS_FCNTL_H
+        if(param->gpfs_release_token) {
+                gpfs_free_all_locks(*fd);
+        }
+#endif
         return ((void *)fd);
 }
 
@@ -217,6 +309,13 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
         int fd;
 
         fd = *(int *)file;
+
+#ifdef HAVE_GPFS_FCNTL_H
+        if (param->gpfs_hint_access) {
+                gpfs_access_start(fd, length, param, access);
+        }
+#endif
+
 
         /* seek to offset */
         if (lseek64(fd, param->offset, SEEK_SET) == -1)
@@ -268,6 +367,11 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                 ptr += rc;
                 xferRetries++;
         }
+#ifdef HAVE_GPFS_FCNTL_H
+        if (param->gpfs_hint_access) {
+                gpfs_access_end(fd, length, param, access);
+        }
+#endif
         return (length);
 }
 
