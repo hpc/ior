@@ -2046,6 +2046,8 @@ static void TestIoSys(IOR_test_t *test)
                   "MPI_Group_range_incl() error");
         MPI_CHECK(MPI_Comm_create(MPI_COMM_WORLD, new_group, &testComm),
                   "MPI_Comm_create() error");
+        MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
+        MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
         params->testComm = testComm;
         if (testComm == MPI_COMM_NULL) {
                 /* tasks not in the group do not participate in this test */
