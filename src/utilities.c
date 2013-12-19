@@ -202,8 +202,8 @@ void ExtractHint(char *settingVal, char *valueVal, char *hintString)
 {
         char *settingPtr, *valuePtr, *tmpPtr1, *tmpPtr2;
 
-        settingPtr = (char *)strtok(hintString, "=");
-        valuePtr = (char *)strtok(NULL, " \t\r\n");
+        settingPtr = (char *)strtok(hintString, " =");
+        valuePtr = (char *)strtok(NULL, " =\t\r\n");
         tmpPtr1 = settingPtr;
         tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__MPI__");
         if (tmpPtr1 == tmpPtr2) {
