@@ -991,6 +991,7 @@ static void GetTestFileName(char *testFileName, IOR_param_t * test)
                 sprintf(tmpString, ".%d", test->repCounter);
                 strcat(testFileName, tmpString);
         }
+        free (fileNames);
 }
 
 /*
@@ -1019,17 +1020,14 @@ static double GetTimeStamp(void)
 }
 
 /*
- * Convert IOR_offset_t value to human readable string.
+ * Convert IOR_offset_t value to human readable string.  This routine uses a
+ * statically-allocated buffer internally and so is not re-entrant.
  */
 static char *HumanReadable(IOR_offset_t value, int base)
 {
-        char *valueStr;
+        static char valueStr[MAX_STR];
         int m = 0, g = 0;
         char m_str[8], g_str[8];
-
-        valueStr = (char *)malloc(MAX_STR);
-        if (valueStr == NULL)
-                ERR("out of memory");
 
         if (base == BASE_TWO) {
                 m = MEBIBYTE;
@@ -1045,22 +1043,22 @@ static char *HumanReadable(IOR_offset_t value, int base)
 
         if (value >= g) {
                 if (value % (IOR_offset_t) g) {
-                        sprintf(valueStr, "%.2f %s",
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
                                 (double)((double)value / g), g_str);
                 } else {
-                        sprintf(valueStr, "%d %s", (int)(value / g), g_str);
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / g), g_str);
                 }
         } else if (value >= m) {
                 if (value % (IOR_offset_t) m) {
-                        sprintf(valueStr, "%.2f %s",
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
                                 (double)((double)value / m), m_str);
                 } else {
-                        sprintf(valueStr, "%d %s", (int)(value / m), m_str);
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / m), m_str);
                 }
         } else if (value >= 0) {
-                sprintf(valueStr, "%d bytes", (int)value);
+                snprintf(valueStr, MAX_STR-1, "%d bytes", (int)value);
         } else {
-                sprintf(valueStr, "-");
+                snprintf(valueStr, MAX_STR-1, "-");
         }
         return valueStr;
 }
