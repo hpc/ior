@@ -21,3 +21,14 @@ src/Makefile.in
 src/config.h
 src/config.h.in
 src/stamp-h1
+*~
+NOTES.txt
+autom4te.cache
+contrib/cbif.o
+src/aiori-MPIIO.o
+src/aiori-PLFS.c
+src/aiori-POSIX.o
+src/ior
+src/ior.o
+src/parse_options.o
+src/utilities.o

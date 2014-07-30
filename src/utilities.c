@@ -13,7 +13,7 @@
 \******************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#  include "config.h"
 #endif
 
 #include <stdio.h>
@@ -25,14 +25,18 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
+
 #ifndef _WIN32
-#include <regex.h>
-#ifdef __sun                    /* SunOS does not support statfs(), instead uses statvfs() */
-#include <sys/statvfs.h>
-#else                           /* !__sun */
-#include <sys/statfs.h>
-#endif                          /* __sun */
-#include <sys/time.h>           /* gettimeofday() */
+#  include <regex.h>
+#  ifdef __sun                    /* SunOS does not support statfs(), instead uses statvfs() */
+#    include <sys/statvfs.h>
+#  elif (defined __APPLE__)
+#    include <sys/param.h>
+#    include <sys/mount.h>
+#  else                           /* ! __sun  or __APPLE__ */
+#    include <sys/statfs.h>
+#  endif                          /* __sun */
+#  include <sys/time.h>           /* gettimeofday() */
 #endif
 
 #include "utilities.h"

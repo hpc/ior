@@ -73,9 +73,13 @@ static size_t NodeMemoryStringToBytes(char *size_str)
                 ERR("percentage must be between 0 and 100");
 
         page_size = sysconf(_SC_PAGESIZE);
+#ifdef  _SC_PHYS_PAGES
         num_pages = sysconf(_SC_PHYS_PAGES);
         if (num_pages == -1)
                 ERR("sysconf(_SC_PHYS_PAGES) is not supported");
+#else
+        ERR("sysconf(_SC_PHYS_PAGES) is not supported");
+#endif
         mem = page_size * num_pages;
 
         return mem / 100 * percent;
