@@ -215,6 +215,11 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
 static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
                                IOR_offset_t length, IOR_param_t * param)
 {
+        /* NOTE: The second arg is (void *) for reads, and (const void *)
+           for writes.  Therefore, one of the two sets of assignments below
+           will get "assignment from incompatible pointer-type" warnings,
+           if we only use this one set of signatures. */
+
         int (MPIAPI * Access) (MPI_File, void *, int,
                                MPI_Datatype, MPI_Status *);
         int (MPIAPI * Access_at) (MPI_File, MPI_Offset, void *, int,

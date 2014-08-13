@@ -119,6 +119,8 @@ extern int verbose;                            /* verbose output */
 typedef long long int      IOR_offset_t;
 typedef long long int      IOR_size_t;
 
+#define                    IOR_format "%016llx"
+
 
 /******************************** M A C R O S *********************************/
 
@@ -165,6 +167,15 @@ typedef long long int      IOR_size_t;
                 MSG, errno, strerror(errno), __FILE__, __LINE__);        \
         fflush(stdout);                                                  \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
+} while (0)
+
+
+/* display a simple error message (i.e. errno is not set) and terminate execution */
+#define ERR_SIMPLE(MSG) do {                                            \
+        fprintf(stdout, "ior ERROR: %s, (%s:%d)\n",                     \
+                MSG, __FILE__, __LINE__);                               \
+        fflush(stdout);                                                 \
+        MPI_Abort(MPI_COMM_WORLD, -1);                                  \
 } while (0)
 
 

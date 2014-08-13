@@ -12,7 +12,10 @@
 #define _IOR_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#  include "config.h"
+#endif
+#ifdef USE_HDFS_AIORI
+#  include <hdfs.h>             /* hdfsFS */
 #endif
 
 #include "iordef.h"
@@ -98,7 +101,6 @@ typedef struct
     void * fd_fppReadCheck;          /* additional fd for fpp read check */
     int randomSeed;                  /* random seed for write/read check */
     int randomOffset;                /* access is to random offsets */
-    MPI_Comm testComm;               /* MPI communicator */
     size_t memoryPerTask;            /* additional memory used per task */
     size_t memoryPerNode;            /* additional memory used per node */
 
@@ -108,6 +110,7 @@ typedef struct
     int fsync;                       /* fsync() after write */
 
     /* MPI variables */
+    MPI_Comm     testComm;           /* MPI communicator */
     MPI_Datatype transferType;       /* datatype for transfer */
     MPI_Datatype fileType;           /* filetype for file view */
 
@@ -115,6 +118,14 @@ typedef struct
     int individualDataSets;          /* datasets not shared by all procs */
     int noFill;                      /* no fill in file creation */
     IOR_offset_t setAlignment;       /* alignment in bytes */
+
+    /* HDFS variables */
+    const char* hdfs_name_node;
+    tPort       hdfs_name_node_port; /* (uint16_t) */
+
+    hdfsFS      hdfs_fs;             /* file-system handle */
+    int         hdfs_replicas;       /* n block replicas.  (0 gets default) */
+    int         hdfs_block_size;     /* internal blk-size. (0 gets default) */
 
     /* NCMPI variables */
     int var_id;                      /* variable id handle for data set */
@@ -147,10 +158,11 @@ typedef struct {
 
 /* define the queuing structure for the test parameters */
 typedef struct IOR_test_t {
-        IOR_param_t params;
-	IOR_results_t *results;
-        struct IOR_test_t *next;
+	IOR_param_t        params;
+	IOR_results_t     *results;
+	struct IOR_test_t *next;
 } IOR_test_t;
+
 
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
 void AllocResults(IOR_test_t *test);

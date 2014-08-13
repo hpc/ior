@@ -73,14 +73,17 @@ char *CurrentTimeString(void)
 /*
  * Dump transfer buffer.
  */
-void DumpBuffer(void *buffer, size_t size)
+void DumpBuffer(void *buffer,
+                size_t size)    /* <size> in bytes */
 {
         size_t i, j;
-        unsigned long long *dumpBuf = (unsigned long long *)buffer;
+        IOR_size_t *dumpBuf = (IOR_size_t *)buffer;
 
+        /* Turns out, IOR_size_t is unsigned long long, but we don't want
+           to assume that it must always be */
         for (i = 0; i < ((size / sizeof(IOR_size_t)) / 4); i++) {
                 for (j = 0; j < 4; j++) {
-                        fprintf(stdout, "%016llx ", dumpBuf[4 * i + j]);
+                        fprintf(stdout, IOR_format" ", dumpBuf[4 * i + j]);
                 }
                 fprintf(stdout, "\n");
         }

@@ -51,17 +51,21 @@ double wall_clock_deviation;
 
 ior_aiori_t *backend;
 ior_aiori_t *available_aiori[] = {
-#ifdef USE_POSIX_AIORI
-        &posix_aiori,
+
+#ifdef USE_HDF5_AIORI
+        &hdf5_aiori,
+#endif
+#ifdef USE_HDFS_AIORI
+        &hdfs_aiori,
 #endif
 #ifdef USE_MPIIO_AIORI
         &mpiio_aiori,
 #endif
-#ifdef USE_HDF5_AIORI
-        &hdf5_aiori,
-#endif
 #ifdef USE_NCMPI_AIORI
         &ncmpi_aiori,
+#endif
+#ifdef USE_POSIX_AIORI
+        &posix_aiori,
 #endif
         NULL
 };
@@ -116,7 +120,8 @@ int main(int argc, char **argv)
 
         /* Sanity check, we were compiled with SOME backend, right? */
         if (available_aiori[0] == NULL) {
-                ERR("No IO backends compiled into ior.  That should not have happened.");
+                ERR("No IO backends compiled into ior.  "
+                    "Run 'configure --with-<backend>', and recompile.");
         }
 
         /* setup tests before verifying test validity */
@@ -129,10 +134,10 @@ int main(int argc, char **argv)
                 DisplayUsage(argv);
         }
 
-	PrintHeader(argc, argv);
+        PrintHeader(argc, argv);
 
         /* perform each test */
-	for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
+        for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
                 verbose = tptr->params.verbose;
                 if (rank == 0 && verbose >= VERBOSE_0) {
                         ShowTestInfo(&tptr->params);
@@ -146,15 +151,15 @@ int main(int argc, char **argv)
         if (verbose < 0)
                 /* always print final summary */
                 verbose = 0;
-	PrintLongSummaryAllTests(tests_head);
+        PrintLongSummaryAllTests(tests_head);
 
         /* display finish time */
         if (rank == 0 && verbose >= VERBOSE_0) {
-		fprintf(stdout, "\n");
-		fprintf(stdout, "Finished: %s", CurrentTimeString());
+                fprintf(stdout, "\n");
+                fprintf(stdout, "Finished: %s", CurrentTimeString());
         }
 
-	DestroyTests(tests_head);
+        DestroyTests(tests_head);
 
         MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
 
@@ -168,14 +173,16 @@ int main(int argc, char **argv)
  */
 void init_IOR_Param_t(IOR_param_t * p)
 {
+        assert(available_aiori[0] != NULL);
         memset(p, 0, sizeof(IOR_param_t));
 
         p->mode = IOR_IRUSR | IOR_IWUSR | IOR_IRGRP | IOR_IWGRP;
         p->openFlags = IOR_RDWR | IOR_CREAT;
-        assert(available_aiori[0] != NULL);
+
         strncpy(p->api, available_aiori[0]->name, MAX_STR);
         strncpy(p->platform, "HOST(OSTYPE)", MAX_STR);
         strncpy(p->testFileName, "testFile", MAXPATHLEN);
+
         p->nodes = 1;
         p->tasksPerNode = 1;
         p->repetitions = 1;
@@ -189,6 +196,11 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->testComm = MPI_COMM_WORLD;
         p->setAlignment = 1;
         p->lustre_start_ost = -1;
+        p->hdfs_name_node      = "default";
+        p->hdfs_name_node_port = 0; /* ??? */
+        p->hdfs_fs = NULL;
+        p->hdfs_replicas = 0;
+        p->hdfs_block_size = 0;
 }
 
 /*
@@ -285,8 +297,8 @@ static void CheckForOutliers(IOR_param_t * test, double **timer, int rep,
  */
 static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
 {
-	IOR_param_t *params = &test->params;
-	IOR_results_t *results = test->results;
+        IOR_param_t *params = &test->params;
+        IOR_results_t *results = test->results;
 
         MPI_CHECK(MPI_Allreduce(&dataMoved, &results->aggFileSizeFromXfer[rep],
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
@@ -439,8 +451,8 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
                                 WARN("overflow in errors counted");
                                 allErrors = -1;
                         }
-			fprintf(stdout, "WARNING: incorrect data on %s (%d errors found).\n",
-				access == WRITECHECK ? "write" : "read", allErrors);
+                        fprintf(stdout, "WARNING: incorrect data on %s (%d errors found).\n",
+                                access == WRITECHECK ? "write" : "read", allErrors);
                         fprintf(stdout,
                                 "Used Time Stamp %u (0x%x) for Data Signature\n",
                                 test->timeStampSignatureValue,
@@ -475,7 +487,7 @@ static int CountTasksPerNode(int numTasks, MPI_Comm comm)
 
         rc = gethostname(localhost, MAX_STR);
         if (rc == -1) {
-                /* This node won't match task 0's hostname...expect in the
+                /* This node won't match task 0's hostname...except in the
                    case where ALL gethostname() calls fail, in which
                    case ALL nodes will appear to be on the same node.
                    We'll handle that later. */
@@ -546,37 +558,37 @@ static void aligned_buffer_free(void *buf)
 
 void AllocResults(IOR_test_t *test)
 {
-	int reps;
-	if (test->results != NULL)
-		return;
+        int reps;
+        if (test->results != NULL)
+                return;
 
-	reps = test->params.repetitions;
-	test->results = (IOR_results_t *)malloc(sizeof(IOR_results_t));
-	if (test->results == NULL)
-		ERR("malloc of IOR_results_t failed");
+        reps = test->params.repetitions;
+        test->results = (IOR_results_t *)malloc(sizeof(IOR_results_t));
+        if (test->results == NULL)
+                ERR("malloc of IOR_results_t failed");
 
-	test->results->writeTime = (double *)malloc(reps * sizeof(double));
-	if (test->results->writeTime == NULL)
-		ERR("malloc of writeTime array failed");
-	memset(test->results->writeTime, 0, reps * sizeof(double));
+        test->results->writeTime = (double *)malloc(reps * sizeof(double));
+        if (test->results->writeTime == NULL)
+                ERR("malloc of writeTime array failed");
+        memset(test->results->writeTime, 0, reps * sizeof(double));
 
-	test->results->readTime = (double *)malloc(reps * sizeof(double));
-	if (test->results->readTime == NULL)
-		ERR("malloc of readTime array failed");
-	memset(test->results->readTime, 0, reps * sizeof(double));
+        test->results->readTime = (double *)malloc(reps * sizeof(double));
+        if (test->results->readTime == NULL)
+                ERR("malloc of readTime array failed");
+        memset(test->results->readTime, 0, reps * sizeof(double));
 
         test->results->aggFileSizeFromStat =
-            (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
+                (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
         if (test->results->aggFileSizeFromStat == NULL)
                 ERR("malloc of aggFileSizeFromStat failed");
 
         test->results->aggFileSizeFromXfer =
-            (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
+                (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
         if (test->results->aggFileSizeFromXfer == NULL)
                 ERR("malloc of aggFileSizeFromXfer failed");
 
         test->results->aggFileSizeForBW =
-            (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
+                (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
         if (test->results->aggFileSizeForBW == NULL)
                 ERR("malloc of aggFileSizeForBW failed");
 
@@ -584,14 +596,14 @@ void AllocResults(IOR_test_t *test)
 
 void FreeResults(IOR_test_t *test)
 {
-	if (test->results != NULL) {
-		free(test->results->aggFileSizeFromStat);
-		free(test->results->aggFileSizeFromXfer);
-		free(test->results->aggFileSizeForBW);
-		free(test->results->readTime);
-		free(test->results->writeTime);
-		free(test->results);
-	}
+        if (test->results != NULL) {
+                free(test->results->aggFileSizeFromStat);
+                free(test->results->aggFileSizeFromXfer);
+                free(test->results->aggFileSizeForBW);
+                free(test->results->readTime);
+                free(test->results->writeTime);
+                free(test->results);
+        }
 }
 
 
@@ -611,24 +623,24 @@ IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num)
         newTest->params.tasksPerNode = tasksPerNode;
         newTest->params.id = test_num;
         newTest->next = NULL;
-	newTest->results = NULL;
+        newTest->results = NULL;
         return newTest;
 }
 
 static void DestroyTest(IOR_test_t *test)
 {
-	FreeResults(test);
-	free(test);
+        FreeResults(test);
+        free(test);
 }
 
 static void DestroyTests(IOR_test_t *tests_head)
 {
-	IOR_test_t *tptr, *next;
+        IOR_test_t *tptr, *next;
 
-	for (tptr = tests_head; tptr != NULL; tptr = next) {
-		next = tptr->next;
-		DestroyTest(tptr);
-	}
+        for (tptr = tests_head; tptr != NULL; tptr = next) {
+                next = tptr->next;
+                DestroyTest(tptr);
+        }
 }
 
 /*
@@ -1185,15 +1197,15 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
                               int access)
 {
         double reduced[12] = { 0 };
-	double diff[6];
-	double *diff_subset;
-	double totalTime;
-	double bw;
+  double diff[6];
+  double *diff_subset;
+  double totalTime;
+  double bw;
         enum { RIGHT, LEFT };
         int i;
         MPI_Op op;
 
-	assert(access == WRITE || access == READ);
+  assert(access == WRITE || access == READ);
 
         /* Find the minimum start time of the even numbered timers, and the
            maximum finish time for the odd numbered timers */
@@ -1204,46 +1216,46 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
         }
 
         if (rank != 0) {
-		/* Only rank 0 tallies and prints the results. */
-		return;
-	}
+    /* Only rank 0 tallies and prints the results. */
+    return;
+  }
 
-	/* Calculate elapsed times and throughput numbers */
-	for (i = 0; i < 6; i++) {
-		diff[i] = reduced[2 * i + 1] - reduced[2 * i];
-	}
-	if (access == WRITE) {
-		totalTime = reduced[5] - reduced[0];
-		test->results->writeTime[rep] = totalTime;
-		diff_subset = &diff[0];
-	} else { /* READ */
-		totalTime = reduced[11] - reduced[6];
-		test->results->readTime[rep] = totalTime;
-		diff_subset = &diff[3];
-	}
+  /* Calculate elapsed times and throughput numbers */
+  for (i = 0; i < 6; i++) {
+    diff[i] = reduced[2 * i + 1] - reduced[2 * i];
+  }
+  if (access == WRITE) {
+    totalTime = reduced[5] - reduced[0];
+    test->results->writeTime[rep] = totalTime;
+    diff_subset = &diff[0];
+  } else { /* READ */
+    totalTime = reduced[11] - reduced[6];
+    test->results->readTime[rep] = totalTime;
+    diff_subset = &diff[3];
+  }
 
         if (verbose < VERBOSE_0) {
-		return;
-	}
+    return;
+  }
 
-	fprintf(stdout, "%-10s", access == WRITE ? "write" : "read");
-	bw = (double)test->results->aggFileSizeForBW[rep] / totalTime;
-	PPDouble(LEFT, bw / MEBIBYTE, " ");
-	PPDouble(LEFT, (double)test->params.blockSize / KIBIBYTE, " ");
-	PPDouble(LEFT, (double)test->params.transferSize / KIBIBYTE, " ");
-	PPDouble(LEFT, diff_subset[0], " ");
-	PPDouble(LEFT, diff_subset[1], " ");
-	PPDouble(LEFT, diff_subset[2], " ");
-	PPDouble(LEFT, totalTime, " ");
-	fprintf(stdout, "%-4d\n", rep);
+  fprintf(stdout, "%-10s", access == WRITE ? "write" : "read");
+  bw = (double)test->results->aggFileSizeForBW[rep] / totalTime;
+  PPDouble(LEFT, bw / MEBIBYTE, " ");
+  PPDouble(LEFT, (double)test->params.blockSize / KIBIBYTE, " ");
+  PPDouble(LEFT, (double)test->params.transferSize / KIBIBYTE, " ");
+  PPDouble(LEFT, diff_subset[0], " ");
+  PPDouble(LEFT, diff_subset[1], " ");
+  PPDouble(LEFT, diff_subset[2], " ");
+  PPDouble(LEFT, totalTime, " ");
+  fprintf(stdout, "%-4d\n", rep);
 
-	fflush(stdout);
+  fflush(stdout);
 }
 
 static void PrintRemoveTiming(double start, double finish, int rep)
 {
         if (rank != 0 || verbose < VERBOSE_0)
-		return;
+    return;
 
         printf("remove    -          -          -          -          -          -          ");
         PPDouble(1, finish-start, " ");
@@ -1381,21 +1393,21 @@ static void XferBuffersFree(void *buffer, void *checkBuffer,
  */
 static void PrintEarlyHeader()
 {
-	if (rank != 0)
-		return;
+        if (rank != 0)
+                return;
 
-	printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
-	printf("\n");
-	fflush(stdout);
+        printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
+        printf("\n");
+        fflush(stdout);
 }
 
 static void PrintHeader(int argc, char **argv)
 {
         struct utsname unamebuf;
-	int i;
+        int i;
 
-	if (rank != 0)
-		return;
+        if (rank != 0)
+                return;
 
         fprintf(stdout, "Began: %s", CurrentTimeString());
         fprintf(stdout, "Command line used:");
@@ -1414,7 +1426,7 @@ static void PrintHeader(int argc, char **argv)
                                 unamebuf.version, unamebuf.machine);
                 }
         }
-	fprintf(stdout, "\n");
+        fprintf(stdout, "\n");
 #ifdef _NO_MPI_TIMER
         if (verbose >= VERBOSE_2)
                 fprintf(stdout, "Using unsynchronized POSIX timer\n");
@@ -1438,7 +1450,7 @@ static void PrintHeader(int argc, char **argv)
                 }
                 fprintf(stdout, "ENDING ENVIRON LOOP\n");
         }
-	fflush(stdout);
+        fflush(stdout);
 }
 
 /*
@@ -1446,7 +1458,7 @@ static void PrintHeader(int argc, char **argv)
  */
 static void ShowTestInfo(IOR_param_t *params)
 {
-	fprintf(stdout, "\n");
+        fprintf(stdout, "\n");
         fprintf(stdout, "Test %d started: %s", params->id, CurrentTimeString());
         if (verbose >= VERBOSE_1) {
                 /* if pvfs2:, then skip */
@@ -1471,7 +1483,7 @@ static void ShowSetup(IOR_param_t *params)
         printf("\tapi                = %s\n", params->apiVersion);
         printf("\ttest filename      = %s\n", params->testFileName);
         printf("\taccess             = ");
-	printf(params->filePerProc ? "file-per-process" : "single-shared-file");
+  printf(params->filePerProc ? "file-per-process" : "single-shared-file");
         if (verbose >= VERBOSE_1 && strcmp(params->api, "POSIX") != 0) {
                 printf(params->collective == FALSE ? ", independent" : ", collective");
         }
@@ -1617,57 +1629,57 @@ static void ShowTest(IOR_param_t * test)
 
 static double mean_of_array_of_doubles(double *values, int len)
 {
-	double tot = 0.0;
-	int i;
+        double tot = 0.0;
+        int i;
 
-	for (i = 0; i < len; i++) {
-		tot += values[i];
-	}
-	return tot / len;
+        for (i = 0; i < len; i++) {
+                tot += values[i];
+        }
+        return tot / len;
 
 }
 
 struct results {
-	double min;
-	double max;
-	double mean;
-	double var;
-	double sd;
-	double sum;
-	double *val;
+        double min;
+        double max;
+        double mean;
+        double var;
+        double sd;
+        double sum;
+        double *val;
 };
 
 static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *vals)
 {
-	struct results *r;
-	int i;
+        struct results *r;
+        int i;
 
-	r = (struct results *)malloc(sizeof(struct results)
-				     + (reps * sizeof(double)));
-	if (r == NULL)
-		ERR("malloc failed");
-	r->val = (double *)&r[1];
+        r = (struct results *)malloc(sizeof(struct results)
+                                     + (reps * sizeof(double)));
+        if (r == NULL)
+                ERR("malloc failed");
+        r->val = (double *)&r[1];
 
-	for (i = 0; i < reps; i++) {
-		r->val[i] = (double)agg_file_size[i] / vals[i];
-		if (i == 0) {
-			r->min = r->val[i];
-			r->max = r->val[i];
-			r->sum = 0.0;
-		}
-		r->min = MIN(r->min, r->val[i]);
-		r->max = MAX(r->max, r->val[i]);
-		r->sum += r->val[i];
-	}
-	r->mean = r->sum / reps;
-	r->var = 0.0;
-	for (i = 0; i < reps; i++) {
-		r->var += pow((r->mean - r->val[i]), 2);
-	}
-	r->var = r->var / reps;
-	r->sd = sqrt(r->var);
+        for (i = 0; i < reps; i++) {
+                r->val[i] = (double)agg_file_size[i] / vals[i];
+                if (i == 0) {
+                        r->min = r->val[i];
+                        r->max = r->val[i];
+                        r->sum = 0.0;
+                }
+                r->min = MIN(r->min, r->val[i]);
+                r->max = MAX(r->max, r->val[i]);
+                r->sum += r->val[i];
+        }
+        r->mean = r->sum / reps;
+        r->var = 0.0;
+        for (i = 0; i < reps; i++) {
+                r->var += pow((r->mean - r->val[i]), 2);
+        }
+        r->var = r->var / reps;
+        r->sd = sqrt(r->var);
 
-	return r;
+        return r;
 }
 
 /*
@@ -1677,17 +1689,17 @@ static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *
  */
 static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *operation)
 {
-	IOR_param_t *params = &test->params;
-	IOR_results_t *results = test->results;
-	struct results *bw;
-	int reps;
-	
-	if (rank != 0 || verbose < VERBOSE_0)
-		return;
+        IOR_param_t *params = &test->params;
+        IOR_results_t *results = test->results;
+        struct results *bw;
+        int reps;
+  
+        if (rank != 0 || verbose < VERBOSE_0)
+                return;
 
-	reps = params->repetitions;
+        reps = params->repetitions;
 
-	bw = bw_values(reps, results->aggFileSizeForBW, times);
+        bw = bw_values(reps, results->aggFileSizeForBW, times);
 
         fprintf(stdout, "%-9s ", operation);
         fprintf(stdout, "%10.2f ", bw->max / MEBIBYTE);
@@ -1712,15 +1724,15 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(stdout, "%s ", params->api);
         fprintf(stdout, "%d", params->referenceNumber);
         fprintf(stdout, "\n");
-	fflush(stdout);
+        fflush(stdout);
 
-	free(bw);
+        free(bw);
 }
 
 static void PrintLongSummaryOneTest(IOR_test_t *test)
 {
-	IOR_param_t *params = &test->params;
-	IOR_results_t *results = test->results;
+        IOR_param_t *params = &test->params;
+        IOR_results_t *results = test->results;
 
         if (params->writeFile)
                 PrintLongSummaryOneOperation(test, results->writeTime, "write");
@@ -1730,13 +1742,13 @@ static void PrintLongSummaryOneTest(IOR_test_t *test)
 
 static void PrintLongSummaryHeader()
 {
-	if (rank != 0 || verbose < VERBOSE_0)
-		return;
+        if (rank != 0 || verbose < VERBOSE_0)
+                return;
 
-	fprintf(stdout, "\n");
-	fprintf(stdout, "%-9s %10s %10s %10s %10s %10s",
+        fprintf(stdout, "\n");
+        fprintf(stdout, "%-9s %10s %10s %10s %10s %10s",
                 "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
-		"Mean(s)");
+                "Mean(s)");
         fprintf(stdout, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
                 " segcnt blksiz xsize aggsize API RefNum\n");
 }
@@ -1745,51 +1757,51 @@ static void PrintLongSummaryAllTests(IOR_test_t *tests_head)
 {
         IOR_test_t *tptr;
 
-	if (rank != 0 || verbose < VERBOSE_0)
-		return;
+        if (rank != 0 || verbose < VERBOSE_0)
+                return;
 
-	fprintf(stdout, "\n");
-	fprintf(stdout, "Summary of all tests:");
+        fprintf(stdout, "\n");
+        fprintf(stdout, "Summary of all tests:");
         PrintLongSummaryHeader();
 
-	for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
+        for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
                 PrintLongSummaryOneTest(tptr);
-	}
+        }
 }
 
 static void PrintShortSummary(IOR_test_t * test)
 {
-	IOR_param_t *params = &test->params;
-	IOR_results_t *results = test->results;
-	double max_write = 0.0;
-	double max_read = 0.0;
-	double bw;
-	int reps;
-	int i;
-	
-	if (rank != 0 || verbose < VERBOSE_0)
-		return;
+        IOR_param_t *params = &test->params;
+        IOR_results_t *results = test->results;
+        double max_write = 0.0;
+        double max_read = 0.0;
+        double bw;
+        int reps;
+        int i;
+  
+        if (rank != 0 || verbose < VERBOSE_0)
+                return;
 
-	reps = params->repetitions;
+        reps = params->repetitions;
 
-	max_write = results->writeTime[0];
-	max_read = results->readTime[0];
-	for (i = 0; i < reps; i++) {
-		bw = (double)results->aggFileSizeForBW[i]/results->writeTime[i];
-		max_write = MAX(bw, max_write);
-		bw = (double)results->aggFileSizeForBW[i]/results->readTime[i];
-		max_read = MAX(bw, max_read);
-	}
+        max_write = results->writeTime[0];
+        max_read = results->readTime[0];
+        for (i = 0; i < reps; i++) {
+                bw = (double)results->aggFileSizeForBW[i]/results->writeTime[i];
+                max_write = MAX(bw, max_write);
+                bw = (double)results->aggFileSizeForBW[i]/results->readTime[i];
+                max_read = MAX(bw, max_read);
+        }
 
-	fprintf(stdout, "\n");
-	if (params->writeFile) {
-		fprintf(stdout, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
-			max_write/MEBIBYTE, max_write/MEGABYTE);
-	}
-	if (params->readFile) {
-		fprintf(stdout, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
-			max_read/MEBIBYTE, max_read/MEGABYTE);
-	}
+        fprintf(stdout, "\n");
+        if (params->writeFile) {
+                fprintf(stdout, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
+                        max_write/MEBIBYTE, max_write/MEGABYTE);
+        }
+        if (params->readFile) {
+                fprintf(stdout, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
+                        max_read/MEBIBYTE, max_read/MEGABYTE);
+        }
 }
 
 /*
@@ -1804,7 +1816,7 @@ static void *malloc_and_touch(size_t size)
         if (size == 0)
                 return NULL;
 
-	page_size = sysconf(_SC_PAGESIZE);
+        page_size = sysconf(_SC_PAGESIZE);
 
         buf = (char *)malloc(size);
         if (buf == NULL)
@@ -1819,59 +1831,59 @@ static void *malloc_and_touch(size_t size)
 
 static void file_hits_histogram(IOR_param_t *params)
 {
-	int *rankoffs;
-	int *filecont;
-	int *filehits;
-	int ifile;
-	int jfile;
+        int *rankoffs;
+        int *filecont;
+        int *filehits;
+        int ifile;
+        int jfile;
 
-	if (rank == 0) {
-		rankoffs = (int *)malloc(params->numTasks * sizeof(int));
-		filecont = (int *)malloc(params->numTasks * sizeof(int));
-		filehits = (int *)malloc(params->numTasks * sizeof(int));
-	}
+        if (rank == 0) {
+                rankoffs = (int *)malloc(params->numTasks * sizeof(int));
+                filecont = (int *)malloc(params->numTasks * sizeof(int));
+                filehits = (int *)malloc(params->numTasks * sizeof(int));
+        }
 
-	MPI_CHECK(MPI_Gather(&rankOffset, 1, MPI_INT, rankoffs,
-			     1, MPI_INT, 0, MPI_COMM_WORLD),
-		  "MPI_Gather error");
+        MPI_CHECK(MPI_Gather(&rankOffset, 1, MPI_INT, rankoffs,
+                             1, MPI_INT, 0, MPI_COMM_WORLD),
+                  "MPI_Gather error");
 
-	if (rank != 0)
-		return;
+        if (rank != 0)
+                return;
 
-	memset((void *)filecont, 0, params->numTasks * sizeof(int));
-	for (ifile = 0; ifile < params->numTasks; ifile++) {
-		filecont[(ifile + rankoffs[ifile]) % params->numTasks]++;
-	}
-	memset((void *)filehits, 0, params->numTasks * sizeof(int));
-	for (ifile = 0; ifile < params->numTasks; ifile++)
-		for (jfile = 0; jfile < params->numTasks; jfile++) {
-			if (ifile == filecont[jfile])
-				filehits[ifile]++;
-		}
-	fprintf(stdout, "#File Hits Dist:");
-	jfile = 0;
-	ifile = 0;
-	while (jfile < params->numTasks && ifile < params->numTasks) {
-		fprintf(stdout, " %d", filehits[ifile]);
-		jfile += filehits[ifile], ifile++;
-	}
-	fprintf(stdout, "\n");
-	free(rankoffs);
-	free(filecont);
-	free(filehits);
+        memset((void *)filecont, 0, params->numTasks * sizeof(int));
+        for (ifile = 0; ifile < params->numTasks; ifile++) {
+                filecont[(ifile + rankoffs[ifile]) % params->numTasks]++;
+        }
+        memset((void *)filehits, 0, params->numTasks * sizeof(int));
+        for (ifile = 0; ifile < params->numTasks; ifile++)
+                for (jfile = 0; jfile < params->numTasks; jfile++) {
+                        if (ifile == filecont[jfile])
+                                filehits[ifile]++;
+                }
+        fprintf(stdout, "#File Hits Dist:");
+        jfile = 0;
+        ifile = 0;
+        while (jfile < params->numTasks && ifile < params->numTasks) {
+                fprintf(stdout, " %d", filehits[ifile]);
+                jfile += filehits[ifile], ifile++;
+        }
+        fprintf(stdout, "\n");
+        free(rankoffs);
+        free(filecont);
+        free(filehits);
 }
 
 
 int test_time_elapsed(IOR_param_t *params, double startTime)
 {
-	double endTime;
+        double endTime;
 
-	if (params->maxTimeDuration == 0)
-		return 0;
+        if (params->maxTimeDuration == 0)
+                return 0;
 
-	endTime = startTime + (params->maxTimeDuration * 60);
+        endTime = startTime + (params->maxTimeDuration * 60);
 
-	return GetTimeStamp() >= endTime;
+        return GetTimeStamp() >= endTime;
 }
 
 /*
@@ -1908,8 +1920,8 @@ static void *HogMemory(IOR_param_t *params)
  */
 static void TestIoSys(IOR_test_t *test)
 {
-	IOR_param_t *params = &test->params;
-	IOR_results_t *results = test->results;
+        IOR_param_t *params = &test->params;
+        IOR_results_t *results = test->results;
         char testFileName[MAX_STR];
         double *timer[12];
         double startTime;
@@ -1933,9 +1945,9 @@ static void TestIoSys(IOR_test_t *test)
         }
         MPI_CHECK(MPI_Comm_group(MPI_COMM_WORLD, &orig_group),
                   "MPI_Comm_group() error");
-        range[0] = 0;           /* first rank */
+        range[0] = 0;                     /* first rank */
         range[1] = params->numTasks - 1;  /* last rank */
-        range[2] = 1;           /* stride */
+        range[2] = 1;                     /* stride */
         MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
                   "MPI_Group_range_incl() error");
         MPI_CHECK(MPI_Comm_create(MPI_COMM_WORLD, new_group, &testComm),
@@ -1983,14 +1995,14 @@ static void TestIoSys(IOR_test_t *test)
                 if (rank == 0) {
                         if (params->setTimeStampSignature) {
                                 params->timeStampSignatureValue =
-                                    (unsigned int)params->setTimeStampSignature;
+                                        (unsigned int)params->setTimeStampSignature;
                         } else {
                                 time_t currentTime;
                                 if ((currentTime = time(NULL)) == -1) {
                                         ERR("cannot get current time");
                                 }
                                 params->timeStampSignatureValue =
-                                    (unsigned int)currentTime;
+                                        (unsigned int)currentTime;
                         }
                         if (verbose >= VERBOSE_2) {
                                 fprintf(stdout,
@@ -1998,11 +2010,11 @@ static void TestIoSys(IOR_test_t *test)
                                         params->timeStampSignatureValue,
                                         params->timeStampSignatureValue);
                         }
-			if (rep == 0 && verbose >= VERBOSE_0) {
-				fprintf(stdout, "\n");
-				fprintf(stdout, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
-				fprintf(stdout, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
-			}
+                        if (rep == 0 && verbose >= VERBOSE_0) {
+                                fprintf(stdout, "\n");
+                                fprintf(stdout, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
+                                fprintf(stdout, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
+                        }
                 }
                 MPI_CHECK(MPI_Bcast
                           (&params->timeStampSignatureValue, 1, MPI_UNSIGNED, 0,
@@ -2037,7 +2049,7 @@ static void TestIoSys(IOR_test_t *test)
                         if (rank == 0 && verbose >= VERBOSE_1) {
                                 fprintf(stderr,
                                         "Commencing write performance test: %s",
-					CurrentTimeString());
+                                        CurrentTimeString());
                         }
                         timer[2][rep] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, fd, WRITE);
@@ -2051,13 +2063,13 @@ static void TestIoSys(IOR_test_t *test)
                         timer[5][rep] = GetTimeStamp();
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
-			/* get the size of the file just written */
-			results->aggFileSizeFromStat[rep] =
-				backend->get_file_size(params, testComm, testFileName);
+                        /* get the size of the file just written */
+                        results->aggFileSizeFromStat[rep] =
+                                backend->get_file_size(params, testComm, testFileName);
 
-			/* check if stat() of file doesn't equal expected file size,
-			   use actual amount of byte moved */
-			CheckFileSize(test, dataMoved, rep);
+                        /* check if stat() of file doesn't equal expected file size,
+                           use actual amount of byte moved */
+                        CheckFileSize(test, dataMoved, rep);
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, WRITE);
@@ -2081,7 +2093,7 @@ static void TestIoSys(IOR_test_t *test)
                         if (params->reorderTasks) {
                                 /* move two nodes away from writing node */
                                 rankOffset =
-                                    (2 * params->tasksPerNode) % params->numTasks;
+                                        (2 * params->tasksPerNode) % params->numTasks;
                         }
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
@@ -2099,21 +2111,21 @@ static void TestIoSys(IOR_test_t *test)
                         if (params->reorderTasks) {
                                 /* move taskPerNodeOffset nodes[1==default] away from writing node */
                                 rankOffset =
-                                    (params->taskPerNodeOffset *
-                                     params->tasksPerNode) % params->numTasks;
+                                        (params->taskPerNodeOffset *
+                                         params->tasksPerNode) % params->numTasks;
                         }
                         /* random process offset reading */
                         if (params->reorderTasksRandom) {
                                 /* this should not intefere with randomOffset within a file because GetOffsetArrayRandom */
                                 /* seeds every random() call  */
-				int nodeoffset;
+                                int nodeoffset;
                                 unsigned int iseed0;
                                 nodeoffset = params->taskPerNodeOffset;
                                 nodeoffset = (nodeoffset < params->nodes) ? nodeoffset : params->nodes - 1;
                                 if (params->reorderTasksRandomSeed < 0)
-					iseed0 = -1 * params->reorderTasksRandomSeed + rep;
-				else
-					iseed0 = params->reorderTasksRandomSeed;
+                                        iseed0 = -1 * params->reorderTasksRandomSeed + rep;
+                                else
+                                        iseed0 = params->reorderTasksRandomSeed;
                                 srand(rank + iseed0);
                                 {
                                         rankOffset = rand() % params->numTasks;
@@ -2124,7 +2136,7 @@ static void TestIoSys(IOR_test_t *test)
                                 }
                                 /* Get more detailed stats if requested by verbose level */
                                 if (verbose >= VERBOSE_2) {
-					file_hits_histogram(params);
+                                        file_hits_histogram(params);
                                 }
                         }
                         /* Using globally passed rankOffset, following function generates testFileName to read */
@@ -2146,7 +2158,7 @@ static void TestIoSys(IOR_test_t *test)
                         if (rank == 0 && verbose >= VERBOSE_1) {
                                 fprintf(stderr,
                                         "Commencing read performance test: %s",
-					CurrentTimeString());
+                                        CurrentTimeString());
                         }
                         timer[8][rep] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, fd, READ);
@@ -2160,8 +2172,8 @@ static void TestIoSys(IOR_test_t *test)
 
                         /* get the size of the file just read */
                         results->aggFileSizeFromStat[rep] =
-                            backend->get_file_size(params, testComm,
-                                                   testFileName);
+                                backend->get_file_size(params, testComm,
+                                                       testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
@@ -2239,8 +2251,8 @@ static void TestIoSys(IOR_test_t *test)
                 PrintShortSummary(test);
         }
 
-	if (hog_buf != NULL)
-		free(hog_buf);
+        if (hog_buf != NULL)
+                free(hog_buf);
         for (i = 0; i < 12; i++) {
                 free(timer[i]);
         }
@@ -2415,7 +2427,7 @@ static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
 
         /* setup empty array */
         offsetArray =
-            (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
+                (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
         if (offsetArray == NULL)
                 ERR("malloc() failed");
         offsetArray[offsets] = -1;      /* set last offset with -1 */
@@ -2428,8 +2440,8 @@ static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
                                 offsetArray[k] += i * test->blockSize;
                         } else {
                                 offsetArray[k] +=
-                                    (i * test->numTasks * test->blockSize)
-                                    + (pretendRank * test->blockSize);
+                                        (i * test->numTasks * test->blockSize)
+                                        + (pretendRank * test->blockSize);
                         }
                         k++;
                 }
@@ -2474,7 +2486,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
 
         /* setup empty array */
         offsetArray =
-            (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
+                (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
         if (offsetArray == NULL)
                 ERR("malloc() failed");
         offsetArray[offsets] = -1;      /* set last offset with -1 */
@@ -2557,19 +2569,19 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
                 transfer = test->transferSize;
                 if (access == WRITE) {
                         amtXferred =
-                            backend->xfer(access, fd, buffer, transfer, test);
+                                backend->xfer(access, fd, buffer, transfer, test);
                         if (amtXferred != transfer)
                                 ERR("cannot write to file");
                 } else if (access == READ) {
                         amtXferred =
-                            backend->xfer(access, fd, buffer, transfer, test);
+                                backend->xfer(access, fd, buffer, transfer, test);
                         if (amtXferred != transfer)
                                 ERR("cannot read from file");
                 } else if (access == WRITECHECK) {
                         memset(checkBuffer, 'a', transfer);
                         amtXferred =
-                            backend->xfer(access, fd, checkBuffer, transfer,
-                                          test);
+                                backend->xfer(access, fd, checkBuffer, transfer,
+                                              test);
                         if (amtXferred != transfer)
                                 ERR("cannot read from file write check");
                         transferCount++;

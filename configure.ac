@@ -20,7 +20,7 @@ AX_PROG_CC_MPI
 # Checks for libraries.
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/statfs.h sys/statvfs.h sys/time.h unistd.h wchar.h gpfs.h gpfs_fcntl.h])
+AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/statfs.h sys/statvfs.h sys/time.h unistd.h wchar.h gpfs.h gpfs_fcntl.h plfs.h hdfs.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
@@ -46,15 +46,26 @@ AS_IF([test "x$with_lustre" != xno], [
         ])
 ])
 
-# POSIX IO support
-AC_ARG_WITH([posix],
-        [AS_HELP_STRING([--with-posix],
-           [support IO with POSIX backend @<:@default=yes@:>@])],
+# HDF5 support
+AC_ARG_WITH([hdf5],
+        [AS_HELP_STRING([--with-hdf5],
+           [support IO with HDF5 backend @<:@default=no@:>@])],
         [],
-        [with_posix=yes])
-AM_CONDITIONAL([USE_POSIX_AIORI], [test x$with_posix = xyes])
-AM_COND_IF([USE_POSIX_AIORI],[
-        AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
+        [with_hdf5=no])
+AM_CONDITIONAL([USE_HDF5_AIORI], [test x$with_hdf5 = xyes])
+AM_COND_IF([USE_HDF5_AIORI],[
+        AC_DEFINE([USE_HDF5_AIORI], [], [Build HDF5 backend AIORI])
+])
+
+# HDFS support
+AC_ARG_WITH([hdfs],
+        [AS_HELP_STRING([--with-hdfs],
+           [support IO with HDFS backend @<:@default=no@:>@])],
+        [],
+        [with_hdfs=no])
+AM_CONDITIONAL([USE_HDFS_AIORI], [test x$with_hdfs = xyes])
+AM_COND_IF([USE_HDFS_AIORI],[
+        AC_DEFINE([USE_HDFS_AIORI], [], [Build HDFS backend AIORI])
 ])
 
 # MPIIO support
@@ -68,17 +79,6 @@ AM_COND_IF([USE_MPIIO_AIORI],[
         AC_DEFINE([USE_MPIIO_AIORI], [], [Build MPIIO backend AIORI])
 ])
 
-# HDF5 support
-AC_ARG_WITH([hdf5],
-        [AS_HELP_STRING([--with-hdf5],
-           [support IO with HDF5 backend @<:@default=no@:>@])],
-        [],
-        [with_hdf5=no])
-AM_CONDITIONAL([USE_HDF5_AIORI], [test x$with_hdf5 = xyes])
-AM_COND_IF([USE_HDF5_AIORI],[
-        AC_DEFINE([USE_HDF5_AIORI], [], [Build HDF5 backend AIORI])
-])
-
 # NCMPI (Parallel netcdf) support
 AC_ARG_WITH([ncmpi],
         [AS_HELP_STRING([--with-ncmpi],
@@ -89,6 +89,31 @@ AM_CONDITIONAL([USE_NCMPI_AIORI], [test x$with_ncmpi = xyes])
 AM_COND_IF([USE_NCMPI_AIORI],[
         AC_DEFINE([USE_NCMPI_AIORI], [], [Build NCMPI backend AIORI])
 ])
+
+# PLFS IO support
+AC_ARG_WITH([plfs],
+        [AS_HELP_STRING([--with-plfs],
+           [support IO with PLFS backend @<:@default=no@:>@])],
+        [],
+        [with_plfs=no])
+AM_CONDITIONAL([USE_PLFS_AIORI], [test x$with_plfs = xyes])
+AM_COND_IF([USE_PLFS_AIORI],[
+        AC_DEFINE([USE_PLFS_AIORI], [], [Build PLFS backend AIORI])
+])
+
+# POSIX IO support
+AC_ARG_WITH([posix],
+        [AS_HELP_STRING([--with-posix],
+           [support IO with POSIX backend @<:@default=yes@:>@])],
+        [],
+        [with_posix=yes])
+AM_CONDITIONAL([USE_POSIX_AIORI], [test x$with_posix = xyes])
+AM_COND_IF([USE_POSIX_AIORI],[
+        AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
+])
+
+
+
 
 # Enable building "IOR", in all capitals
 AC_ARG_ENABLE([caps],
