@@ -96,11 +96,12 @@ static void RecalculateExpectedFileSize(IOR_param_t *params)
  */
 static void CheckRunSettings(IOR_test_t *tests)
 {
-	IOR_test_t *ptr;
-	IOR_param_t *params;
+        IOR_test_t *ptr;
+        IOR_param_t *params;
 
-	for (ptr = tests; ptr != NULL; ptr = ptr->next) {
-		params = &ptr->params;
+        for (ptr = tests; ptr != NULL; ptr = ptr->next) {
+                params = &ptr->params;
+
                 /* If no write/read/check action requested, set both write and read */
                 if (params->writeFile == FALSE
                     && params->readFile == FALSE
@@ -109,12 +110,29 @@ static void CheckRunSettings(IOR_test_t *tests)
                         params->readFile = TRUE;
                         params->writeFile = TRUE;
                 }
+
+                /* If only read or write is requested, then fix the default
+                 * openFlags to not be open RDWR.  It matters in the case
+                 * of HDFS, which doesn't support opening RDWR.
+                 */
+                if ((params->openFlags & IOR_RDWR)
+                    && ((params->readFile | params->checkRead)
+                        ^ (params->writeFile | params->checkWrite))
+                    && (params->openFlags & IOR_RDWR)) {
+
+                        params->openFlags &= ~(IOR_RDWR);
+                        if (params->readFile | params->checkRead)
+                                params->openFlags |= IOR_RDONLY;
+                        else
+                                params->openFlags |= IOR_WRONLY;
+                }
+
                 /* If numTasks set to 0, use all tasks */
                 if (params->numTasks == 0) {
                         MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD,
-						&params->numTasks),
+                                                &params->numTasks),
                                   "MPI_Comm_size() error");
-			RecalculateExpectedFileSize(params);
+                        RecalculateExpectedFileSize(params);
                 }
         }
 }
@@ -373,7 +391,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                 if (sscanf(linebuf, " #%s", empty) == 1)
                         continue;
                 if (contains_only(linebuf, "ior stop")) {
-			AllocResults(tail);
+                        AllocResults(tail);
                         break;
                 } else if (contains_only(linebuf, "run")) {
                         if (runflag) {
@@ -382,16 +400,16 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                                 tail->next = CreateTest(&tail->params, test_num++);
                                 tail = tail->next;
                         }
-			AllocResults(tail);
+                        AllocResults(tail);
                         runflag = 1;
                 } else if (runflag) {
                         /* If this directive was preceded by a "run" line, then
                            create and initialize a new test structure */
-			runflag = 0;
-			tail->next = CreateTest(&tail->params, test_num++);
-			tail = tail->next;
+                        runflag = 0;
+                        tail->next = CreateTest(&tail->params, test_num++);
+                        tail = tail->next;
                         ParseLine(linebuf, &tail->params);
-		} else {
+                } else {
                         ParseLine(linebuf, &tail->params);
                 }
         }
@@ -506,7 +524,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                 case 'l':
                         initialTestParams.storeFileOffset = TRUE;
                         break;
-		case 'M':
+                case 'M':
                         initialTestParams.memoryPerNode =
                                 NodeMemoryStringToBytes(optarg);
                         break;
@@ -591,7 +609,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         /* If an IOR script was not used, initialize test queue to the defaults */
         if (tests == NULL) {
                 tests = CreateTest(&initialTestParams, 0);
-		AllocResults(tests);
+                AllocResults(tests);
         }
 
         CheckRunSettings(tests);
