@@ -26,28 +26,29 @@
 
 /*************************** D E F I N I T I O N S ****************************/
 
-                                /* -- file open flags -- */
-#define IOR_RDONLY        1     /* read only */
-#define IOR_WRONLY        2     /* write only */
-#define IOR_RDWR          4     /* read/write */
-#define IOR_APPEND        8     /* append */
-#define IOR_CREAT         16    /* create */
-#define IOR_TRUNC         32    /* truncate */
-#define IOR_EXCL          64    /* exclusive */
-#define IOR_DIRECT        128   /* bypass I/O buffers */
-                                /* -- file mode flags -- */
-#define IOR_IRWXU         1     /* read, write, execute perm: owner */
-#define IOR_IRUSR         2     /* read permission: owner */
-#define IOR_IWUSR         4     /* write permission: owner */
-#define IOR_IXUSR         8     /* execute permission: owner */
-#define IOR_IRWXG         16    /* read, write, execute perm: group */
-#define IOR_IRGRP         32    /* read permission: group */
-#define IOR_IWGRP         64    /* write permission: group */
-#define IOR_IXGRP         128   /* execute permission: group */
-#define IOR_IRWXO         256   /* read, write, execute perm: other */
-#define IOR_IROTH         512   /* read permission: other */
-#define IOR_IWOTH         1024  /* write permission: other */
-#define IOR_IXOTH         2048  /* execute permission: other */
+/* -- file open flags -- */
+#define IOR_RDONLY        0x01    /* read only */
+#define IOR_WRONLY        0x02    /* write only */
+#define IOR_RDWR          0x04    /* read/write */
+#define IOR_APPEND        0x08    /* append */
+#define IOR_CREAT         0x10    /* create */
+#define IOR_TRUNC         0x20    /* truncate */
+#define IOR_EXCL          0x40    /* exclusive */
+#define IOR_DIRECT        0x80    /* bypass I/O buffers */
+
+/* -- file mode flags -- */
+#define IOR_IRWXU         0x0001  /* read, write, execute perm: owner */
+#define IOR_IRUSR         0x0002  /* read permission: owner */
+#define IOR_IWUSR         0x0004  /* write permission: owner */
+#define IOR_IXUSR         0x0008  /* execute permission: owner */
+#define IOR_IRWXG         0x0010  /* read, write, execute perm: group */
+#define IOR_IRGRP         0x0020  /* read permission: group */
+#define IOR_IWGRP         0x0040  /* write permission: group */
+#define IOR_IXGRP         0x0080  /* execute permission: group */
+#define IOR_IRWXO         0x0100  /* read, write, execute perm: other */
+#define IOR_IROTH         0x0200  /* read permission: other */
+#define IOR_IWOTH         0x0400  /* write permission: other */
+#define IOR_IXOTH         0x0800 /* execute permission: other */
 
 typedef struct ior_aiori {
         char *name;
