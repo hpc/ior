@@ -25,10 +25,7 @@ src/stamp-h1
 NOTES.txt
 autom4te.cache
 contrib/cbif.o
-src/aiori-MPIIO.o
-src/aiori-PLFS.c
-src/aiori-POSIX.o
+src/*.o
+src/*.i
+src/*.s
 src/ior
-src/ior.o
-src/parse_options.o
-src/utilities.o

@@ -145,6 +145,14 @@ int main(int argc, char **argv)
                 if (rank == 0 && verbose >= VERBOSE_3) {
                         ShowTest(&tptr->params);
                 }
+#if 0
+                // This is useful for trapping a running MPI process.  While
+                // this is sleeping, run the script 'testing/hdfs/gdb.attach'
+                printf("\tsleeping ...");
+                fflush(stdout);
+                sleep(5);
+                printf("done.\n");
+#endif
                 TestIoSys(tptr);
         }
 
@@ -196,10 +204,12 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->testComm = MPI_COMM_WORLD;
         p->setAlignment = 1;
         p->lustre_start_ost = -1;
+
+        strncpy(p->hdfs_user, getenv("USER"), MAX_STR);
         p->hdfs_name_node      = "default";
         p->hdfs_name_node_port = 0; /* ??? */
         p->hdfs_fs = NULL;
-        p->hdfs_replicas = 0;
+        p->hdfs_replicas = 0;   /* invokes the default */
         p->hdfs_block_size = 0;
 }
 
@@ -873,9 +883,10 @@ void GetPlatformName(char *platformName)
  */
 static void GetTestFileName(char *testFileName, IOR_param_t * test)
 {
-        char **fileNames,
-            initialTestFileName[MAXPATHLEN],
-            testFileNameRoot[MAX_STR], tmpString[MAX_STR];
+        char **fileNames;
+        char   initialTestFileName[MAXPATHLEN];
+        char   testFileNameRoot[MAX_STR];
+        char   tmpString[MAX_STR];
         int count;
 
         /* parse filename for multiple file systems */
@@ -1483,7 +1494,7 @@ static void ShowSetup(IOR_param_t *params)
         printf("\tapi                = %s\n", params->apiVersion);
         printf("\ttest filename      = %s\n", params->testFileName);
         printf("\taccess             = ");
-  printf(params->filePerProc ? "file-per-process" : "single-shared-file");
+        printf(params->filePerProc ? "file-per-process" : "single-shared-file");
         if (verbose >= VERBOSE_1 && strcmp(params->api, "POSIX") != 0) {
                 printf(params->collective == FALSE ? ", independent" : ", collective");
         }
@@ -2053,6 +2064,10 @@ static void TestIoSys(IOR_test_t *test)
                         }
                         timer[2][rep] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, fd, WRITE);
+                        if (params->verbose >= VERBOSE_4) {
+                          printf("* data moved = %llu\n", dataMoved);
+                          fflush(stdout);
+                        }
                         timer[3][rep] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),

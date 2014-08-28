@@ -120,6 +120,7 @@ typedef struct
     IOR_offset_t setAlignment;       /* alignment in bytes */
 
     /* HDFS variables */
+    char        hdfs_user[MAX_STR];  /* copied from ENV, for now */
     const char* hdfs_name_node;
     tPort       hdfs_name_node_port; /* (uint16_t) */
 
