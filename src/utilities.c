@@ -55,17 +55,29 @@ extern int verbose;
 
 /*
  * Returns string containing the current time.
+ *
+ * NOTE: On some systems, MPI jobs hang while ctime() waits for a lock.
+ * This is true even though CurrentTimeString() is only called for rank==0.
+ * ctime_r() fixes this.
  */
 char *CurrentTimeString(void)
 {
         static time_t currentTime;
-        char *currentTimePtr;
+        char*         currentTimePtr;
 
         if ((currentTime = time(NULL)) == -1)
                 ERR("cannot get current time");
+
+#if     (_POSIX_C_SOURCE >= 1 || _XOPEN_SOURCE || _BSD_SOURCE || _SVID_SOURCE || _POSIX_SOURCE)
+        static char   threadSafeBuff[32]; /* "must be at least 26 characters long" */
+        if ((currentTimePtr = ctime_r(&currentTime, threadSafeBuff)) == NULL) {
+                ERR("cannot read current time");
+        }
+#else
         if ((currentTimePtr = ctime(&currentTime)) == NULL) {
                 ERR("cannot read current time");
         }
+#endif
         /* ctime string ends in \n */
         return (currentTimePtr);
 }
