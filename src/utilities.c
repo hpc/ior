@@ -53,6 +53,27 @@ extern int verbose;
 
 /***************************** F U N C T I O N S ******************************/
 
+
+/* Used in aiori-POSIX.c and aiori-PLFS.c
+ */
+
+void set_o_direct_flag(int *fd)
+{
+/* note that TRU64 needs O_DIRECTIO, SunOS uses directio(),
+   and everyone else needs O_DIRECT */
+#ifndef O_DIRECT
+#  ifndef O_DIRECTIO
+     WARN("cannot use O_DIRECT");
+#    define O_DIRECT 000000
+#  else                           /* O_DIRECTIO */
+#    define O_DIRECT O_DIRECTIO
+#  endif                          /* not O_DIRECTIO */
+#endif                            /* not O_DIRECT */
+
+        *fd |= O_DIRECT;
+}
+
+
 /*
  * Returns string containing the current time.
  *

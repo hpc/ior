@@ -14,8 +14,13 @@
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
+
 #ifdef USE_HDFS_AIORI
 #  include <hdfs.h>             /* hdfsFS */
+#else
+#  include <stdint.h>
+   typedef uint16_t tPort;       /* unused, but needs a type */
+   typedef void*    hdfsFS;      /* unused, but needs a type */
 #endif
 
 #include "iordef.h"
@@ -123,7 +128,6 @@ typedef struct
     char        hdfs_user[MAX_STR];  /* copied from ENV, for now */
     const char* hdfs_name_node;
     tPort       hdfs_name_node_port; /* (uint16_t) */
-
     hdfsFS      hdfs_fs;             /* file-system handle */
     int         hdfs_replicas;       /* n block replicas.  (0 gets default) */
     int         hdfs_block_size;     /* internal blk-size. (0 gets default) */

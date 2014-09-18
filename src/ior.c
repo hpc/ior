@@ -67,6 +67,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_POSIX_AIORI
         &posix_aiori,
 #endif
+#ifdef USE_PLFS_AIORI
+        &plfs_aiori,
+#endif
         NULL
 };
 
@@ -145,7 +148,7 @@ int main(int argc, char **argv)
                 if (rank == 0 && verbose >= VERBOSE_3) {
                         ShowTest(&tptr->params);
                 }
-#if 0
+#if 1
                 // This is useful for trapping a running MPI process.  While
                 // this is sleeping, run the script 'testing/hdfs/gdb.attach'
                 printf("\tsleeping ...");

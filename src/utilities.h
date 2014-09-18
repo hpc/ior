@@ -12,12 +12,13 @@
 #define _UTILITIES_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#  include "config.h"
 #endif
 
 #include <mpi.h>
-
 #include "ior.h"
+
+void set_o_direct_flag(int *fd);
 
 char *CurrentTimeString(void);
 void OutputToRoot(int, MPI_Comm, char *);

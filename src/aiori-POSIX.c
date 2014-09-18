@@ -13,46 +13,49 @@
 \******************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#  include "config.h"
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+
 #ifdef __linux__
-#include <sys/ioctl.h>          /* necessary for: */
-#define __USE_GNU               /* O_DIRECT and */
-#include <fcntl.h>              /* IO operations */
-#undef __USE_GNU
+#  include <sys/ioctl.h>          /* necessary for: */
+#  define __USE_GNU               /* O_DIRECT and */
+#  include <fcntl.h>              /* IO operations */
+#  undef __USE_GNU
 #endif                          /* __linux__ */
+
 #include <errno.h>
 #include <fcntl.h>              /* IO operations */
 #include <sys/stat.h>
 #include <assert.h>
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
-#include <lustre/lustre_user.h>
-#endif
 
+#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#  include <lustre/lustre_user.h>
+#endif
 #ifdef HAVE_GPFS_H
-#include <gpfs.h>
+#  include <gpfs.h>
 #endif
 #ifdef HAVE_GPFS_FCNTL_H
-#include <gpfs_fcntl.h>
+#  include <gpfs_fcntl.h>
 #endif
 
 #include "ior.h"
 #include "aiori.h"
 #include "iordef.h"
+#include "utilities.h"
 
 #ifndef   open64                /* necessary for TRU64 -- */
-#define open64  open            /* unlikely, but may pose */
+#  define open64  open            /* unlikely, but may pose */
 #endif  /* not open64 */                        /* conflicting prototypes */
 
 #ifndef   lseek64               /* necessary for TRU64 -- */
-#define lseek64 lseek           /* unlikely, but may pose */
+#  define lseek64 lseek           /* unlikely, but may pose */
 #endif  /* not lseek64 */                        /* conflicting prototypes */
 
 #ifndef   O_BINARY              /* Required on Windows    */
-#define O_BINARY 0
+#  define O_BINARY 0
 #endif
 
 /**************************** P R O T O T Y P E S *****************************/
@@ -82,21 +85,6 @@ ior_aiori_t posix_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 
-void set_o_direct_flag(int *fd)
-{
-/* note that TRU64 needs O_DIRECTIO, SunOS uses directio(),
-   and everyone else needs O_DIRECT */
-#ifndef O_DIRECT
-#ifndef O_DIRECTIO
-        WARN("cannot use O_DIRECT");
-#define O_DIRECT 000000
-#else                           /* O_DIRECTIO */
-#define O_DIRECT O_DIRECTIO
-#endif                          /* not O_DIRECTIO */
-#endif                          /* not O_DIRECT */
-
-        *fd |= O_DIRECT;
-}
 
 #ifdef HAVE_GPFS_FCNTL_H
 void gpfs_free_all_locks(int fd)
