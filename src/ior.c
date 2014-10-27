@@ -35,12 +35,13 @@
 #include "utilities.h"
 #include "parse_options.h"
 
+
 /* globals used by other files, also defined "extern" in ior.h */
-int numTasksWorld = 0;
-int rank = 0;
-int rankOffset = 0;
-int tasksPerNode = 0;           /* tasks per node */
-int verbose = VERBOSE_0;        /* verbose output */
+int      numTasksWorld = 0;
+int      rank = 0;
+int      rankOffset = 0;
+int      tasksPerNode = 0;           /* tasks per node */
+int      verbose = VERBOSE_0;        /* verbose output */
 MPI_Comm testComm;
 
 /* file scope globals */
@@ -69,6 +70,9 @@ ior_aiori_t *available_aiori[] = {
 #endif
 #ifdef USE_PLFS_AIORI
         &plfs_aiori,
+#endif
+#ifdef USE_S3_AIORI
+        &s3_aiori,
 #endif
         NULL
 };
@@ -110,6 +114,13 @@ int main(int argc, char **argv)
                 }
         }
 
+#ifdef USE_S3_AIORI
+        /* This is supposed to be done before *any* threads are created.
+         * Could MPI_Init() create threads (or call multi-threaded
+         * libraries)?  We'll assume so. */
+        AWS4C_CHECK( aws_init() );
+#endif
+
         /* start the MPI code */
         MPI_CHECK(MPI_Init(&argc, &argv), "cannot initialize MPI");
         MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &numTasksWorld),
@@ -148,14 +159,15 @@ int main(int argc, char **argv)
                 if (rank == 0 && verbose >= VERBOSE_3) {
                         ShowTest(&tptr->params);
                 }
-#if 1
+
                 // This is useful for trapping a running MPI process.  While
                 // this is sleeping, run the script 'testing/hdfs/gdb.attach'
-                printf("\tsleeping ...");
-                fflush(stdout);
-                sleep(5);
-                printf("done.\n");
-#endif
+                if (verbose >= VERBOSE_4) {
+                        printf("\trank %d: sleeping\n", rank);
+                        sleep(5);
+                        printf("\trank %d: awake.\n", rank);
+                }
+
                 TestIoSys(tptr);
         }
 
@@ -173,6 +185,12 @@ int main(int argc, char **argv)
         DestroyTests(tests_head);
 
         MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
+
+#ifdef USE_S3_AIORI
+        /* done once per program, after exiting all threads.
+         * NOTE: This fn doesn't return a value that can be checked for success. */
+        aws_cleanup();
+#endif
 
         return (totalErrorCount);
 }
@@ -214,6 +232,13 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->hdfs_fs = NULL;
         p->hdfs_replicas = 0;   /* invokes the default */
         p->hdfs_block_size = 0;
+
+        // p->curl       = NULL;
+        p->URI = NULL;
+        p->curl_flags = 0;
+        p->io_buf = NULL;
+        p->etags = NULL;
+        p->part_number = 0;
 }
 
 /*

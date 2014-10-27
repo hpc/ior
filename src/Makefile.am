@@ -13,9 +13,10 @@ ior_SOURCES += ior.h utilities.h parse_options.h aiori.h iordef.h
 
 
 if USE_HDFS_AIORI
-# TBD: figure out how to find this from the corresponding bin/ dir in $PATH
-#      or pick an environment var to use (and set it in modulefiles)
-#      or provide a config-flag, to set a variable we use here
+# TBD: figure out how to find the appropriate -I and -L dirs.  Maybe we can
+#      get them from the corresponding bin/ dir in $PATH, or pick an
+#      environment var to use (and set it in modulefiles), or provide a
+#      config-flag, to set a variable we use here.
 ior_SOURCES  += aiori-HDFS.c
 ior_CPPFLAGS += -I/opt/hadoop-2.2.0/include
 ior_LDFLAGS  += -L/opt/hadoop-2.2.0/lib/native
@@ -33,10 +34,14 @@ endif
 
 if USE_NCMPI_AIORI
 ior_SOURCES += aiori-NCMPI.c
-ior_LDADD += -lpnetcdf
+ior_LDADD   += -lpnetcdf
 endif
 
 if USE_PLFS_AIORI
+# TBD: modulefiles don't add PLFS_VER to env, but you can find it embedded in
+#      $PLFS_HOME.  configure.ac should extract this for us.  Then we should
+#      add -D... to ior_CPPFLAGS, here.  Then aiori-PLFS.c can conditionalize
+#      compilation of calls that vary according to PLFS version.
 ior_SOURCES += aiori-PLFS.c
 ior_LDADD   += -lplfs
 endif
@@ -46,6 +51,21 @@ ior_SOURCES += aiori-POSIX.c
 endif
 
 
-IOR_SOURCES = $(ior_SOURCES)
-IOR_LDADD = $(ior_LDADD)
+if USE_S3_AIORI
+# TBD: Find the aws4c and libxml installations programmatically
+AWS4C  = /users/jti/projects/ecs_hobo/tools/aws4c-0.5
+ior_SOURCES  += aiori-S3.c
+ior_CPPFLAGS += -I/usr/include/libxml2
+ior_CPPFLAGS += -I$(AWS4C)
+ior_LDFLAGS  += -L$(AWS4C)
+ior_LDADD    += -lcurl
+ior_LDADD    += -lxml2
+ior_LDADD    += -laws4c
+ior_LDADD    += -laws4c_extra
+endif
+
+
+IOR_SOURCES  = $(ior_SOURCES)
+IOR_LDADD    = $(ior_LDADD)
 IOT_CPPFLAGS = $(ior_CPPFLAGS)
+

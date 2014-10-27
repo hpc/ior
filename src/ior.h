@@ -1,5 +1,11 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
+/* -*- mode: c; indent-tabs-mode: nil; -*-
+ * vim:expandtab:
+ *
+ * NOTE: Someone was setting indent-sizes in the mode-line.  Don't do that.
+ *       8-chars of indenting is ridiculous.  If you really want 8-spaces,
+ *       then change the mode-line to use tabs, and configure your personal
+ *       editor environment to use 8-space tab-stops.
+ *       
  */
 /******************************************************************************\
 *                                                                              *
@@ -22,6 +28,16 @@
    typedef uint16_t tPort;       /* unused, but needs a type */
    typedef void*    hdfsFS;      /* unused, but needs a type */
 #endif
+
+#ifdef USE_S3_AIORI
+#  include <curl/curl.h>
+#  include "aws4c.h"
+#else
+   typedef void     CURL;       /* unused, but needs a type */
+   typedef void     IOBuf;      /* unused, but needs a type */
+#endif
+
+
 
 #include "iordef.h"
 
@@ -50,7 +66,7 @@ typedef struct
 {
     char debug[MAX_STR];             /* debug info string */
     unsigned int mode;               /* file permissions */
-    unsigned int openFlags;          /* open flags */
+    unsigned int openFlags;          /* open flags (see also <open>) */
     int referenceNumber;             /* user supplied reference number */
     char api[MAX_STR];               /* API for I/O */
     char apiVersion[MAX_STR];        /* API version */
@@ -97,7 +113,7 @@ typedef struct
     int uniqueDir;                   /* use unique directory for each fpp */
     int useExistingTestFile;         /* do not delete test file before access */
     int storeFileOffset;             /* use file offset as stored signature */
-    int deadlineForStonewalling; /* max time in seconds to run any test phase */
+    int deadlineForStonewalling;     /* max time in seconds to run any test phase */
     int maxTimeDuration;             /* max time in minutes to run each test */
     int outlierThreshold;            /* warn on outlier N seconds from mean */
     int verbose;                     /* verbosity */
@@ -132,6 +148,18 @@ typedef struct
     int         hdfs_replicas;       /* n block replicas.  (0 gets default) */
     int         hdfs_block_size;     /* internal blk-size. (0 gets default) */
 
+    /* REST/S3 variables */
+    //    CURL*       curl;             /* for libcurl "easy" fns (now managed by aws4c) */
+#   define      IOR_CURL_INIT        0x01
+#   define      IOR_CURL_NOCONTINUE  0x02
+    char        curl_flags;
+    char*       URI;                 /* "path" to target object */
+    IOBuf*      io_buf;              /* aws4c places parsed header values here */
+    IOBuf*      etags;               /* accumulate ETags for N:1 parts */
+    size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
+#   define      MAX_UPLOAD_ID_SIZE    256 /* seems to be 32, actually */
+    char        UploadId[MAX_UPLOAD_ID_SIZE +1]; /* key for multi-part-uploads */
+
     /* NCMPI variables */
     int var_id;                      /* variable id handle for data set */
 
@@ -154,18 +182,18 @@ typedef struct
 /* each pointer is to an array, each of length equal to the number of
    repetitions in the test */
 typedef struct {
-	double *writeTime;
-	double *readTime;
-	IOR_offset_t *aggFileSizeFromStat;
-	IOR_offset_t *aggFileSizeFromXfer;
-	IOR_offset_t *aggFileSizeForBW;
+   double *writeTime;
+   double *readTime;
+   IOR_offset_t *aggFileSizeFromStat;
+   IOR_offset_t *aggFileSizeFromXfer;
+   IOR_offset_t *aggFileSizeForBW;
 } IOR_results_t;
 
 /* define the queuing structure for the test parameters */
 typedef struct IOR_test_t {
-	IOR_param_t        params;
-	IOR_results_t     *results;
-	struct IOR_test_t *next;
+   IOR_param_t        params;
+   IOR_results_t     *results;
+   struct IOR_test_t *next;
 } IOR_test_t;
 
 

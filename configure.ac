@@ -112,6 +112,19 @@ AM_COND_IF([USE_POSIX_AIORI],[
         AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
 ])
 
+# Amazon S3 support
+AC_ARG_WITH([S3],
+        [AS_HELP_STRING([--with-S3],
+           [support IO with Amazon S3 backend @<:@default=yes@:>@])],
+        [],
+        [with_S3=yes])
+AM_CONDITIONAL([USE_S3_AIORI], [test x$with_S3 = xyes])
+AM_COND_IF([USE_S3_AIORI],[
+        AC_DEFINE([USE_S3_AIORI], [], [Build Amazon-S3 backend AIORI])
+])
+
+
+
 
 
 
