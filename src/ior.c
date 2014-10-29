@@ -73,6 +73,8 @@ ior_aiori_t *available_aiori[] = {
 #endif
 #ifdef USE_S3_AIORI
         &s3_aiori,
+        &s3_plus_aiori,
+        &s3_emc_aiori,
 #endif
         NULL
 };
@@ -245,7 +247,7 @@ void init_IOR_Param_t(IOR_param_t * p)
  * Bind the global "backend" pointer to the requested backend AIORI's
  * function table.
  */
-static void AioriBind(char *api)
+static void AioriBind(char* api, IOR_param_t* param)
 {
         ior_aiori_t **tmp;
 
@@ -259,6 +261,14 @@ static void AioriBind(char *api)
 
         if (backend == NULL) {
                 ERR("unrecognized IO API");
+        }
+        else if (! strncmp(api, "S3", 2)) {
+                if (! strcmp(api, "S3_plus"))
+                        param->curl_flags |= IOR_CURL_S3_EMC_EXT;
+                else if (! strcmp(api, "S3_EMC"))
+                        param->curl_flags |= IOR_CURL_S3_EMC_EXT;
+                else
+                        param->curl_flags &= ~(IOR_CURL_S3_EMC_EXT);
         }
 
 }
@@ -1303,6 +1313,7 @@ static void PrintRemoveTiming(double start, double finish, int rep)
 
 /*
  * Check for file(s), then remove all files if file-per-proc, else single file.
+ *
  */
 static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
 {
@@ -1322,6 +1333,12 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         GetTestFileName(testFileName, test);
                 }
         } else {
+                // BUG: "access()" assumes a POSIX filesystem.  Maybe use
+                //      backend->get_file_size(), instead, (and catch
+                //      errors), or extend the aiori struct to include
+                //      something to safely check for existence of the
+                //      "file".
+                //      
                 if ((rank == 0) && (access(testFileName, F_OK) == 0)) {
                         backend->delete(testFileName, test);
                 }
@@ -2016,7 +2033,7 @@ static void TestIoSys(IOR_test_t *test)
         }
 
         /* bind I/O calls to specific API */
-        AioriBind(params->api);
+        AioriBind(params->api, params);
 
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
@@ -2314,7 +2331,7 @@ static void ValidTests(IOR_param_t * test)
 
         init_IOR_Param_t(&defaults);
         /* get the version of the tests */
-        AioriBind(test->api);
+        AioriBind(test->api, test);
         backend->set_version(test);
 
         if (test->repetitions <= 0)

@@ -150,8 +150,9 @@ typedef struct
 
     /* REST/S3 variables */
     //    CURL*       curl;             /* for libcurl "easy" fns (now managed by aws4c) */
-#   define      IOR_CURL_INIT        0x01
+#   define      IOR_CURL_INIT        0x01 /* curl top-level inits were perfomed once? */
 #   define      IOR_CURL_NOCONTINUE  0x02
+#   define      IOR_CURL_S3_EMC_EXT  0x04 /* allow EMC extensions to S3? */
     char        curl_flags;
     char*       URI;                 /* "path" to target object */
     IOBuf*      io_buf;              /* aws4c places parsed header values here */
