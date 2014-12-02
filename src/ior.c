@@ -263,9 +263,7 @@ static void AioriBind(char* api, IOR_param_t* param)
                 ERR("unrecognized IO API");
         }
         else if (! strncmp(api, "S3", 2)) {
-                if (! strcmp(api, "S3_plus"))
-                        param->curl_flags |= IOR_CURL_S3_EMC_EXT;
-                else if (! strcmp(api, "S3_EMC"))
+                if (! strcmp(api, "S3_EMC"))
                         param->curl_flags |= IOR_CURL_S3_EMC_EXT;
                 else
                         param->curl_flags &= ~(IOR_CURL_S3_EMC_EXT);
@@ -742,7 +740,7 @@ static void DisplayUsage(char **argv)
 {
         char *opts[] = {
                 "OPTIONS:",
-                " -a S  api --  API for I/O [POSIX|MPIIO|HDF5|NCMPI]",
+                " -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]",
                 " -A N  refNum -- user supplied reference number to include in the summary",
                 " -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)",
                 " -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers",
