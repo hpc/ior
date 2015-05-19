@@ -112,16 +112,80 @@ AM_COND_IF([USE_POSIX_AIORI],[
         AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
 ])
 
-# Amazon S3 support
+
+
+
+# aws4c is needed for the S3 backend (see --with-S3, below).
+# Version 0.5.2 of aws4c is available at https://github.com/jti-lanl/aws4c.git
+# Install it something like this:
+#
+#   cd $my_install_dir
+#   git clone https://github.com/jti-lanl/aws4c.git
+#   cd aws4c
+#   make
+#
+# Then:
+#   --with-S3 --with-aws4c=$my_install_dir/aws4c
+
+aws4c_dir=
+AC_ARG_WITH([aws4c],
+        [AS_HELP_STRING([--with-aws4c=DIR],
+           [aws4c library is needed for Amazon S3 backend])],
+        [aws4c_dir="$withval"])
+AM_CONDITIONAL([AWS4C_DIR], [test x$aws4c_dir != x])
+
+# AC_SUBST([AWS4C_DIR],[$aws4c_dir])
+AM_COND_IF([AWS4C_DIR],[
+   AC_SUBST([AWS4C_CPPFLAGS],[-I$aws4c_dir])
+   AC_SUBST([AWS4C_LDFLAGS], [-L$aws4c_dir])
+])
+
+
+# Amazon S3 support  [see also:  --with-aws4c]
 AC_ARG_WITH([S3],
         [AS_HELP_STRING([--with-S3],
-           [support IO with Amazon S3 backend @<:@default=yes@:>@])],
+           [support IO with Amazon S3 backend @<:@default=no@:>@])],
         [],
-        [with_S3=yes])
+        [with_S3=no])
 AM_CONDITIONAL([USE_S3_AIORI], [test x$with_S3 = xyes])
 AM_COND_IF([USE_S3_AIORI],[
         AC_DEFINE([USE_S3_AIORI], [], [Build Amazon-S3 backend AIORI])
 ])
+
+err=0
+AS_IF([test "x$with_S3" != xno], [
+            AC_MSG_NOTICE([beginning of S3-related checks])
+
+            # save user's values, while we use AC_CHECK_HEADERS with $AWS4C_DIR
+            ORIG_CPPFLAGS=$CPPFLAGS
+            ORIG_LDFLAGS=$LDFLAGS
+
+            CPPFLAGS="$CPPFLAGS $AWS4C_CPPFLAGS"
+            LDFLAGS=" $LDFLAGS  $AWS4C_LDFLAGS"
+
+            AC_CHECK_HEADERS([aws4c.h], [], [err=1])
+            AC_CHECK_HEADERS([libxml/parser.h], [], [err=1])
+
+            # Autotools thinks searching for a library means I want it added to LIBS
+            ORIG_LIBS=$LIBS
+            AC_CHECK_LIB([curl], [curl_easy_init], [], [err=1])
+            AC_CHECK_LIB([xml2], [xmlDocGetRootElement], [], [err=1])
+            AC_CHECK_LIB([aws4c], [s3_get], [], [err=1], [-lcurl -lxml2 -lcrypto])
+            LIBS=$ORIG_LIBS
+
+            AC_MSG_NOTICE([end of S3-related checks])
+            if test "$err" == 1; then
+                AC_MSG_FAILURE([S3 support is missing.  dnl
+Make sure you have access to libaws4c, libcurl, libxml2, and libcrypto.  dnl
+Consider --with-aws4c=, CPPFLAGS, LDFLAGS, etc])
+            fi
+
+            # restore user's values
+            CPPFLAGS=$ORIG_CPPFLAGS
+            LDFLAGS=$ORIG_LDFLAGS
+])
+
+
 
 
 

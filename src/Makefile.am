@@ -52,12 +52,11 @@ endif
 
 
 if USE_S3_AIORI
-# TBD: Find the aws4c and libxml installations programmatically
-AWS4C  = /users/jti/projects/ecs_hobo/tools/aws4c-0.5
 ior_SOURCES  += aiori-S3.c
-ior_CPPFLAGS += -I/usr/include/libxml2
-ior_CPPFLAGS += -I$(AWS4C)
-ior_LDFLAGS  += -L$(AWS4C)
+if AWS4C_DIR
+  ior_CPPFLAGS += $(AWS4C_CPPFLAGS)
+  ior_LDFLAGS  += $(AWS4C_LDFLAGS)
+endif
 ior_LDADD    += -lcurl
 ior_LDADD    += -lxml2
 ior_LDADD    += -laws4c

@@ -1,0 +1,82 @@
+[This is some help for building with experimental S3 support.]
+
+
+--- BUILDING
+
+module load openmpi-gnu
+
+./bootstrap
+
+
+# configure must be able to find libaws4c, libxml2, libcurl, libcrypto, etc.
+# On some machines, the libxml2 include files are in:
+#
+#     /usr/include/libxml2
+#
+# which is not a standard include location, so we must define CPPFLAGS
+# to put that path in the include path. Do this:
+#
+#     setenv CPPFLAGS -I/usr/include/libxml2
+#     [or add "CPPFLAGS=-I/usr/include/libxml2" to the end of the configure command]
+#
+# Use the --with-aws4c=DIR to point to the path where your libaws4c library
+# sits.
+#
+# Use the --prefix=iorInstallDir to point to the path where you want IOR
+# to install all the files it builds during the "make" process.
+
+./configure --prefix=iorInstallDir --with-S3 [ --with-aws4c=DIR ]
+
+
+# Here is an example configure-command invocation, for building with the
+# S3-targeting extensions, which require access to additional libraries
+# mentioned above.  This will probably not work verbatim on your
+# installation, because libraries will be installed in different locations,
+# but it could help you to understand what is needed.
+
+./configure --prefix=`pwd`/installed \
+            --with-S3 \
+            --with-aws4c=`pwd`/aws4c \
+            LDFLAGS="-L/usr/lib64 -L`pwd`/libxml2-2.9.1/installed/lib" \
+            CFLAGS="-I`pwd`/libxml2-2.9.1/installed/include/libxml2"
+
+
+# 14-May-2015:
+# To change the target of the experiment, there is an #if block from line
+# 284-309. The "if" portion is activated by putting a 1 as the argument
+# instead of a 0. In that case, the experiment will use the four ECS nodes
+# directly, splitting the load up between all four.
+#
+# If the #if argument is 0, then the "#else" portion is executed. In this
+# case you can use the load balancer, haproxy.ccstar.lanl.gov, by using
+# the IP 10.143.0.1:80. If you want to use one of the ECS nodes directly
+# us the IP 10.140.0.[15-17]:9020.
+#
+# To specify the bucket where the experiment file(s) will go, you need
+# to set that with the "const char* bucket_name declaration. There are
+# a couple options at lines 207-208.
+
+
+make
+make install
+
+
+-- RUNNING  (various options ...)
+
+# llogin -np 4
+msub -IX -l nodes=4:ppn=4,walltime=11:00:00
+
+
+
+# For debugging, run on 1 node, -vvvv turns on detailed curl debugging
+mpirun -np 1 MY_INSTALL_DIR/bin/ior -a S3 -o test_`date +"%Y%m%d_%H%M%S"` -vvvv -t1k -b1k
+
+# this defaults the number of processors
+mpirun MY_INSTALL_DIRbin/ior -a S3 -C -o test_`date +"%Y%m%d_%H%M%S"`
+
+# this does one parallel run, putting a heavy load on the server [assumes bash]
+mpirun -npernode 8 MY_INSTALL_DIR/bin/ior -a S3_EMC -C -o test_`date +"%Y%m%d_%H%M%S"` \
+ -b $(( 128 * 1024 * 1024 )) \
+ -t $(( 128 * 1024 * 1024 )) \
+ -i 1
+

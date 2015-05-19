@@ -205,6 +205,7 @@ CURLcode           rc;
 
 /* Any objects we create or delete will be under this bucket */
 const char* bucket_name = "ior";
+//const char* bucket_name = "brettk";
 
 
 /***************************** F U N C T I O N S ******************************/
@@ -259,9 +260,9 @@ s3_connect( IOR_param_t* param ) {
 	// NOTE: These inits could be done in init_IORParam_t(), in ior.c, but
 	//       would require conditional compilation, there.
 
+	aws_set_debug(param->verbose >= 4);
 	aws_read_config(getenv("USER"));  // requires ~/.awsAuth
 	aws_reuse_connections(1);
-	aws_set_debug(param->verbose >= 4);
 
 	// initalize IOBufs.  These are basically dynamically-extensible
 	// linked-lists.  "growth size" controls the increment of new memory
@@ -272,24 +273,59 @@ s3_connect( IOR_param_t* param ) {
 	param->etags = aws_iobuf_new();
 	aws_iobuf_growth_size(param->etags, 1024*1024*8);
 
+   // WARNING: if you have http_proxy set in your environment, you may need
+   //          to override it here.  TBD: add a command-line variable to
+   //          allow you to define a proxy.
+   //
 	// our hosts are currently 10.140.0.15 - 10.140 0.18
 	// TBD: Try DNS-round-robin server at vi-lb.ccstar.lanl.gov
-	snprintf(buff, BUFF_SIZE, "10.140.0.%d:9020", 15 + (rank % 4));
-	s3_set_host(buff);
+   // TBD: try HAProxy round-robin at 10.143.0.1
+
+#if 1
+   //   snprintf(buff, BUFF_SIZE, "10.140.0.%d:9020", 15 + (rank % 4));
+   //   s3_set_proxy(buff);
+   //
+   //   snprintf(buff, BUFF_SIZE, "10.140.0.%d", 15 + (rank % 4));
+   //	s3_set_host(buff);
+
+   snprintf(buff, BUFF_SIZE, "10.140.0.%d:9020", 15 + (rank % 4));
+   s3_set_host(buff);
+
+#else
+/*
+ * If you just want to go to one if the ECS nodes, put that IP
+ * address in here directly with port 9020.
+ *
+ */
+//   s3_set_host("10.140.0.15:9020");
+
+/*
+ * If you want to go to haproxy.ccstar.lanl.gov, this is its IP
+ * address.
+ *
+ */
+//   s3_set_proxy("10.143.0.1:80");
+//   s3_set_host( "10.143.0.1:80");
+#endif
 
 	// make sure test-bucket exists
 	s3_set_bucket((char*)bucket_name);
-   AWS4C_CHECK( s3_head(param->io_buf, "") );
-   if ( param->io_buf->code == 404 ) {					// "404 Not Found"
-      printf("  bucket '%s' doesn't exist\n", bucket_name);
 
-      AWS4C_CHECK( s3_put(param->io_buf, "") );	/* creates URL as bucket + obj */
-      AWS4C_CHECK_OK(     param->io_buf );		// assure "200 OK"
-		printf("created bucket '%s'\n", bucket_name);
-	}
-   else {														// assure "200 OK"
-      AWS4C_CHECK_OK( param->io_buf );
-	}
+   if (rank == 0) {
+      AWS4C_CHECK( s3_head(param->io_buf, "") );
+      if ( param->io_buf->code == 404 ) {					// "404 Not Found"
+         printf("  bucket '%s' doesn't exist\n", bucket_name);
+
+         AWS4C_CHECK( s3_put(param->io_buf, "") );	/* creates URL as bucket + obj */
+         AWS4C_CHECK_OK(     param->io_buf );		// assure "200 OK"
+         printf("created bucket '%s'\n", bucket_name);
+      }
+      else {														// assure "200 OK"
+         AWS4C_CHECK_OK( param->io_buf );
+      }
+   }
+   MPI_CHECK(MPI_Barrier(param->testComm), "barrier error");
+
 
 	// Maybe allow EMC extensions to S3
 	s3_enable_EMC_extensions(param->curl_flags & IOR_CURL_S3_EMC_EXT);
@@ -821,7 +857,6 @@ S3_Xfer_internal(int          access,
 		// we're "extending" rather than "appending".  That means the
 		// buffer represents empty storage, which will be filled by the
 		// libcurl writefunction, invoked via aws4c.
-
 		aws_iobuf_reset(param->io_buf);
 		aws_iobuf_extend_static(param->io_buf, data_ptr, remaining);
 		AWS4C_CHECK( s3_get(param->io_buf, file) );

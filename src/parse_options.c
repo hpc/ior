@@ -114,6 +114,7 @@ static void CheckRunSettings(IOR_test_t *tests)
                 /* If only read or write is requested, then fix the default
                  * openFlags to not be open RDWR.  It matters in the case
                  * of HDFS, which doesn't support opening RDWR.
+                 * (We assume int-valued params are exclusively 0 or 1.)
                  */
                 if ((params->openFlags & IOR_RDWR)
                     && ((params->readFile | params->checkRead)
@@ -441,11 +442,11 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
 
         while ((c = getopt(argc, argv, opts)) != -1) {
                 switch (c) {
-                case 'A':
-                        initialTestParams.referenceNumber = atoi(optarg);
-                        break;
                 case 'a':
                         strcpy(initialTestParams.api, optarg);
+                        break;
+                case 'A':
+                        initialTestParams.referenceNumber = atoi(optarg);
                         break;
                 case 'b':
                         initialTestParams.blockSize = StringToBytes(optarg);
@@ -460,24 +461,12 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                 case 'C':
                         initialTestParams.reorderTasks = TRUE;
                         break;
-                case 'Q':
-                        initialTestParams.taskPerNodeOffset = atoi(optarg);
-                        break;
-                case 'Z':
-                        initialTestParams.reorderTasksRandom = TRUE;
-                        break;
-                case 'X':
-                        initialTestParams.reorderTasksRandomSeed = atoi(optarg);
-                        break;
                 case 'd':
                         initialTestParams.interTestDelay = atoi(optarg);
                         break;
                 case 'D':
                         initialTestParams.deadlineForStonewalling =
                             atoi(optarg);
-                        break;
-                case 'Y':
-                        initialTestParams.fsyncPerWrite = TRUE;
                         break;
                 case 'e':
                         initialTestParams.fsync = TRUE;
@@ -524,12 +513,12 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                 case 'l':
                         initialTestParams.storeFileOffset = TRUE;
                         break;
+                case 'm':
+                        initialTestParams.multiFile = TRUE;
+                        break;
                 case 'M':
                         initialTestParams.memoryPerNode =
                                 NodeMemoryStringToBytes(optarg);
-                        break;
-                case 'm':
-                        initialTestParams.multiFile = TRUE;
                         break;
                 case 'n':
                         initialTestParams.noFill = TRUE;
@@ -552,6 +541,9 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 'q':
                         initialTestParams.quitOnError = TRUE;
+                        break;
+                case 'Q':
+                        initialTestParams.taskPerNodeOffset = atoi(optarg);
                         break;
                 case 'r':
                         initialTestParams.readFile = TRUE;
@@ -593,8 +585,17 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                 case 'x':
                         initialTestParams.singleXferAttempt = TRUE;
                         break;
+                case 'X':
+                        initialTestParams.reorderTasksRandomSeed = atoi(optarg);
+                        break;
+                case 'Y':
+                        initialTestParams.fsyncPerWrite = TRUE;
+                        break;
                 case 'z':
                         initialTestParams.randomOffset = TRUE;
+                        break;
+                case 'Z':
+                        initialTestParams.reorderTasksRandom = TRUE;
                         break;
                 default:
                         fprintf(stdout,

@@ -92,7 +92,7 @@ static void ShowSetup(IOR_param_t *params);
 static void ShowTest(IOR_param_t *);
 static void PrintLongSummaryAllTests(IOR_test_t *tests_head);
 static void TestIoSys(IOR_test_t *);
-static void ValidTests(IOR_param_t *);
+static void ValidateTests(IOR_param_t *);
 static IOR_offset_t WriteOrRead(IOR_param_t *, void *, int);
 static void WriteTimes(IOR_param_t *, double **, int, int);
 
@@ -140,12 +140,12 @@ int main(int argc, char **argv)
                     "Run 'configure --with-<backend>', and recompile.");
         }
 
-        /* setup tests before verifying test validity */
+        /* setup tests, and validate parameters */
         tests_head = SetupTests(argc, argv);
         verbose = tests_head->params.verbose;
         tests_head->params.testComm = MPI_COMM_WORLD;
 
-        /* check for commandline usage */
+        /* check for commandline 'help' request */
         if (rank == 0 && tests_head->params.showHelp == TRUE) {
                 DisplayUsage(argv);
         }
@@ -860,6 +860,17 @@ FillBuffer(void *buffer,
         unsigned long long hi, lo;
         unsigned long long *buf = (unsigned long long *)buffer;
 
+/*
+ * Consider adding a parameter to use incompressible data or what is here now.
+ * The way to get incompressible data would be to use some random transfer
+ * buffer content. In Linux we can read from /dev/urandom. In C we can use
+ * the rand() function in stdlib.h.
+ *
+ * # include <stdlib.h>
+ *
+ * hi = (( unsigned long long )rand() ) << 32;
+ * lo = (( unsigned long long )rand() );
+ */
         hi = ((unsigned long long)fillrank) << 32;
         lo = (unsigned long long)test->timeStampSignatureValue;
         for (i = 0; i < test->transferSize / sizeof(unsigned long long); i++) {
@@ -1373,6 +1384,7 @@ static double TimeDeviation(void)
 
 /*
  * Setup tests by parsing commandline and creating test script.
+ * Perform a sanity-check on the configured parameters.
  */
 static IOR_test_t *SetupTests(int argc, char **argv)
 {
@@ -1391,7 +1403,7 @@ static IOR_test_t *SetupTests(int argc, char **argv)
 
         /* check validity of tests and create test queue */
         while (tests != NULL) {
-                ValidTests(&tests->params);
+                ValidateTests(&tests->params);
                 tests = tests->next;
         }
 
@@ -2323,11 +2335,11 @@ static void TestIoSys(IOR_test_t *test)
 /*
  * Determine if valid tests from parameters.
  */
-static void ValidTests(IOR_param_t * test)
+static void ValidateTests(IOR_param_t * test)
 {
         IOR_param_t defaults;
-
         init_IOR_Param_t(&defaults);
+
         /* get the version of the tests */
         AioriBind(test->api, test);
         backend->set_version(test);
@@ -2366,6 +2378,8 @@ static void ValidTests(IOR_param_t * test)
         }
         if (test->blockSize < test->transferSize)
                 ERR("block size must not be smaller than transfer size");
+
+        /* specific APIs */
         if ((strcmp(test->api, "MPIIO") == 0)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
@@ -2418,6 +2432,8 @@ static void ValidTests(IOR_param_t * test)
         if ((strcmp(test->api, "POSIX") == 0) && test->collective)
                 WARN_RESET("collective not available in POSIX",
                            test, &defaults, collective);
+
+        /* parameter consitency */
         if (test->reorderTasks == TRUE && test->reorderTasksRandom == TRUE)
                 ERR("Both Constant and Random task re-ordering specified. Choose one and resubmit");
         if (test->randomOffset && test->reorderTasksRandom
@@ -2430,6 +2446,8 @@ static void ValidTests(IOR_param_t * test)
                 ERR("random offset not available with read check option (use write check)");
         if (test->randomOffset && test->storeFileOffset)
                 ERR("random offset not available with store file offset option)");
+
+
         if ((strcmp(test->api, "MPIIO") == 0) && test->randomOffset
             && test->collective)
                 ERR("random offset not available with collective MPIIO");
@@ -2471,6 +2489,17 @@ static void ValidTests(IOR_param_t * test)
         }
         if (test->useExistingTestFile && test->lustre_set_striping)
                 ERR("Lustre stripe options are incompatible with useExistingTestFile");
+
+        /* N:1 and N:N */
+        IOR_offset_t  NtoN = test->filePerProc;
+        IOR_offset_t  Nto1 = ! NtoN;
+        IOR_offset_t  s    = test->segmentCount;
+        IOR_offset_t  t    = test->transferSize;
+        IOR_offset_t  b    = test->blockSize;
+
+        if (Nto1 && (s != 1) && (b != t)) {
+                ERR("N:1 (strided) requires xfer-size == block-size");
+        }
 }
 
 static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
