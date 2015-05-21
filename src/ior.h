@@ -48,6 +48,19 @@ extern int tasksPerNode;
 extern int verbose;
 extern MPI_Comm testComm;
 
+
+/******************** DATA Packet Type ***************************************/
+/* Holds the types of data packets: generic, offset, timestamp, incompressible */
+
+enum PACKET_TYPE
+{
+    generic = 0,                /* No packet type specified */
+    timestamp=1,                  /* Timestamp packet set with -l */
+    offset=2,                     /* Offset packet set with -l */
+    incompressible=3              /* Incompressible packet set with -l */
+
+};
+
 /******************************************************************************/
 /*
  * The parameter struct holds all of the "global" data to be passed,
@@ -121,9 +134,12 @@ typedef struct
     unsigned int timeStampSignatureValue; /* value for time stamp signature */
     void * fd_fppReadCheck;          /* additional fd for fpp read check */
     int randomSeed;                  /* random seed for write/read check */
+    int incompressibleSeed;           /* random seed for incompressible file creation */
     int randomOffset;                /* access is to random offsets */
     size_t memoryPerTask;            /* additional memory used per task */
     size_t memoryPerNode;            /* additional memory used per node */
+    enum PACKET_TYPE dataPacketType;             /* The type of data packet.  */
+
 
     /* POSIX variables */
     int singleXferAttempt;           /* do not retry transfer if incomplete */

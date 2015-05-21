@@ -224,6 +224,7 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->blockSize = 1048576;
         p->transferSize = 262144;
         p->randomSeed = -1;
+        p->incompressibleSeed = 573;
         p->testComm = MPI_COMM_WORLD;
         p->setAlignment = 1;
         p->lustre_start_ost = -1;
@@ -762,7 +763,7 @@ static void DisplayUsage(char **argv)
                 " -J N  setAlignment -- HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g)",
                 " -k    keepFile -- don't remove the test file(s) on program exit",
                 " -K    keepFileWithError  -- keep error-filled file(s) after data-checking",
-                " -l    storeFileOffset -- use file offset as stored signature",
+                " -l    datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]",
                 " -m    multiFile -- use number of reps (-i) for multiple file count",
                 " -M N  memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)",
                 " -n    noFill -- no fill in HDF5 file creation",
@@ -852,6 +853,25 @@ void DistributeHints(void)
  * ints, store transfer offset.  If storeFileOffset option is used, the file
  * (not transfer) offset is stored instead.
  */
+
+static void
+FillIncompressibleBuffer(void* buffer, IOR_param_t * test)
+
+{
+        size_t i;
+        unsigned long long hi, lo;
+        unsigned long long *buf = (unsigned long long *)buffer;
+        
+        for (i = 0; i < test->transferSize / sizeof(unsigned long long); i++) {
+                hi = ((unsigned long long) rand_r(&test->incompressibleSeed) << 32);
+                lo = (unsigned long long) rand_r(&test->incompressibleSeed);
+                buf[i] = hi | lo; 
+        }
+        
+}
+
+unsigned int reseed_incompressible_prng = TRUE;
+
 static void
 FillBuffer(void *buffer,
            IOR_param_t * test, unsigned long long offset, int fillrank)
@@ -859,27 +879,28 @@ FillBuffer(void *buffer,
         size_t i;
         unsigned long long hi, lo;
         unsigned long long *buf = (unsigned long long *)buffer;
+        
+        if(test->dataPacketType == incompressible ) { /* Make for some non compressable buffers with randomish data */
 
-/*
- * Consider adding a parameter to use incompressible data or what is here now.
- * The way to get incompressible data would be to use some random transfer
- * buffer content. In Linux we can read from /dev/urandom. In C we can use
- * the rand() function in stdlib.h.
- *
- * # include <stdlib.h>
- *
- * hi = (( unsigned long long )rand() ) << 32;
- * lo = (( unsigned long long )rand() );
- */
-        hi = ((unsigned long long)fillrank) << 32;
-        lo = (unsigned long long)test->timeStampSignatureValue;
-        for (i = 0; i < test->transferSize / sizeof(unsigned long long); i++) {
-                if ((i % 2) == 0) {
-                        /* evens contain MPI rank and time in seconds */
-                        buf[i] = hi | lo;
-                } else {
-                        /* odds contain offset */
-                        buf[i] = offset + (i * sizeof(unsigned long long));
+                /* In order for write checks to work, we have to restart the psuedo random sequence */
+                if(reseed_incompressible_prng == TRUE) {
+                        test->incompressibleSeed = test->setTimeStampSignature ; /* We copied seed into timestampSignature at initialization */
+                        reseed_incompressible_prng = FALSE;
+                }
+                FillIncompressibleBuffer(buffer, test);
+        }
+ 
+        else {
+                hi = ((unsigned long long)fillrank) << 32;
+                lo = (unsigned long long)test->timeStampSignatureValue;
+                for (i = 0; i < test->transferSize / sizeof(unsigned long long); i++) {
+                        if ((i % 2) == 0) {
+                                /* evens contain MPI rank and time in seconds */
+                                buf[i] = hi | lo;
+                        } else {
+                                /* odds contain offset */
+                                buf[i] = offset + (i * sizeof(unsigned long long));
+                        }
                 }
         }
 }
@@ -1622,6 +1643,8 @@ static void ShowSetup(IOR_param_t *params)
  */
 static void ShowTest(IOR_param_t * test)
 {
+        const char* data_packets[] = {"g", "t","o","i"};
+        
         fprintf(stdout, "TEST:\t%s=%d\n", "id", test->id);
         fprintf(stdout, "\t%s=%d\n", "refnum", test->referenceNumber);
         fprintf(stdout, "\t%s=%s\n", "api", test->api);
@@ -1677,8 +1700,9 @@ static void ShowTest(IOR_param_t * test)
                 test->keepFileWithError);
         fprintf(stdout, "\t%s=%d\n", "quitOnError", test->quitOnError);
         fprintf(stdout, "\t%s=%d\n", "verbose", verbose);
-        fprintf(stdout, "\t%s=%d\n", "setTimeStampSignature",
-                test->setTimeStampSignature);
+        fprintf(stdout, "\t%s=%s\n", "data packet type", data_packets[test->dataPacketType]);
+        fprintf(stdout, "\t%s=%d\n", "setTimeStampSignature/incompressibleSeed",
+                test->setTimeStampSignature); /* Seed value was copied into setTimeStampSignature as well */
         fprintf(stdout, "\t%s=%d\n", "collective", test->collective);
         fprintf(stdout, "\t%s=%lld", "segmentCount", test->segmentCount);
 #ifdef HAVE_GPFS_FCNTL_H
@@ -2059,7 +2083,7 @@ static void TestIoSys(IOR_test_t *test)
                 /* Get iteration start time in seconds in task 0 and broadcast to
                    all tasks */
                 if (rank == 0) {
-                        if (params->setTimeStampSignature) {
+                        if (params->dataPacketType == timestamp && params->setTimeStampSignature) {
                                 params->timeStampSignatureValue =
                                         (unsigned int)params->setTimeStampSignature;
                         } else {
@@ -2165,6 +2189,9 @@ static void TestIoSys(IOR_test_t *test)
                                 rankOffset =
                                         (2 * params->tasksPerNode) % params->numTasks;
                         }
+
+                        reseed_incompressible_prng = TRUE; /* Re-Seed the PRNG to get same sequence back, if random */
+
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
                         fd = backend->open(testFileName, params);

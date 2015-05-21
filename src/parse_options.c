@@ -428,7 +428,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 IOR_test_t *ParseCommandLine(int argc, char **argv)
 {
         static const char *opts =
-          "a:A:b:BcCd:D:eEf:FgG:hHi:Ij:J:kKlmM:nN:o:O:pPqQ:rRs:St:T:uU:vVwWxX:YzZ";
+          "a:A:b:BcCd:D:eEf:FgG:hHi:Ij:J:kKl:mM:nN:o:O:pPqQ:rRs:St:T:uU:vVwWxX:YzZ";
         int c, i;
         static IOR_test_t *tests = NULL;
 
@@ -484,7 +484,12 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         initialTestParams.intraTestBarriers = TRUE;
                         break;
                 case 'G':
+                        /* This option toggles between Incompressible Seed and Time stamp sig based on -l,
+                         * so we'll toss the value in both for now, and sort it out in initialization
+                         * after all the arguments are in and we know which it keep.
+                         */
                         initialTestParams.setTimeStampSignature = atoi(optarg);
+                        initialTestParams.incompressibleSeed = atoi(optarg);
                         break;
                 case 'h':
                         initialTestParams.showHelp = TRUE;
@@ -511,7 +516,22 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         initialTestParams.keepFileWithError = TRUE;
                         break;
                 case 'l':
-                        initialTestParams.storeFileOffset = TRUE;
+                        switch(*optarg) {
+                        case 'i': /* Incompressible */
+                                initialTestParams.dataPacketType = incompressible;
+                                break;
+                        case 't': /* timestamp */
+                                initialTestParams.dataPacketType = timestamp;         
+                                break;
+                        case 'o': /* offset packet */
+                                initialTestParams.storeFileOffset = TRUE;
+                                initialTestParams.dataPacketType = offset;
+                                break;
+                        default: 
+                                fprintf(stdout,
+                                        "Unknown arguement for -l  %s generic assumed\n", optarg);
+                                break;
+                        }
                         break;
                 case 'm':
                         initialTestParams.multiFile = TRUE;
