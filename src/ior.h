@@ -61,6 +61,20 @@ enum PACKET_TYPE
 
 };
 
+
+
+/***************** IOR_BUFFERS *************************************************/
+/* A struct to hold the buffers so we can pass 1 pointer around instead of 3
+ */
+
+typedef struct IO_BUFFERS 
+{
+    void* buffer;
+    void* checkBuffer;
+    void* readCheckBuffer;
+
+} IOR_io_buffers;
+
 /******************************************************************************/
 /*
  * The parameter struct holds all of the "global" data to be passed,

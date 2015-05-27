@@ -93,7 +93,7 @@ static void ShowTest(IOR_param_t *);
 static void PrintLongSummaryAllTests(IOR_test_t *tests_head);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t *);
-static IOR_offset_t WriteOrRead(IOR_param_t *, void *, int);
+static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io_buffers* ioBuffers);
 static void WriteTimes(IOR_param_t *, double **, int, int);
 
 /********************************** M A I N ***********************************/
@@ -1440,17 +1440,18 @@ static IOR_test_t *SetupTests(int argc, char **argv)
 /*
  * Setup transfer buffers, creating and filling as needed.
  */
-static void XferBuffersSetup(void **buffer, void **checkBuffer,
-                             void **readCheckBuffer, int access,
-                             IOR_param_t * test, int pretendRank)
+static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test, 
+                             int pretendRank)
 {
-        *buffer = aligned_buffer_alloc(test->transferSize);
-        FillBuffer(*buffer, test, 0, pretendRank);
-        if (access == WRITECHECK || access == READCHECK) {
-                *checkBuffer = aligned_buffer_alloc(test->transferSize);
+        ioBuffers->buffer = aligned_buffer_alloc(test->transferSize);
+
+        FillBuffer(ioBuffers->buffer, test, 0, pretendRank);
+
+        if (test->checkWrite || test->checkRead) {
+                ioBuffers->checkBuffer = aligned_buffer_alloc(test->transferSize);
         }
-        if (access == READCHECK) {
-                *readCheckBuffer = aligned_buffer_alloc(test->transferSize);
+        if (test->checkRead) {
+                ioBuffers->readCheckBuffer = aligned_buffer_alloc(test->transferSize);
         }
 
         return;
@@ -1459,15 +1460,16 @@ static void XferBuffersSetup(void **buffer, void **checkBuffer,
 /*
  * Free transfer buffers.
  */
-static void XferBuffersFree(void *buffer, void *checkBuffer,
-                            void *readCheckBuffer, int access)
+static void XferBuffersFree(IOR_io_buffers* ioBuffers, IOR_param_t* test)
+
 {
-        aligned_buffer_free(buffer);
-        if (access == WRITECHECK || access == READCHECK) {
-                aligned_buffer_free(checkBuffer);
+        aligned_buffer_free(ioBuffers->buffer);
+
+        if (test->checkWrite || test->checkRead) {
+                aligned_buffer_free(ioBuffers->checkBuffer);
         }
-        if (access == READCHECK) {
-                aligned_buffer_free(readCheckBuffer);
+        if (test->checkRead) {
+                aligned_buffer_free(ioBuffers->readCheckBuffer);
         }
 
         return;
@@ -2015,12 +2017,14 @@ static void TestIoSys(IOR_test_t *test)
         char testFileName[MAX_STR];
         double *timer[12];
         double startTime;
+        int pretendRank;
         int i, rep;
         void *fd;
         MPI_Group orig_group, new_group;
         int range[3];
         IOR_offset_t dataMoved; /* for data rate calculation */
         void *hog_buf;
+        IOR_io_buffers ioBuffers;
 
         /* set up communicator for test */
         if (params->numTasks > numTasksWorld) {
@@ -2075,6 +2079,13 @@ static void TestIoSys(IOR_test_t *test)
 
         hog_buf = HogMemory(params);
 
+        pretendRank = (rank + rankOffset) % params->numTasks;
+
+        /* IO Buffer Setup */
+
+        XferBuffersSetup(&ioBuffers, params, pretendRank);
+
+        /* Initial time stamp */
         startTime = GetTimeStamp();
 
         /* loop over test iterations */
@@ -2142,7 +2153,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[2][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, fd, WRITE);
+                        dataMoved = WriteOrRead(params, fd, WRITE, &ioBuffers);
                         if (params->verbose >= VERBOSE_4) {
                           printf("* data moved = %llu\n", dataMoved);
                           fflush(stdout);
@@ -2195,7 +2206,7 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
                         fd = backend->open(testFileName, params);
-                        dataMoved = WriteOrRead(params, fd, WRITECHECK);
+                        dataMoved = WriteOrRead(params, fd, WRITECHECK, &ioBuffers);
                         backend->close(fd, params);
                         rankOffset = 0;
                 }
@@ -2258,7 +2269,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[8][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, fd, READ);
+                        dataMoved = WriteOrRead(params, fd, READ, &ioBuffers);
                         timer[9][rep] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -2316,7 +2327,7 @@ static void TestIoSys(IOR_test_t *test)
                                 rankOffset = tmpRankOffset;
                                 params->fd_fppReadCheck = backend->open(params->testFileName_fppReadCheck, params);
                         }
-                        dataMoved = WriteOrRead(params, fd, READCHECK);
+                        dataMoved = WriteOrRead(params, fd, READCHECK, &ioBuffers);
                         if (params->filePerProc) {
                                 backend->close(params->fd_fppReadCheck, params);
                                 params->fd_fppReadCheck = NULL;
@@ -2347,6 +2358,8 @@ static void TestIoSys(IOR_test_t *test)
         } else {
                 PrintShortSummary(test);
         }
+
+        XferBuffersFree(&ioBuffers, params);
 
         if (hog_buf != NULL)
                 free(hog_buf);
@@ -2636,7 +2649,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
  * Write or Read data to file(s).  This loops through the strides, writing
  * out the data to each block in transfer sizes, until the remainder left is 0.
  */
-static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
+static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io_buffers* ioBuffers)
 {
         int errors = 0;
         IOR_offset_t amtXferred;
@@ -2645,9 +2658,9 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
         IOR_offset_t pairCnt = 0;
         IOR_offset_t *offsetArray;
         int pretendRank;
-        void *buffer = NULL;
-        void *checkBuffer = NULL;
-        void *readCheckBuffer = NULL;
+        void *buffer = ioBuffers->buffer;
+        void *checkBuffer = ioBuffers->checkBuffer;
+        void *readCheckBuffer = ioBuffers->readCheckBuffer;
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
         double startForStonewall;
         int hitStonewall;
@@ -2661,8 +2674,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
                 offsetArray = GetOffsetArraySequential(test, pretendRank);
         }
 
-        XferBuffersSetup(&buffer, &checkBuffer, &readCheckBuffer,
-                         access, test, pretendRank);
 
         /* check for stonewall */
         startForStonewall = GetTimeStamp();
@@ -2716,8 +2727,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access)
         }
 
         totalErrorCount += CountErrors(test, access, errors);
-
-        XferBuffersFree(buffer, checkBuffer, readCheckBuffer, access);
 
         free(offsetArray);
 
