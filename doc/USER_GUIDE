@@ -461,8 +461,29 @@ NOTES: * Not all test parameters need be set.
 4)  IOR version 3 (Jan 2012-present) has changed the output of IOR somewhat,
     and the "testNum" option was renamed "refNum".
 
+***************************
+* 8. INCOMPRESSIBLE NOTES *
+***************************
+
+Please note that incompressibility is a factor of how large a block compression
+algorithm uses.  The incompressible buffer is filled only once before write times,
+so if the compression algorithm takes in blocks larger than the transfer size,
+there will be compression.  Below are some baselines that I established for
+zip, gzip, and bzip.
+
+1) zip:  For zipped files, a transfer size of 1k is sufficient.
+
+2) gzip: For gzipped files, a transfer size of 1k is sufficient.
+
+3) bzip2: For bziped files a transfer size of 1k is insufficient (~50% compressed).  
+   To avoid compression a transfer size of greater than the bzip block size is required 
+   (default = 900KB). I suggest a transfer size of greather than 1MB to avoid bzip2 compression.
+
+Be aware of the block size your compression algorithm will look at, and adjust the transfer size
+accordingly.
+
 *********************************
-* 8. FREQUENTLY ASKED QUESTIONS *
+* 9. FREQUENTLY ASKED QUESTIONS *
 *********************************
 HOW DO I PERFORM MULTIPLE DATA CHECKS ON AN EXISTING FILE?
 
