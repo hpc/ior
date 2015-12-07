@@ -32,7 +32,6 @@
  * NCMPI_CHECK will display a custom error message and then exit the program
  */
 #define NCMPI_CHECK(NCMPI_RETURN, MSG) do {                              \
-    char resultString[1024];                                             \
                                                                          \
     if (NCMPI_RETURN < 0) {                                              \
         fprintf(stdout, "** error **\n");                                \

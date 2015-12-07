@@ -65,7 +65,6 @@
 } while(0)
 #else                           /* ! (H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6) */
 #define HDF5_CHECK(HDF5_RETURN, MSG) do {                                \
-    char   resultString[1024];                                           \
                                                                          \
     if (HDF5_RETURN < 0) {                                               \
         fprintf(stdout, "** error **\n");                                \
