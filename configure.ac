@@ -30,6 +30,11 @@ AC_CHECK_FUNCS([getpagesize gettimeofday memset mkdir pow putenv realpath regcom
 AC_SEARCH_LIBS([sqrt], [m], [],
         [AC_MSG_ERROR([Math library not found])])
 
+AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "yes"], [
+	AC_SEARCH_LIBS([gpfs_fcntl], [gpfs], [],
+	  [AC_MSG_ERROR([Library containing gpfs_fcntl symbols not found])])
+])
+
 # Check for system capabilities
 AC_SYS_LARGEFILE
 
