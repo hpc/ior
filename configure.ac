@@ -20,7 +20,7 @@ AX_PROG_CC_MPI
 # Checks for libraries.
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/statfs.h sys/statvfs.h sys/time.h unistd.h wchar.h gpfs.h gpfs_fcntl.h plfs.h hdfs.h])
+AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/statfs.h sys/statvfs.h sys/time.h unistd.h wchar.h plfs.h hdfs.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
@@ -30,9 +30,23 @@ AC_CHECK_FUNCS([getpagesize gettimeofday memset mkdir pow putenv realpath regcom
 AC_SEARCH_LIBS([sqrt], [m], [],
         [AC_MSG_ERROR([Math library not found])])
 
+# Check for gpfs availability
+AC_ARG_WITH([gpfs],
+        [AS_HELP_STRING([--with-gpfs],
+                [support configurable GPFS @<:@default=check@:>@])],
+        [], [with_gpfs=check])
+
+AS_IF([test "x$with_gpfs" != xno], [
+        AC_CHECK_HEADERS([gpfs.h gpfs_fcntl.h], [], [
+                if test "x$with_gpfs" != xcheck; then
+                        AC_MSG_FAILURE([--with-gpfs was given, <gpfs.h> and <gpfs_fcntl.h> not found])
+                fi
+        ])
 AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "yes"], [
-	AC_SEARCH_LIBS([gpfs_fcntl], [gpfs], [],
-	  [AC_MSG_ERROR([Library containing gpfs_fcntl symbols not found])])
+        AC_SEARCH_LIBS([gpfs_fcntl], [gpfs], [],
+        [AC_MSG_ERROR([Library containing gpfs_fcntl symbols not found])
+        ])
+    ])
 ])
 
 # Check for system capabilities
