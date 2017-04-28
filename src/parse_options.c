@@ -122,8 +122,10 @@ static void CheckRunSettings(IOR_test_t *tests)
                     && (params->openFlags & IOR_RDWR)) {
 
                         params->openFlags &= ~(IOR_RDWR);
-                        if (params->readFile | params->checkRead)
+                        if (params->readFile | params->checkRead) {
                                 params->openFlags |= IOR_RDONLY;
+                                params->openFlags &= ~(IOR_CREAT|IOR_EXCL);
+                        }
                         else
                                 params->openFlags |= IOR_WRONLY;
                 }
