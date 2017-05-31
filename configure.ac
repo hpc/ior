@@ -2,8 +2,12 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
-AC_INIT
+AC_CONFIG_MACRO_DIR([config])
+
+AC_INIT([META_PACKAGE_NAME],[META_PACKAGE_VERSION],[],[META_PACKAGE_NAME])
+
 X_AC_META
+
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_SRCDIR([src/ior.c])
 AC_CONFIG_HEADER([src/config.h])
@@ -11,7 +15,7 @@ AC_CONFIG_HEADER([src/config.h])
 AC_CANONICAL_HOST
 
 # Automake support
-AM_INIT_AUTOMAKE([$META_NAME], [$META_VERSION], [check-news dist-bzip2 gnu no-define])
+AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define])
 AM_MAINTAINER_MODE
 
 # Checks for programs.

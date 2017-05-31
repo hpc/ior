@@ -11,6 +11,10 @@
 #    Read metadata from the META file.
 ##*****************************************************************************
 
+m4_define([META_FILE], m4_include([META]))
+m4_define([META_PACKAGE_NAME], regexp(META_FILE, [^Package:\s*\(.*\)], [\1]))
+m4_define([META_PACKAGE_VERSION], regexp(META_FILE, [^Version:\s*\(.*\)$], [\1]))
+
 AC_DEFUN([X_AC_META], [
   AC_MSG_CHECKING([metadata])
 
