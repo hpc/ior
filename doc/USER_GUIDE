@@ -281,6 +281,8 @@ GENERAL:
                            Useful for long runs that may be interrupted, preventing
                            the final long summary for ALL tests to be printed.
 
+  * repetitionsPerFile   - number of times to rewind and repeat the entire I/O
+                           pattern on each file before closing them [1]
 
 POSIX-ONLY:
 ===========
@@ -346,8 +348,8 @@ GPFS-SPECIFIC:
   * gpfsHintAccess       - use gpfs_fcntl hints to pre-declare accesses
 
   * gpfsReleaseToken     - immediately after opening or creating file, release
-			   all locks.  Might help mitigate lock-revocation
-			   traffic when many proceses write/read to same file.
+                           all locks.  Might help mitigate lock-revocation
+                           traffic when many proceses write/read to same file.
 
 ***********************
 * 5. VERBOSITY LEVELS *
