@@ -29,3 +29,7 @@ src/*.o
 src/*.i
 src/*.s
 src/ior
+
+doc/doxygen/html
+doc/doxygen/xml
+doc/sphinx/_*/

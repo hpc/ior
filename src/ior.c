@@ -226,6 +226,10 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->beegfs_chunkSize = -1;
 }
 
+/**
+ * Bind the global "backend" pointer to the requested backend AIORI's
+ * function table.
+ */
 static void AioriBind(char* api, IOR_param_t* param)
 {
         backend = aiori_select (api);
@@ -636,7 +640,7 @@ void FreeResults(IOR_test_t *test)
 }
 
 
-/*
+/**
  * Create new test for list of tests.
  */
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num)
