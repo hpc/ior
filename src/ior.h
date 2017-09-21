@@ -205,6 +205,9 @@ typedef struct
     int gpfs_hint_access;          /* use gpfs "access range" hint */
     int gpfs_release_token;        /* immediately release GPFS tokens after
                                       creating or opening a file */
+    /* beegfs variables */
+    int beegfs_numTargets;           /* number storage targets to use */
+    int beegfs_chunkSize;            /* srtipe pattern for new files */
 
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */

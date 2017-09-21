@@ -25,6 +25,8 @@
 #include "aiori.h"
 #include "parse_options.h"
 
+#define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
+
 IOR_param_t initialTestParams;
 
 /*
@@ -298,6 +300,20 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 ERR("ior was not compiled with GPFS hint support");
 #endif
                 params->gpfs_release_token = atoi(value);
+       } else if (strcasecmp(option, "beegfsNumTargets") == 0) {
+#ifndef HAVE_BEEGFS_BEEGFS_H
+                ERR("ior was not compiled with BeeGFS support");
+#endif
+                params->beegfs_numTargets = atoi(value);
+                if (params->beegfs_numTargets < 1)
+                        ERR("beegfsNumTargets must be >= 1");
+        } else if (strcasecmp(option, "beegfsChunkSize") == 0) {
+ #ifndef HAVE_BEEGFS_BEEGFS_H
+                 ERR("ior was not compiled with BeeGFS support"); 
+ #endif
+                 params->beegfs_chunkSize = StringToBytes(value);
+                 if (!ISPOWEROFTWO(params->beegfs_chunkSize) || params->beegfs_chunkSize < (1<<16))
+                         ERR("beegfsChunkSize must be a power of two and >64k");
         } else if (strcasecmp(option, "numtasks") == 0) {
                 params->numTasks = atoi(value);
 		RecalculateExpectedFileSize(params);

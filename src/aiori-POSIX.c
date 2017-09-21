@@ -41,6 +41,12 @@
 #  include <gpfs_fcntl.h>
 #endif
 
+#ifdef HAVE_BEEGFS_BEEGFS_H
+#include <beegfs/beegfs.h>
+#include <dirent.h>
+#include <libgen.h>
+#endif
+
 #include "ior.h"
 #include "aiori.h"
 #include "iordef.h"
@@ -158,6 +164,101 @@ void gpfs_access_end(int fd, IOR_offset_t length, IOR_param_t *param, int access
 
 #endif
 
+#ifdef HAVE_BEEGFS_BEEGFS_H
+
+int mkTempInDir(char* dirPath)
+{
+   unsigned long len = strlen(dirPath) + 8;
+   char* tmpfilename = (char*)malloc(sizeof (char)*len+1);
+   snprintf(tmpfilename, len, "%s/XXXXXX", dirPath);
+
+   int fd = mkstemp(tmpfilename);
+   unlink(tmpfilename);
+   free(tmpfilename);
+
+   return fd;
+}
+
+bool beegfs_getStriping(char* dirPath, u_int16_t* numTargetsOut, unsigned* chunkSizeOut)
+{
+   bool retVal = false;
+
+   int fd = mkTempInDir(dirPath);
+   if (fd) {
+      unsigned stripePattern = 0;
+      retVal = beegfs_getStripeInfo(fd, &stripePattern, chunkSizeOut, numTargetsOut);
+      close(fd);
+   }
+
+   return retVal;
+}
+
+bool beegfs_isOptionSet(int opt) {
+   return opt != -1;
+}
+
+/*
+ * Create a file on a BeeGFS file system with striping parameters
+ */
+bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chunkSize)
+{
+        bool retVal = false;
+        char* dirTmp = strdup(filepath);
+        char* dir = dirname(dirTmp);
+        DIR* parentDirS = opendir(dir);
+        if (!parentDirS) {
+                ERR("Failed to get directory");
+        }
+        else
+        {
+                int parentDirFd = dirfd(parentDirS);
+                if (parentDirFd < 0)
+                {
+                        ERR("Failed to get directory descriptor");
+                }
+                else
+                {
+                        bool isBeegfs = beegfs_testIsBeeGFS(parentDirFd);
+                        if (!isBeegfs)
+                        {
+                                WARN("Not a BeeGFS file system");
+                        }
+                        else
+                        {
+                                if (   !beegfs_isOptionSet(numTargets)
+                                    || !beegfs_isOptionSet(chunkSize)) {
+                                        u_int16_t defaultNumTargets = 0;
+                                        unsigned  defaultChunkSize  = 0;
+                                        bool haveDefaults = beegfs_getStriping(dir,
+                                                                               &defaultNumTargets,
+                                                                               &defaultChunkSize);
+                                        if (!haveDefaults)
+                                                ERR("Failed to get default BeeGFS striping values");
+
+                                        numTargets = beegfs_isOptionSet(numTargets) ?
+                                                        numTargets : defaultNumTargets;
+                                        chunkSize  = beegfs_isOptionSet(chunkSize) ?
+                                                        chunkSize  : defaultChunkSize;
+                                }
+
+                                char* filenameTmp = strdup(filepath);
+                                char* filename = basename(filepath);
+                                bool isFileCreated = beegfs_createFile(parentDirFd, filename,
+                                                                       mode, numTargets, chunkSize);
+                                if (!isFileCreated)
+                                        ERR("Could not create file");
+                                retVal = true;
+                                free(filenameTmp);
+                        }
+                }
+                closedir(parentDirS);
+        }
+        free(dirTmp);
+        return retVal;
+}
+#endif /* HAVE_BEEGFS_BEEGFS_H */
+
+
 /*
  * Creat and open a file through the POSIX interface.
  */
@@ -219,10 +320,28 @@ static void *POSIX_Create(char *testFileName, IOR_param_t * param)
                 }
         } else {
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+
                 fd_oflag |= O_CREAT | O_RDWR;
+
+#ifdef HAVE_BEEGFS_BEEGFS_H
+                if (beegfs_isOptionSet(param->beegfs_chunkSize)
+                    || beegfs_isOptionSet(param->beegfs_numTargets)) {
+                    bool result = beegfs_createFilePath(testFileName,
+                                                        0664,
+                                                        param->beegfs_numTargets,
+                                                        param->beegfs_chunkSize);
+                    if (result) {
+                       fd_oflag &= ~O_CREAT;
+                    } else {
+                       EWARN("BeeGFS tuning failed");
+                    }
+                 }
+#endif /* HAVE_BEEGFS_BEEGFS_H */
+
                 *fd = open64(testFileName, fd_oflag, 0664);
                 if (*fd < 0)
                         ERR("open64() failed");
+
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
         }
 

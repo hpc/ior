@@ -349,6 +349,14 @@ GPFS-SPECIFIC:
 			   all locks.  Might help mitigate lock-revocation
 			   traffic when many proceses write/read to same file.
 
+BeeGFS-SPECIFIC (POSIX only):
+================
+  * beegfsNumTargets     - set the number of storage targets to use
+
+  * beegfsChunkSize      - set the striping chunk size. Must be a power of two,
+                             and greater than 64kiB, (e.g.: 256k, 1M, ...)
+
+
 ***********************
 * 5. VERBOSITY LEVELS *
 ***********************
