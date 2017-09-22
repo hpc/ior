@@ -218,6 +218,7 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->tasksPerNode = 1;
         p->repetitions = 1;
         p->repetitionsPerFile = 1;
+        p->repetitionsPerFileRW = 0;
         p->repCounter = -1;
         p->open = WRITE;
         p->taskPerNodeOffset = 1;
@@ -347,17 +348,18 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
+        IOR_offset_t aggFileSizeFromXferExpected;
 
         MPI_CHECK(MPI_Allreduce(&dataMoved, &results->aggFileSizeFromXfer[rep],
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
                   "cannot total data moved");
 
+        aggFileSizeFromXferExpected = results->aggFileSizeFromXfer[rep] / params->repetitionsPerFile;
+
         if (strcmp(params->api, "HDF5") != 0 && strcmp(params->api, "NCMPI") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
-                        if ((params->expectedAggFileSize
-                             != results->aggFileSizeFromXfer[rep] / params->repetitionsPerFile)
-                            || (results->aggFileSizeFromStat[rep]
-                                != results->aggFileSizeFromXfer[rep] / params->repetitionsPerFile)) {
+                        if ((params->expectedAggFileSize != aggFileSizeFromXferExpected)
+                            || (results->aggFileSizeFromStat[rep] != aggFileSizeFromXferExpected)) {
                                 fprintf(stdout,
                                         "WARNING: Expected aggregate file size       = %lld.\n",
                                         (long long) params->expectedAggFileSize);
@@ -1614,6 +1616,7 @@ static void ShowSetup(IOR_param_t *params)
                        HumanReadable(params->memoryPerNode, BASE_TWO));
         printf("\trepetitions        = %d\n", params->repetitions);
         printf("\trepetitionsPerFile = %d\n", params->repetitionsPerFile);
+        printf("\trepetitionsPerFileRW = %d\n", params->repetitionsPerFileRW);
         printf("\txfersize           = %s\n",
                 HumanReadable(params->transferSize, BASE_TWO));
         printf("\tblocksize          = %s\n",
@@ -1665,6 +1668,7 @@ static void ShowTest(IOR_param_t * test)
         fprintf(stdout, "\t%s=%d\n", "tasksPerNode", tasksPerNode);
         fprintf(stdout, "\t%s=%d\n", "repetitions", test->repetitions);
         fprintf(stdout, "\t%s=%d\n", "repetitionsPerFile", test->repetitionsPerFile);
+        fprintf(stdout, "\t%s=%d\n", "repetitionsPerFileRW", test->repetitionsPerFileRW);
         fprintf(stdout, "\t%s=%d\n", "multiFile", test->multiFile);
         fprintf(stdout, "\t%s=%d\n", "interTestDelay", test->interTestDelay);
         fprintf(stdout, "\t%s=%d\n", "fsync", test->fsync);
@@ -1816,7 +1820,8 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(stdout, "%lld ", results->aggFileSizeForBW[0]);
         fprintf(stdout, "%s ", params->api);
         fprintf(stdout, "%d ", params->referenceNumber);
-        fprintf(stdout, "%d", params->repetitionsPerFile);
+        fprintf(stdout, "%d ", params->repetitionsPerFile);
+        fprintf(stdout, "%d", params->repetitionsPerFileRW);
         fprintf(stdout, "\n");
         fflush(stdout);
 
@@ -1844,7 +1849,7 @@ static void PrintLongSummaryHeader()
                 "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
                 "Mean(s)");
         fprintf(stdout, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
-                " segcnt blksiz xsize aggsize API RefNum repPF\n");
+                " segcnt blksiz xsize aggsize API RefNum repPF repPFrw\n");
 }
 
 static void PrintLongSummaryAllTests(IOR_test_t *tests_head)
@@ -2672,6 +2677,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io
         double startForStonewall;
         int hitStonewall;
         int repetitionsPerFileStep = 0;
+        int accessOrig = access;
 
         /* initialize values */
         pretendRank = (rank + rankOffset) % test->numTasks;
@@ -2728,8 +2734,26 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io
                 }
                 dataMoved += amtXferred;
 
-                if ( offsetArray[++pairCnt] == -1 && ++repetitionsPerFileStep < test->repetitionsPerFile )
+                if ( offsetArray[++pairCnt] == -1 && ++repetitionsPerFileStep < test->repetitionsPerFile ) {
                     pairCnt = 0;
+                    /* flip read/write between repetitionsPerFile */
+                    if (test->repetitionsPerFileRW != 0) {
+                        if (access == READ) {
+                            access = WRITE;
+                            if (rank == 0 && verbose >= VERBOSE_1) {
+                                fprintf(stdout, "Switching from READ to WRITE\n");
+                                fflush(stdout);
+                            }
+                        }
+                        else if (access == WRITE) {
+                            access = READ;
+                            if (rank == 0 && verbose >= VERBOSE_1) {
+                                fprintf(stdout, "Switching from WRITE to READ\n");
+                                fflush(stdout);
+                            }
+                        }
+                    }
+                }
 
                 hitStonewall = ((test->deadlineForStonewalling != 0)
                                 && ((GetTimeStamp() - startForStonewall)
