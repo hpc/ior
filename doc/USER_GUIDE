@@ -284,6 +284,10 @@ GENERAL:
   * repetitionsPerFile   - number of times to rewind and repeat the entire I/O
                            pattern on each file before closing them [1]
 
+  * repetitionsPerFileRW - if repetitionsPerFile > 1, alternate between read and
+                           write after reach repetitionPerFile [0=FALSE]
+
+
 POSIX-ONLY:
 ===========
   * useO_DIRECT          - use O_DIRECT for POSIX, bypassing I/O buffers [0]
