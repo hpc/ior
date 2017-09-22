@@ -106,6 +106,8 @@ typedef struct
     int nodes;                       /* number of nodes for test */
     int tasksPerNode;                /* number of tasks per node */
     int repetitions;                 /* number of repetitions of test */
+    int repetitionsPerFile;          /* number of times to read/write the same file between open/close */
+    int repetitionsPerFileRW;        /* alternate between read and write between each repetitionPerFile */
     int repCounter;                  /* rep counter */
     int multiFile;                   /* multiple files */
     int interTestDelay;              /* delay between reps in seconds */
