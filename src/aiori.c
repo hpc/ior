@@ -109,7 +109,7 @@ static int aiori_stat (const char *path, struct stat *buf, IOR_param_t * param)
 const ior_aiori_t *aiori_select (const char *api)
 {
         for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
-                if (NULL == api || strcmp(api, (*tmp)->name) == 0) {
+                if (NULL == api || strcasecmp(api, (*tmp)->name) == 0) {
                         if (NULL == (*tmp)->statfs) {
                                 (*tmp)->statfs = aiori_statfs;
                         }
