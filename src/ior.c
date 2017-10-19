@@ -242,6 +242,9 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->io_buf = NULL;
         p->etags = NULL;
         p->part_number = 0;
+
+        p->beegfs_numTargets = -1;
+        p->beegfs_chunkSize = -1;
 }
 
 /*
