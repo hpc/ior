@@ -45,15 +45,6 @@ extraSOURCES += aiori-NCMPI.c
 extraLDADD   += -lpnetcdf
 endif
 
-if USE_PLFS_AIORI
-# TBD: modulefiles don't add PLFS_VER to env, but you can find it embedded in
-#      $PLFS_HOME.  configure.ac should extract this for us.  Then we should
-#      add -D... to ior_CPPFLAGS, here.  Then aiori-PLFS.c can conditionalize
-#      compilation of calls that vary according to PLFS version.
-extraSOURCES += aiori-PLFS.c
-extraLDADD   += -lplfs
-endif
-
 if USE_POSIX_AIORI
 extraSOURCES += aiori-POSIX.c
 endif

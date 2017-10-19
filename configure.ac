@@ -27,7 +27,7 @@ AC_PROG_CC_C99
 # Checks for libraries.
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/statfs.h sys/statvfs.h sys/time.h sys/param.h sys/mount.h unistd.h wchar.h plfs.h hdfs.h beegfs/beegfs.h])
+AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/statfs.h sys/statvfs.h sys/time.h sys/param.h sys/mount.h unistd.h wchar.h hdfs.h beegfs/beegfs.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
@@ -114,17 +114,6 @@ AC_ARG_WITH([ncmpi],
 AM_CONDITIONAL([USE_NCMPI_AIORI], [test x$with_ncmpi = xyes])
 AM_COND_IF([USE_NCMPI_AIORI],[
         AC_DEFINE([USE_NCMPI_AIORI], [], [Build NCMPI backend AIORI])
-])
-
-# PLFS IO support
-AC_ARG_WITH([plfs],
-        [AS_HELP_STRING([--with-plfs],
-           [support IO with PLFS backend @<:@default=no@:>@])],
-        [],
-        [with_plfs=no])
-AM_CONDITIONAL([USE_PLFS_AIORI], [test x$with_plfs = xyes])
-AM_COND_IF([USE_PLFS_AIORI],[
-        AC_DEFINE([USE_PLFS_AIORI], [], [Build PLFS backend AIORI])
 ])
 
 # POSIX IO support

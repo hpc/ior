@@ -54,12 +54,6 @@
 #include <sys/statvfs.h>
 #endif
 
-
-#ifdef HAVE_PLFS_H
-#include <plfs.h>
-#include <plfs_error.h>
-#endif
-
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
@@ -1659,12 +1653,6 @@ void show_file_system_size(char *file_system) {
         * 100;
 
     /* show results */
-    if (0 == strcmp (backend->name, "plfs")) {
-        strcpy( real_path, file_system );
-    } else if (realpath(file_system, real_path) == NULL) {
-        FAIL("unable to use realpath()");
-    }
-
     fprintf(stdout, "Path: %s\n", real_path);
     fprintf(stdout, "FS: %.1f %s   Used FS: %2.1f%%   ",
             total_file_system_size_hr, file_system_unit_str,
@@ -1819,7 +1807,6 @@ int main(int argc, char **argv) {
     int last = 0;
     int stride = 1;
     int iterations = 1;
-    bool using_plfs_path;
 
     /* Check for -h parameter before MPI_Init so the mdtest binary can be
        called directly, without, for instance, mpirun. */
@@ -2075,16 +2062,7 @@ int main(int argc, char **argv) {
         strcpy(testdirpath, filenames[rank%path_count]);
     }
 
-#ifdef HAVE_PLFS_H
-    using_plfs_path = is_plfs_path( testdirpath );
-#endif
-
-    if (using_plfs_path) {
-        backend = aiori_select ("PLFS");
-    } else {
-        backend = aiori_select (backend_name);
-    }
-
+    backend = aiori_select (backend_name);
     if (NULL == backend) {
         FAIL("Could not find suitable backend to use");
     }

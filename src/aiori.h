@@ -84,7 +84,6 @@ extern ior_aiori_t hdfs_aiori;
 extern ior_aiori_t mpiio_aiori;
 extern ior_aiori_t ncmpi_aiori;
 extern ior_aiori_t posix_aiori;
-extern ior_aiori_t plfs_aiori;
 extern ior_aiori_t s3_aiori;
 extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
