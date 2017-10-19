@@ -391,12 +391,9 @@ CompareBuffers(void *expectedBuffer,
         unsigned long long *goodbuf = (unsigned long long *)expectedBuffer;
         unsigned long long *testbuf = (unsigned long long *)unknownBuffer;
 
-        if (access == WRITECHECK) {
+        if (access == WRITECHECK || access == READCHECK) {
                 strcpy(bufferLabel1, "Expected: ");
                 strcpy(bufferLabel2, "Actual:   ");
-        } else if (access == READCHECK) {
-                strcpy(bufferLabel1, "1st Read: ");
-                strcpy(bufferLabel2, "2nd Read: ");
         } else {
                 ERR("incorrect argument for CompareBuffers()");
         }
@@ -754,7 +751,7 @@ static void DisplayUsage(char **argv)
                 " -f S  scriptFile -- test script name",
                 " -F    filePerProc -- file-per-process",
                 " -g    intraTestBarriers -- use barriers between open, write/read, and close",
-                " -G N  setTimeStampSignature -- set value for time stamp signature",
+                " -G N  setTimeStampSignature -- set value for time stamp signature/random seed",
                 " -h    showHelp -- displays options and help",
                 " -H    showHints -- show hints",
                 " -i N  repetitions -- number of repetitions of test",
@@ -775,7 +772,7 @@ static void DisplayUsage(char **argv)
                 " -q    quitOnError -- during file error-checking, abort on error",
                 " -Q N  taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)",
                 " -r    readFile -- read existing file",
-                " -R    checkRead -- check read after read",
+                " -R    checkRead -- verify that the output of read matches the expected signature (used with -G)",
                 " -s N  segmentCount -- number of segments",
                 " -S    useStridedDatatype -- put strided access into datatype [not working]",
                 " -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)",
@@ -861,13 +858,13 @@ FillIncompressibleBuffer(void* buffer, IOR_param_t * test)
         size_t i;
         unsigned long long hi, lo;
         unsigned long long *buf = (unsigned long long *)buffer;
-        
+
         for (i = 0; i < test->transferSize / sizeof(unsigned long long); i++) {
                 hi = ((unsigned long long) rand_r(&test->incompressibleSeed) << 32);
                 lo = (unsigned long long) rand_r(&test->incompressibleSeed);
-                buf[i] = hi | lo; 
+                buf[i] = hi | lo;
         }
-        
+
 }
 
 unsigned int reseed_incompressible_prng = TRUE;
@@ -879,17 +876,17 @@ FillBuffer(void *buffer,
         size_t i;
         unsigned long long hi, lo;
         unsigned long long *buf = (unsigned long long *)buffer;
-        
+
         if(test->dataPacketType == incompressible ) { /* Make for some non compressable buffers with randomish data */
 
                 /* In order for write checks to work, we have to restart the psuedo random sequence */
                 if(reseed_incompressible_prng == TRUE) {
-                        test->incompressibleSeed = test->setTimeStampSignature ; /* We copied seed into timestampSignature at initialization */
+                        test->incompressibleSeed = test->setTimeStampSignature + rank; /* We copied seed into timestampSignature at initialization, also add the rank to add randomness between processes */
                         reseed_incompressible_prng = FALSE;
                 }
                 FillIncompressibleBuffer(buffer, test);
         }
- 
+
         else {
                 hi = ((unsigned long long)fillrank) << 32;
                 lo = (unsigned long long)test->timeStampSignatureValue;
@@ -1192,79 +1189,6 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
         return dir;
 }
 
-/*
- * Read and then reread buffer to confirm data read twice matches.
- */
-static void
-ReadCheck(void *fd,
-          void *buffer,
-          void *checkBuffer,
-          void *readCheckBuffer,
-          IOR_param_t *params,
-          IOR_offset_t transfer,
-          IOR_offset_t blockSize,
-          IOR_offset_t *amtXferred,
-          IOR_offset_t *transferCount, int access, int *errors)
-{
-        int readCheckToRank;
-        int readCheckFromRank;
-        MPI_Status status;
-        IOR_offset_t tmpOffset;
-        IOR_offset_t segmentSize;
-        IOR_offset_t segmentNum;
-
-        memset(buffer, 'a', transfer);
-        *amtXferred = backend->xfer(access, fd, buffer, transfer, params);
-        tmpOffset = params->offset;
-        if (params->filePerProc == FALSE) {
-                /* offset changes for shared file, not for file-per-proc */
-                segmentSize = params->numTasks * blockSize;
-                segmentNum = params->offset / segmentSize;
-
-                /* work in current segment */
-                params->offset = (((params->offset % segmentSize)
-                                 /* offset to neighbor's data */
-                                 + ((params->reorderTasks ?
-                                     params->tasksPerNode : 0) * blockSize))
-                                /* stay within current segment */
-                                % segmentSize)
-                    /* return segment to actual file offset */
-                    + (segmentNum * segmentSize);
-        }
-        if (*amtXferred != transfer)
-                ERR("cannot read from file on read check");
-        memset(checkBuffer, 'a', transfer);     /* empty buffer */
-        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-        if (params->filePerProc) {
-                *amtXferred = backend->xfer(access, params->fd_fppReadCheck,
-                                            checkBuffer, transfer, params);
-        } else {
-                *amtXferred =
-                    backend->xfer(access, fd, checkBuffer, transfer, params);
-        }
-        params->offset = tmpOffset;
-        if (*amtXferred != transfer)
-                ERR("cannot reread from file read check");
-        (*transferCount)++;
-        /* exchange buffers */
-        memset(readCheckBuffer, 'a', transfer);
-        readCheckToRank = (rank + (params->reorderTasks ? params->tasksPerNode : 0))
-            % params->numTasks;
-        readCheckFromRank = (rank + (params->numTasks
-                                     -
-                                     (params->
-                                      reorderTasks ? params->tasksPerNode : 0)))
-            % params->numTasks;
-        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-        MPI_Sendrecv(checkBuffer, transfer, MPI_CHAR, readCheckToRank, 1,
-                     readCheckBuffer, transfer, MPI_CHAR, readCheckFromRank, 1,
-                     testComm, &status);
-        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-        *errors += CompareBuffers(buffer, readCheckBuffer, transfer,
-                                  *transferCount, params, READCHECK);
-        return;
-}
-
 /******************************************************************************/
 /*
  * Reduce test results, and show if verbose set.
@@ -1366,7 +1290,7 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                 //      errors), or extend the aiori struct to include
                 //      something to safely check for existence of the
                 //      "file".
-                //      
+                //
                 if ((rank == 0) && (access(testFileName, F_OK) == 0)) {
                         backend->delete(testFileName, test);
                 }
@@ -1438,7 +1362,7 @@ static IOR_test_t *SetupTests(int argc, char **argv)
 /*
  * Setup transfer buffers, creating and filling as needed.
  */
-static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test, 
+static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
                              int pretendRank)
 {
         ioBuffers->buffer = aligned_buffer_alloc(test->transferSize);
@@ -1644,7 +1568,7 @@ static void ShowSetup(IOR_param_t *params)
 static void ShowTest(IOR_param_t * test)
 {
         const char* data_packets[] = {"g", "t","o","i"};
-        
+
         fprintf(stdout, "TEST:\t%s=%d\n", "id", test->id);
         fprintf(stdout, "\t%s=%d\n", "refnum", test->referenceNumber);
         fprintf(stdout, "\t%s=%s\n", "api", test->api);
@@ -1783,7 +1707,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         IOR_results_t *results = test->results;
         struct results *bw;
         int reps;
-  
+
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
 
@@ -1868,7 +1792,7 @@ static void PrintShortSummary(IOR_test_t * test)
         double bw;
         int reps;
         int i;
-  
+
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
 
@@ -2083,7 +2007,11 @@ static void TestIoSys(IOR_test_t *test)
 
         /* IO Buffer Setup */
 
+        if (params->setTimeStampSignature) { // initialize the buffer properly
+                params->timeStampSignatureValue = (unsigned int)params->setTimeStampSignature;
+        }
         XferBuffersSetup(&ioBuffers, params, pretendRank);
+        reseed_incompressible_prng = TRUE; // reset pseudo random generator, necessary to guarantee the next call to FillBuffer produces the same value as it is right now
 
         /* Initial time stamp */
         startTime = GetTimeStamp();
@@ -2094,22 +2022,19 @@ static void TestIoSys(IOR_test_t *test)
                 /* Get iteration start time in seconds in task 0 and broadcast to
                    all tasks */
                 if (rank == 0) {
-                        if (params->dataPacketType == timestamp && params->setTimeStampSignature) {
-                                params->timeStampSignatureValue =
-                                        (unsigned int)params->setTimeStampSignature;
-                        } else {
+                        if (! params->setTimeStampSignature) {
                                 time_t currentTime;
                                 if ((currentTime = time(NULL)) == -1) {
                                         ERR("cannot get current time");
                                 }
                                 params->timeStampSignatureValue =
                                         (unsigned int)currentTime;
-                        }
-                        if (verbose >= VERBOSE_2) {
-                                fprintf(stdout,
-                                        "Using Time Stamp %u (0x%x) for Data Signature\n",
-                                        params->timeStampSignatureValue,
-                                        params->timeStampSignatureValue);
+                                if (verbose >= VERBOSE_2) {
+                                        fprintf(stdout,
+                                                "Using Time Stamp %u (0x%x) for Data Signature\n",
+                                                params->timeStampSignatureValue,
+                                                params->timeStampSignatureValue);
+                                }
                         }
                         if (rep == 0 && verbose >= VERBOSE_0) {
                                 fprintf(stdout, "\n");
@@ -2213,7 +2138,12 @@ static void TestIoSys(IOR_test_t *test)
                 /*
                  * read the file(s), getting timing between I/O calls
                  */
-                if (params->readFile && !test_time_elapsed(params, startTime)) {
+                if ((params->readFile || params->checkRead ) && !test_time_elapsed(params, startTime)) {
+                        int operation_flag = READ;
+                        if ( params->checkRead ){
+                          // actually read and then compare the buffer
+                          operation_flag = READCHECK;
+                        }
                         /* Get rankOffset [file offset] for this process to read, based on -C,-Z,-Q,-X options */
                         /* Constant process offset reading */
                         if (params->reorderTasks) {
@@ -2247,6 +2177,10 @@ static void TestIoSys(IOR_test_t *test)
                                         file_hits_histogram(params);
                                 }
                         }
+                        if(operation_flag == READCHECK){
+                            FillBuffer(ioBuffers.readCheckBuffer, params, 0, rank + rankOffset);
+                        }
+
                         /* Using globally passed rankOffset, following function generates testFileName to read */
                         GetTestFileName(testFileName, params);
 
@@ -2269,7 +2203,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[8][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, fd, READ, &ioBuffers);
+                        dataMoved = WriteOrRead(params, fd, operation_flag, &ioBuffers);
                         timer[9][rep] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -2295,45 +2229,6 @@ static void TestIoSys(IOR_test_t *test)
                         }
                 }
 
-                /* end readFile test */
-                /*
-                 * perform a check of data, reading back data twice and
-                 * comparing against what was expected to be read
-                 */
-                if (params->checkRead && !test_time_elapsed(params, startTime)) {
-                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-                        if (rank == 0 && verbose >= VERBOSE_1) {
-                                fprintf(stdout, "Re-reading the file(s) twice to ");
-                                fprintf(stdout, "verify that reads are consistent.\n");
-                                fprintf(stdout, "%s\n", CurrentTimeString());
-                        }
-                        if (params->reorderTasks) {
-                                /* move three nodes away from reading node */
-                                rankOffset = (3 * params->tasksPerNode) % params->numTasks;
-                        }
-                        GetTestFileName(testFileName, params);
-                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-                        params->open = READCHECK;
-                        fd = backend->open(testFileName, params);
-                        if (params->filePerProc) {
-                                int tmpRankOffset;
-                                tmpRankOffset = rankOffset;
-                                /* increment rankOffset to open comparison file on other node */
-                                if (params->reorderTasks) {
-                                        /* move four nodes away from reading node */
-                                        rankOffset = (4 * params->tasksPerNode) % params->numTasks;
-                                }
-                                GetTestFileName(params->testFileName_fppReadCheck, params);
-                                rankOffset = tmpRankOffset;
-                                params->fd_fppReadCheck = backend->open(params->testFileName_fppReadCheck, params);
-                        }
-                        dataMoved = WriteOrRead(params, fd, READCHECK, &ioBuffers);
-                        if (params->filePerProc) {
-                                backend->close(params->fd_fppReadCheck, params);
-                                params->fd_fppReadCheck = NULL;
-                        }
-                        backend->close(fd, params);
-                }
                 if (!params->keepFile
                     && !(params->errorFound && params->keepFileWithError)) {
                         double start, finish;
@@ -2684,15 +2579,16 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io
         /* loop over offsets to access */
         while ((offsetArray[pairCnt] != -1) && !hitStonewall) {
                 test->offset = offsetArray[pairCnt];
-                /*
-                 * fills each transfer with a unique pattern
-                 * containing the offset into the file
-                 */
-                if (test->storeFileOffset == TRUE) {
-                        FillBuffer(buffer, test, test->offset, pretendRank);
-                }
+
                 transfer = test->transferSize;
                 if (access == WRITE) {
+                        /*
+                         * fills each transfer with a unique pattern
+                         * containing the offset into the file
+                         */
+                        if (test->storeFileOffset == TRUE) {
+                                FillBuffer(buffer, test, test->offset, pretendRank);
+                        }
                         amtXferred =
                                 backend->xfer(access, fd, buffer, transfer, test);
                         if (amtXferred != transfer)
@@ -2714,9 +2610,14 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io
                                                  transferCount, test,
                                                  WRITECHECK);
                 } else if (access == READCHECK) {
-                        ReadCheck(fd, buffer, checkBuffer, readCheckBuffer,
-                                  test, transfer, test->blockSize, &amtXferred,
-                                  &transferCount, access, &errors);
+                        amtXferred = backend->xfer(access, fd, buffer, transfer, test);
+                        if (amtXferred != transfer){
+                          ERR("cannot read from file");
+                        }
+                        if (test->storeFileOffset == TRUE) {
+                                FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
+                        }
+                        errors += CompareBuffers(readCheckBuffer, buffer, transfer, transferCount, test, READCHECK);
                 }
                 dataMoved += amtXferred;
                 pairCnt++;
