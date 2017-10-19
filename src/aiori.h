@@ -21,6 +21,8 @@
 #   include <mpio.h>
 #endif /* not MPI_FILE_NULL */
 
+#include <sys/stat.h>
+
 #include "ior.h"
 #include "iordef.h"                                     /* IOR Definitions */
 
@@ -50,6 +52,15 @@
 #define IOR_IWOTH         0x0400  /* write permission: other */
 #define IOR_IXOTH         0x0800 /* execute permission: other */
 
+typedef struct ior_aiori_statfs {
+        uint64_t f_bsize;
+        uint64_t f_blocks;
+        uint64_t f_bfree;
+        uint64_t f_bavail;
+        uint64_t f_files;
+        uint64_t f_ffree;
+} ior_aiori_statfs_t;
+
 typedef struct ior_aiori {
         char *name;
         void *(*create)(char *, IOR_param_t *);
@@ -61,6 +72,11 @@ typedef struct ior_aiori {
         void (*set_version)(IOR_param_t *);
         void (*fsync)(void *, IOR_param_t *);
         IOR_offset_t (*get_file_size)(IOR_param_t *, MPI_Comm, char *);
+        int (*statfs) (const char *, ior_aiori_statfs_t *, IOR_param_t * param);
+        int (*mkdir) (const char *path, mode_t mode, IOR_param_t * param);
+        int (*rmdir) (const char *path, IOR_param_t * param);
+        int (*access) (const char *path, int mode, IOR_param_t * param);
+        int (*stat) (const char *path, struct stat *buf, IOR_param_t * param);
 } ior_aiori_t;
 
 extern ior_aiori_t hdf5_aiori;
@@ -73,6 +89,9 @@ extern ior_aiori_t s3_aiori;
 extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
 
+const ior_aiori_t *aiori_select (const char *api);
+int aiori_count (void);
+const char *aiori_default (void);
 
 IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName);

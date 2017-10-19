@@ -1,0 +1,188 @@
+.TH mdtest 1 "2010-05-05" "mdtest-1.8.3" "mdtest"
+.SH NAME
+mdtest \- test file system metadata performance
+.SH SYNOPSIS
+.B mdtest
+.I "[-options]"
+.SH DESCRIPTION
+.B mdtest
+is a file system metadata performance test designed to run
+in a cluster MPI environment against parallel file systems.
+.PP
+In each iteration of the test, each MPI task creates, stats, and removes
+the specified number of directories and/or files and measures the performance
+in ops/second.  After all the iterations complete, the maximum, minimum,
+mean ops/sec and the std. deviation are reported for each operation.
+.SH OPTIONS
+.TP
+.I "-b" branching_factor
+The branching factor of the hierarchical directory structure [default: 1].
+.TP
+.I "-B"
+No barriers will be taken between the phases (create/stat/remove) of the tests.
+.TP
+.I "-c"
+Use ``collective creates'', meaning task 0 does all the creates.
+.TP
+.I "-C"
+Only perform the create phase of the tests.
+.TP
+.I "-d" testdir[@testdir2]
+The directory in which the tests will run.  For multiple pathes, must use fully-qualified pathnames.
+[default: working directory of mdtest].
+.TP
+.I "-D"
+Perform test on directories only (no files).
+.TP
+.I "-e" bytes
+Set the number of Bytes to read from each file [default: 0].
+.TP
+.I "-E"
+Only perform the read phase of the tests.
+.TP
+.I "-f" first
+The first number of tasks on which the test will run
+[default: 0].
+.TP
+.I "-F"
+Perform test on files only (no directories).
+.TP
+.I "-h"
+Display help message.
+.TP
+.I "-i" iterations
+The number of iterations the test will run
+[default: 1].
+.TP
+.I "-I" items_per_directory
+The number of items per directory in the tree [default: 0].
+.TP
+.I "-l" last
+The last number of tasks on which the test will run
+[default: 0].
+.TP
+.I "-L"
+Files/directories only created at the leaf level of the tree.
+.TP
+.I "-n" number_of_items
+Every process will creat/stat/remove # directories and files
+[default: 0].
+.TP
+.I "-N" stride
+Stride # between neighbor tasks for file/dir stat, 0 = local
+[default: 0].
+.TP
+.I "-p" seconds
+Pre-iteration delay (in seconds).
+.TP
+.I "-r"
+Only perform the remove phase of the tests.
+.TP
+.I "-R[seed]"
+Randomly stat files. There is an optional argument that provides a seed
+to the random number generator. (Note: There is no space between the 
+.I "-R"
+ and
+the seed if one is provided.)
+.TP
+.I "-s" stride
+Stride between the number of tasks for each test
+[default: 1].
+.TP
+.I "-S"
+Shared file access (file only, no directories).
+.TP
+.I "-t"
+Include unique working directory management overhead in the results
+(presumes
+.I "-u"
+option).
+.TP
+.I "-T"
+Only perform the stat phase of the tests.
+.TP
+.I "-u"
+Create a unique working directory for each task
+(presumes
+.I "-d"
+option).
+.TP
+.I "-v"
+Increase verbosity (each instance of option increments by one).
+.TP
+.I "-V" value
+Set verbosity value
+[default: 0].
+.TP
+.I "-w" bytes
+Set the number of Bytes to write to each file after it is created
+[default: 0].
+.TP
+.I "-z" tree_depth
+The depth of the hierarchical directory tree [default: 0].
+.SH EXAMPLES
+.SS "Example 1"
+.nf
+$ mpirun -n 2 ./mdtest -d /tmp/z -n 100 -i 2
+
+-- started at 11/23/2009 09:05:29 --
+
+mdtest-1.8.1 was launched with 2 total task(s) on 1 nodes
+Command line used: ./mdtest -d /tmp/z -n 100 -i 2
+Path: /tmp
+FS: 28.8 GiB   Used FS: 8.6%   8.6%Inodes: 1.8 Mi   Used Inodes: 5.1%
+
+time to create tree: 0.000078 sec
+tree creation rate: 12826.617737 ops/sec
+
+2 tasks, 200 files/directories
+
+SUMMARY: (of 2 iterations)
+   Operation                  Max        Min       Mean    Std Dev
+   ---------                  ---        ---       ----    -------
+   Directory creation:  21489.415  17447.551  19468.483   2020.932
+   Directory stat    : 154657.227  28731.061  91694.144  62963.083
+   Directory removal : 146756.613  21489.415  84123.014  62633.599
+   File creation     :  42024.989  28731.061  35378.025   6646.964
+   File stat         : 146756.613  17447.551  82102.082  64654.531
+   File removal      : 156884.384  42024.989  99454.686  57429.698
+                        
+time to remove tree: 0.001031 sec
+tree removal rate: 970.005550 ops/sec
+
+-- finished at 11/23/2009 09:05:29 --
+.fi
+.SS "Example 2"
+.nf
+$ mpirun -np 2 -H pc6 ./mdtest -d /tmp/z -b 2 -z 3 -I 10
+
+-- started at 11/23/2009 09:09:23 --
+
+mdtest-1.8.1 was launched with 2 total task(s) on 1 nodes
+Command line used: ./mdtest -d /tmp/z -b 2 -z 3 -I 10
+Path: /tmp
+FS: 28.8 GiB   Used FS: 8.6%   8.6%Inodes: 1.8 Mi   Used Inodes: 5.1%
+
+time to create tree: 0.000765 sec
+tree creation rate: 19605.659084 ops/sec
+
+2 tasks, 300 files/directories
+
+SUMMARY: (of 1 iterations)
+   Operation                  Max        Min       Mean    Std Dev
+   ---------                  ---        ---       ----    -------
+   Directory creation:  29365.707  29365.707  29365.707      0.000
+   Directory stat    : 123701.455 123701.455 123701.455      0.000
+   Directory removal :  25623.459  25623.459  25623.459      0.000
+   File creation     :  38704.743  38704.743  38704.743      0.000
+   File stat         : 125477.782 125477.782 125477.782      0.000
+   File removal      :  51911.845  51911.845  51911.845      0.000
+
+time to remove tree: 0.000940 sec
+tree removal rate: 15960.060883 ops/sec
+
+-- finished at 11/23/2009 09:09:23 --
+.fi
+
+.SH "SEE ALSO"
+\fBhttp://sourceforge.net/projects/mdtest\fR

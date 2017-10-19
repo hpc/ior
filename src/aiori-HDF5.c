@@ -96,15 +96,15 @@ static IOR_offset_t HDF5_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t hdf5_aiori = {
-        "HDF5",
-        HDF5_Create,
-        HDF5_Open,
-        HDF5_Xfer,
-        HDF5_Close,
-        HDF5_Delete,
-        HDF5_SetVersion,
-        HDF5_Fsync,
-        HDF5_GetFileSize
+        .name = "HDF5",
+        .create = HDF5_Create,
+        .open = HDF5_Open,
+        .xfer = HDF5_Xfer,
+        .close = HDF5_Close,
+        .delete = HDF5_Delete,
+        .set_version = HDF5_SetVersion,
+        .fsync = HDF5_Fsync,
+        .get_file_size = HDF5_GetFileSize,
 };
 
 static hid_t xferPropList;      /* xfer property list */

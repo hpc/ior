@@ -103,19 +103,27 @@ static void PLFS_Delete(char *, IOR_param_t *);
 static void PLFS_SetVersion(IOR_param_t *);
 static void PLFS_Fsync(void *, IOR_param_t *);
 static IOR_offset_t PLFS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
+static int PLFS_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param);
+static int PLFS_mkdir (const char *path, mode_t mode, IOR_param_t * param);
+static int PLFS_rmdir (const char *path, IOR_param_t * param);
+static int PLFS_access (const char *path, int mode, IOR_param_t * param);
 
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t plfs_aiori = {
-        "PLFS",
-        PLFS_Create,
-        PLFS_Open,
-        PLFS_Xfer,
-        PLFS_Close,
-        PLFS_Delete,
-        PLFS_SetVersion,
-        PLFS_Fsync,
-        PLFS_GetFileSize
+        .name = "PLFS",
+        .create = PLFS_Create,
+        .open = PLFS_Open,
+        .xfer = PLFS_Xfer,
+        .close = PLFS_Close,
+        .delete = PLFS_Delete,
+        .set_version = PLFS_SetVersion,
+        .fsync = PLFS_Fsync,
+        .get_file_size = PLFS_GetFileSize,
+        .statfs = PLFS_statfs,
+        .mkdir = PLFS_mkdir,
+        .rmdir = PLFS_rmdir,
+        .access = PLFS_access,
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -470,4 +478,72 @@ static IOR_offset_t PLFS_GetFileSize(
   }
 
   return ( aggFileSizeFromStat );
+}
+
+static int PLFS_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param)
+{
+         struct statvfs stbuf;
+
+         plfs_ret = plfs_statvfs( file_system, &stbuf );
+         if ( plfs_ret != PLFS_SUCCESS ) {
+                 return -1;
+         }
+
+         stat_buf->f_bsize = stbuf.f_bsize;
+         stat_buf->f_blocks = stbuf.f_blocks;
+         stat_buf->f_bfree = stbuf.f_bfree;
+         stat_buf->f_bavail = stbuf.f_bavail;
+         stat_buf->f_files = stbuf.f_files;
+         stat_buf->f_ffree = stbuf.f_ffree;
+
+         return 0;
+}
+
+static int PLFS_mkdir (const char *path, mode_t mode, IOR_param_t * param)
+{
+        int ret;
+
+        ret = plfs_mkdir (path, mode);
+        if (PLFS_SUCCESS != ret) {
+                return -1;
+        }
+
+        return 0;
+}
+
+static int PLFS_rmdir (const char *path, IOR_param_t * param)
+{
+        int ret;
+
+        ret = plfs_rmdir (path);
+        if (PLFS_SUCCESS != ret) {
+                return -1;
+        }
+
+        return 0;
+}
+
+static int PLFS_access (const char *path, int mode, IOR_param_t * param)
+{
+        int ret;
+
+        ret = plfs_access (path, mode);
+        if (PLFS_SUCCESS != ret) {
+                return -1;
+        }
+
+        return 0;
+}
+
+static int PLFS_stat (const char *path, struct stat *stat_buf, IOR_param_t * param)
+{
+        int ret;
+
+        ret = plfs_getattr (NULL, path, stat_buf, 0);
+        if ( plfs_ret != PLFS_SUCCESS ) {
+                ERR("Unable to plfs_getattr directory");
+                return -1;
+        }
+
+        return 0;
 }

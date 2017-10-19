@@ -60,15 +60,15 @@ static IOR_offset_t NCMPI_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t ncmpi_aiori = {
-        "NCMPI",
-        NCMPI_Create,
-        NCMPI_Open,
-        NCMPI_Xfer,
-        NCMPI_Close,
-        NCMPI_Delete,
-        NCMPI_SetVersion,
-        NCMPI_Fsync,
-        NCMPI_GetFileSize
+        .name = "NCMPI",
+        .create = NCMPI_Create,
+        .open = NCMPI_Open,
+        .xfer = NCMPI_Xfer,
+        .close = NCMPI_Close,
+        .delete = NCMPI_Delete,
+        .set_version = NCMPI_SetVersion,
+        .fsync = NCMPI_Fsync,
+        .get_file_size = NCMPI_GetFileSize,
 };
 
 /***************************** F U N C T I O N S ******************************/

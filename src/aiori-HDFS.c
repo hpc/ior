@@ -114,15 +114,15 @@ static IOR_offset_t HDFS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t hdfs_aiori = {
-	"HDFS",
-	HDFS_Create,
-	HDFS_Open,
-	HDFS_Xfer,
-	HDFS_Close,
-	HDFS_Delete,
-	HDFS_SetVersion,
-	HDFS_Fsync,
-	HDFS_GetFileSize
+	.name = "HDFS",
+	.create = HDFS_Create,
+	.open = HDFS_Open,
+	.xfer = HDFS_Xfer,
+	.close = HDFS_Close,
+	.delete = HDFS_Delete,
+	.set_version = HDFS_SetVersion,
+	.fsync = HDFS_Fsync,
+	.get_file_size = HDFS_GetFileSize,
 };
 
 /***************************** F U N C T I O N S ******************************/

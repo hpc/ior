@@ -132,45 +132,45 @@ static IOR_offset_t S3_GetFileSize(IOR_param_t*, MPI_Comm, char*);
 //     N:1 writes use multi-part upload
 //     N:N fails if "transfer-size" != "block-size" (because that requires "append")
 ior_aiori_t s3_aiori = {
-	"S3",
-	S3_Create,
-	S3_Open,
-	S3_Xfer,
-	S3_Close,
-	S3_Delete,
-	S3_SetVersion,
-	S3_Fsync,
-	S3_GetFileSize
+	.name = "S3",
+	.create = S3_Create,
+	.open = S3_Open,
+	.xfer = S3_Xfer,
+	.close = S3_Close,
+	.delete = S3_Delete,
+	.set_version = S3_SetVersion,
+	.fsync = S3_Fsync,
+	.get_file_size = S3_GetFileSize,
 };
 
 // "S3", plus EMC-extensions enabled
 //     N:1 writes use multi-part upload
 //     N:N succeeds (because EMC-extensions support "append")
 ior_aiori_t s3_plus_aiori = {
-	"S3_plus",
-	S3_Create,
-	S3_Open,
-	S3_Xfer,
-	S3_Close,
-	S3_Delete,
-	S3_SetVersion,
-	S3_Fsync,
-	S3_GetFileSize
+	.name = "S3_plus",
+	.create = S3_Create,
+	.open = S3_Open,
+	.xfer = S3_Xfer,
+	.close = S3_Close,
+	.delete = S3_Delete,
+	.set_version = S3_SetVersion,
+	.fsync = S3_Fsync,
+	.get_file_size = S3_GetFileSize,
 };
 
 // Use EMC-extensions for N:1 write, as well
 //     N:1 writes use EMC byte-range
 //     N:N succeeds because EMC-extensions support "append"
 ior_aiori_t s3_emc_aiori = {
-	"S3_EMC",
-	EMC_Create,
-	EMC_Open,
-	EMC_Xfer,
-	EMC_Close,
-	S3_Delete,
-	S3_SetVersion,
-	S3_Fsync,
-	S3_GetFileSize
+	.name = "S3_EMC",
+	.create = EMC_Create,
+	.open = EMC_Open,
+	.xfer = EMC_Xfer,
+	.close = EMC_Close,
+	.delete = S3_Delete,
+	.set_version = S3_SetVersion,
+	.fsync = S3_Fsync,
+	.get_file_size = S3_GetFileSize,
 };
 
 
