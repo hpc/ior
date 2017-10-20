@@ -793,6 +793,7 @@ static void DisplayUsage(char **argv)
                 " -x    singleXferAttempt -- do not retry transfer if incomplete",
                 " -X N  reorderTasksRandomSeed -- random seed for -Z option",
                 " -y    stoneWallingWearOut -- once the stonewalling timout is over, all process finish to access the amount of data",
+                " -1    stoneWallingWearOutIterations stop after processing this number of iterations, needed for reading data back written with -y",
                 " -Y    fsyncPerWrite -- perform fsync after each POSIX write",
                 " -z    randomOffset -- access is to random, not sequential, offsets within a file",
                 " -Z    reorderTasksRandom -- changes task ordering to random ordering for readback",
@@ -2635,13 +2636,13 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                             > test->deadlineForStonewalling));
 
         /* loop over offsets to access */
-        while ((offsetArray[pairCnt] != -1) && !hitStonewall) {
+        while ((offsetArray[pairCnt] != -1) && !hitStonewall ) {
                 dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
 
                 hitStonewall = ((test->deadlineForStonewalling != 0)
                                 && ((GetTimeStamp() - startForStonewall)
-                                    > test->deadlineForStonewalling));
+                                    > test->deadlineForStonewalling)) || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
         }
         if (test->stoneWallingWearOut){
           MPI_CHECK(MPI_Allreduce(& pairCnt, &results->pairs_accessed,

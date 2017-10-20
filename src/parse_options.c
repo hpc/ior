@@ -432,7 +432,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 IOR_test_t *ParseCommandLine(int argc, char **argv)
 {
         static const char *opts =
-          "a:A:b:BcCd:D:eEf:FgG:hHi:Ij:J:kKl:mM:nN:o:O:pPqQ:rRs:St:T:uU:vVwWxX:YzZy";
+          "a:A:b:BcCd:D:eEf:FgG:hHi:Ij:J:kKl:mM:nN:o:O:pPqQ:rRs:St:T:uU:vVwWxX:YzZy1:";
         int c, i;
         static IOR_test_t *tests = NULL;
 
@@ -611,6 +611,9 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 'X':
                         initialTestParams.reorderTasksRandomSeed = atoi(optarg);
+                        break;
+                case '1':
+                        initialTestParams.stoneWallingWearOutIterations = atoi(optarg);
                         break;
                 case 'y':
                         initialTestParams.stoneWallingWearOut = TRUE;
