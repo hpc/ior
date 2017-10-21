@@ -171,6 +171,8 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
                 params->stoneWallingWearOut = atoi(value);
+        } else if (strcasecmp(option, "stoneWallingWearOutIterations") == 0) {
+                params->stoneWallingWearOutIterations = atoi(value);
         } else if (strcasecmp(option, "maxtimeduration") == 0) {
                 params->maxTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {
@@ -611,12 +613,6 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         break;
                 case 'X':
                         initialTestParams.reorderTasksRandomSeed = atoi(optarg);
-                        break;
-                case '1':
-                        initialTestParams.stoneWallingWearOutIterations = atoi(optarg);
-                        break;
-                case 'y':
-                        initialTestParams.stoneWallingWearOut = TRUE;
                         break;
                 case 'Y':
                         initialTestParams.fsyncPerWrite = TRUE;

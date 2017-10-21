@@ -169,11 +169,11 @@ int main(int argc, char **argv)
                         sleep(5);
                         printf("\trank %d: awake.\n", rank);
                 }
+                TestIoSys(tptr);
+
                 if(rank == 0 && tptr->params.stoneWallingWearOut){
                   fprintf(stdout, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
                 }
-
-                TestIoSys(tptr);
         }
 
         if (verbose < 0)
@@ -753,6 +753,8 @@ static void DisplayUsage(char **argv)
                 " -C    reorderTasks -- changes task ordering to n+1 ordering for readback",
                 " -d N  interTestDelay -- delay between reps in seconds",
                 " -D N  deadlineForStonewalling -- seconds before stopping write or read phase",
+                " -O stoneWallingWearOut=1 -- once the stonewalling timout is over, all process finish to access the amount of data",
+                " -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut",
                 " -e    fsync -- perform fsync upon POSIX write close",
                 " -E    useExistingTestFile -- do not remove test file before write access",
                 " -f S  scriptFile -- test script name",
@@ -792,8 +794,6 @@ static void DisplayUsage(char **argv)
                 " -W    checkWrite -- check read after write",
                 " -x    singleXferAttempt -- do not retry transfer if incomplete",
                 " -X N  reorderTasksRandomSeed -- random seed for -Z option",
-                " -y    stoneWallingWearOut -- once the stonewalling timout is over, all process finish to access the amount of data",
-                " -1    stoneWallingWearOutIterations stop after processing this number of iterations, needed for reading data back written with -y",
                 " -Y    fsyncPerWrite -- perform fsync after each POSIX write",
                 " -z    randomOffset -- access is to random, not sequential, offsets within a file",
                 " -Z    reorderTasksRandom -- changes task ordering to random ordering for readback",
