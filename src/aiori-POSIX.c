@@ -78,15 +78,15 @@ static IOR_offset_t POSIX_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t posix_aiori = {
-        "POSIX",
-        POSIX_Create,
-        POSIX_Open,
-        POSIX_Xfer,
-        POSIX_Close,
-        POSIX_Delete,
-        POSIX_SetVersion,
-        POSIX_Fsync,
-        POSIX_GetFileSize
+        .name = "POSIX",
+        .create = POSIX_Create,
+        .open = POSIX_Open,
+        .xfer = POSIX_Xfer,
+        .close = POSIX_Close,
+        .delete = POSIX_Delete,
+        .set_version = POSIX_SetVersion,
+        .fsync = POSIX_Fsync,
+        .get_file_size = POSIX_GetFileSize,
 };
 
 /***************************** F U N C T I O N S ******************************/

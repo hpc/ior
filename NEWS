@@ -1,0 +1,9 @@
+IOR NEWS
+========
+
+Last updated 2017-06
+
+3.0.2
+
+- IOR and mdtest now share a common codebase. This will make it easier
+run performance benchmarks on new hardware.

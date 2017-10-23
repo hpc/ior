@@ -50,34 +50,7 @@ int totalErrorCount = 0;
 double wall_clock_delta = 0;
 double wall_clock_deviation;
 
-ior_aiori_t *backend;
-ior_aiori_t *available_aiori[] = {
-
-#ifdef USE_HDF5_AIORI
-        &hdf5_aiori,
-#endif
-#ifdef USE_HDFS_AIORI
-        &hdfs_aiori,
-#endif
-#ifdef USE_MPIIO_AIORI
-        &mpiio_aiori,
-#endif
-#ifdef USE_NCMPI_AIORI
-        &ncmpi_aiori,
-#endif
-#ifdef USE_POSIX_AIORI
-        &posix_aiori,
-#endif
-#ifdef USE_PLFS_AIORI
-        &plfs_aiori,
-#endif
-#ifdef USE_S3_AIORI
-        &s3_aiori,
-        &s3_plus_aiori,
-        &s3_emc_aiori,
-#endif
-        NULL
-};
+const ior_aiori_t *backend;
 
 static void DestroyTests(IOR_test_t *tests_head);
 static void DisplayUsage(char **);
@@ -135,7 +108,7 @@ int main(int argc, char **argv)
            "cannot set errhandler"); */
 
         /* Sanity check, we were compiled with SOME backend, right? */
-        if (available_aiori[0] == NULL) {
+        if (0 == aiori_count ()) {
                 ERR("No IO backends compiled into ior.  "
                     "Run 'configure --with-<backend>', and recompile.");
         }
@@ -204,13 +177,16 @@ int main(int argc, char **argv)
  */
 void init_IOR_Param_t(IOR_param_t * p)
 {
-        assert(available_aiori[0] != NULL);
+        const char *default_aiori = aiori_default ();
+
+        assert (NULL != default_aiori);
+
         memset(p, 0, sizeof(IOR_param_t));
 
         p->mode = IOR_IRUSR | IOR_IWUSR | IOR_IRGRP | IOR_IWGRP;
         p->openFlags = IOR_RDWR | IOR_CREAT;
 
-        strncpy(p->api, available_aiori[0]->name, MAX_STR);
+        strncpy(p->api, default_aiori, MAX_STR);
         strncpy(p->platform, "HOST(OSTYPE)", MAX_STR);
         strncpy(p->testFileName, "testFile", MAXPATHLEN);
 
@@ -247,32 +223,20 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->beegfs_chunkSize = -1;
 }
 
-/*
- * Bind the global "backend" pointer to the requested backend AIORI's
- * function table.
- */
 static void AioriBind(char* api, IOR_param_t* param)
 {
-        ior_aiori_t **tmp;
-
-        backend = NULL;
-        for (tmp = available_aiori; *tmp != NULL; tmp++) {
-                if (strcmp(api, (*tmp)->name) == 0) {
-                        backend = *tmp;
-                        break;
+        backend = aiori_select (api);
+        if (NULL != backend) {
+                if (! strncmp(api, "S3", 2)) {
+                        if (! strcmp(api, "S3_EMC")) {
+                                param->curl_flags |= IOR_CURL_S3_EMC_EXT;
+                        } else {
+                                param->curl_flags &= ~(IOR_CURL_S3_EMC_EXT);
+                        }
                 }
-        }
-
-        if (backend == NULL) {
+        } else {
                 ERR("unrecognized IO API");
         }
-        else if (! strncmp(api, "S3", 2)) {
-                if (! strcmp(api, "S3_EMC"))
-                        param->curl_flags |= IOR_CURL_S3_EMC_EXT;
-                else
-                        param->curl_flags &= ~(IOR_CURL_S3_EMC_EXT);
-        }
-
 }
 
 static void
