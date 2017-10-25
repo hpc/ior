@@ -2145,7 +2145,7 @@ static void TestIoSys(IOR_test_t *test)
                                 }
                         }
                         if(operation_flag == READCHECK){
-                            FillBuffer(ioBuffers.readCheckBuffer, params, 0, rank + rankOffset);
+                            FillBuffer(ioBuffers.readCheckBuffer, params, 0, (rank + rankOffset) % params->numTasks);
                         }
 
                         /* Using globally passed rankOffset, following function generates testFileName to read */
