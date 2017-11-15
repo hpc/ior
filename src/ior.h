@@ -5,7 +5,7 @@
  *       8-chars of indenting is ridiculous.  If you really want 8-spaces,
  *       then change the mode-line to use tabs, and configure your personal
  *       editor environment to use 8-space tab-stops.
- *       
+ *
  */
 /******************************************************************************\
 *                                                                              *
@@ -67,7 +67,7 @@ enum PACKET_TYPE
 /* A struct to hold the buffers so we can pass 1 pointer around instead of 3
  */
 
-typedef struct IO_BUFFERS 
+typedef struct IO_BUFFERS
 {
     void* buffer;
     void* checkBuffer;
@@ -141,6 +141,8 @@ typedef struct
     int useExistingTestFile;         /* do not delete test file before access */
     int storeFileOffset;             /* use file offset as stored signature */
     int deadlineForStonewalling;     /* max time in seconds to run any test phase */
+    int stoneWallingWearOut;         /* wear out the stonewalling, once the timout is over, each process has to write the same amount */
+    int stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
     int maxTimeDuration;             /* max time in minutes to run each test */
     int outlierThreshold;            /* warn on outlier N seconds from mean */
     int verbose;                     /* verbosity */
@@ -218,6 +220,7 @@ typedef struct
 typedef struct {
    double *writeTime;
    double *readTime;
+   size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
    IOR_offset_t *aggFileSizeFromStat;
    IOR_offset_t *aggFileSizeFromXfer;
    IOR_offset_t *aggFileSizeForBW;

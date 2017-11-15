@@ -171,6 +171,10 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 strcpy(params->hintsFileName, value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
                 params->deadlineForStonewalling = atoi(value);
+        } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
+                params->stoneWallingWearOut = atoi(value);
+        } else if (strcasecmp(option, "stoneWallingWearOutIterations") == 0) {
+                params->stoneWallingWearOutIterations = atoi(value);
         } else if (strcasecmp(option, "maxtimeduration") == 0) {
                 params->maxTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {
@@ -539,13 +543,13 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                                 initialTestParams.dataPacketType = incompressible;
                                 break;
                         case 't': /* timestamp */
-                                initialTestParams.dataPacketType = timestamp;         
+                                initialTestParams.dataPacketType = timestamp;
                                 break;
                         case 'o': /* offset packet */
                                 initialTestParams.storeFileOffset = TRUE;
                                 initialTestParams.dataPacketType = offset;
                                 break;
-                        default: 
+                        default:
                                 fprintf(stdout,
                                         "Unknown arguement for -l  %s generic assumed\n", optarg);
                                 break;

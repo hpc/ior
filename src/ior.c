@@ -66,7 +66,7 @@ static void ShowTest(IOR_param_t *);
 static void PrintLongSummaryAllTests(IOR_test_t *tests_head);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t *);
-static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io_buffers* ioBuffers);
+static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers);
 static void WriteTimes(IOR_param_t *, double **, int, int);
 
 /********************************** M A I N ***********************************/
@@ -142,8 +142,11 @@ int main(int argc, char **argv)
                         sleep(5);
                         printf("\trank %d: awake.\n", rank);
                 }
-
                 TestIoSys(tptr);
+
+                if(rank == 0 && tptr->params.stoneWallingWearOut){
+                  fprintf(stdout, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
+                }
         }
 
         if (verbose < 0)
@@ -333,6 +336,10 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                                 fprintf(stdout,
                                         "WARNING: Using actual aggregate bytes moved = %lld.\n",
                                         (long long) results->aggFileSizeFromXfer[rep]);
+                                if(params->deadlineForStonewalling){
+                                  fprintf(stdout,
+                                        "WARNING: maybe caused by deadlineForStonewalling\n");
+                                }
                         }
                 }
         }
@@ -713,6 +720,8 @@ static void DisplayUsage(char **argv)
                 " -C    reorderTasks -- changes task ordering to n+1 ordering for readback",
                 " -d N  interTestDelay -- delay between reps in seconds",
                 " -D N  deadlineForStonewalling -- seconds before stopping write or read phase",
+                " -O stoneWallingWearOut=1 -- once the stonewalling timout is over, all process finish to access the amount of data",
+                " -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut",
                 " -e    fsync -- perform fsync upon POSIX write close",
                 " -E    useExistingTestFile -- do not remove test file before write access",
                 " -f S  scriptFile -- test script name",
@@ -1523,8 +1532,8 @@ static void ShowSetup(IOR_param_t *params)
         }
 #endif /* HAVE_LUSTRE_LUSTRE_USER_H */
         if (params->deadlineForStonewalling > 0) {
-                printf("\tUsing stonewalling = %d second(s)\n",
-                        params->deadlineForStonewalling);
+                printf("\tUsing stonewalling = %d second(s)%s\n",
+                        params->deadlineForStonewalling, params->stoneWallingWearOut ? " with phase out" : "");
         }
         fflush(stdout);
 }
@@ -1544,6 +1553,7 @@ static void ShowTest(IOR_param_t * test)
         fprintf(stdout, "\t%s=%s\n", "hintsFileName", test->hintsFileName);
         fprintf(stdout, "\t%s=%d\n", "deadlineForStonewall",
                 test->deadlineForStonewalling);
+        fprintf(stdout, "\t%s=%d\n", "stoneWallingWearOut", test->stoneWallingWearOut);
         fprintf(stdout, "\t%s=%d\n", "maxTimeDuration", test->maxTimeDuration);
         fprintf(stdout, "\t%s=%d\n", "outlierThreshold",
                 test->outlierThreshold);
@@ -2045,7 +2055,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[2][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, fd, WRITE, &ioBuffers);
+                        dataMoved = WriteOrRead(params, results, fd, WRITE, &ioBuffers);
                         if (params->verbose >= VERBOSE_4) {
                           printf("* data moved = %llu\n", dataMoved);
                           fflush(stdout);
@@ -2098,7 +2108,7 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
                         fd = backend->open(testFileName, params);
-                        dataMoved = WriteOrRead(params, fd, WRITECHECK, &ioBuffers);
+                        dataMoved = WriteOrRead(params, results, fd, WRITECHECK, &ioBuffers);
                         backend->close(fd, params);
                         rankOffset = 0;
                 }
@@ -2170,7 +2180,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[8][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, fd, operation_flag, &ioBuffers);
+                        dataMoved = WriteOrRead(params, results, fd, operation_flag, &ioBuffers);
                         timer[9][rep] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -2507,22 +2517,71 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
         return (offsetArray);
 }
 
+static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offsetArray, int pretendRank,
+  IOR_offset_t * transferCount, int * errors, IOR_param_t * test, int * fd, IOR_io_buffers* ioBuffers, int access){
+  IOR_offset_t amtXferred;
+  IOR_offset_t transfer;
+
+  void *buffer = ioBuffers->buffer;
+  void *checkBuffer = ioBuffers->checkBuffer;
+  void *readCheckBuffer = ioBuffers->readCheckBuffer;
+
+  test->offset = offsetArray[pairCnt];
+
+  transfer = test->transferSize;
+  if (access == WRITE) {
+          /*
+           * fills each transfer with a unique pattern
+           * containing the offset into the file
+           */
+          if (test->storeFileOffset == TRUE) {
+                  FillBuffer(buffer, test, test->offset, pretendRank);
+          }
+          amtXferred =
+                  backend->xfer(access, fd, buffer, transfer, test);
+          if (amtXferred != transfer)
+                  ERR("cannot write to file");
+  } else if (access == READ) {
+          amtXferred =
+                  backend->xfer(access, fd, buffer, transfer, test);
+          if (amtXferred != transfer)
+                  ERR("cannot read from file");
+  } else if (access == WRITECHECK) {
+          memset(checkBuffer, 'a', transfer);
+          amtXferred =
+                  backend->xfer(access, fd, checkBuffer, transfer,
+                                test);
+          if (amtXferred != transfer)
+                  ERR("cannot read from file write check");
+          (*transferCount)++;
+          *errors += CompareBuffers(buffer, checkBuffer, transfer,
+                                   *transferCount, test,
+                                   WRITECHECK);
+  } else if (access == READCHECK) {
+          amtXferred = backend->xfer(access, fd, buffer, transfer, test);
+          if (amtXferred != transfer){
+            ERR("cannot read from file");
+          }
+          if (test->storeFileOffset == TRUE) {
+                  FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
+          }
+          *errors += CompareBuffers(readCheckBuffer, buffer, transfer, *transferCount, test, READCHECK);
+  }
+  return amtXferred;
+}
+
 /*
  * Write or Read data to file(s).  This loops through the strides, writing
  * out the data to each block in transfer sizes, until the remainder left is 0.
  */
-static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io_buffers* ioBuffers)
+static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers)
 {
         int errors = 0;
         IOR_offset_t amtXferred;
-        IOR_offset_t transfer;
         IOR_offset_t transferCount = 0;
         IOR_offset_t pairCnt = 0;
         IOR_offset_t *offsetArray;
         int pretendRank;
-        void *buffer = ioBuffers->buffer;
-        void *checkBuffer = ioBuffers->checkBuffer;
-        void *readCheckBuffer = ioBuffers->readCheckBuffer;
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
         double startForStonewall;
         int hitStonewall;
@@ -2544,55 +2603,30 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, void *fd, int access, IOR_io
                             > test->deadlineForStonewalling));
 
         /* loop over offsets to access */
-        while ((offsetArray[pairCnt] != -1) && !hitStonewall) {
-                test->offset = offsetArray[pairCnt];
-
-                transfer = test->transferSize;
-                if (access == WRITE) {
-                        /*
-                         * fills each transfer with a unique pattern
-                         * containing the offset into the file
-                         */
-                        if (test->storeFileOffset == TRUE) {
-                                FillBuffer(buffer, test, test->offset, pretendRank);
-                        }
-                        amtXferred =
-                                backend->xfer(access, fd, buffer, transfer, test);
-                        if (amtXferred != transfer)
-                                ERR("cannot write to file");
-                } else if (access == READ) {
-                        amtXferred =
-                                backend->xfer(access, fd, buffer, transfer, test);
-                        if (amtXferred != transfer)
-                                ERR("cannot read from file");
-                } else if (access == WRITECHECK) {
-                        memset(checkBuffer, 'a', transfer);
-                        amtXferred =
-                                backend->xfer(access, fd, checkBuffer, transfer,
-                                              test);
-                        if (amtXferred != transfer)
-                                ERR("cannot read from file write check");
-                        transferCount++;
-                        errors += CompareBuffers(buffer, checkBuffer, transfer,
-                                                 transferCount, test,
-                                                 WRITECHECK);
-                } else if (access == READCHECK) {
-                        amtXferred = backend->xfer(access, fd, buffer, transfer, test);
-                        if (amtXferred != transfer){
-                          ERR("cannot read from file");
-                        }
-                        if (test->storeFileOffset == TRUE) {
-                                FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
-                        }
-                        errors += CompareBuffers(readCheckBuffer, buffer, transfer, transferCount, test, READCHECK);
-                }
-                dataMoved += amtXferred;
+        while ((offsetArray[pairCnt] != -1) && !hitStonewall ) {
+                dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
 
                 hitStonewall = ((test->deadlineForStonewalling != 0)
                                 && ((GetTimeStamp() - startForStonewall)
-                                    > test->deadlineForStonewalling));
+                                    > test->deadlineForStonewalling)) || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
         }
+        if (test->stoneWallingWearOut){
+          MPI_CHECK(MPI_Allreduce(& pairCnt, &results->pairs_accessed,
+                                  1, MPI_LONG_LONG_INT, MPI_MAX, testComm), "cannot reduce pairs moved");
+          if (verbose >= VERBOSE_1){
+            printf("%d: stonewalling pairs accessed globally: %lld this rank: %lld\n", rank, (long long) results->pairs_accessed, (long long) pairCnt);
+          }
+          if(pairCnt != results->pairs_accessed){
+            // some work needs still to be done !
+            for(; pairCnt < results->pairs_accessed; pairCnt++ ) {
+                    dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
+            }
+          }
+        }else{
+          results->pairs_accessed = pairCnt;
+        }
+
 
         totalErrorCount += CountErrors(test, access, errors);
 
