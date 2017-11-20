@@ -119,6 +119,9 @@ static int depth;
 /* needed for MPI/IO backend to link correctly */
 int rankOffset = 0;
 
+/* needed for NCMPI backend to link correctly */
+int numTasksWorld = 0;
+
 /*
  * This is likely a small value, but it's sometimes computed by
  * branch_factor^(depth+1), so we'll make it a larger variable,
@@ -1819,6 +1822,9 @@ int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
+  
+    /* NCMPI backend uses numTaskWorld as size */
+    numTasksWorld = size;
 
     pid = getpid();
     uid = getuid();

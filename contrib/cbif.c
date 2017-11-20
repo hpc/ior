@@ -36,6 +36,14 @@
 
 #define BYTE_BOUNDARY 8
 
+#ifndef   open64                /* necessary for TRU64 -- */
+#  define open64  open            /* unlikely, but may pose */
+#endif  /* not open64 */                        /* conflicting prototypes */
+
+#ifndef   lseek64               /* necessary for TRU64 -- */
+#  define lseek64 lseek           /* unlikely, but may pose */
+#endif  /* not lseek64 */                        /* conflicting prototypes */
+
 int
 main(int argc, char **argv)
 {
