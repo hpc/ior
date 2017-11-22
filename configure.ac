@@ -2,9 +2,9 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
-AC_CONFIG_MACRO_DIR([config])
 
 AC_INIT([META_PACKAGE_NAME],[META_PACKAGE_VERSION],[],[META_PACKAGE_NAME])
+AC_CONFIG_MACRO_DIR([config])
 
 X_AC_META
 
