@@ -18,8 +18,12 @@ AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define])
 AM_MAINTAINER_MODE
 
-# Checks for programs.
-AX_PROG_CC_MPI
+# Checks for programs
+
+# We can't do anything without a working MPI
+AX_PROG_CC_MPI(,,[
+    AC_MSG_FAILURE([MPI compiler requested, but couldn't use MPI.])
+])
 
 # No reason not to require modern C at this point
 AC_PROG_CC_C99
