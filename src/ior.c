@@ -1688,6 +1688,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(out_logfile, "%10.2f ", bw->max / MEBIBYTE);
         fprintf(out_logfile, "%10.2f ", bw->min / MEBIBYTE);
         fprintf(out_logfile, "%10.2f ", bw->mean / MEBIBYTE);
+
         fprintf(out_logfile, "%10.2f ", bw->sd / MEBIBYTE);
         fprintf(out_logfile, "%10.2f ", ops->max);
         fprintf(out_logfile, "%10.2f ", ops->min);
@@ -1695,21 +1696,21 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(out_logfile, "%10.2f ", ops->sd);
         fprintf(out_logfile, "%10.5f ",
                 mean_of_array_of_doubles(times, reps));
-        fprintf(out_logfile, "%d ", params->id);
-        fprintf(out_logfile, "%d ", params->numTasks);
-        fprintf(out_logfile, "%d ", params->tasksPerNode);
-        fprintf(out_logfile, "%d ", params->repetitions);
-        fprintf(out_logfile, "%d ", params->filePerProc);
-        fprintf(out_logfile, "%d ", params->reorderTasks);
-        fprintf(out_logfile, "%d ", params->taskPerNodeOffset);
-        fprintf(out_logfile, "%d ", params->reorderTasksRandom);
-        fprintf(out_logfile, "%d ", params->reorderTasksRandomSeed);
-        fprintf(out_logfile, "%lld ", params->segmentCount);
-        fprintf(out_logfile, "%lld ", params->blockSize);
-        fprintf(out_logfile, "%lld ", params->transferSize);
-        fprintf(out_logfile, "%lld ", results->aggFileSizeForBW[0]);
-        fprintf(out_logfile, "%s ", params->api);
-        fprintf(out_logfile, "%d", params->referenceNumber);
+        fprintf(out_logfile, "%5d ", params->id);
+        fprintf(out_logfile, "%6d ", params->numTasks);
+        fprintf(out_logfile, "%3d ", params->tasksPerNode);
+        fprintf(out_logfile, "%4d ", params->repetitions);
+        fprintf(out_logfile, "%3d ", params->filePerProc);
+        fprintf(out_logfile, "%5d ", params->reorderTasks);
+        fprintf(out_logfile, "%8d ", params->taskPerNodeOffset);
+        fprintf(out_logfile, "%9d ", params->reorderTasksRandom);
+        fprintf(out_logfile, "%4d ", params->reorderTasksRandomSeed);
+        fprintf(out_logfile, "%6lld ", params->segmentCount);
+        fprintf(out_logfile, "%8lld ", params->blockSize);
+        fprintf(out_logfile, "%8lld ", params->transferSize);
+        fprintf(out_logfile, "%9.1f ", (float)results->aggFileSizeForBW[0] / MEBIBYTE);
+        fprintf(out_logfile, "%3s ", params->api);
+        fprintf(out_logfile, "%6d", params->referenceNumber);
         fprintf(out_logfile, "\n");
         fflush(out_logfile);
 
@@ -1739,7 +1740,9 @@ static void PrintLongSummaryHeader()
                 "Max(OPs)", "Min(OPs)", "Mean(OPs)", "StdDev",
                 "Mean(s)");
         fprintf(out_logfile, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
-                " segcnt blksiz xsize aggsize API RefNum\n");
+                " segcnt ");
+        fprintf(out_logfile, "%8s %8s %9s %5s", " blksiz", "xsize","aggs(MiB)", "API");
+        fprintf(out_logfile, " RefNum\n");
 }
 
 static void PrintLongSummaryAllTests(IOR_test_t *tests_head)
