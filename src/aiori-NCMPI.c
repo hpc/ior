@@ -276,26 +276,26 @@ static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
         /* access the file */
         if (access == WRITE) {  /* WRITE */
                 if (param->collective) {
-                        NCMPI_CHECK(ncmpi_put_vara_all
+                        NCMPI_CHECK(ncmpi_put_vara_schar_all
                                     (*(int *)fd, var_id, offset, bufSize,
-                                     bufferPtr, length, MPI_SIGNED_CHAR),
+                                     bufferPtr),
                                     "cannot write to data set");
                 } else {
-                        NCMPI_CHECK(ncmpi_put_vara
+                        NCMPI_CHECK(ncmpi_put_vara_schar
                                     (*(int *)fd, var_id, offset, bufSize,
-                                     bufferPtr, length, MPI_SIGNED_CHAR),
+                                     bufferPtr),
                                     "cannot write to data set");
                 }
         } else {                /* READ or CHECK */
                 if (param->collective == TRUE) {
-                        NCMPI_CHECK(ncmpi_get_vara_all
+                        NCMPI_CHECK(ncmpi_get_vara_schar_all
                                     (*(int *)fd, var_id, offset, bufSize,
-                                     bufferPtr, length, MPI_SIGNED_CHAR),
+                                     bufferPtr),
                                     "cannot read from data set");
                 } else {
-                        NCMPI_CHECK(ncmpi_get_vara
+                        NCMPI_CHECK(ncmpi_get_vara_schar
                                     (*(int *)fd, var_id, offset, bufSize,
-                                     bufferPtr, length, MPI_SIGNED_CHAR),
+                                     bufferPtr),
                                     "cannot read from data set");
                 }
         }
