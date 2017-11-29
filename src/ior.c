@@ -496,6 +496,17 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
  */
 static int CountTasksPerNode(int numTasks, MPI_Comm comm)
 {
+        // for debugging and testing:
+        if (getenv("IOR_FAKE_TASK_PER_NODES")){
+          int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
+          int rank;
+          MPI_Comm_rank(comm, & rank);
+          if(rank == 0){
+            printf("Fake tasks per node: using %d\n", tasksPerNode);
+          }
+          return tasksPerNode;
+        }
+
         char localhost[MAX_STR];
         char hostname0[MAX_STR];
         static int firstPass = TRUE;
