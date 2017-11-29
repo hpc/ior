@@ -1359,7 +1359,7 @@ static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
         if (test->checkWrite || test->checkRead) {
                 ioBuffers->checkBuffer = aligned_buffer_alloc(test->transferSize);
         }
-        if (test->checkRead) {
+        if (test->checkRead || test->checkWrite) {
                 ioBuffers->readCheckBuffer = aligned_buffer_alloc(test->transferSize);
         }
 
@@ -2114,6 +2114,9 @@ static void TestIoSys(IOR_test_t *test)
                                         (2 * params->tasksPerNode) % params->numTasks;
                         }
 
+                        // update the check buffer
+                        FillBuffer(ioBuffers.readCheckBuffer, params, 0, (rank + rankOffset) % params->numTasks);
+
                         reseed_incompressible_prng = TRUE; /* Re-Seed the PRNG to get same sequence back, if random */
 
                         GetTestFileName(testFileName, params);
@@ -2559,13 +2562,14 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
                   ERR("cannot read from file");
   } else if (access == WRITECHECK) {
           memset(checkBuffer, 'a', transfer);
+
           amtXferred =
                   backend->xfer(access, fd, checkBuffer, transfer,
                                 test);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
           (*transferCount)++;
-          *errors += CompareBuffers(buffer, checkBuffer, transfer,
+          *errors += CompareBuffers(readCheckBuffer, checkBuffer, transfer,
                                    *transferCount, test,
                                    WRITECHECK);
   } else if (access == READCHECK) {
