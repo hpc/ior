@@ -496,7 +496,7 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
  */
 static int CountTasksPerNode(int numTasks, MPI_Comm comm)
 {
-        // for debugging and testing:
+        /* for debugging and testing */
         if (getenv("IOR_FAKE_TASK_PER_NODES")){
           int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
           int rank;
@@ -2544,10 +2544,8 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
 
   transfer = test->transferSize;
   if (access == WRITE) {
-          /*
-           * fills each transfer with a unique pattern
-           * containing the offset into the file
-           */
+          /* fills each transfer with a unique pattern
+           * containing the offset into the file */
           if (test->storeFileOffset == TRUE) {
                   FillBuffer(buffer, test, test->offset, pretendRank);
           }
@@ -2563,9 +2561,11 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
   } else if (access == WRITECHECK) {
           memset(checkBuffer, 'a', transfer);
 
-          amtXferred =
-                  backend->xfer(access, fd, checkBuffer, transfer,
-                                test);
+          if (test->storeFileOffset == TRUE) {
+                  FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
+          }
+
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
           (*transferCount)++;
