@@ -231,7 +231,7 @@ static void AioriBind(char* api, IOR_param_t* param)
         backend = aiori_select (api);
         if (NULL != backend) {
                 if (! strncmp(api, "S3", 2)) {
-                        if (! strcmp(api, "S3_EMC")) {
+                        if (! strcasecmp(api, "S3_EMC")) {
                                 param->curl_flags |= IOR_CURL_S3_EMC_EXT;
                         } else {
                                 param->curl_flags &= ~(IOR_CURL_S3_EMC_EXT);
@@ -321,7 +321,7 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
                   "cannot total data moved");
 
-        if (strcmp(params->api, "HDF5") != 0 && strcmp(params->api, "NCMPI") != 0) {
+        if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
                         if ((params->expectedAggFileSize
                              != results->aggFileSizeFromXfer[rep])
@@ -1471,7 +1471,7 @@ static void ShowSetup(IOR_param_t *params)
         printf("\ttest filename      = %s\n", params->testFileName);
         printf("\taccess             = ");
         printf(params->filePerProc ? "file-per-process" : "single-shared-file");
-        if (verbose >= VERBOSE_1 && strcmp(params->api, "POSIX") != 0) {
+        if (verbose >= VERBOSE_1 && strcasecmp(params->api, "POSIX") != 0) {
                 printf(params->collective == FALSE ? ", independent" : ", collective");
         }
         printf("\n");
@@ -1610,7 +1610,7 @@ static void ShowTest(IOR_param_t * test)
         fprintf(stdout, "\t%s=%d\n", "gpfsHintAccess", test->gpfs_hint_access);
         fprintf(stdout, "\t%s=%d\n", "gpfsReleaseToken", test->gpfs_release_token);
 #endif
-        if (strcmp(test->api, "HDF5") == 0) {
+        if (strcasecmp(test->api, "HDF5") == 0) {
                 fprintf(stdout, " (datasets)");
         }
         fprintf(stdout, "\n");
@@ -2292,15 +2292,15 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("block size must not be smaller than transfer size");
 
         /* specific APIs */
-        if ((strcmp(test->api, "MPIIO") == 0)
+        if ((strcasecmp(test->api, "MPIIO") == 0)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
                 ERR("block/transfer size may not be smaller than IOR_size_t for MPIIO");
-        if ((strcmp(test->api, "HDF5") == 0)
+        if ((strcasecmp(test->api, "HDF5") == 0)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
                 ERR("block/transfer size may not be smaller than IOR_size_t for HDF5");
-        if ((strcmp(test->api, "NCMPI") == 0)
+        if ((strcasecmp(test->api, "NCMPI") == 0)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
                 ERR("block/transfer size may not be smaller than IOR_size_t for NCMPI");
@@ -2309,39 +2309,39 @@ static void ValidateTests(IOR_param_t * test)
             &&((test->numTasks * test->blockSize) >
                (2 * (IOR_offset_t) GIBIBYTE)))
                 ERR("segment size must be < 2GiB");
-        if ((strcmp(test->api, "POSIX") != 0) && test->singleXferAttempt)
+        if ((strcasecmp(test->api, "POSIX") != 0) && test->singleXferAttempt)
                 WARN_RESET("retry only available in POSIX",
                            test, &defaults, singleXferAttempt);
-        if ((strcmp(test->api, "POSIX") != 0) && test->fsync)
+        if ((strcasecmp(test->api, "POSIX") != 0) && test->fsync)
                 WARN_RESET("fsync() only available in POSIX",
                            test, &defaults, fsync);
-        if ((strcmp(test->api, "MPIIO") != 0) && test->preallocate)
+        if ((strcasecmp(test->api, "MPIIO") != 0) && test->preallocate)
                 WARN_RESET("preallocation only available in MPIIO",
                            test, &defaults, preallocate);
-        if ((strcmp(test->api, "MPIIO") != 0) && test->useFileView)
+        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useFileView)
                 WARN_RESET("file view only available in MPIIO",
                            test, &defaults, useFileView);
-        if ((strcmp(test->api, "MPIIO") != 0) && test->useSharedFilePointer)
+        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useSharedFilePointer)
                 WARN_RESET("shared file pointer only available in MPIIO",
                            test, &defaults, useSharedFilePointer);
-        if ((strcmp(test->api, "MPIIO") == 0) && test->useSharedFilePointer)
+        if ((strcasecmp(test->api, "MPIIO") == 0) && test->useSharedFilePointer)
                 WARN_RESET("shared file pointer not implemented",
                            test, &defaults, useSharedFilePointer);
-        if ((strcmp(test->api, "MPIIO") != 0) && test->useStridedDatatype)
+        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useStridedDatatype)
                 WARN_RESET("strided datatype only available in MPIIO",
                            test, &defaults, useStridedDatatype);
-        if ((strcmp(test->api, "MPIIO") == 0) && test->useStridedDatatype)
+        if ((strcasecmp(test->api, "MPIIO") == 0) && test->useStridedDatatype)
                 WARN_RESET("strided datatype not implemented",
                            test, &defaults, useStridedDatatype);
-        if ((strcmp(test->api, "MPIIO") == 0)
+        if ((strcasecmp(test->api, "MPIIO") == 0)
             && test->useStridedDatatype && (test->blockSize < sizeof(IOR_size_t)
                                             || test->transferSize <
                                             sizeof(IOR_size_t)))
                 ERR("need larger file size for strided datatype in MPIIO");
-        if ((strcmp(test->api, "POSIX") == 0) && test->showHints)
+        if ((strcasecmp(test->api, "POSIX") == 0) && test->showHints)
                 WARN_RESET("hints not available in POSIX",
                            test, &defaults, showHints);
-        if ((strcmp(test->api, "POSIX") == 0) && test->collective)
+        if ((strcasecmp(test->api, "POSIX") == 0) && test->collective)
                 WARN_RESET("collective not available in POSIX",
                            test, &defaults, collective);
 
@@ -2360,26 +2360,26 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("random offset not available with store file offset option)");
 
 
-        if ((strcmp(test->api, "MPIIO") == 0) && test->randomOffset
+        if ((strcasecmp(test->api, "MPIIO") == 0) && test->randomOffset
             && test->collective)
                 ERR("random offset not available with collective MPIIO");
-        if ((strcmp(test->api, "MPIIO") == 0) && test->randomOffset
+        if ((strcasecmp(test->api, "MPIIO") == 0) && test->randomOffset
             && test->useFileView)
                 ERR("random offset not available with MPIIO fileviews");
-        if ((strcmp(test->api, "HDF5") == 0) && test->randomOffset)
+        if ((strcasecmp(test->api, "HDF5") == 0) && test->randomOffset)
                 ERR("random offset not available with HDF5");
-        if ((strcmp(test->api, "NCMPI") == 0) && test->randomOffset)
+        if ((strcasecmp(test->api, "NCMPI") == 0) && test->randomOffset)
                 ERR("random offset not available with NCMPI");
-        if ((strcmp(test->api, "HDF5") != 0) && test->individualDataSets)
+        if ((strcasecmp(test->api, "HDF5") != 0) && test->individualDataSets)
                 WARN_RESET("individual datasets only available in HDF5",
                            test, &defaults, individualDataSets);
-        if ((strcmp(test->api, "HDF5") == 0) && test->individualDataSets)
+        if ((strcasecmp(test->api, "HDF5") == 0) && test->individualDataSets)
                 WARN_RESET("individual data sets not implemented",
                            test, &defaults, individualDataSets);
-        if ((strcmp(test->api, "NCMPI") == 0) && test->filePerProc)
+        if ((strcasecmp(test->api, "NCMPI") == 0) && test->filePerProc)
                 ERR("file-per-proc not available in current NCMPI");
         if (test->noFill) {
-                if (strcmp(test->api, "HDF5") != 0) {
+                if (strcasecmp(test->api, "HDF5") != 0) {
                         ERR("'no fill' option only available in HDF5");
                 } else {
                         /* check if hdf5 available */
