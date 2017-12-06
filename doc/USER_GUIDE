@@ -74,7 +74,7 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -J N  setAlignment -- HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g)
   -k    keepFile -- don't remove the test file(s) on program exit
   -K    keepFileWithError  -- keep error-filled file(s) after data-checking
-  -l    data packet type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]
+  -l    data packet type-- type of packet that will be created [offset|incompressible|timestamp|userdata|o|i|t|u]
   -m    multiFile -- use number of reps (-i) for multiple file count
   -M N  memoryPerNode -- hog memory on the node (e.g.: 2g, 75%)
   -n    noFill -- no fill in HDF5 file creation
@@ -280,6 +280,9 @@ GENERAL:
   * summaryAlways        - Always print the long summary for each test.
                            Useful for long runs that may be interrupted, preventing
                            the final long summary for ALL tests to be printed.
+                           
+  * pathToInputFile      - Path to a file with user definded data, as needed for 
+  						   -l u (data packet type =  userdata)  	                   
 
 
 POSIX-ONLY:
