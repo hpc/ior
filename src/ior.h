@@ -55,9 +55,10 @@ extern MPI_Comm testComm;
 enum PACKET_TYPE
 {
     generic = 0,                /* No packet type specified */
-    timestamp=1,                  /* Timestamp packet set with -l */
-    offset=2,                     /* Offset packet set with -l */
-    incompressible=3              /* Incompressible packet set with -l */
+    timestamp=1,                /* Timestamp packet set with -l */
+    offset=2,                   /* Offset packet set with -l */
+    incompressible=3,           /* Incompressible packet set with -l */
+    userdata=4                  /* User data is used to file the buffers */
 
 };
 
@@ -100,6 +101,7 @@ typedef struct
     char platform[MAX_STR];          /* platform type */
     char testFileName[MAXPATHLEN];   /* full name for test */
     char testFileName_fppReadCheck[MAXPATHLEN];/* filename for fpp read check */
+    char pathToInputFile[MAXPATHLEN];/* path to input file */
     char hintsFileName[MAXPATHLEN];  /* full name for hints file */
     char options[MAXPATHLEN];        /* options string */
     int numTasks;                    /* number of tasks for test */
@@ -150,11 +152,12 @@ typedef struct
     unsigned int timeStampSignatureValue; /* value for time stamp signature */
     void * fd_fppReadCheck;          /* additional fd for fpp read check */
     int randomSeed;                  /* random seed for write/read check */
-    int incompressibleSeed;           /* random seed for incompressible file creation */
+    int incompressibleSeed;	     /* random seed for incompressible file creation */
     int randomOffset;                /* access is to random offsets */
     size_t memoryPerTask;            /* additional memory used per task */
     size_t memoryPerNode;            /* additional memory used per node */
-    enum PACKET_TYPE dataPacketType;             /* The type of data packet.  */
+    enum PACKET_TYPE dataPacketType; /* The type of data packet.  */
+    IOR_offset_t userdataFileSize;   /* Size of the file for the userdata from pathtoInputFile */
 
 
     /* POSIX variables */

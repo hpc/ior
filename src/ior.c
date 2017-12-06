@@ -207,6 +207,7 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->testComm = MPI_COMM_WORLD;
         p->setAlignment = 1;
         p->lustre_start_ost = -1;
+        strncpy(p->pathToInputFile, "\0", MAXPATHLEN);
 
         strncpy(p->hdfs_user, getenv("USER"), MAX_STR);
         p->hdfs_name_node      = "default";
@@ -864,7 +865,17 @@ FillBuffer(void *buffer,
         unsigned long long hi, lo;
         unsigned long long *buf = (unsigned long long *)buffer;
 
-        if(test->dataPacketType == incompressible ) { /* Make for some non compressable buffers with randomish data */
+        if(test->dataPacketType == userdata){ /* File buffer with user specified data from pathToFileInput */
+
+            FILE *fdUserData = fopen(test->pathToInputFile, "r");
+            if (fdUserData == NULL)
+              ERR("Couldn't open userData File");
+
+            fread(buf, test->blockSize, 1,fdUserData);
+
+            fclose(fdUserData);
+        }
+        else if(test->dataPacketType == incompressible ) { /* Make for some non compressable buffers with randomish data */
 
                 /* In order for write checks to work, we have to restart the psuedo random sequence */
                 if(reseed_incompressible_prng == TRUE) {
@@ -1352,13 +1363,23 @@ static IOR_test_t *SetupTests(int argc, char **argv)
 static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
                              int pretendRank)
 {
-        ioBuffers->buffer = aligned_buffer_alloc(test->transferSize);
+
+	IOR_offset_t bufferSize;
+
+	if(test->dataPacketType == userdata){
+	    bufferSize = test->blockSize;
+	}
+	else{
+	    bufferSize = test->transferSize;
+	}
+
+        ioBuffers->buffer = aligned_buffer_alloc(bufferSize);
 
         if (test->checkWrite || test->checkRead) {
-                ioBuffers->checkBuffer = aligned_buffer_alloc(test->transferSize);
+                ioBuffers->checkBuffer = aligned_buffer_alloc(bufferSize);
         }
         if (test->checkRead || test->checkWrite) {
-                ioBuffers->readCheckBuffer = aligned_buffer_alloc(test->transferSize);
+                ioBuffers->readCheckBuffer = aligned_buffer_alloc(bufferSize);
         }
 
         return;
@@ -2258,7 +2279,7 @@ static void TestIoSys(IOR_test_t *test)
 
 }
 
-/*
+/**
  * Determine if valid tests from parameters.
  */
 static void ValidateTests(IOR_param_t * test)
@@ -2425,52 +2446,116 @@ static void ValidateTests(IOR_param_t * test)
         if (Nto1 && (s != 1) && (b != t)) {
                 ERR("N:1 (strided) requires xfer-size == block-size");
         }
+
+        /* Validation of filesize for userdata */
+
+        if (test->dataPacketType == userdata && test->storeFileOffset)
+                ERR("userdata and store file offset option are incompatible.");
+        if (test->dataPacketType == userdata && strlen(test->pathToInputFile) == 0)
+		ERR("Path to file for userdata is needed!");
+
+
+        //TODO Not sure if this is the right place to do do this.
+        if (test->dataPacketType == userdata )
+	{
+            // get file size of user data from pathToInputFile
+            FILE *fd;
+            fd = fopen(test->pathToInputFile, "r" );
+            fseek(fd, 0L, SEEK_END);
+            test->userdataFileSize = ftell(fd);
+            fclose(fd);
+
+            if (test->userdataFileSize < test->blockSize)
+                    ERR("userdata needs to be at least blocksize big");
+	}
+
+
 }
 
-static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
+/** \struct IOR_offsetTuple_t
+ * A pair of IOR_offset_t.
+ * One for for each, the file and memory offset.
+ */
+typedef struct {
+  IOR_offset_t memory;
+  IOR_offset_t file;
+} IOR_offsetTuple_t ;
+
+
+/**
+ * Returns a precomputed array of IOR_offsetTuple_t for the inner benchmark loop.
+ * Each IOR_offsetTuple_t holdes one offset for the memory and one for the file.
+ * In both cases these offset are seqential.
+ * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
+ * @param pretendRank int pretended Rank for shifting the offsest corectly
+ * @return IOR_offsetTuple_t
+ */
+static IOR_offsetTuple_t *GetOffsetArraySequential(IOR_param_t * test,
                                               int pretendRank)
 {
-        IOR_offset_t i, j, k = 0;
-        IOR_offset_t offsets;
-        IOR_offset_t *offsetArray;
+    IOR_offset_t i, j, k = 0;
+    IOR_offset_t offsets;
+    IOR_offsetTuple_t *offsetArray;
 
-        /* count needed offsets */
-        offsets = (test->blockSize / test->transferSize) * test->segmentCount;
+    /* count needed offsets */
+    offsets = (test->blockSize / test->transferSize) * test->segmentCount;
 
-        /* setup empty array */
-        offsetArray =
-                (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
-        if (offsetArray == NULL)
-                ERR("malloc() failed");
-        offsetArray[offsets] = -1;      /* set last offset with -1 */
+    /* setup empty array */
+    offsetArray  = (IOR_offsetTuple_t *)malloc(sizeof(IOR_offsetTuple_t) * (offsets + 1));
+    if (offsetArray == NULL)
+                    ERR("malloc() failed");
 
-        /* fill with offsets */
-        for (i = 0; i < test->segmentCount; i++) {
-                for (j = 0; j < (test->blockSize / test->transferSize); j++) {
-                        offsetArray[k] = j * test->transferSize;
-                        if (test->filePerProc) {
-                                offsetArray[k] += i * test->blockSize;
-                        } else {
-                                offsetArray[k] +=
-                                        (i * test->numTasks * test->blockSize)
+
+    offsetArray[offsets].file= -1;      /* set last offset with -1 */
+    offsetArray[offsets].memory = -1;   /* set last offset with -1 */
+
+
+    /* fill with offsets */
+    for (i = 0; i < test->segmentCount; i++) {
+        for (j = 0; j < (test->blockSize / test->transferSize); j++) {
+            offsetArray[k].file = j * test->transferSize;
+            if (test->filePerProc) {
+                offsetArray[k].file += i * test->blockSize;
+            } else {
+                offsetArray[k].file += (i * test->numTasks * test->blockSize)
                                         + (pretendRank * test->blockSize);
-                        }
-                        k++;
-                }
-        }
+            }
+            // save offset for buffer to read from
+            if(test->dataPacketType ==  userdata){
+                offsetArray[k].memory = j * test->transferSize;
+            } else {
+                offsetArray[k].memory = 0;
+            }
 
-        return (offsetArray);
+            k++;
+        }
+    }
+
+    return (offsetArray);
 }
 
-static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
+/**
+ * Returns a precomputed array of IOR_offsettTuple_t for the inner benchmark loop.
+ * Each IOR_offsettTuple_t holdes one offset for the memory and one for the file.
+ * All IOR_offsettTuple_t get mixed up at the end.
+ * For a shared file all transfers get randomly assigned to ranks. The processes
+ * can also have differen't numbers of transfers. This might lead to a bigger
+ * diversion in accesse as it dose with filePerProc. This is expected but
+ * should be mined.
+ * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
+ * @param pretendRank int pretended Rank for shifting the offsest corectly
+ * @return IOR_offsetTuple_t
+ * @return
+ */
+static IOR_offsetTuple_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                                           int access)
 {
         int seed;
-        IOR_offset_t i, value, tmp;
+        IOR_offset_t i, j, k, value;
         IOR_offset_t offsets = 0;
         IOR_offset_t offsetCnt = 0;
         IOR_offset_t fileSize;
-        IOR_offset_t *offsetArray;
+        IOR_offsetTuple_t *offsetArray, tmp;
 
         /* set up seed for random() */
         if (access == WRITE || access == READ) {
@@ -2480,44 +2565,61 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
         }
         srandom(seed);
 
-        fileSize = test->blockSize * test->segmentCount;
-        if (test->filePerProc == FALSE) {
-                fileSize *= test->numTasks;
-        }
-
-        /* count needed offsets (pass 1) */
-        for (i = 0; i < fileSize; i += test->transferSize) {
-                if (test->filePerProc == FALSE) {
-                        if ((random() % test->numTasks) == pretendRank) {
-                                offsets++;
-                        }
-                } else {
-                        offsets++;
-                }
-        }
-
-        /* setup empty array */
-        offsetArray =
-                (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
-        if (offsetArray == NULL)
-                ERR("malloc() failed");
-        offsetArray[offsets] = -1;      /* set last offset with -1 */
 
         if (test->filePerProc) {
-                /* fill array */
-                for (i = 0; i < offsets; i++) {
-                        offsetArray[i] = i * test->transferSize;
-                }
+            // file perProc is identical with the sequential just reordered in
+            // the end
+           offsetArray = GetOffsetArraySequential(test, pretendRank);
         } else {
-                /* fill with offsets (pass 2) */
-                srandom(seed);  /* need same seed */
-                for (i = 0; i < fileSize; i += test->transferSize) {
-                        if ((random() % test->numTasks) == pretendRank) {
-                                offsetArray[offsetCnt] = i;
-                                offsetCnt++;
-                        }
-                }
+	    /* This case is different as the number of transfers dose not have
+	     * to be spread equaly above the processes.
+	     * Therefor every process might have to allocate memory for a
+	     * different number of offsets.
+	     */
+
+            // callculating file size to determine the total number of transfers
+            fileSize = test->blockSize * test->segmentCount;
+            if (test->filePerProc == FALSE) {
+                    fileSize *= test->numTasks;
+            }
+
+            // count needed offsets (pass 1)
+            for (i = 0; i < fileSize; i += test->transferSize) {
+		    if ((random() % test->numTasks) == pretendRank) {
+			    offsets++;
+		    }
+            }
+
+            // allocating offsets
+            offsetArray  = (IOR_offsetTuple_t *)malloc(sizeof(IOR_offsetTuple_t) * (offsets + 1));
+            if (offsetArray == NULL)
+                            ERR("malloc() failed");
+
+            // initilising last files with -1
+            offsetArray[offsets].file= -1;      /* set last offset with -1 */
+            offsetArray[offsets].memory = -1;   /* set last offset with -1 */
+
+    	    /* fill with offsets (pass 2) */
+    	    srandom(seed);  /* need same seed as in counting*/
+    	    // both loops needed for j counter in user data
+    	    for (i = 0; i < test->segmentCount; i++) {
+        		for (j = 0; j < (test->blockSize / test->transferSize); j++) {
+        		      for (k = 0; k < test->numTasks; ++k) {
+        			  if ((random() % test->numTasks) == pretendRank) {
+        			      offsetArray[offsetCnt].file = i * j  * k * test->transferSize;
+
+        			      if(test->dataPacketType ==  userdata){
+        				  offsetArray[offsetCnt].memory = j * test->transferSize;
+        			      } else {
+        				  offsetArray[offsetCnt].memory = 0;
+        			      }
+        			      offsetCnt++;
+        			  }
+        		    }
+        		}
+    	    }
         }
+
         /* reorder array */
         for (i = 0; i < offsets; i++) {
                 value = random() % offsets;
@@ -2525,21 +2627,29 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                 offsetArray[value] = offsetArray[i];
                 offsetArray[i] = tmp;
         }
+
         SeedRandGen(test->testComm);    /* synchronize seeds across tasks */
 
         return (offsetArray);
 }
 
-static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offsetArray, int pretendRank,
-  IOR_offset_t * transferCount, int * errors, IOR_param_t * test, int * fd, IOR_io_buffers* ioBuffers, int access){
+static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt,
+                                    IOR_offsetTuple_t *offsetArray,
+                                    int pretendRank,
+                                    IOR_offset_t * transferCount, int * errors,
+                                    IOR_param_t * test, int * fd,
+                                    IOR_io_buffers* ioBuffers, int access)
+  {
   IOR_offset_t amtXferred;
   IOR_offset_t transfer;
 
-  void *buffer = ioBuffers->buffer;
-  void *checkBuffer = ioBuffers->checkBuffer;
-  void *readCheckBuffer = ioBuffers->readCheckBuffer;
+  void *buffer = (void*) ((char*)ioBuffers->buffer + offsetArray[pairCnt].memory);
+  void *checkBuffer = (void*) ((char*)ioBuffers->checkBuffer + offsetArray[pairCnt].memory);
+  void *readCheckBuffer = (void*) ((char*)ioBuffers->readCheckBuffer + offsetArray[pairCnt].memory);
 
-  test->offset = offsetArray[pairCnt];
+  test->offset = offsetArray[pairCnt].file;
+
+
 
   transfer = test->transferSize;
   if (access == WRITE) {
@@ -2594,7 +2704,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
         IOR_offset_t amtXferred;
         IOR_offset_t transferCount = 0;
         IOR_offset_t pairCnt = 0;
-        IOR_offset_t *offsetArray;
+        IOR_offsetTuple_t *offsetArray;
         int pretendRank;
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
         double startForStonewall;
@@ -2617,7 +2727,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                             > test->deadlineForStonewalling));
 
         /* loop over offsets to access */
-        while ((offsetArray[pairCnt] != -1) && !hitStonewall ) {
+        while ((offsetArray[pairCnt].file != -1) && !hitStonewall ) {
                 dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
 

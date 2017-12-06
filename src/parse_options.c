@@ -167,6 +167,8 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 strcpy(params->platform, value);
         } else if (strcasecmp(option, "testfile") == 0) {
                 strcpy(params->testFileName, value);
+        } else if (strcasecmp(option, "pathToInputFile") == 0) {
+                strcpy(params->pathToInputFile, value);
         } else if (strcasecmp(option, "hintsfilename") == 0) {
                 strcpy(params->hintsFileName, value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
@@ -548,6 +550,9 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         case 'o': /* offset packet */
                                 initialTestParams.storeFileOffset = TRUE;
                                 initialTestParams.dataPacketType = offset;
+                                break;
+                        case 'u': /* userdata packet */
+                                initialTestParams.dataPacketType = userdata;
                                 break;
                         default:
                                 fprintf(stdout,
