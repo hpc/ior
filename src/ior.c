@@ -1354,8 +1354,6 @@ static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
 {
         ioBuffers->buffer = aligned_buffer_alloc(test->transferSize);
 
-        FillBuffer(ioBuffers->buffer, test, 0, pretendRank);
-
         if (test->checkWrite || test->checkRead) {
                 ioBuffers->checkBuffer = aligned_buffer_alloc(test->transferSize);
         }
@@ -2033,6 +2031,8 @@ static void TestIoSys(IOR_test_t *test)
                 MPI_CHECK(MPI_Bcast
                           (&params->timeStampSignatureValue, 1, MPI_UNSIGNED, 0,
                            testComm), "cannot broadcast start time value");
+
+                FillBuffer(ioBuffers.buffer, params, 0, pretendRank);
                 /* use repetition count for number of multiple files */
                 if (params->multiFile)
                         params->repCounter = rep;
