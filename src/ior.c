@@ -2282,8 +2282,7 @@ static void ValidateTests(IOR_param_t * test)
             && test->checkRead != TRUE && test->checkWrite != TRUE)
                 ERR("test must write, read, or check read/write file");
         if(! test->setTimeStampSignature && test->writeFile != TRUE && test->checkRead == TRUE)
-                ERR("readCheck requires to write a timeStampSignature before using -G");
-
+                ERR("using readCheck only requires to write a timeStampSignature -- use -G");
         if (test->segmentCount < 0)
                 ERR("segment count must be positive value");
         if ((test->blockSize % sizeof(IOR_size_t)) != 0)
