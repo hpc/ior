@@ -2280,10 +2280,10 @@ static void ValidateTests(IOR_param_t * test)
                            test, &defaults, interTestDelay);
         if (test->readFile != TRUE && test->writeFile != TRUE
             && test->checkRead != TRUE && test->checkWrite != TRUE)
-                ERR("test must write, read, or check file");
-        if ((test->deadlineForStonewalling > 0)
-            && (test->checkWrite == TRUE || test->checkRead == TRUE))
-                ERR("can not perform write or read check with stonewalling");
+                ERR("test must write, read, or check read/write file");
+        if(! test->setTimeStampSignature && test->writeFile != TRUE && test->checkRead == TRUE)
+                ERR("readCheck requires to write a timeStampSignature before using -G");
+
         if (test->segmentCount < 0)
                 ERR("segment count must be positive value");
         if ((test->blockSize % sizeof(IOR_size_t)) != 0)
