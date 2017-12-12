@@ -496,6 +496,17 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
  */
 static int CountTasksPerNode(int numTasks, MPI_Comm comm)
 {
+        /* for debugging and testing */
+        if (getenv("IOR_FAKE_TASK_PER_NODES")){
+          int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
+          int rank;
+          MPI_Comm_rank(comm, & rank);
+          if(rank == 0){
+            printf("Fake tasks per node: using %d\n", tasksPerNode);
+          }
+          return tasksPerNode;
+        }
+
         char localhost[MAX_STR];
         char hostname0[MAX_STR];
         static int firstPass = TRUE;
@@ -1343,12 +1354,10 @@ static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
 {
         ioBuffers->buffer = aligned_buffer_alloc(test->transferSize);
 
-        FillBuffer(ioBuffers->buffer, test, 0, pretendRank);
-
         if (test->checkWrite || test->checkRead) {
                 ioBuffers->checkBuffer = aligned_buffer_alloc(test->transferSize);
         }
-        if (test->checkRead) {
+        if (test->checkRead || test->checkWrite) {
                 ioBuffers->readCheckBuffer = aligned_buffer_alloc(test->transferSize);
         }
 
@@ -2022,6 +2031,8 @@ static void TestIoSys(IOR_test_t *test)
                 MPI_CHECK(MPI_Bcast
                           (&params->timeStampSignatureValue, 1, MPI_UNSIGNED, 0,
                            testComm), "cannot broadcast start time value");
+
+                FillBuffer(ioBuffers.buffer, params, 0, pretendRank);
                 /* use repetition count for number of multiple files */
                 if (params->multiFile)
                         params->repCounter = rep;
@@ -2102,6 +2113,9 @@ static void TestIoSys(IOR_test_t *test)
                                 rankOffset =
                                         (2 * params->tasksPerNode) % params->numTasks;
                         }
+
+                        // update the check buffer
+                        FillBuffer(ioBuffers.readCheckBuffer, params, 0, (rank + rankOffset) % params->numTasks);
 
                         reseed_incompressible_prng = TRUE; /* Re-Seed the PRNG to get same sequence back, if random */
 
@@ -2266,10 +2280,9 @@ static void ValidateTests(IOR_param_t * test)
                            test, &defaults, interTestDelay);
         if (test->readFile != TRUE && test->writeFile != TRUE
             && test->checkRead != TRUE && test->checkWrite != TRUE)
-                ERR("test must write, read, or check file");
-        if ((test->deadlineForStonewalling > 0)
-            && (test->checkWrite == TRUE || test->checkRead == TRUE))
-                ERR("can not perform write or read check with stonewalling");
+                ERR("test must write, read, or check read/write file");
+        if(! test->setTimeStampSignature && test->writeFile != TRUE && test->checkRead == TRUE)
+                ERR("using readCheck only requires to write a timeStampSignature -- use -G");
         if (test->segmentCount < 0)
                 ERR("segment count must be positive value");
         if ((test->blockSize % sizeof(IOR_size_t)) != 0)
@@ -2530,10 +2543,8 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
 
   transfer = test->transferSize;
   if (access == WRITE) {
-          /*
-           * fills each transfer with a unique pattern
-           * containing the offset into the file
-           */
+          /* fills each transfer with a unique pattern
+           * containing the offset into the file */
           if (test->storeFileOffset == TRUE) {
                   FillBuffer(buffer, test, test->offset, pretendRank);
           }
@@ -2548,13 +2559,16 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
                   ERR("cannot read from file");
   } else if (access == WRITECHECK) {
           memset(checkBuffer, 'a', transfer);
-          amtXferred =
-                  backend->xfer(access, fd, checkBuffer, transfer,
-                                test);
+
+          if (test->storeFileOffset == TRUE) {
+                  FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
+          }
+
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
           (*transferCount)++;
-          *errors += CompareBuffers(buffer, checkBuffer, transfer,
+          *errors += CompareBuffers(readCheckBuffer, checkBuffer, transfer,
                                    *transferCount, test,
                                    WRITECHECK);
   } else if (access == READCHECK) {

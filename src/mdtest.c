@@ -1822,7 +1822,7 @@ int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-  
+
     /* NCMPI backend uses numTaskWorld as size */
     numTasksWorld = size;
 
@@ -2161,12 +2161,12 @@ int main(int argc, char **argv) {
                 fflush(stdout);
             }
 
-            strcpy(testdir, testdirpath);
+            int pos = sprintf(testdir, "%s", testdirpath);
             if ( testdir[strlen( testdir ) - 1] != '/' ) {
-                strcat(testdir, "/");
+                pos += sprintf(& testdir[pos], "/");
             }
-            strcat(testdir, TEST_DIR);
-            sprintf(testdir, "%s.%d", testdir, j);
+            pos += sprintf(& testdir[pos], "%s", TEST_DIR);
+            pos += sprintf(& testdir[pos], ".%d", j);
 
             if (verbose >= 2 && rank == 0) {
                 printf( "V-2: main (for j loop): making testdir, \"%s\"\n", testdir );
