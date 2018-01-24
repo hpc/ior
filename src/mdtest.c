@@ -1655,6 +1655,10 @@ void show_file_system_size(char *file_system) {
     used_inode_percentage = (1 - ((double)free_inodes/(double)total_inodes))
         * 100;
 
+    if (realpath(file_system, real_path) == NULL) {
+        FAIL("unable to use realpath()");
+    }
+
     /* show results */
     fprintf(stdout, "Path: %s\n", real_path);
     fprintf(stdout, "FS: %.1f %s   Used FS: %2.1f%%   ",
