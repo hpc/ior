@@ -49,6 +49,12 @@ if USE_POSIX_AIORI
 extraSOURCES += aiori-POSIX.c
 endif
 
+if USE_JSON
+extraCPPFLAGS += $(json_CFLAGS)
+extraLDADD += $(json_LIBS)
+endif
+
+
 
 if USE_S3_AIORI
 extraSOURCES  += aiori-S3.c

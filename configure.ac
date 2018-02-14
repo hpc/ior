@@ -205,10 +205,22 @@ Consider --with-aws4c=, CPPFLAGS, LDFLAGS, etc])
 ])
 
 
+# Enable json output
+PKG_PROG_PKG_CONFIG
 
-
-
-
+AC_ARG_WITH([json],
+  [AS_HELP_STRING([--with-json],
+    [build with json for output @<:@default=check@:>@])],
+  [],
+  [with_json=check])
+AS_CASE(["$with_json"],
+  [yes], [PKG_CHECK_MODULES([json], [json-c], [HAVE_JSON=1])],
+  [no], [],
+  [PKG_CHECK_MODULES([json], [json-c], [HAVE_JSON=1], [HAVE_JSON=0])])
+AM_CONDITIONAL([USE_JSON], [test "$with_json" != no -a "$HAVE_JSON" -eq 1])
+AM_COND_IF([USE_JSON],[
+        AC_DEFINE([USE_JSON], [], [Build with JSON ouput option])
+])
 
 
 # Enable building "IOR", in all capitals

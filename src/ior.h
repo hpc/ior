@@ -213,6 +213,11 @@ typedef struct
 
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
+
+    /* json output */
+#ifdef USE_JSON
+    char jsonFileName[MAXPATHLEN];   /* Path to the json file for result output */
+#endif
 } IOR_param_t;
 
 /* each pointer is to an array, each of length equal to the number of

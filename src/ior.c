@@ -28,6 +28,10 @@
 # include <sys/utsname.h>        /* uname() */
 #endif
 
+#ifdef USE_JSON
+# include  <json.h>
+#endif
+
 #include <assert.h>
 
 #include "ior.h"
@@ -68,7 +72,9 @@ static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t *);
 static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers);
 static void WriteTimes(IOR_param_t *, double **, int, int);
-
+#ifdef USE_JSON
+static void JSONResultsAllTests(IOR_test_t *tests_head);
+#endif
 /********************************** M A I N ***********************************/
 
 int main(int argc, char **argv)
@@ -154,6 +160,9 @@ int main(int argc, char **argv)
                 verbose = 0;
         PrintLongSummaryAllTests(tests_head);
 
+#ifdef USE_JSON
+        JSONResultsAllTests(tests_head);
+#endif
         /* display finish time */
         if (rank == 0 && verbose >= VERBOSE_0) {
                 fprintf(stdout, "\n");
@@ -228,6 +237,11 @@ void init_IOR_Param_t(IOR_param_t * p)
 
         p->beegfs_numTargets = -1;
         p->beegfs_chunkSize = -1;
+
+        // json output
+#ifdef USE_JSON
+        strncpy(p->jsonFileName, "\0", MAXPATHLEN);
+#endif
 }
 
 /**
@@ -1855,6 +1869,159 @@ static void PrintShortSummary(IOR_test_t * test)
                         max_read/MEBIBYTE, max_read/MEGABYTE);
         }
 }
+
+#ifdef USE_JSON
+/**
+ * Adds a singel operation of a test to its json object jobj.
+ * @param test      Pointer to all the test
+ * @param times     Results for operation
+ * @param operation Operation type as string
+ * @param jobj      json objet to which the results are added
+ */
+static void JSONResultsOneOperation(IOR_test_t *test, double *times, char *operation, json_object * jobj)
+{
+        IOR_param_t *params = &test->params;
+        IOR_results_t *results = test->results;
+        struct results *bw;
+        int reps;
+
+        if (rank != 0 || verbose < VERBOSE_0)
+                return;
+
+        reps = params->repetitions;
+
+        bw = bw_values(reps, results->aggFileSizeForBW, times);
+
+        json_object_object_add(jobj,"Operation",
+                               json_object_new_string(operation));
+        json_object_object_add(jobj,"Max", json_object_new_double(bw->max));
+        json_object_object_add(jobj,"Min", json_object_new_double(bw->min));
+        json_object_object_add(jobj,"Mean", json_object_new_double(bw->mean));
+        json_object_object_add(jobj,"StdDev", json_object_new_double(bw->sd));
+        json_object_object_add(jobj,"MeanTime",
+                               json_object_new_double(
+                                   mean_of_array_of_doubles(times, reps)));
+
+        free(bw);
+}
+
+/**
+ * Add the paramters and results of one single test to the test_jobj json object
+ * @param test      Pointer to all the test
+ * @param test_jobj json object holding all tests
+ */
+static void JSONResultsOneTest(IOR_test_t *test, json_object * test_jobj)
+{
+    IOR_param_t *params = &test->params;
+    IOR_results_t *results = test->results;
+
+    // creat and add a new json object holding all the paramter
+    json_object * parameter_jobj = json_object_new_object();
+    json_object_object_add(test_jobj, "parameter", parameter_jobj);
+
+    //add parameters. this is the same list as in the printed summery.
+    //this could easyly be extended to all IOR paramters
+    json_object_object_add(parameter_jobj,"TestNumber",
+                           json_object_new_int(params->id));
+    json_object_object_add(parameter_jobj,"TasksPerNode",
+                           json_object_new_boolean(params->tasksPerNode));
+    json_object_object_add(parameter_jobj,"Repetitions",
+                           json_object_new_int(params->repetitions));
+    json_object_object_add(parameter_jobj,"#Tasks",
+                           json_object_new_int(params->numTasks));
+    json_object_object_add(parameter_jobj,"FilePerProc",
+                           json_object_new_boolean(params->filePerProc));
+    json_object_object_add(parameter_jobj,"ReorderTasks",
+                           json_object_new_boolean(params->reorderTasks));
+    json_object_object_add(parameter_jobj,"taskPerNodeOffset",
+                           json_object_new_int(params->taskPerNodeOffset));
+    json_object_object_add(parameter_jobj,"reorderTasksRandom",
+                           json_object_new_boolean(params->reorderTasksRandom));
+    json_object_object_add(parameter_jobj,"reorderTasksRandomSeed",
+                           json_object_new_int(params->reorderTasksRandomSeed));
+    json_object_object_add(parameter_jobj,"segmentCount",
+                           json_object_new_int(params->segmentCount));
+    json_object_object_add(parameter_jobj,"blockSize",
+                           json_object_new_int(params->blockSize));
+    json_object_object_add(parameter_jobj,"transferSize",
+                           json_object_new_int(params->transferSize));
+    json_object_object_add(parameter_jobj,"aggFileSize",
+                           json_object_new_int(results->aggFileSizeForBW[0]));
+    json_object_object_add(parameter_jobj,"API",
+                           json_object_new_string(params->api));
+    json_object_object_add(parameter_jobj,"referenceNumber",
+                           json_object_new_int(params->referenceNumber));
+
+    // create and add result object to the test object
+    json_object * results_jobj = json_object_new_object();
+    json_object_object_add(test_jobj, "results", results_jobj);
+
+    // create and add read and/or write results to the results  object
+    if (params->writeFile){
+        json_object * write_jobj = json_object_new_object();
+        json_object_object_add(results_jobj, "write", write_jobj);
+        JSONResultsOneOperation(test, results->writeTime, "write", write_jobj);
+    }
+    if (params->readFile){
+        json_object * read_jobj = json_object_new_object();
+        json_object_object_add(results_jobj, "read", read_jobj);
+        JSONResultsOneOperation(test, results->readTime, "read", read_jobj);
+    }
+}
+
+/**
+ * Generates a json formated file containing all the test results.
+ * @param tests_head Poiter to test
+ */
+static void JSONResultsAllTests(IOR_test_t *tests_head)
+{
+    IOR_test_t *tptr;
+    char *lastJsonFileName = tests_head->params.jsonFileName;
+    char *testNumber[64];
+    json_object *jobj;
+
+    // only rank 0 should do this. And only if the json option is set
+    if (rank != 0 )
+            return;
+
+    // create outer json object holding all the test results
+     jobj= json_object_new_object();
+
+    // iterate over all test
+    for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
+        // write json file and create new object when jsonFileName changes
+        // between test
+        if ((strcmp(tptr->params.jsonFileName, lastJsonFileName) != 0))
+        {
+            // write json if filename is not '\0'
+            if((strcmp(lastJsonFileName, "\0") != 0)){
+                json_object_to_file_ext(lastJsonFileName , jobj,
+                                        JSON_C_TO_STRING_SPACED |
+                                        JSON_C_TO_STRING_PRETTY);
+            }
+            printf("new file \n");
+            jobj = json_object_new_object();
+        }
+        // create test object
+        json_object * test_jobj = json_object_new_object();
+        // name individual test objects by its id. would be nice to have a real
+        // unique identifier but there is none
+        sprintf(testNumber, "test%d", tptr->params.id);
+        json_object_object_add(jobj, testNumber, test_jobj);
+        // add parameters and results
+        JSONResultsOneTest(tptr, test_jobj);
+        lastJsonFileName = tptr->params.jsonFileName;
+    }
+
+    // write json if filename is not '\0'
+    if (strcmp(tests_head->params.jsonFileName, "\0") == 0){
+        json_object_to_file_ext(lastJsonFileName, jobj,
+                                JSON_C_TO_STRING_SPACED |
+                                JSON_C_TO_STRING_PRETTY);
+    }
+
+}
+#endif
 
 /*
  * malloc a buffer, touching every page in an attempt to defeat lazy allocation.
