@@ -2014,7 +2014,7 @@ static void JSONResultsAllTests(IOR_test_t *tests_head)
     }
 
     // write json if filename is not '\0'
-    if (strcmp(tests_head->params.jsonFileName, "\0") == 0){
+    if (strcmp(tests_head->params.jsonFileName, "\0") != 0){
         json_object_to_file_ext(lastJsonFileName, jobj,
                                 JSON_C_TO_STRING_SPACED |
                                 JSON_C_TO_STRING_PRETTY);
