@@ -391,7 +391,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
     }
 
     if (!(shared_file && rank != 0)) {
-        backend->delete (curr_item, &param);
+        backend->remove (curr_item, &param);
     }
 }
 
@@ -530,7 +530,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
             backend->close (aiori_fh, &param);
         } else if (!(shared_file && rank != 0)) {
             //remove files
-            backend->delete (curr_item, &param);
+            backend->remove (curr_item, &param);
         }
     }
 }

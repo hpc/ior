@@ -106,7 +106,7 @@ static void *HDFS_Open(char *, IOR_param_t *);
 static IOR_offset_t HDFS_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void HDFS_Close(void *, IOR_param_t *);
-static void HDFS_Delete(char *, IOR_param_t *);
+static void HDFS_Remove(char *, IOR_param_t *);
 static void HDFS_SetVersion(IOR_param_t *);
 static void HDFS_Fsync(void *, IOR_param_t *);
 static IOR_offset_t HDFS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
@@ -119,7 +119,7 @@ ior_aiori_t hdfs_aiori = {
 	.open = HDFS_Open,
 	.xfer = HDFS_Xfer,
 	.close = HDFS_Close,
-	.delete = HDFS_Delete,
+	.remove = HDFS_Remove,
 	.set_version = HDFS_SetVersion,
 	.fsync = HDFS_Fsync,
 	.get_file_size = HDFS_GetFileSize,
@@ -289,9 +289,9 @@ static void *HDFS_Create_Or_Open( char *testFileName, IOR_param_t *param, unsign
 	 * truncate each other's writes
 	 */
 
-	if (( param->openFlags & IOR_WRONLY ) && 
-			( !param->filePerProc )						&&	 
-			( rank != 0 )) { 
+	if (( param->openFlags & IOR_WRONLY ) &&
+			( !param->filePerProc )						&&
+			( rank != 0 )) {
 
 		MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 	}
@@ -308,7 +308,7 @@ static void *HDFS_Create_Or_Open( char *testFileName, IOR_param_t *param, unsign
 					 param->transferSize,
 					 param->hdfs_replicas,
 					 param->hdfs_block_size);
-	}			 
+	}
 	hdfs_file = hdfsOpenFile( param->hdfs_fs,
 														testFileName,
 														fd_oflags,
@@ -323,12 +323,12 @@ static void *HDFS_Create_Or_Open( char *testFileName, IOR_param_t *param, unsign
 	 * For N-1 write, Rank 0 waits for the other ranks to open the file after it has.
 	 */
 
-	if (( param->openFlags & IOR_WRONLY ) && 
-			( !param->filePerProc )						&&	 
-			( rank == 0 )) { 
+	if (( param->openFlags & IOR_WRONLY ) &&
+			( !param->filePerProc )						&&
+			( rank == 0 )) {
 
 		MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-	}		 
+	}
 
 	if (param->verbose >= VERBOSE_4) {
 		printf("<- HDFS_Create_Or_Open\n");
@@ -404,7 +404,7 @@ static IOR_offset_t HDFS_Xfer(int access, void *file, IOR_size_t * buffer,
 			}
 
 			if (param->verbose >= VERBOSE_4) {
-				printf("\thdfsWrite( 0x%llx, 0x%llx, 0x%llx, %lld)\n", 
+				printf("\thdfsWrite( 0x%llx, 0x%llx, 0x%llx, %lld)\n",
 							 hdfs_fs, hdfs_file, ptr, remaining ); /* DEBUGGING */
 			}
 			rc = hdfsWrite( hdfs_fs, hdfs_file, ptr, remaining );
@@ -426,7 +426,7 @@ static IOR_offset_t HDFS_Xfer(int access, void *file, IOR_size_t * buffer,
 			}
 
 			if (param->verbose >= VERBOSE_4) {
-				printf("\thdfsRead( 0x%llx, 0x%llx, 0x%llx, %lld)\n", 
+				printf("\thdfsRead( 0x%llx, 0x%llx, 0x%llx, %lld)\n",
 							 hdfs_fs, hdfs_file, ptr, remaining ); /* DEBUGGING */
 			}
 			rc = hdfsRead( hdfs_fs, hdfs_file, ptr, remaining );
@@ -541,14 +541,14 @@ static void HDFS_Close( void *fd, IOR_param_t * param ) {
 }
 
 /*
- * Delete a file through the HDFS interface.
+ * Remove a file through the HDFS interface.
  *
  * NOTE: The signature for ior_aiori.delete doesn't include a parameter to
  * select recursive deletes.  We'll assume that that is never needed.
  */
-static void HDFS_Delete( char *testFileName, IOR_param_t * param ) {
+static void HDFS_Remove( char *testFileName, IOR_param_t * param ) {
 	if (param->verbose >= VERBOSE_4) {
-		printf("-> HDFS_Delete\n");
+		printf("-> HDFS_Remove\n");
 	}
 
 	char errmsg[256];
@@ -567,7 +567,7 @@ static void HDFS_Delete( char *testFileName, IOR_param_t * param ) {
 		EWARN( errmsg );
 	}
 	if (param->verbose >= VERBOSE_4) {
-		printf("<- HDFS_Delete\n");
+		printf("<- HDFS_Remove\n");
 	}
 }
 

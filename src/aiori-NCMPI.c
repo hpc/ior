@@ -52,7 +52,7 @@ static void *NCMPI_Open(char *, IOR_param_t *);
 static IOR_offset_t NCMPI_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void NCMPI_Close(void *, IOR_param_t *);
-static void NCMPI_Delete(char *, IOR_param_t *);
+static void S3_Remove(char *, IOR_param_t *);
 static void NCMPI_SetVersion(IOR_param_t *);
 static void NCMPI_Fsync(void *, IOR_param_t *);
 static IOR_offset_t NCMPI_GetFileSize(IOR_param_t *, MPI_Comm, char *);
@@ -65,7 +65,7 @@ ior_aiori_t ncmpi_aiori = {
         .open = NCMPI_Open,
         .xfer = NCMPI_Xfer,
         .close = NCMPI_Close,
-        .delete = NCMPI_Delete,
+        .remove = S3_Remove,
         .set_version = NCMPI_SetVersion,
         .fsync = NCMPI_Fsync,
         .get_file_size = NCMPI_GetFileSize,
@@ -325,9 +325,9 @@ static void NCMPI_Close(void *fd, IOR_param_t * param)
 }
 
 /*
- * Delete a file through the NCMPI interface.
+ * Remove a file through the NCMPI interface.
  */
-static void NCMPI_Delete(char *testFileName, IOR_param_t * param)
+static void S3_Remove(char *testFileName, IOR_param_t * param)
 {
         if (unlink(testFileName) != 0)
                 WARN("unlink() failed");

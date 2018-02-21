@@ -70,7 +70,7 @@ static void *POSIX_Open(char *, IOR_param_t *);
 static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void POSIX_Close(void *, IOR_param_t *);
-static void POSIX_Delete(char *, IOR_param_t *);
+static void POSIX_Remove(char *, IOR_param_t *);
 static void POSIX_SetVersion(IOR_param_t *);
 static void POSIX_Fsync(void *, IOR_param_t *);
 static IOR_offset_t POSIX_GetFileSize(IOR_param_t *, MPI_Comm, char *);
@@ -83,7 +83,7 @@ ior_aiori_t posix_aiori = {
         .open = POSIX_Open,
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
-        .delete = POSIX_Delete,
+        .remove = POSIX_Remove,
         .set_version = POSIX_SetVersion,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
@@ -502,9 +502,9 @@ static void POSIX_Close(void *fd, IOR_param_t * param)
 }
 
 /*
- * Delete a file through the POSIX interface.
+ * Remove a file through the POSIX interface.
  */
-static void POSIX_Delete(char *testFileName, IOR_param_t * param)
+static void POSIX_Remove(char *testFileName, IOR_param_t * param)
 {
         char errmsg[256];
         sprintf(errmsg, "[RANK %03d]: unlink() of file \"%s\" failed\n",

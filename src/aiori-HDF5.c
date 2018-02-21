@@ -88,7 +88,7 @@ static void *HDF5_Open(char *, IOR_param_t *);
 static IOR_offset_t HDF5_Xfer(int, void *, IOR_size_t *,
                            IOR_offset_t, IOR_param_t *);
 static void HDF5_Close(void *, IOR_param_t *);
-static void HDF5_Delete(char *, IOR_param_t *);
+static void HDFS_Remove(char *, IOR_param_t *);
 static void HDF5_SetVersion(IOR_param_t *);
 static void HDF5_Fsync(void *, IOR_param_t *);
 static IOR_offset_t HDF5_GetFileSize(IOR_param_t *, MPI_Comm, char *);
@@ -101,7 +101,7 @@ ior_aiori_t hdf5_aiori = {
         .open = HDF5_Open,
         .xfer = HDF5_Xfer,
         .close = HDF5_Close,
-        .delete = HDF5_Delete,
+        .remove = HDFS_Remove,
         .set_version = HDF5_SetVersion,
         .fsync = HDF5_Fsync,
         .get_file_size = HDF5_GetFileSize,
@@ -431,12 +431,12 @@ static void HDF5_Close(void *fd, IOR_param_t * param)
 }
 
 /*
- * Delete a file through the HDF5 interface.
+ * Remove a file through the HDF5 interface.
  */
-static void HDF5_Delete(char *testFileName, IOR_param_t * param)
+static void HDFS_Remove(char *testFileName, IOR_param_t * param)
 {
         if (unlink(testFileName) != 0)
-                WARN("cannot delete file");
+                WARN("cannot remove file");
 }
 
 /*
