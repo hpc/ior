@@ -362,8 +362,8 @@ CompareBuffers(void *expectedBuffer,
         size_t i, j, length, first, last;
         size_t errorCount = 0;
         int inError = 0;
-        unsigned long long *goodbuf = (unsigned long long *)expectedBuffer;
-        unsigned long long *testbuf = (unsigned long long *)unknownBuffer;
+        IOR_size_t *goodbuf = (IOR_size_t *)expectedBuffer;
+        IOR_size_t *testbuf = (IOR_size_t *)unknownBuffer;
 
         if (access == WRITECHECK || access == READCHECK) {
                 strcpy(bufferLabel1, "Expected: ");
