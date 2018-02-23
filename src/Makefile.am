@@ -49,6 +49,9 @@ if USE_POSIX_AIORI
 extraSOURCES += aiori-POSIX.c
 endif
 
+if USE_RADOS_AIORI
+extraSOURCES += aiori-RADOS.c
+endif
 
 if USE_S3_AIORI
 extraSOURCES  += aiori-S3.c
