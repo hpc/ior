@@ -37,7 +37,12 @@
    typedef void     IOBuf;      /* unused, but needs a type */
 #endif
 
-
+#ifdef USE_RADOS_AIORI
+#  include <rados/librados.h>
+#else
+    typedef void *rados_t;
+    typedef void *rados_ioctx_t;
+#endif
 
 #include "iordef.h"
 
@@ -192,6 +197,10 @@ typedef struct
     size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
 #   define      MAX_UPLOAD_ID_SIZE    256 /* seems to be 32, actually */
     char        UploadId[MAX_UPLOAD_ID_SIZE +1]; /* key for multi-part-uploads */
+
+    /* RADOS variables */
+    rados_t rados_cluster;           /* RADOS cluster handle */
+    rados_ioctx_t rados_ioctx;       /* I/O context for our pool in the RADOS cluster */
 
     /* NCMPI variables */
     int var_id;                      /* variable id handle for data set */

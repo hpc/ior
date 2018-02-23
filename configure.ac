@@ -131,6 +131,16 @@ AM_COND_IF([USE_POSIX_AIORI],[
         AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
 ])
 
+# RADOS support
+AC_ARG_WITH([rados],
+        [AS_HELP_STRING([--with-rados],
+           [support IO with librados backend @<:@default=no@:>@])],
+        [],
+        [with_rados=no])
+AM_CONDITIONAL([USE_RADOS_AIORI], [test x$with_rados = xyes])
+AM_COND_IF([USE_RADOS_AIORI],[
+        AC_DEFINE([USE_RADOS_AIORI], [], [Build RADOS backend AIORI])
+])
 
 
 
