@@ -330,7 +330,10 @@ static void NCMPI_Close(void *fd, IOR_param_t * param)
 static void NCMPI_Delete(char *testFileName, IOR_param_t * param)
 {
         if (unlink(testFileName) != 0)
-                WARN("unlink() failed");
+        {
+                if (errno != ENOENT)
+                        EWARN("unlink() failed");
+        }
 }
 
 /*

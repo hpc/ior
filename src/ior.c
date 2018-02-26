@@ -1272,21 +1272,13 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         rankOffset = 0;
                         GetTestFileName(testFileName, test);
                 }
-                if (access(testFileName, F_OK) == 0) {
-                        backend->delete(testFileName, test);
-                }
+                backend->delete(testFileName, test);
                 if (test->reorderTasksRandom == TRUE) {
                         rankOffset = tmpRankOffset;
                         GetTestFileName(testFileName, test);
                 }
         } else {
-                // BUG: "access()" assumes a POSIX filesystem.  Maybe use
-                //      backend->get_file_size(), instead, (and catch
-                //      errors), or extend the aiori struct to include
-                //      something to safely check for existence of the
-                //      "file".
-                //
-                if ((rank == 0) && (access(testFileName, F_OK) == 0)) {
+                if (rank == 0) {
                         backend->delete(testFileName, test);
                 }
         }
