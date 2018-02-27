@@ -440,11 +440,7 @@ static void HDF5_Close(void *fd, IOR_param_t * param)
  */
 static void HDF5_Delete(char *testFileName, IOR_param_t * param)
 {
-        if (unlink(testFileName) != 0)
-        {
-                if (errno != ENOENT)
-                        EWARN("cannot delete file");
-        }
+        return(MPIIO_Delete(testFileName, param));
 }
 
 /*
