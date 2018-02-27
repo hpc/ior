@@ -92,6 +92,13 @@ const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
 const char *aiori_default (void);
 
+/* some generic POSIX-based backend calls */
+int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param);
+int aiori_posix_mkdir (const char *path, mode_t mode, IOR_param_t * param);
+int aiori_posix_rmdir (const char *path, IOR_param_t * param);
+int aiori_posix_access (const char *path, int mode, IOR_param_t * param);
+int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param);
+
 IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName);
 

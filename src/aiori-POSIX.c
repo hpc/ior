@@ -87,6 +87,11 @@ ior_aiori_t posix_aiori = {
         .set_version = POSIX_SetVersion,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
+        .statfs = aiori_posix_statfs,
+        .mkdir = aiori_posix_mkdir,
+        .rmdir = aiori_posix_rmdir,
+        .access = aiori_posix_access,
+        .stat = aiori_posix_stat,
 };
 
 /***************************** F U N C T I O N S ******************************/
