@@ -69,6 +69,11 @@ ior_aiori_t ncmpi_aiori = {
         .set_version = NCMPI_SetVersion,
         .fsync = NCMPI_Fsync,
         .get_file_size = NCMPI_GetFileSize,
+        .statfs = aiori_posix_statfs,
+        .mkdir = aiori_posix_mkdir,
+        .rmdir = aiori_posix_rmdir,
+        .access = aiori_posix_access,
+        .stat = aiori_posix_stat,
 };
 
 /***************************** F U N C T I O N S ******************************/

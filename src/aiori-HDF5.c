@@ -105,6 +105,11 @@ ior_aiori_t hdf5_aiori = {
         .set_version = HDF5_SetVersion,
         .fsync = HDF5_Fsync,
         .get_file_size = HDF5_GetFileSize,
+        .statfs = aiori_posix_statfs,
+        .mkdir = aiori_posix_mkdir,
+        .rmdir = aiori_posix_rmdir,
+        .access = aiori_posix_access,
+        .stat = aiori_posix_stat,
 };
 
 static hid_t xferPropList;      /* xfer property list */

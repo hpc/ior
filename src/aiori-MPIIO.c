@@ -45,15 +45,20 @@ static void MPIIO_Fsync(void *, IOR_param_t *);
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t mpiio_aiori = {
-        "MPIIO",
-        MPIIO_Create,
-        MPIIO_Open,
-        MPIIO_Xfer,
-        MPIIO_Close,
-        MPIIO_Delete,
-        MPIIO_SetVersion,
-        MPIIO_Fsync,
-        MPIIO_GetFileSize
+        .name = "MPIIO",
+        .create = MPIIO_Create,
+        .open = MPIIO_Open,
+        .xfer = MPIIO_Xfer,
+        .close = MPIIO_Close,
+        .delete = MPIIO_Delete,
+        .set_version = MPIIO_SetVersion,
+        .fsync = MPIIO_Fsync,
+        .get_file_size = MPIIO_GetFileSize,
+        .statfs = aiori_posix_statfs,
+        .mkdir = aiori_posix_mkdir,
+        .rmdir = aiori_posix_rmdir,
+        .access = aiori_posix_access,
+        .stat = aiori_posix_stat,
 };
 
 /***************************** F U N C T I O N S ******************************/
