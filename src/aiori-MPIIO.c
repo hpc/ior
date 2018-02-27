@@ -38,7 +38,6 @@ static void *MPIIO_Open(char *, IOR_param_t *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
                                    IOR_offset_t, IOR_param_t *);
 static void MPIIO_Close(void *, IOR_param_t *);
-static void MPIIO_Delete(char *, IOR_param_t *);
 static void MPIIO_SetVersion(IOR_param_t *);
 static void MPIIO_Fsync(void *, IOR_param_t *);
 
@@ -375,30 +374,8 @@ static void MPIIO_Close(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the MPIIO interface.
  */
-static void MPIIO_Delete(char *testFileName, IOR_param_t * param)
+void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 {
-        /* NOTE: the IOR backend delete function can be called on files that do
-         * or do not exist, depending on the code path. we therefore need this
-         * delete routine to cleanly handle both code paths. however, there
-         * are a couple of issues within MPIIO that complicate this:
-         *   1.) MPI_File_delete does not necessarily return MPI_ERR_NO_SUCH_FILE
-         *       if the file being deleted does not exist -- sometimes these
-         *       errors are returned as generic MPIIO errors (MPI_ERR_IO) with
-         *       ADIOS encoding the actual underlying error. this makes catching
-         *       this sort of error difficult.
-         *   2.) there is not a safe way to check existence of an MPIIO file (e.g.,
-         *       using the access() routine) due to weird naming prefixes used in
-         *       ROMIO (e.g., pvfs:/path/to/testFile), making it difficult to assert
-         *       a file's existence before removing it.
-         *
-         * Our brute force approach is to just attempt to create the file as the
-         * first step of the delete process, ensuring that MPI_File_delete has
-         * _something_ to try to remove.
-         */
-        MPI_File tmp_fh;
-        MPI_File_open(MPI_COMM_SELF, testFileName, MPI_MODE_WRONLY | MPI_MODE_CREATE,
-                      (MPI_Info) MPI_INFO_NULL, &tmp_fh);
-        MPI_File_close(&tmp_fh);
         MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
                   "cannot delete file");
 }

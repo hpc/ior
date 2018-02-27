@@ -99,6 +99,7 @@ int aiori_posix_rmdir (const char *path, IOR_param_t * param);
 int aiori_posix_access (const char *path, int mode, IOR_param_t * param);
 int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param);
 
+void MPIIO_Delete(char *testFileName, IOR_param_t * param);
 IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName);
 
