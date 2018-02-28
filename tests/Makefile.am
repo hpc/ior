@@ -23,7 +23,8 @@ check_PROGRAMS =  iorTest
 
 iorTest_SOURCES = iorTest.cpp
 iorTest_CPPFLAGS = $(AM_CPPFLAGS) -fpermissive
-iorTest_LDADD = libgtest.la libgtest_main.la
+iorTest_LDADD = libgtest.la
+# iorTest_LDADD = libgtest.la libgtest_main.la
 
 
 TESTS =   iorTest
