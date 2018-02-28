@@ -54,19 +54,64 @@ ior_aiori_t rados_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 
+static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int create_flag)
+{
+        int ret;
+
+        /* create RADOS cluster handle */
+        /* XXX: HARDCODED RADOS USER NAME */
+        ret = rados_create(&param->rados_cluster, "admin");
+        if (ret)
+                ERR("unable to create RADOS cluster handle");
+
+        /* set the handle using the Ceph config */
+        /* XXX: HARDCODED RADOS CONF PATH */
+        ret = rados_conf_read_file(param->rados_cluster, "/etc/ceph/ceph.conf");
+        if (ret)
+                ERR("unable to read RADOS config file");
+
+        /* connect to the RADOS cluster */
+        ret = rados_connect(param->rados_cluster);
+        if (ret)
+                ERR("unable to connect to the RADOS cluster");
+
+        /* create an io context for the pool we are operating on */
+        /* XXX: HARDCODED RADOS POOL NAME */
+        ret = rados_ioctx_create(param->rados_cluster, "cephfs_data",
+                                 &param->rados_ioctx);
+        if (ret)
+                ERR("unable to create an I/O context for the RADOS cluster");
+
+        /* if create flag is given, create the object */
+        if (create_flag)
+        {
+                rados_write_op_t create_op;
+
+                /* create a RADOS "write op" for creating the ojbect */
+                create_op = rados_create_write_op();
+                rados_write_op_create(create_op, LIBRADOS_CREATE_EXCLUSIVE, NULL);
+                ret = rados_write_op_operate(create_op, param->rados_ioctx, testFileName,
+                                       NULL, 0);
+                if (ret)
+                        ERR("unable to create RADOS object");
+                rados_release_write_op(create_op);
+        }
+        /* the open operation itsef is a NOOP */
+
+        return;
+}
+
 static void *RADOS_Create(char *testFileName, IOR_param_t * param)
 {
-        /* connect */
-        //rados_connect();
-
-        /* create */
-
-        return NULL;
+        return RADOS_Create_Or_Open(testFileName, param, TRUE);
 }
 
 static void *RADOS_Open(char *testFileName, IOR_param_t * param)
 {
-        return RADOS_Create(testFileName, param);
+        if (param->openFlags & IOR_CREAT)
+                return RADOS_Create_Or_Open(testFileName, param, TRUE);
+        else
+                return RADOS_Create_Or_Open(testFileName, param, FALSE);
 }
 
 static IOR_offset_t RADOS_Xfer(int access, void *fd, IOR_size_t * buffer,
