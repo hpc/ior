@@ -207,6 +207,7 @@ static void RADOS_Delete(char *testFileName, IOR_param_t * param)
 
 static void RADOS_SetVersion(IOR_param_t * test)
 {
+        strcpy(test->apiVersion, test->api);
         return;
 }
 
