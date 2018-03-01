@@ -123,9 +123,26 @@ static void *RADOS_Open(char *testFileName, IOR_param_t * param)
 }
 
 static IOR_offset_t RADOS_Xfer(int access, void *fd, IOR_size_t * buffer,
-                              IOR_offset_t length, IOR_param_t * param)
+                               IOR_offset_t length, IOR_param_t * param)
 {
-        return 0;
+        int ret;
+        char *oid = (char *)fd;
+
+        if (access == WRITE)
+        {
+                rados_write_op_t write_op;
+
+                write_op = rados_create_write_op();
+                rados_write_op_write(write_op, (const char *)buffer,
+                                     length, param->offset);
+                ret = rados_write_op_operate(write_op, param->rados_ioctx,
+                                             oid, NULL, 0);
+                rados_release_write_op(write_op);
+                if (ret)
+                        ERR("unable to write RADOS object");
+        }
+
+        return length;
 }
 
 static void RADOS_Fsync(void *fd, IOR_param_t * param)
