@@ -189,12 +189,16 @@ static void RADOS_Delete(char *testFileName, IOR_param_t * param)
 
         /* remove the object */
         remove_op = rados_create_write_op();
+        rados_write_op_assert_exists(remove_op);
         rados_write_op_remove(remove_op);
         ret = rados_write_op_operate(remove_op, param->rados_ioctx,
                                      oid, NULL, 0);
         rados_release_write_op(remove_op);
+        /* XXX ignore errors for now ... we can't be sure testFileName exists when this is called */
+#if 0
         if (ret)
                 ERR("unable to remove RADOS object");
+#endif
 
         RADOS_Cluster_Finalize(param);
 
