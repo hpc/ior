@@ -173,7 +173,6 @@ static void RADOS_Close(void *fd, IOR_param_t * param)
 
         /* object does not need to be "closed", but we should tear the cluster down */
         RADOS_Cluster_Finalize(param);
-
         free(oid);
 
         return;
@@ -194,14 +193,20 @@ static IOR_offset_t RADOS_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
 {
         int ret;
         char *oid = testFileName;
+        rados_read_op_t stat_op;
         uint64_t oid_size;
+        int stat_ret;
         IOR_offset_t aggSizeFromStat, tmpMin, tmpMax, tmpSum;
 
         /* we have to reestablish cluster connection here... */
         RADOS_Cluster_Init(test);
 
-        ret = rados_stat(test->rados_ioctx, oid, &oid_size, NULL);
-        if (ret)
+        /* stat the object */
+        stat_op = rados_create_read_op();
+        rados_read_op_stat(stat_op, &oid_size, NULL, &stat_ret);
+        ret = rados_read_op_operate(stat_op, test->rados_ioctx, oid, 0);
+        rados_release_read_op(stat_op);
+        if (ret || stat_ret)
                 ERR("unable to stat RADOS object");
         aggSizeFromStat = oid_size;
 
