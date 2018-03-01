@@ -180,6 +180,24 @@ static void RADOS_Close(void *fd, IOR_param_t * param)
 
 static void RADOS_Delete(char *testFileName, IOR_param_t * param)
 {
+        int ret;
+        char *oid = testFileName;
+        rados_write_op_t remove_op;
+
+        /* we have to reestablish cluster connection here... */
+        RADOS_Cluster_Init(param);
+
+        /* remove the object */
+        remove_op = rados_create_write_op();
+        rados_write_op_remove(remove_op);
+        ret = rados_write_op_operate(remove_op, param->rados_ioctx,
+                                     oid, NULL, 0);
+        rados_release_write_op(remove_op);
+        if (ret)
+                ERR("unable to remove RADOS object");
+
+        RADOS_Cluster_Finalize(param);
+
         return;
 }
 
