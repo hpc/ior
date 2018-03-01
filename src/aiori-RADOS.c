@@ -57,6 +57,11 @@ ior_aiori_t rados_aiori = {
 static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int create_flag)
 {
         int ret;
+        char *oid;
+
+        oid = strdup(testFileName);
+        if (!oid)
+                ERR("unable to allocate RADOS oid");
 
         /* create RADOS cluster handle */
         /* XXX: HARDCODED RADOS USER NAME */
@@ -90,15 +95,18 @@ static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int c
                 /* create a RADOS "write op" for creating the ojbect */
                 create_op = rados_create_write_op();
                 rados_write_op_create(create_op, LIBRADOS_CREATE_EXCLUSIVE, NULL);
-                ret = rados_write_op_operate(create_op, param->rados_ioctx, testFileName,
+                ret = rados_write_op_operate(create_op, param->rados_ioctx, oid,
                                        NULL, 0);
+                rados_release_write_op(create_op);
                 if (ret)
                         ERR("unable to create RADOS object");
-                rados_release_write_op(create_op);
         }
-        /* the open operation itsef is a NOOP */
+        else
+        {
+                /* XXX actually, we should probably assert oid existence here? */
+        }
 
-        return;
+        return (void *)oid;
 }
 
 static void *RADOS_Create(char *testFileName, IOR_param_t * param)
@@ -127,6 +135,8 @@ static void RADOS_Fsync(void *fd, IOR_param_t * param)
 
 static void RADOS_Close(void *fd, IOR_param_t * param)
 {
+        /* object does not need to be "closed", but we should tear the cluster down */
+
         return;
 }
 
