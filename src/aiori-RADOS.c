@@ -54,14 +54,9 @@ ior_aiori_t rados_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 
-static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int create_flag)
+static void RADOS_Cluster_Init(IOR_param_t * param)
 {
         int ret;
-        char *oid;
-
-        oid = strdup(testFileName);
-        if (!oid)
-                ERR("unable to allocate RADOS oid");
 
         /* create RADOS cluster handle */
         /* XXX: HARDCODED RADOS USER NAME */
@@ -87,12 +82,34 @@ static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int c
         if (ret)
                 ERR("unable to create an I/O context for the RADOS cluster");
 
-        /* if create flag is given, create the object */
+        return;
+}
+
+static void RADOS_Cluster_Finalize(IOR_param_t * param)
+{
+        /* ioctx destroy */
+        rados_ioctx_destroy(param->rados_ioctx);
+
+        /* shutdown */
+        rados_shutdown(param->rados_cluster);
+}
+
+static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int create_flag)
+{
+        int ret;
+        char *oid;
+
+        RADOS_Cluster_Init(param);
+
+        oid = strdup(testFileName);
+        if (!oid)
+                ERR("unable to allocate RADOS oid");
+
         if (create_flag)
         {
                 rados_write_op_t create_op;
 
-                /* create a RADOS "write op" for creating the ojbect */
+                /* create a RADOS "write op" for creating the object */
                 create_op = rados_create_write_op();
                 rados_write_op_create(create_op, LIBRADOS_CREATE_EXCLUSIVE, NULL);
                 ret = rados_write_op_operate(create_op, param->rados_ioctx, oid,
@@ -152,7 +169,12 @@ static void RADOS_Fsync(void *fd, IOR_param_t * param)
 
 static void RADOS_Close(void *fd, IOR_param_t * param)
 {
+        char *oid = (char *)fd;
+
         /* object does not need to be "closed", but we should tear the cluster down */
+        RADOS_Cluster_Finalize(param);
+
+        free(oid);
 
         return;
 }
@@ -170,5 +192,45 @@ static void RADOS_SetVersion(IOR_param_t * test)
 static IOR_offset_t RADOS_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                       char *testFileName)
 {
-        return 0;
+        int ret;
+        char *oid = testFileName;
+        uint64_t oid_size;
+        IOR_offset_t aggSizeFromStat, tmpMin, tmpMax, tmpSum;
+
+        /* we have to reestablish cluster connection here... */
+        RADOS_Cluster_Init(test);
+
+        ret = rados_stat(test->rados_ioctx, oid, &oid_size, NULL);
+        if (ret)
+                ERR("unable to stat RADOS object");
+        aggSizeFromStat = oid_size;
+
+        if (test->filePerProc == TRUE)
+        {
+                MPI_CHECK(MPI_Allreduce(&aggSizeFromStat, &tmpSum, 1,
+                                        MPI_LONG_LONG_INT, MPI_SUM, testComm),
+                          "cannot total data moved");
+                aggSizeFromStat = tmpSum;
+        }
+        else
+        {
+                MPI_CHECK(MPI_Allreduce(&aggSizeFromStat, &tmpMin, 1,
+                                        MPI_LONG_LONG_INT, MPI_MIN, testComm),
+                          "cannot total data moved");
+                MPI_CHECK(MPI_Allreduce(&aggSizeFromStat, &tmpMax, 1,
+                                        MPI_LONG_LONG_INT, MPI_MAX, testComm),
+                          "cannot total data moved");
+                if (tmpMin != tmpMax)
+                {
+                        if (rank == 0)
+                                WARN("inconsistent file size by different tasks");
+
+                        /* incorrect, but now consistent across tasks */
+                        aggSizeFromStat = tmpMin;
+                }
+        }
+
+        RADOS_Cluster_Finalize(test);
+
+        return aggSizeFromStat;
 }
