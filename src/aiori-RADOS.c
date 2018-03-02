@@ -169,6 +169,20 @@ static IOR_offset_t RADOS_Xfer(int access, void *fd, IOR_size_t * buffer,
                 if (ret)
                         RADOS_ERR("unable to write RADOS object", ret);
         }
+        else /* READ */
+        {
+                int read_ret;
+                size_t bytes_read;
+                rados_read_op_t read_op;
+
+                read_op = rados_create_read_op();
+                rados_read_op_read(read_op, param->offset, length, (char *)buffer,
+                                   &bytes_read, &read_ret);
+                ret = rados_read_op_operate(read_op, param->rados_ioctx, oid, 0);
+                rados_release_read_op(read_op);
+                if (ret || read_ret || ((IOR_offset_t)bytes_read != length))
+                        RADOS_ERR("unable to read RADOS object", ret);
+        }
 
         return length;
 }
