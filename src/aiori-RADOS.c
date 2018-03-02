@@ -52,6 +52,11 @@ ior_aiori_t rados_aiori = {
         .get_file_size = RADOS_GetFileSize,
 };
 
+#define RADOS_ERR(__err_str, __ret) do { \
+        errno = -__ret; \
+        ERR(__err_str); \
+} while(0)
+
 /***************************** F U N C T I O N S ******************************/
 
 static void RADOS_Cluster_Init(IOR_param_t * param)
@@ -62,25 +67,25 @@ static void RADOS_Cluster_Init(IOR_param_t * param)
         /* XXX: HARDCODED RADOS USER NAME */
         ret = rados_create(&param->rados_cluster, "admin");
         if (ret)
-                ERR("unable to create RADOS cluster handle");
+                RADOS_ERR("unable to create RADOS cluster handle", ret);
 
         /* set the handle using the Ceph config */
         /* XXX: HARDCODED RADOS CONF PATH */
         ret = rados_conf_read_file(param->rados_cluster, "/etc/ceph/ceph.conf");
         if (ret)
-                ERR("unable to read RADOS config file");
+                RADOS_ERR("unable to read RADOS config file", ret);
 
         /* connect to the RADOS cluster */
         ret = rados_connect(param->rados_cluster);
         if (ret)
-                ERR("unable to connect to the RADOS cluster");
+                RADOS_ERR("unable to connect to the RADOS cluster", ret);
 
         /* create an io context for the pool we are operating on */
         /* XXX: HARDCODED RADOS POOL NAME */
         ret = rados_ioctx_create(param->rados_cluster, "cephfs_data",
                                  &param->rados_ioctx);
         if (ret)
-                ERR("unable to create an I/O context for the RADOS cluster");
+                RADOS_ERR("unable to create an I/O context for the RADOS cluster", ret);
 
         return;
 }
@@ -122,7 +127,7 @@ static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int c
                                        NULL, 0);
                 rados_release_write_op(create_op);
                 if (ret)
-                        ERR("unable to create RADOS object");
+                        RADOS_ERR("unable to create RADOS object", ret);
         }
         else
         {
@@ -162,7 +167,7 @@ static IOR_offset_t RADOS_Xfer(int access, void *fd, IOR_size_t * buffer,
                                              oid, NULL, 0);
                 rados_release_write_op(write_op);
                 if (ret)
-                        ERR("unable to write RADOS object");
+                        RADOS_ERR("unable to write RADOS object", ret);
         }
 
         return length;
@@ -203,7 +208,7 @@ static void RADOS_Delete(char *testFileName, IOR_param_t * param)
         /* XXX ignore errors for now ... we can't be sure testFileName exists when this is called */
 #if 0
         if (ret)
-                ERR("unable to remove RADOS object");
+                RADOS_ERR("unable to remove RADOS object", ret);
 #endif
 
         RADOS_Cluster_Finalize(param);
@@ -236,7 +241,7 @@ static IOR_offset_t RADOS_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         ret = rados_read_op_operate(stat_op, test->rados_ioctx, oid, 0);
         rados_release_read_op(stat_op);
         if (ret || stat_ret)
-                ERR("unable to stat RADOS object");
+                RADOS_ERR("unable to stat RADOS object", stat_ret);
         aggSizeFromStat = oid_size;
 
         if (test->filePerProc == TRUE)
