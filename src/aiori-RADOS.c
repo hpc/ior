@@ -108,10 +108,16 @@ static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int c
         if (create_flag)
         {
                 rados_write_op_t create_op;
+                int rados_create_flag;
+
+                if (param->openFlags & IOR_EXCL)
+                        rados_create_flag = LIBRADOS_CREATE_EXCLUSIVE;
+                else
+                        rados_create_flag = LIBRADOS_CREATE_IDEMPOTENT;
 
                 /* create a RADOS "write op" for creating the object */
                 create_op = rados_create_write_op();
-                rados_write_op_create(create_op, LIBRADOS_CREATE_EXCLUSIVE, NULL);
+                rados_write_op_create(create_op, rados_create_flag, NULL);
                 ret = rados_write_op_operate(create_op, param->rados_ioctx, oid,
                                        NULL, 0);
                 rados_release_write_op(create_op);
