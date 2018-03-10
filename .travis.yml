@@ -1,0 +1,38 @@
+language: c
+# xenial 16.04 not yet supported
+# dist: xenial
+before_install:
+    # For MPI
+    - test -n $CC && unset CC
+install:
+    - sudo apt-get -qq update
+    # Install MPI
+    - sudo apt-get install -y openmpi-bin libopenmpi-dev
+    # Install HDF5
+    - sudo apt-get install -y hdf5-tools libhdf5-mpi-dev
+    # Install Lustre
+    # TODO: As far as a i can see it needs to be compiled form source with kernel
+    # module as there is no package.
+    # It seams that there are .debs releases for lustre, but its only for 16.04
+    # So need to wait till travis is updated.
+    # https://downloads.hpdd.intel.com/public/lustre/lustre-2.10.3/
+    # Install  Parallel netcdf
+    # TODO: Not in repos for 14.04 trustz but comes 16.04 xenial
+    #- sudo apt-get install -y libpnetcdf-dev pnetcdf-bin
+    # Install HDFS
+    # TODO: Not sure with which c libray hdfs should be used and if it is in
+    # the ubuntu repos
+    # Probably hadoop needs to be installed an provides nativ api.
+    # Install Amazon S3
+    # TODO: The needed library needs to be installed. Follow the instructions in
+    # aiori-S3.c to achive this.
+    # GPFS
+    # NOTE: Think GPFS need a license and is therefore not testable with travis.
+before_script: ./bootstrap
+script: ./configure --with-hdf5 && make
+
+
+# notifications:
+#   email:
+#     on_success: change # default: change
+#     on_failure: always # default: always
