@@ -55,8 +55,12 @@ ior_aiori_t mpiio_aiori = {
         .set_version = MPIIO_SetVersion,
         .fsync = MPIIO_Fsync,
         .get_file_size = MPIIO_GetFileSize,
+        .statfs = NULL,
+        .mkdir = NULL,
+        .rmdir = NULL,
         .access = MPIIO_Access,
-};
+        .stat = NULL,
+};   
 
 /***************************** F U N C T I O N S ******************************/
 
