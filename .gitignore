@@ -30,6 +30,6 @@ src/*.i
 src/*.s
 src/ior
 
-doc/doxygen/html
-doc/doxygen/xml
+doc/doxygen/build
 doc/sphinx/_*/
+!doc/sphinx/Makefile

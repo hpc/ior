@@ -11,20 +11,25 @@
     :caption: User Documentation
 
     userDoc/install
-    userDoc/tutorial
-    userDoc/userguid
+    First Steps <userDoc/tutorial>
+    userDoc/options
+    userDoc/skripts
+    userDoc/compatibility
+    FAQ <userDoc/faq>
+
 
 .. toctree::
     :hidden:
     :caption: Developer Documentation
 
     devDoc/doxygen
+    devDoc/CI
 
 .. toctree::
     :hidden:
     :caption: Miscellaneous
 
-    Git Repository <github.com/IOR-LANL/ior#http://>
+    Git Repository <https://github.com/hpc/ior>
     changes
 
 ..  Indices and tables

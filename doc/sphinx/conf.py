@@ -22,16 +22,19 @@ import sys
 sys.path.insert(0, os.path.abspath('.'))
 
 
-# -- Breathe -------------------------------------------------------------
-
-sys.path.append( "/usr/local/bin/breathe-apidoc" )
-
-# compile doxygen
+# -- compile doxygen --------------
+# this is needed for breath and to compile doxygen on read the docs
 import subprocess
 subprocess.call('cd ../doxygen ; doxygen', shell=True)
 
-breathe_projects = { "IOR":"../doxygen/xml/" }
-breathe_default_project = 'IOR'
+html_extra_path = ['../doxygen/build/']
+
+# -- Breathe -------------------------------------------------------------
+#
+# sys.path.append( "/usr/local/bin/breathe-apidoc" )
+
+# breathe_projects = { "IOR":"../doxygen/xml/" }
+# breathe_default_project = 'IOR'
 # breathe_default_members = ('members', 'private-members', 'undoc-members')
 # breathe_domain_by_extension = {"h" : "c", 'c': 'c',}
 # breathe_build_directory
@@ -45,7 +48,8 @@ breathe_default_project = 'IOR'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.imgmath', 'sphinx.ext.todo', 'breathe' ]
+# extensions = ['sphinx.ext.imgmath', 'sphinx.ext.todo', 'breathe' ]
+extensions = ['sphinx.ext.imgmath', 'sphinx.ext.todo']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -69,7 +73,7 @@ author = u'IOR'
 # built documents.
 #
 # The short X.Y version.
-version = u'3.0.1'
+version = u'3.1.0'
 # The full version, including alpha/beta/rc tags.
 release = u'0'
 

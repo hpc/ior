@@ -1,36 +1,21 @@
-IOR USER GUIDE
-===============
+.. _options:
+
+Options
+=======
+
+IOR provides many options, in fact there are now more than there are one letter
+flags in the alphabet.
+For this and to run IOR by a config script, there are some options which are
+only available via directives. When both script and command line options are in
+use, command line options set in front of -f are the defaults which may be
+overridden by the script.
+Directives can also be set from the command line via "-O" option. In combination
+with a script they behave like the normal command line options. But directives and
+normal parameters override each other, so the last one executed.
 
 
-1.  DESCRIPTION
----------------
-IOR can be used for testing performance of parallel file systems using various
-interfaces and access patterns.  IOR uses MPI for process synchronization.
-IOR version 2 is a complete rewrite of the original IOR (Interleaved-Or-Random)
-version 1 code.
-
-
-
-2. RUNNING IOR
---------------
-Two ways to run IOR:
-
-  * Command line with arguments -- executable followed by command line options.
-
-    E.g., to execute:  IOR -w -r -o filename
-    This performs a write and a read to the file 'filename'.
-
-  * Command line with scripts -- any arguments on the command line will
-    establish the default for the test run, but a script may be used in
-    conjunction with this for varying specific tests during an execution of the
-    code.
-
-    E.g., to execute:  IOR -W -f script
-    This defaults all tests in 'script' to use write data checking.
-
-
-3. OPTIONS
-----------
+Command line options
+--------------------
 These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]
   -A N  refNum -- user reference number to include in long summary
@@ -89,7 +74,7 @@ NOTES: * S is a string, N is an integer number.
          suffices are recognized.  I.e., '4k' or '4K' is accepted as 4096.
 
 
-4. OPTION DETAILS
+Directive Options
 ------------------
 For each of the general settings, note the default is shown in brackets.
 IMPORTANT NOTE: For all true/false options below [1]=true, [0]=false
@@ -173,9 +158,9 @@ GENERAL:
 
   * checkWrite           - read data back and check for errors against known
                            pattern; can be used independently of writeFile [0=FALSE]
-                           NOTES: * data checking is not timed and does not
+                           NOTES: - data checking is not timed and does not
                                     affect other performance timings
-                                  * all errors tallied and returned as program
+                                  - all errors tallied and returned as program
                                     exit code, unless quitOnError set
 
   * checkRead            - reread data and check for errors between reads; can
@@ -190,12 +175,12 @@ GENERAL:
   * useExistingTestFile  - do not remove test file before write access [0=FALSE]
 
   * segmentCount         - number of segments in file [1]
-                           NOTES: * a segment is a contiguous chunk of data
+                           NOTES: - a segment is a contiguous chunk of data
                                     accessed by multiple clients each writing/
                                     reading their own contiguous data;
                                     comprised of blocks accessed by multiple
                                     clients
-                                  * with HDF5 this repeats the pattern of an
+                                  - with HDF5 this repeats the pattern of an
                                     entire shared dataset
 
   * blockSize            - size (in bytes) of a contiguous chunk of data
@@ -238,7 +223,7 @@ GENERAL:
                                     to complete without interruption
 
   * deadlineForStonewalling - seconds before stopping write or read phase [0]
-                           NOTES: * used for measuring the amount of data moved
+                           NOTES: - used for measuring the amount of data moved
                                     in a fixed time.  After the barrier, each
                                     task starts its own timer, begins moving
                                     data, and the stops moving data at a pre-
@@ -248,11 +233,11 @@ GENERAL:
                                     data moved in a fixed amount of time.  The
                                     objective is to prevent tasks slow to
                                     complete from skewing the performance.
-                                  * setting this to zero (0) unsets this option
-                                  * this option is incompatible w/data checking
+                                  - setting this to zero (0) unsets this option
+                                  - this option is incompatible w/data checking
 
   * randomOffset         - access is to random, not sequential, offsets within a file [0=FALSE]
-                           NOTES: * this option is currently incompatible with:
+                           NOTES: - this option is currently incompatible with:
                                     -checkRead
                                     -storeFileOffset
                                     -MPIIO collective or useFileView
@@ -330,118 +315,28 @@ GPFS-SPECIFIC
 			   traffic when many proceses write/read to same file.
 
 
-5. VERBOSITY LEVELS
+
+Verbosity levels
 ---------------------
 The verbosity of output for IOR can be set with -v.  Increasing the number of
 -v instances on a command line sets the verbosity higher.
 
 Here is an overview of the information shown for different verbosity levels:
-  0 - default; only bare essentials shown
-  1 - max clock deviation, participating tasks, free space, access pattern,
-      commence/verify access notification w/time
-  2 - rank/hostname, machine name, timer used, individual repetition
-      performance results, timestamp used for data signature
-  3 - full test details, transfer block/offset compared, individual data
-      checking errors, environment variables, task writing/reading file name,
-      all test operation times
-  4 - task id and offset for each transfer
-  5 - each 8-byte data signature comparison (WARNING: more data to STDOUT
-      than stored in file, use carefully)
+
+0)  default; only bare essentials shown
+1)  max clock deviation, participating tasks, free space, access pattern,
+    commence/verify access notification w/time
+2)  rank/hostname, machine name, timer used, individual repetition
+    performance results, timestamp used for data signature
+3)  full test details, transfer block/offset compared, individual data
+    checking errors, environment variables, task writing/reading file name,
+    all test operation times
+4)  task id and offset for each transfer
+5)  each 8-byte data signature comparison (WARNING: more data to STDOUT
+    than stored in file, use carefully)
 
 
-6. USING SCRIPTS
------------------
-IOR can use a script with the command line.  Any options on the command line
-will be considered the default settings for running the script.  (I.e.,
-'IOR -W -f script' will have all tests in the script run with the -W option as
-default.)  The script itself can override these settings and may be set to run
-run many different tests of IOR under a single execution.
-The command line is: ::
-
-  IOR/bin/IOR -f script
-
-In IOR/scripts, there are scripts of testcases for simulating I/O behavior of
-various application codes.  Details are included in each script as necessary.
-
-An example of a script: ::
-
-  IOR START
-    api=[POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]
-    testFile=testFile
-    hintsFileName=hintsFile
-    repetitions=8
-    multiFile=0
-    interTestDelay=5
-    readFile=1
-    writeFile=1
-    filePerProc=0
-    checkWrite=0
-    checkRead=0
-    keepFile=1
-    quitOnError=0
-    segmentCount=1
-    blockSize=32k
-    outlierThreshold=0
-    setAlignment=1
-    transferSize=32
-    singleXferAttempt=0
-    individualDataSets=0
-    verbose=0
-    numTasks=32
-    collective=1
-    preallocate=0
-    useFileView=0
-    keepFileWithError=0
-    setTimeStampSignature=0
-    useSharedFilePointer=0
-    useStridedDatatype=0
-    uniqueDir=0
-    fsync=0
-    storeFileOffset=0
-    maxTimeDuration=60
-    deadlineForStonewalling=0
-    useExistingTestFile=0
-    useO_DIRECT=0
-    showHints=0
-    showHelp=0
-  RUN
-    # additional tests are optional
-    <snip>
-  RUN
-    <snip>
-  RUN
-  IOR STOP
-
-
-NOTES:
-  * Not all test parameters need be set.
-  * White space is ignored in script, as are comments starting with '#'.
-
-
-7. COMPATIBILITY WITH OLDER VERSIONS
--------------------------------------
-1)  IOR version 1 (c. 1996-2002) and IOR version 2 (c. 2003-present) are
-    incompatible.  Input decks from one will not work on the other.  As version
-    1 is not included in this release, this shouldn't be case for concern.  All
-    subsequent compatibility issues are for IOR version 2.
-
-2)  IOR versions prior to release 2.8 provided data size and rates in powers
-    of two.  E.g., 1 MB/sec referred to 1,048,576 bytes per second.  With the
-    IOR release 2.8 and later versions, MB is now defined as 1,000,000 bytes
-    and MiB is 1,048,576 bytes.
-
-3)  In IOR versions 2.5.3 to 2.8.7, IOR could be run without any command line
-    options.  This assumed that if both write and read options (-w -r) were
-    omitted, the run with them both set as default.  Later, it became clear
-    that in certain cases (data checking, e.g.) this caused difficulties.  In
-    IOR versions 2.8.8 and later, if not one of the -w -r -W or -R options is
-    set, then -w and -r are set implicitly.
-
-4)  IOR version 3 (Jan 2012-present) has changed the output of IOR somewhat,
-    and the "testNum" option was renamed "refNum".
-
-
-8. INCOMPRESSIBLE NOTES
+Incompressible notes
 -------------------------
 Please note that incompressibility is a factor of how large a block compression
 algorithm uses.  The incompressible buffer is filled only once before write times,
@@ -449,190 +344,13 @@ so if the compression algorithm takes in blocks larger than the transfer size,
 there will be compression.  Below are some baselines that I established for
 zip, gzip, and bzip.
 
-1) zip:  For zipped files, a transfer size of 1k is sufficient.
+1)  zip:  For zipped files, a transfer size of 1k is sufficient.
 
-2) gzip: For gzipped files, a transfer size of 1k is sufficient.
+2)  gzip: For gzipped files, a transfer size of 1k is sufficient.
 
-3) bzip2: For bziped files a transfer size of 1k is insufficient (~50% compressed).
-   To avoid compression a transfer size of greater than the bzip block size is required
-   (default = 900KB). I suggest a transfer size of greather than 1MB to avoid bzip2 compression.
+3)  bzip2: For bziped files a transfer size of 1k is insufficient (~50% compressed).
+    To avoid compression a transfer size of greater than the bzip block size is required
+    (default = 900KB). I suggest a transfer size of greather than 1MB to avoid bzip2 compression.
 
 Be aware of the block size your compression algorithm will look at, and adjust the transfer size
 accordingly.
-
-
-9. FREQUENTLY ASKED QUESTIONS
-------------------------------
-HOW DO I PERFORM MULTIPLE DATA CHECKS ON AN EXISTING FILE?
-
-  Use this command line:  IOR -k -E -W -i 5 -o file
-
-  -k keeps the file after the access rather than deleting it
-  -E uses the existing file rather than truncating it first
-  -W performs the writecheck
-  -i number of iterations of checking
-  -o filename
-
-  On versions of IOR prior to 2.8.8, you need the -r flag also, otherwise
-  you'll first overwrite the existing file.  (In earlier versions, omitting -w
-  and -r implied using both.  This semantic has been subsequently altered to be
-  omitting -w, -r, -W, and -R implied using both -w and -r.)
-
-  If you're running new tests to create a file and want repeat data checking on
-  this file multiple times, there is an undocumented option for this.  It's -O
-  multiReRead=1, and you'd need to have an IOR version compiled with the
-  USE_UNDOC_OPT=1 (in iordef.h).  The command line would look like this:
-
-  IOR -k -E -w -W -i 5 -o file -O multiReRead=1
-
-  For the first iteration, the file would be written (w/o data checking).  Then
-  for any additional iterations (four, in this example) the file would be
-  reread for whatever data checking option is used.
-
-
-HOW DOES IOR CALCULATE PERFORMANCE?
-
-  IOR performs get a time stamp START, then has all participating tasks open a
-  shared or independent file, transfer data, close the file(s), and then get a
-  STOP time.  A stat() or MPI_File_get_size() is performed on the file(s) and
-  compared against the aggregate amount of data transferred.  If this value
-  does not match, a warning is issued and the amount of data transferred as
-  calculated from write(), e.g., return codes is used.  The calculated
-  bandwidth is the amount of data transferred divided by the elapsed
-  STOP-minus-START time.
-
-  IOR also gets time stamps to report the open, transfer, and close times.
-  Each of these times is based on the earliest start time for any task and the
-  latest stop time for any task.  Without using barriers between these
-  operations (-g), the sum of the open, transfer, and close times may not equal
-  the elapsed time from the first open to the last close.
-
-
-HOW DO I ACCESS MULTIPLE FILE SYSTEMS IN IOR?
-
-  It is possible when using the filePerProc option to have tasks round-robin
-  across multiple file names.  Rather than use a single file name '-o file',
-  additional names '-o file1@file2@file3' may be used.  In this case, a file
-  per process would have three different file names (which may be full path
-  names) to access.  The '@' delimiter is arbitrary, and may be set in the
-  FILENAME_DELIMITER definition in iordef.h.
-
-  Note that this option of multiple filenames only works with the filePerProc
-  -F option.  This will not work for shared files.
-
-
-HOW DO I BALANCE LOAD ACROSS MULTIPLE FILE SYSTEMS?
-
-  As for the balancing of files per file system where different file systems
-  offer different performance, additional instances of the same destination
-  path can generally achieve good balance.
-
-  For example, with FS1 getting 50% better performance than FS2, set the '-o'
-  flag such that there are additional instances of the FS1 directory.  In this
-  case, '-o FS1/file@FS1/file@FS1/file@FS2/file@FS2/file' should adjust for
-  the performance difference and balance accordingly.
-
-
-HOW DO I USE STONEWALLING?
-
-  To use stonewalling (-D), it's generally best to separate write testing from
-  read testing.  Start with writing a file with '-D 0' (stonewalling disabled)
-  to determine how long the file takes to be written.  If it takes 10 seconds
-  for the data transfer, run again with a shorter duration, '-D 7' e.g., to
-  stop before the file would be completed without stonewalling.  For reading,
-  it's best to create a full file (not an incompletely written file from a
-  stonewalling run) and then run with stonewalling set on this preexisting
-  file.  If a write and read test are performed in the same run with
-  stonewalling, it's likely that the read will encounter an error upon hitting
-  the EOF.  Separating the runs can correct for this.  E.g.,
-
-  IOR -w -k -o file -D 10  # write and keep file, stonewall after 10 seconds
-  IOR -r -E -o file -D 7   # read existing file, stonewall after 7 seconds
-
-  Also, when running multiple iterations of a read-only stonewall test, it may
-  be necessary to set the -D value high enough so that each iteration is not
-  reading from cache.  Otherwise, in some cases, the first iteration may show
-  100 MB/s, the next 200 MB/s, the third 300 MB/s.  Each of these tests is
-  actually reading the same amount from disk in the allotted time, but they
-  are also reading the cached data from the previous test each time to get the
-  increased performance.  Setting -D high enough so that the cache is
-  overfilled will prevent this.
-
-
-HOW DO I BYPASS CACHING WHEN READING BACK A FILE I'VE JUST WRITTEN?
-
-  One issue with testing file systems is handling cached data.  When a file is
-  written, that data may be stored locally on the node writing the file.  When
-  the same node attempts to read the data back from the file system either for
-  performance or data integrity checking, it may be reading from its own cache
-  rather from the file system.
-
-  The reorderTasksConstant '-C' option attempts to address this by having a
-  different node read back data than wrote it.  For example, node N writes the
-  data to file, node N+1 reads back the data for read performance, node N+2
-  reads back the data for write data checking, and node N+3 reads the data for
-  read data checking, comparing this with the reread data from node N+4.  The
-  objective is to make sure on file access that the data is not being read from
-  cached data.
-
-    Node 0: writes data
-    Node 1: reads data
-    Node 2: reads written data for write checking
-    Node 3: reads written data for read checking
-    Node 4: reads written data for read checking, comparing with Node 3
-
-  The algorithm for skipping from N to N+1, e.g., expects consecutive task
-  numbers on nodes (block assignment), not those assigned round robin (cyclic
-  assignment).  For example, a test running 6 tasks on 3 nodes would expect
-  tasks 0,1 on node 0; tasks 2,3 on node 1; and tasks 4,5 on node 2.  Were the
-  assignment for tasks-to-node in round robin fashion, there would be tasks 0,3
-  on node 0; tasks 1,4 on node 1; and tasks 2,5 on node 2.  In this case, there
-  would be no expectation that a task would not be reading from data cached on
-  a node.
-
-
-HOW DO I USE HINTS?
-
-  It is possible to pass hints to the I/O library or file system layers
-  following this form:
-    'setenv IOR_HINT__<layer>__<hint> <value>'
-  For example:
-    'setenv IOR_HINT__MPI__IBM_largeblock_io true'
-    'setenv IOR_HINT__GPFS__important_hint true'
-  or, in a file in the form:
-    'IOR_HINT__<layer>__<hint>=<value>'
-  Note that hints to MPI from the HDF5 or NCMPI layers are of the form:
-    'setenv IOR_HINT__MPI__<hint> <value>'
-
-
-HOW DO I EXPLICITY SET THE FILE DATA SIGNATURE?
-
-  The data signature for a transfer contains the MPI task number, transfer-
-  buffer offset, and also timestamp for the start of iteration.  As IOR works
-  with 8-byte long long ints, the even-numbered long longs written contain a
-  32-bit MPI task number and a 32-bit timestamp.  The odd-numbered long longs
-  contain a 64-bit transferbuffer offset (or file offset if the '-l'
-  storeFileOffset option is used).  To set the timestamp value, use '-G' or
-  setTimeStampSignature.
-
-
-HOW DO I EASILY CHECK OR CHANGE A BYTE IN AN OUTPUT DATA FILE?
-
-  There is a simple utility IOR/src/C/cbif/cbif.c that may be built.  This is a
-  stand-alone, serial application called cbif (Change Byte In File).  The
-  utility allows a file offset to be checked, returning the data at that
-  location in IOR's data check format.  It also allows a byte at that location
-  to be changed.
-
-
-HOW DO I CORRECT FOR CLOCK SKEW BETWEEN NODES IN A CLUSTER?
-
-  To correct for clock skew between nodes, IOR compares times between nodes,
-  then broadcasts the root node's timestamp so all nodes can adjust by the
-  difference.  To see an egregious outlier, use the '-j' option.  Be sure
-  to set this value high enough to only show a node outside a certain time
-  from the mean.
-
-
-Copyright (c) 2003, The Regents of the University of California
-See the file COPYRIGHT for a complete copyright notice and license.
