@@ -29,3 +29,7 @@ src/*.o
 src/*.i
 src/*.s
 src/ior
+
+doc/doxygen/build
+doc/sphinx/_*/
+!doc/sphinx/Makefile

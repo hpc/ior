@@ -226,6 +226,10 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->beegfs_chunkSize = -1;
 }
 
+/**
+ * Bind the global "backend" pointer to the requested backend AIORI's
+ * function table.
+ */
 static void AioriBind(char* api, IOR_param_t* param)
 {
         backend = aiori_select (api);
@@ -636,7 +640,7 @@ void FreeResults(IOR_test_t *test)
 }
 
 
-/*
+/**
  * Create new test for list of tests.
  */
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num)
@@ -2427,6 +2431,13 @@ static void ValidateTests(IOR_param_t * test)
         }
 }
 
+/**
+ * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
+ * They are sequential and the last element is set to -1 as end marker.
+ * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
+ * @param pretendRank int pretended Rank for shifting the offsest corectly
+ * @return IOR_offset_t
+ */
 static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
                                               int pretendRank)
 {
@@ -2462,6 +2473,21 @@ static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
         return (offsetArray);
 }
 
+/**
+ * Returns a precomputed array of IOR_offsett_t for the inner benchmark loop.
+ * They get created sequentially and mixed up in the end. The last array element
+ * is set to -1 as end marker.
+ * It should be noted that as the seeds get synchronised across all processes
+ * every process computes the same random order if used with filePerProc.
+ * For a shared file all transfers get randomly assigned to ranks. The processes
+ * can also have differen't numbers of transfers. This might lead to a bigger
+ * diversion in accesse as it dose with filePerProc. This is expected but
+ * should be mined.
+ * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
+ * @param pretendRank int pretended Rank for shifting the offsest corectly
+ * @return IOR_offset_t
+ * @return
+ */
 static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                                           int access)
 {
@@ -2488,6 +2514,8 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
         /* count needed offsets (pass 1) */
         for (i = 0; i < fileSize; i += test->transferSize) {
                 if (test->filePerProc == FALSE) {
+                        // this counts which process get how many transferes in
+                        // a shared file
                         if ((random() % test->numTasks) == pretendRank) {
                                 offsets++;
                         }
@@ -2510,7 +2538,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                 }
         } else {
                 /* fill with offsets (pass 2) */
-                srandom(seed);  /* need same seed */
+                srandom(seed);  /* need same seed  to get same transfers as counted in the beginning*/
                 for (i = 0; i < fileSize; i += test->transferSize) {
                         if ((random() % test->numTasks) == pretendRank) {
                                 offsetArray[offsetCnt] = i;
