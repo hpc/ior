@@ -68,7 +68,7 @@ typedef struct ior_aiori {
         IOR_offset_t (*xfer)(int, void *, IOR_size_t *,
                              IOR_offset_t, IOR_param_t *);
         void (*close)(void *, IOR_param_t *);
-        void (*delete)(char *, IOR_param_t *);
+        void (*remove)(char *, IOR_param_t *);
         void (*set_version)(IOR_param_t *);
         void (*fsync)(void *, IOR_param_t *);
         IOR_offset_t (*get_file_size)(IOR_param_t *, MPI_Comm, char *);

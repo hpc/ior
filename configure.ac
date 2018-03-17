@@ -15,7 +15,7 @@ AC_CONFIG_HEADER([src/config.h])
 AC_CANONICAL_HOST
 
 # Automake support
-AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define])
+AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define subdir-objects])
 AM_MAINTAINER_MODE
 
 # Checks for programs
@@ -25,8 +25,14 @@ AX_PROG_CC_MPI(,,[
     AC_MSG_FAILURE([MPI compiler requested, but couldn't use MPI.])
 ])
 
+# We can't do anything without a working MPI
+AX_PROG_CXX_MPI(,,[
+    AC_MSG_FAILURE([MPI compiler requested, but couldn't use MPI.])
+])
+
 # No reason not to require modern C at this point
 AC_PROG_CC_C99
+AC_PROG_CXX
 
 # Checks for libraries.
 
@@ -206,10 +212,10 @@ Consider --with-aws4c=, CPPFLAGS, LDFLAGS, etc])
 
 
 
-
-
-
-
+# for google test unit test
+AM_PROG_AR
+LT_INIT
+AC_CONFIG_MACRO_DIRS([config])
 
 # Enable building "IOR", in all capitals
 AC_ARG_ENABLE([caps],
@@ -222,5 +228,6 @@ AM_CONDITIONAL([USE_CAPS], [test x$enable_caps = xyes])
 AC_CONFIG_FILES([Makefile
                  src/Makefile
                  contrib/Makefile
+                 tests/Makefile
                  doc/Makefile])
 AC_OUTPUT

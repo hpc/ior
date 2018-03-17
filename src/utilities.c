@@ -308,36 +308,6 @@ void ShowHints(MPI_Info * mpiHints)
         }
 }
 
-/*
- * Takes a string of the form 64, 8m, 128k, 4g, etc. and converts to bytes.
- */
-IOR_offset_t StringToBytes(char *size_str)
-{
-        IOR_offset_t size = 0;
-        char range;
-        int rc;
-
-        rc = sscanf(size_str, "%lld%c", &size, &range);
-        if (rc == 2) {
-                switch ((int)range) {
-                case 'k':
-                case 'K':
-                        size <<= 10;
-                        break;
-                case 'm':
-                case 'M':
-                        size <<= 20;
-                        break;
-                case 'g':
-                case 'G':
-                        size <<= 30;
-                        break;
-                }
-        } else if (rc == 0) {
-                size = -1;
-        }
-        return (size);
-}
 
 /*
  * Displays size of file system and percent of data blocks and inodes used.

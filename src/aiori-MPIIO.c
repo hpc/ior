@@ -38,7 +38,7 @@ static void *MPIIO_Open(char *, IOR_param_t *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
                                    IOR_offset_t, IOR_param_t *);
 static void MPIIO_Close(void *, IOR_param_t *);
-static void MPIIO_Delete(char *, IOR_param_t *);
+static void MPIIO_Remove(char *, IOR_param_t *);
 static void MPIIO_SetVersion(IOR_param_t *);
 static void MPIIO_Fsync(void *, IOR_param_t *);
 static int MPIIO_Access(const char *, int, IOR_param_t *);
@@ -51,12 +51,16 @@ ior_aiori_t mpiio_aiori = {
         .open = MPIIO_Open,
         .xfer = MPIIO_Xfer,
         .close = MPIIO_Close,
-        .delete = MPIIO_Delete,
+        .remove = MPIIO_Remove,
         .set_version = MPIIO_SetVersion,
         .fsync = MPIIO_Fsync,
         .get_file_size = MPIIO_GetFileSize,
+        .statfs = NULL,
+        .mkdir = NULL,
+        .rmdir = NULL,
         .access = MPIIO_Access,
-};
+        .stat = NULL,
+};   
 
 /***************************** F U N C T I O N S ******************************/
 
@@ -394,9 +398,9 @@ static void MPIIO_Close(void *fd, IOR_param_t * param)
 }
 
 /*
- * Delete a file through the MPIIO interface.
+ * Remove a file through the MPIIO interface.
  */
-static void MPIIO_Delete(char *testFileName, IOR_param_t * param)
+static void MPIIO_Remove(char *testFileName, IOR_param_t * param)
 {
         MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
                   "cannot delete file");
@@ -438,7 +442,7 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
                 if (param->filePerProc) {
                         tempOffset = tempOffset / param->transferSize;
                 } else {
-                        /* 
+                        /*
                          * this formula finds a file view offset for a task
                          * from an absolute offset
                          */

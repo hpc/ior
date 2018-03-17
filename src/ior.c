@@ -1262,14 +1262,14 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
 {
         int tmpRankOffset;
         if (filePerProc) {
-                /* in random tasks, delete own file */
+                /* in random tasks, remove own file */
                 if (test->reorderTasksRandom == TRUE) {
                         tmpRankOffset = rankOffset;
                         rankOffset = 0;
                         GetTestFileName(testFileName, test);
                 }
                 if (access(testFileName, F_OK) == 0) {
-                        backend->delete(testFileName, test);
+                        backend->remove(testFileName, test);
                 }
                 if (test->reorderTasksRandom == TRUE) {
                         rankOffset = tmpRankOffset;
@@ -1283,7 +1283,7 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                 //      "file".
                 //
                 if ((rank == 0) && (access(testFileName, F_OK) == 0)) {
-                        backend->delete(testFileName, test);
+                        backend->remove(testFileName, test);
                 }
         }
 }

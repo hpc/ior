@@ -29,7 +29,9 @@ install:
     # GPFS
     # NOTE: Think GPFS need a license and is therefore not testable with travis.
 before_script: ./bootstrap
-script: ./configure --with-hdf5 && make
+script:
+    - ./configure --with-hdf5 && make
+    - ./configure  && make && make check
 
 
 # notifications:
