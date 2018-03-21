@@ -117,7 +117,7 @@ extern int verbose;                            /* verbose output */
                                    __LINE__, rank);
 
 typedef long long int      IOR_offset_t;
-typedef long long int      IOR_size_t;
+typedef char               IOR_size_t;
 
 #define                    IOR_format "%016llx"
 
