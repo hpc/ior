@@ -181,6 +181,7 @@ int main(int argc, char **argv)
 void init_IOR_Param_t(IOR_param_t * p)
 {
         const char *default_aiori = aiori_default ();
+        char *hdfs_user;
 
         assert (NULL != default_aiori);
 
@@ -208,7 +209,10 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->setAlignment = 1;
         p->lustre_start_ost = -1;
 
-        strncpy(p->hdfs_user, getenv("USER"), MAX_STR);
+        hdfs_user = getenv("USER");
+        if (!hdfs_user)
+                hdfs_user = "";
+        strncpy(p->hdfs_user, hdfs_user, MAX_STR);
         p->hdfs_name_node      = "default";
         p->hdfs_name_node_port = 0; /* ??? */
         p->hdfs_fs = NULL;
