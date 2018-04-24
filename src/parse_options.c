@@ -313,7 +313,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
                         ERR("beegfsNumTargets must be >= 1");
         } else if (strcasecmp(option, "beegfsChunkSize") == 0) {
  #ifndef HAVE_BEEGFS_BEEGFS_H
-                 ERR("ior was not compiled with BeeGFS support"); 
+                 ERR("ior was not compiled with BeeGFS support");
  #endif
                  params->beegfs_chunkSize = StringToBytes(value);
                  if (!ISPOWEROFTWO(params->beegfs_chunkSize) || params->beegfs_chunkSize < (1<<16))
@@ -323,6 +323,15 @@ void DecodeDirective(char *line, IOR_param_t *params)
 		RecalculateExpectedFileSize(params);
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
+#ifdef USE_JSON
+} else if (strcasecmp(option, "jsonFileName") == 0) {
+            if (strcmp(value, "0") == 0){
+                strcpy(params->jsonFileName, "\0");
+            }
+            else{
+                strcpy(params->jsonFileName, value);
+            }
+#endif
         } else {
                 if (rank == 0)
                         fprintf(stdout, "Unrecognized parameter \"%s\"\n",
