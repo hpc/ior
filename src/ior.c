@@ -1883,6 +1883,7 @@ static void JSONResultsOneOperation(IOR_test_t *test, double *times, char *opera
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
         struct results *bw;
+        struct results *ops;
         int reps;
 
         if (rank != 0 || verbose < VERBOSE_0)
@@ -1891,18 +1892,36 @@ static void JSONResultsOneOperation(IOR_test_t *test, double *times, char *opera
         reps = params->repetitions;
 
         bw = bw_values(reps, results->aggFileSizeForBW, times);
+        ops = ops_values(reps, results->aggFileSizeForBW,
+                         params->transferSize, times);
 
         json_object_object_add(jobj,"Operation",
                                json_object_new_string(operation));
-        json_object_object_add(jobj,"Max", json_object_new_double(bw->max));
-        json_object_object_add(jobj,"Min", json_object_new_double(bw->min));
-        json_object_object_add(jobj,"Mean", json_object_new_double(bw->mean));
-        json_object_object_add(jobj,"StdDev", json_object_new_double(bw->sd));
+
+        json_object_object_add(jobj,"Bandwidth_Max",
+                               json_object_new_double(bw->max));
+        json_object_object_add(jobj,"Bandwidth_Min",
+                               json_object_new_double(bw->min));
+        json_object_object_add(jobj,"Bandwidth_Mean",
+                               json_object_new_double(bw->mean));
+        json_object_object_add(jobj,"Bandwidth_StdDev",
+                               json_object_new_double(bw->sd));
+
+
+        json_object_object_add(jobj,"IOPS_Max",
+                               json_object_new_double(ops->max));
+        json_object_object_add(jobj,"IOPS_Min",
+                               json_object_new_double(ops->min));
+        json_object_object_add(jobj,"IOPS_Mean",
+                               json_object_new_double(ops->mean));
+        json_object_object_add(jobj,"IOPS_StdDev",
+                               json_object_new_double(ops->sd));
         json_object_object_add(jobj,"MeanTime",
                                json_object_new_double(
-                                   mean_of_array_of_doubles(times, reps)));
+                               mean_of_array_of_doubles(times, reps)));
 
         free(bw);
+        free(ops);
 }
 
 /**
@@ -1942,11 +1961,11 @@ static void JSONResultsOneTest(IOR_test_t *test, json_object * test_jobj)
     json_object_object_add(parameter_jobj,"segmentCount",
                            json_object_new_int(params->segmentCount));
     json_object_object_add(parameter_jobj,"blockSize",
-                           json_object_new_int(params->blockSize));
+                           json_object_new_int64(params->blockSize));
     json_object_object_add(parameter_jobj,"transferSize",
-                           json_object_new_int(params->transferSize));
+                           json_object_new_int64(params->transferSize));
     json_object_object_add(parameter_jobj,"aggFileSize",
-                           json_object_new_int(results->aggFileSizeForBW[0]));
+                           json_object_new_int64(results->aggFileSizeForBW[0]));
     json_object_object_add(parameter_jobj,"API",
                            json_object_new_string(params->api));
     json_object_object_add(parameter_jobj,"referenceNumber",
