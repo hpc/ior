@@ -92,6 +92,7 @@ static void HDF5_Delete(char *, IOR_param_t *);
 static void HDF5_SetVersion(IOR_param_t *);
 static void HDF5_Fsync(void *, IOR_param_t *);
 static IOR_offset_t HDF5_GetFileSize(IOR_param_t *, MPI_Comm, char *);
+static int HDF5_Access(const char *, int, IOR_param_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -105,6 +106,11 @@ ior_aiori_t hdf5_aiori = {
         .set_version = HDF5_SetVersion,
         .fsync = HDF5_Fsync,
         .get_file_size = HDF5_GetFileSize,
+        .statfs = aiori_posix_statfs,
+        .mkdir = aiori_posix_mkdir,
+        .rmdir = aiori_posix_rmdir,
+        .access = HDF5_Access,
+        .stat = aiori_posix_stat,
 };
 
 static hid_t xferPropList;      /* xfer property list */
@@ -435,8 +441,7 @@ static void HDF5_Close(void *fd, IOR_param_t * param)
  */
 static void HDF5_Delete(char *testFileName, IOR_param_t * param)
 {
-        if (unlink(testFileName) != 0)
-                WARN("cannot delete file");
+        return(MPIIO_Delete(testFileName, param));
 }
 
 /*
@@ -565,5 +570,13 @@ static void SetupDataSet(void *fd, IOR_param_t * param)
 static IOR_offset_t
 HDF5_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
-        return (MPIIO_GetFileSize(test, testComm, testFileName));
+        return(MPIIO_GetFileSize(test, testComm, testFileName));
+}
+
+/*
+ * Use MPIIO call to check for access.
+ */
+static int HDF5_Access(const char *path, int mode, IOR_param_t *param)
+{
+        return(MPIIO_Access(path, mode, param));
 }
