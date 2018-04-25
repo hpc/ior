@@ -515,7 +515,7 @@ static void POSIX_Delete(char *testFileName, IOR_param_t * param)
         sprintf(errmsg, "[RANK %03d]: unlink() of file \"%s\" failed\n",
                 rank, testFileName);
         if (unlink(testFileName) != 0)
-                EWARN(errmsg);  
+                EWARN(errmsg);
 }
 
 /*

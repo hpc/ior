@@ -56,6 +56,7 @@ static void NCMPI_Delete(char *, IOR_param_t *);
 static void NCMPI_SetVersion(IOR_param_t *);
 static void NCMPI_Fsync(void *, IOR_param_t *);
 static IOR_offset_t NCMPI_GetFileSize(IOR_param_t *, MPI_Comm, char *);
+static int NCMPI_Access(const char *, int, IOR_param_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -72,7 +73,7 @@ ior_aiori_t ncmpi_aiori = {
         .statfs = aiori_posix_statfs,
         .mkdir = aiori_posix_mkdir,
         .rmdir = aiori_posix_rmdir,
-        .access = aiori_posix_access,
+        .access = NCMPI_Access,
         .stat = aiori_posix_stat,
 };
 
@@ -391,5 +392,13 @@ static int GetFileMode(IOR_param_t * param)
 static IOR_offset_t NCMPI_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                       char *testFileName)
 {
-        return (MPIIO_GetFileSize(test, testComm, testFileName));
+        return(MPIIO_GetFileSize(test, testComm, testFileName));
+}
+
+/*
+ * Use MPIIO call to check for access.
+ */
+static int NCMPI_Access(const char *path, int mode, IOR_param_t *param)
+{
+        return(MPIIO_Access(path, mode, param));
 }

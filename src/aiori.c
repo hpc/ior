@@ -52,11 +52,6 @@ ior_aiori_t *available_aiori[] = {
         NULL
 };
 
-#define IOR_STRIP_ROMIO_PREFIX(__path) do { \
-        char *__tmp = strchr(path, ':'); \
-        if (__tmp > __path + 1) __path = __tmp + 1; \
-} while(0)
-
 /**
  * Default statfs implementation.
  *
@@ -69,8 +64,6 @@ ior_aiori_t *available_aiori[] = {
 int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param)
 {
         int ret;
-
-        IOR_STRIP_ROMIO_PREFIX(path);
 #if defined(HAVE_STATVFS)
         struct statvfs statfs_buf;
 
@@ -95,25 +88,21 @@ int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_para
 
 int aiori_posix_mkdir (const char *path, mode_t mode, IOR_param_t * param)
 {
-        IOR_STRIP_ROMIO_PREFIX(path);
         return mkdir (path, mode);
 }
 
 int aiori_posix_rmdir (const char *path, IOR_param_t * param)
 {
-        IOR_STRIP_ROMIO_PREFIX(path);
         return rmdir (path);
 }
 
 int aiori_posix_access (const char *path, int mode, IOR_param_t * param)
 {
-        IOR_STRIP_ROMIO_PREFIX(path);
         return access (path, mode);
 }
 
 int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param)
 {
-        IOR_STRIP_ROMIO_PREFIX(path);
         return stat (path, buf);
 }
 
