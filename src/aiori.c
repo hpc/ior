@@ -65,7 +65,7 @@ ior_aiori_t *available_aiori[] = {
  * This function provides a AIORI statfs for POSIX-compliant filesystems. It
  * uses statvfs is available and falls back on statfs.
  */
-static int aiori_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param)
+int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param)
 {
         int ret;
 #if defined(HAVE_STATVFS)
@@ -90,44 +90,60 @@ static int aiori_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_par
         return 0;
 }
 
-static int aiori_mkdir (const char *path, mode_t mode, IOR_param_t * param)
+int aiori_posix_mkdir (const char *path, mode_t mode, IOR_param_t * param)
 {
         return mkdir (path, mode);
 }
 
-static int aiori_rmdir (const char *path, IOR_param_t * param)
+int aiori_posix_rmdir (const char *path, IOR_param_t * param)
 {
         return rmdir (path);
 }
 
-static int aiori_access (const char *path, int mode, IOR_param_t * param)
+int aiori_posix_access (const char *path, int mode, IOR_param_t * param)
 {
         return access (path, mode);
 }
 
-static int aiori_stat (const char *path, struct stat *buf, IOR_param_t * param)
+int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param)
 {
         return stat (path, buf);
 }
 
 const ior_aiori_t *aiori_select (const char *api)
 {
+        char warn_str[256] = {0};
         for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
                 if (NULL == api || strcasecmp(api, (*tmp)->name) == 0) {
                         if (NULL == (*tmp)->statfs) {
-                                (*tmp)->statfs = aiori_statfs;
+                                (*tmp)->statfs = aiori_posix_statfs;
+                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                         " %s statfs call", api);
+                                WARN(warn_str);
                         }
                         if (NULL == (*tmp)->mkdir) {
-                                (*tmp)->mkdir = aiori_mkdir;
+                                (*tmp)->mkdir = aiori_posix_mkdir;
+                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                         " %s mkdir call", api);
+                                WARN(warn_str);
                         }
                         if (NULL == (*tmp)->rmdir) {
-                                (*tmp)->rmdir = aiori_rmdir;
+                                (*tmp)->rmdir = aiori_posix_rmdir;
+                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                         " %s rmdir call", api);
+                                WARN(warn_str);
                         }
                         if (NULL == (*tmp)->access) {
-                                (*tmp)->access = aiori_access;
+                                (*tmp)->access = aiori_posix_access;
+                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                         " %s access call", api);
+                                WARN(warn_str);
                         }
                         if (NULL == (*tmp)->stat) {
-                                (*tmp)->stat = aiori_stat;
+                                (*tmp)->stat = aiori_posix_stat;
+                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                         " %s stat call", api);
+                                WARN(warn_str);
                         }
                         return *tmp;
                 }
