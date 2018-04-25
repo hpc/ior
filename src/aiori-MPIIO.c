@@ -53,7 +53,11 @@ ior_aiori_t mpiio_aiori = {
         .set_version = MPIIO_SetVersion,
         .fsync = MPIIO_Fsync,
         .get_file_size = MPIIO_GetFileSize,
+        .statfs = aiori_posix_statfs,
+        .mkdir = aiori_posix_mkdir,
+        .rmdir = aiori_posix_rmdir,
         .access = MPIIO_Access,
+        .stat = aiori_posix_stat,
 };
 
 /***************************** F U N C T I O N S ******************************/
