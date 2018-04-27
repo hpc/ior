@@ -342,6 +342,8 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
                         }
                 }
         }
+        if((access == WRITE) && (param->fsyncPerWrite == TRUE))
+               MPIIO_Fsync(fd, param);
         return (length);
 }
 
@@ -350,7 +352,8 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
  */
 static void MPIIO_Fsync(void *fd, IOR_param_t * param)
 {
-        ;
+        if (MPI_File_sync(*(MPI_File *)fd) != MPI_SUCCESS)
+                EWARN("fsync() failed");
 }
 
 /*
