@@ -45,6 +45,10 @@ extraSOURCES += aiori-NCMPI.c
 extraLDADD   += -lpnetcdf
 endif
 
+if USE_MMAP_AIORI
+extraSOURCES += aiori-MMAP.c
+endif
+
 if USE_POSIX_AIORI
 extraSOURCES += aiori-POSIX.c
 endif

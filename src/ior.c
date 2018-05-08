@@ -228,6 +228,8 @@ void init_IOR_Param_t(IOR_param_t * p)
 
         p->beegfs_numTargets = -1;
         p->beegfs_chunkSize = -1;
+
+        p->mmap_ptr = NULL;
 }
 
 /**
@@ -731,7 +733,7 @@ static void DisplayUsage(char **argv)
 {
         char *opts[] = {
                 "OPTIONS:",
-                " -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]",
+                " -a S  api --  API for I/O [POSIX|MMAP|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]",
                 " -A N  refNum -- user supplied reference number to include in the summary",
                 " -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)",
                 " -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers",
@@ -741,7 +743,7 @@ static void DisplayUsage(char **argv)
                 " -D N  deadlineForStonewalling -- seconds before stopping write or read phase",
                 " -O stoneWallingWearOut=1 -- once the stonewalling timout is over, all process finish to access the amount of data",
                 " -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut",
-                " -e    fsync -- perform fsync upon POSIX write close",
+                " -e    fsync -- perform fsync/msync upon POSIX/MMAP write close",
                 " -E    useExistingTestFile -- do not remove test file before write access",
                 " -f S  scriptFile -- test script name",
                 " -F    filePerProc -- file-per-process",
@@ -780,7 +782,7 @@ static void DisplayUsage(char **argv)
                 " -W    checkWrite -- check read after write",
                 " -x    singleXferAttempt -- do not retry transfer if incomplete",
                 " -X N  reorderTasksRandomSeed -- random seed for -Z option",
-                " -Y    fsyncPerWrite -- perform fsync after each POSIX write",
+                " -Y    fsyncPerWrite -- perform fsync/msync after each POSIX/MMAP write",
                 " -z    randomOffset -- access is to random, not sequential, offsets within a file",
                 " -Z    reorderTasksRandom -- changes task ordering to random ordering for readback",
                 " ",
@@ -2377,8 +2379,9 @@ static void ValidateTests(IOR_param_t * test)
         if ((strcasecmp(test->api, "POSIX") != 0) && test->singleXferAttempt)
                 WARN_RESET("retry only available in POSIX",
                            test, &defaults, singleXferAttempt);
-        if ((strcasecmp(test->api, "POSIX") != 0) && test->fsync)
-                WARN_RESET("fsync() only available in POSIX",
+        if ((strcasecmp(test->api, "POSIX") != 0) && (strcasecmp(test->api, "MMAP") != 0)
+            && test->fsync)
+                WARN_RESET("fsync() only available in POSIX/MMAP",
                            test, &defaults, fsync);
         if ((strcasecmp(test->api, "MPIIO") != 0) && test->preallocate)
                 WARN_RESET("preallocation only available in MPIIO",
@@ -2409,6 +2412,9 @@ static void ValidateTests(IOR_param_t * test)
         if ((strcasecmp(test->api, "POSIX") == 0) && test->collective)
                 WARN_RESET("collective not available in POSIX",
                            test, &defaults, collective);
+        if ((strcasecmp(test->api, "MMAP") == 0) && test->fsyncPerWrite
+            && (test->transferSize & (sysconf(_SC_PAGESIZE) - 1)))
+                ERR("transfer size must be aligned with PAGESIZE for MMAP with fsyncPerWrite");
 
         /* parameter consitency */
         if (test->reorderTasks == TRUE && test->reorderTasksRandom == TRUE)
