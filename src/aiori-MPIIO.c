@@ -464,8 +464,15 @@ IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
 {
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
         MPI_File fd;
+        MPI_Comm comm;
 
-        MPI_CHECK(MPI_File_open(testComm, testFileName, MPI_MODE_RDONLY,
+        if (test->filePerProc == TRUE) {
+                comm = MPI_COMM_SELF;
+        } else {
+                comm = testComm;
+        }
+
+        MPI_CHECK(MPI_File_open(comm, testFileName, MPI_MODE_RDONLY,
                                 MPI_INFO_NULL, &fd),
                   "cannot open file to get file size");
         MPI_CHECK(MPI_File_get_size(fd, (MPI_Offset *) & aggFileSizeFromStat),
