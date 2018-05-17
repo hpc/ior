@@ -100,6 +100,7 @@ static void CheckRunSettings(IOR_test_t *tests)
 {
         IOR_test_t *ptr;
         IOR_param_t *params;
+        int needRead, needWrite;
 
         for (ptr = tests; ptr != NULL; ptr = ptr->next) {
                 params = &ptr->params;
@@ -118,13 +119,16 @@ static void CheckRunSettings(IOR_test_t *tests)
                  * of HDFS, which doesn't support opening RDWR.
                  * (We assume int-valued params are exclusively 0 or 1.)
                  */
+                needRead  = params->readFile  |
+                            params->checkRead |
+                            params->checkWrite; /* checkWrite reads the file */
+                needWrite = params->writeFile;
                 if ((params->openFlags & IOR_RDWR)
-                    && ((params->readFile | params->checkRead)
-                        ^ (params->writeFile | params->checkWrite))
-                    && (params->openFlags & IOR_RDWR)) {
-
+                    && (needRead ^ needWrite))
+                {
+                        /* need to either read or write, but not both */
                         params->openFlags &= ~(IOR_RDWR);
-                        if (params->readFile | params->checkRead) {
+                        if (needRead) {
                                 params->openFlags |= IOR_RDONLY;
                                 params->openFlags &= ~(IOR_CREAT|IOR_EXCL);
                         }
