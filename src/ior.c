@@ -1753,6 +1753,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(stdout, "%10.2f ", bw->max / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->min / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->mean / MEBIBYTE);
+
         fprintf(stdout, "%10.2f ", bw->sd / MEBIBYTE);
         fprintf(stdout, "%10.2f ", ops->max);
         fprintf(stdout, "%10.2f ", ops->min);
@@ -1760,21 +1761,21 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(stdout, "%10.2f ", ops->sd);
         fprintf(stdout, "%10.5f ",
                 mean_of_array_of_doubles(times, reps));
-        fprintf(stdout, "%d ", params->id);
-        fprintf(stdout, "%d ", params->numTasks);
-        fprintf(stdout, "%d ", params->tasksPerNode);
-        fprintf(stdout, "%d ", params->repetitions);
-        fprintf(stdout, "%d ", params->filePerProc);
-        fprintf(stdout, "%d ", params->reorderTasks);
-        fprintf(stdout, "%d ", params->taskPerNodeOffset);
-        fprintf(stdout, "%d ", params->reorderTasksRandom);
-        fprintf(stdout, "%d ", params->reorderTasksRandomSeed);
-        fprintf(stdout, "%lld ", params->segmentCount);
-        fprintf(stdout, "%lld ", params->blockSize);
-        fprintf(stdout, "%lld ", params->transferSize);
-        fprintf(stdout, "%lld ", results->aggFileSizeForBW[0]);
-        fprintf(stdout, "%s ", params->api);
-        fprintf(stdout, "%d", params->referenceNumber);
+        fprintf(stdout, "%5d ", params->id);
+        fprintf(stdout, "%6d ", params->numTasks);
+        fprintf(stdout, "%3d ", params->tasksPerNode);
+        fprintf(stdout, "%4d ", params->repetitions);
+        fprintf(stdout, "%3d ", params->filePerProc);
+        fprintf(stdout, "%5d ", params->reorderTasks);
+        fprintf(stdout, "%8d ", params->taskPerNodeOffset);
+        fprintf(stdout, "%9d ", params->reorderTasksRandom);
+        fprintf(stdout, "%4d ", params->reorderTasksRandomSeed);
+        fprintf(stdout, "%6lld ", params->segmentCount);
+        fprintf(stdout, "%8lld ", params->blockSize);
+        fprintf(stdout, "%8lld ", params->transferSize);
+        fprintf(stdout, "%9.1f ", (float)results->aggFileSizeForBW[0] / MEBIBYTE);
+        fprintf(stdout, "%3s ", params->api);
+        fprintf(stdout, "%6d", params->referenceNumber);
         fprintf(stdout, "\n");
         fflush(stdout);
 
@@ -1804,7 +1805,9 @@ static void PrintLongSummaryHeader()
                 "Max(OPs)", "Min(OPs)", "Mean(OPs)", "StdDev",
                 "Mean(s)");
         fprintf(stdout, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
-                " segcnt blksiz xsize aggsize API RefNum\n");
+                " segcnt ");
+        fprintf(stdout, "%8s %8s %9s %5s", " blksiz", "xsize","aggs(MiB)", "API");
+        fprintf(stdout, " RefNum\n");
 }
 
 static void PrintLongSummaryAllTests(IOR_test_t *tests_head)
@@ -2613,7 +2616,9 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
 }
 
 static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offsetArray, int pretendRank,
-  IOR_offset_t * transferCount, int * errors, IOR_param_t * test, int * fd, IOR_io_buffers* ioBuffers, int access){
+				      IOR_offset_t * transferCount, int * errors, IOR_param_t * test,
+				      int * fd, IOR_io_buffers* ioBuffers, int access)
+{
   IOR_offset_t amtXferred;
   IOR_offset_t transfer;
 
@@ -2703,9 +2708,8 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                 dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
 
-                hitStonewall = ((test->deadlineForStonewalling != 0)
-                                && ((GetTimeStamp() - startForStonewall)
-                                    > test->deadlineForStonewalling)) || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
+                hitStonewall = ((test->deadlineForStonewalling != 0) && ((GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
+                                    || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
         }
         if (test->stoneWallingWearOut){
           MPI_CHECK(MPI_Allreduce(& pairCnt, &results->pairs_accessed,
