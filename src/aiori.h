@@ -87,6 +87,7 @@ extern ior_aiori_t posix_aiori;
 extern ior_aiori_t s3_aiori;
 extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
+extern ior_aiori_t rados_aiori;
 
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
