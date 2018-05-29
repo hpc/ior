@@ -37,6 +37,10 @@ static void RADOS_Delete(char *, IOR_param_t *);
 static void RADOS_SetVersion(IOR_param_t *);
 static void RADOS_Fsync(void *, IOR_param_t *);
 static IOR_offset_t RADOS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
+static int RADOS_StatFS(const char *, ior_aiori_statfs_t *, IOR_param_t *);
+static int RADOS_MkDir(const char *, mode_t, IOR_param_t *);
+static int RADOS_RmDir(const char *, IOR_param_t *);
+static int RADOS_Stat(const char *, struct stat *, IOR_param_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -50,6 +54,10 @@ ior_aiori_t rados_aiori = {
         .set_version = RADOS_SetVersion,
         .fsync = RADOS_Fsync,
         .get_file_size = RADOS_GetFileSize,
+        .statfs = RADOS_StatFS,
+        .mkdir = RADOS_MkDir,
+        .rmdir = RADOS_RmDir,
+        .stat = RADOS_Stat,
 };
 
 #define RADOS_ERR(__err_str, __ret) do { \
@@ -289,4 +297,29 @@ static IOR_offset_t RADOS_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         RADOS_Cluster_Finalize(test);
 
         return aggSizeFromStat;
+}
+
+static int RADOS_StatFS(const char *path, ior_aiori_statfs_t *stat_buf,
+                        IOR_param_t *param)
+{
+        WARN("statfs not supported in RADOS backend!");
+        return -1;
+}
+
+static int RADOS_MkDir(const char *path, mode_t mode, IOR_param_t *param)
+{
+        WARN("mkdir not supported in RADOS backend!");
+        return -1;
+}
+
+static int RADOS_RmDir(const char *path, IOR_param_t *param)
+{
+        WARN("rmdir not supported in RADOS backend!");
+        return -1;
+}
+
+static int RADOS_Stat(const char *path, struct stat *buf, IOR_param_t *param)
+{
+        WARN("stat not supported in RADOS backend!");
+        return -1;
 }
