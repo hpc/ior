@@ -40,6 +40,7 @@ static IOR_offset_t RADOS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static int RADOS_StatFS(const char *, ior_aiori_statfs_t *, IOR_param_t *);
 static int RADOS_MkDir(const char *, mode_t, IOR_param_t *);
 static int RADOS_RmDir(const char *, IOR_param_t *);
+static int RADOS_Access(const char *, int, IOR_param_t *);
 static int RADOS_Stat(const char *, struct stat *, IOR_param_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
@@ -57,6 +58,7 @@ ior_aiori_t rados_aiori = {
         .statfs = RADOS_StatFS,
         .mkdir = RADOS_MkDir,
         .rmdir = RADOS_RmDir,
+        .access = RADOS_Access,
         .stat = RADOS_Stat,
 };
 
@@ -225,16 +227,12 @@ static void RADOS_Delete(char *testFileName, IOR_param_t * param)
 
         /* remove the object */
         remove_op = rados_create_write_op();
-        rados_write_op_assert_exists(remove_op);
         rados_write_op_remove(remove_op);
         ret = rados_write_op_operate(remove_op, param->rados_ioctx,
                                      oid, NULL, 0);
         rados_release_write_op(remove_op);
-        /* XXX ignore errors for now ... we can't be sure testFileName exists when this is called */
-#if 0
         if (ret)
                 RADOS_ERR("unable to remove RADOS object", ret);
-#endif
 
         RADOS_Cluster_Finalize(param);
 
@@ -299,26 +297,50 @@ static IOR_offset_t RADOS_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         return aggSizeFromStat;
 }
 
-static int RADOS_StatFS(const char *path, ior_aiori_statfs_t *stat_buf,
+static int RADOS_StatFS(const char *oid, ior_aiori_statfs_t *stat_buf,
                         IOR_param_t *param)
 {
         WARN("statfs not supported in RADOS backend!");
         return -1;
 }
 
-static int RADOS_MkDir(const char *path, mode_t mode, IOR_param_t *param)
+static int RADOS_MkDir(const char *oid, mode_t mode, IOR_param_t *param)
 {
         WARN("mkdir not supported in RADOS backend!");
         return -1;
 }
 
-static int RADOS_RmDir(const char *path, IOR_param_t *param)
+static int RADOS_RmDir(const char *oid, IOR_param_t *param)
 {
         WARN("rmdir not supported in RADOS backend!");
         return -1;
 }
 
-static int RADOS_Stat(const char *path, struct stat *buf, IOR_param_t *param)
+static int RADOS_Access(const char *oid, int mode, IOR_param_t *param)
+{
+        rados_read_op_t read_op;
+        int ret;
+        int prval;
+        uint64_t oid_size;
+
+        /* we have to reestablish cluster connection here... */
+        RADOS_Cluster_Init(param);
+
+        /* use read_op stat to check for oid existence */
+        read_op = rados_create_read_op();
+        rados_read_op_stat(read_op, &oid_size, NULL, &prval);
+        ret = rados_read_op_operate(read_op, param->rados_ioctx, oid, 0);
+        rados_release_read_op(read_op);
+
+        RADOS_Cluster_Finalize(param);
+
+        if (ret | prval)
+                return -1;
+        else
+                return 0;
+}
+
+static int RADOS_Stat(const char *oid, struct stat *buf, IOR_param_t *param)
 {
         WARN("stat not supported in RADOS backend!");
         return -1;
