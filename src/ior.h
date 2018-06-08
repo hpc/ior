@@ -38,7 +38,10 @@
 #endif
 
 #ifdef USE_RADOS_AIORI
-#include <rados/librados.h>
+#  include <rados/librados.h>
+#else
+    typedef void *rados_t;
+    typedef void *rados_ioctx_t;
 #endif
 
 #include "iordef.h"
