@@ -733,7 +733,7 @@ static void DisplayUsage(char **argv)
 {
         char *opts[] = {
                 "OPTIONS:",
-                " -a S  api --  API for I/O [POSIX|MMAP|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]",
+                " -a S  api --  API for I/O [POSIX|DFS|MMAP|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]",
                 " -A N  refNum -- user supplied reference number to include in the summary",
                 " -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)",
                 " -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers",
@@ -2037,6 +2037,11 @@ static void TestIoSys(IOR_test_t *test)
         /* bind I/O calls to specific API */
         AioriBind(params->api, params);
 
+#ifdef USE_DFS_AIORI
+        if (strcmp(params->api, "DFS") == 0)
+                dfs_init();
+#endif
+
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
@@ -2310,6 +2315,10 @@ static void TestIoSys(IOR_test_t *test)
         /* Sync with the tasks that did not participate in this test */
         MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
 
+#ifdef USE_DFS_AIORI
+    if (strcmp(params->api, "DFS") == 0)
+	    dfs_finalize();
+#endif
 }
 
 /*

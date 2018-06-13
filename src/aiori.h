@@ -88,10 +88,14 @@ extern ior_aiori_t mmap_aiori;
 extern ior_aiori_t s3_aiori;
 extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
+extern ior_aiori_t dfs_aiori;
 
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
 const char *aiori_default (void);
+
+int dfs_init(void);
+int dfs_finalize(void);
 
 IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName);

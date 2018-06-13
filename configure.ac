@@ -142,8 +142,27 @@ AM_COND_IF([USE_POSIX_AIORI],[
         AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
 ])
 
+# DFS IO support
+AC_ARG_WITH([daos],
+    [AS_HELP_STRING([--with-daos],
+	    [support IO with DFS backend @<:@default=no@:>@])],
+	    [],
+    	    [with_daos=no])
 
+AS_IF([test "x$with_daos" != xno],
+    DAOS="yes"
+    LDFLAGS="$LDFLAGS -L$with_daos/lib"
+    CPPFLAGS="$CPPFLAGS -I$with_daos/include"
+    AC_CHECK_HEADERS(daos_types.h,, [unset DAOS])
+    AC_CHECK_LIB([uuid], [uuid_generate],, [unset DAOS])
+    AC_CHECK_LIB([daos_common], [daos_sgl_init],, [unset DAOS])
+    AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
+    AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS]))
 
+AM_CONDITIONAL([USE_DFS_AIORI], [test x$DAOS = xyes])
+AM_COND_IF([USE_DFS_AIORI],[
+        AC_DEFINE([USE_DFS_AIORI], [], [Build DFS backend AIORI])
+])
 
 # aws4c is needed for the S3 backend (see --with-S3, below).
 # Version 0.5.2 of aws4c is available at https://github.com/jti-lanl/aws4c.git

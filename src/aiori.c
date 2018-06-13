@@ -52,6 +52,9 @@ ior_aiori_t *available_aiori[] = {
         &s3_plus_aiori,
         &s3_emc_aiori,
 #endif
+#ifdef USE_DFS_AIORI
+        &dfs_aiori,
+#endif
         NULL
 };
 

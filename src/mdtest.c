@@ -1936,6 +1936,11 @@ int main(int argc, char **argv) {
         }
     }
 
+#ifdef USE_DFS_AIORI
+    if (strcmp(backend_name, "DFS") == 0)
+	    dfs_init();
+#endif
+
     if (!create_only && !stat_only && !read_only && !remove_only) {
         create_only = stat_only = read_only = remove_only = 1;
         if (( rank == 0 ) && ( verbose >= 1 )) {
@@ -2410,6 +2415,11 @@ int main(int argc, char **argv) {
     if (random_seed > 0) {
         free(rand_array);
     }
+
+#ifdef USE_DFS_AIORI
+    if (strcmp(backend_name, "DFS") == 0)
+	    dfs_finalize();
+#endif
 
     MPI_Finalize();
     exit(0);

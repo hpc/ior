@@ -53,6 +53,10 @@ if USE_POSIX_AIORI
 extraSOURCES += aiori-POSIX.c
 endif
 
+if USE_DFS_AIORI
+extraSOURCES += aiori-DFS.c
+endif
+
 
 if USE_S3_AIORI
 extraSOURCES  += aiori-S3.c
