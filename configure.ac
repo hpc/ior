@@ -142,6 +142,18 @@ AM_COND_IF([USE_POSIX_AIORI],[
         AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
 ])
 
+AC_ARG_WITH([cart],
+    [AS_HELP_STRING([--with-cart],
+            [Build DAOS ROMIO driver[default=no]])],,
+    [with_cart=no])
+
+AS_IF([test "x$with_cart" != xno],
+    CART="yes"
+    LDFLAGS="$LDFLAGS -L$with_cart/lib"
+    CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
+    AC_CHECK_HEADERS(gurt/common.h,, [unset CART])
+    AC_CHECK_LIB([gurt], [d_rank_list_alloc],, [unset CART]))
+
 # DFS IO support
 AC_ARG_WITH([daos],
     [AS_HELP_STRING([--with-daos],
@@ -158,6 +170,8 @@ AS_IF([test "x$with_daos" != xno],
     AC_CHECK_LIB([daos_common], [daos_sgl_init],, [unset DAOS])
     AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
     AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS]))
+
+AS_IF([test "x$CART" != xyes], [unset DAOS])
 
 AM_CONDITIONAL([USE_DFS_AIORI], [test x$DAOS = xyes])
 AM_COND_IF([USE_DFS_AIORI],[

@@ -36,6 +36,7 @@
 #include "utilities.h"
 
 dfs_t *dfs;
+daos_handle_t poh, coh;
 
 static int
 parse_filename(const char *path, char **_obj_name, char **_cont_name)
@@ -151,20 +152,121 @@ ior_aiori_t dfs_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 
+/* MSC - Make a generic DAOS function instead */
+static d_rank_list_t *
+daos_rank_list_parse(const char *str, const char *sep)
+{
+    d_rank_t *buf;
+    int cap = 8;
+    d_rank_list_t *ranks = NULL;
+    char *s, *p;
+    int n = 0;
+
+    buf = malloc(sizeof(d_rank_t) * cap);
+    if (buf == NULL)
+        goto out;
+    s = strdup(str);
+    if (s == NULL)
+        goto out_buf;
+
+    while ((s = strtok_r(s, sep, &p)) != NULL) {
+        if (n == cap) {
+            d_rank_t    *buf_new;
+            int		cap_new;
+
+            /* Double the buffer. */
+            cap_new = cap * 2;
+            buf_new = malloc(sizeof(d_rank_t) * cap_new);
+            if (buf_new == NULL)
+                goto out_s;
+            memcpy(buf_new, buf, sizeof(d_rank_t) * n);
+            free(buf);
+            buf = buf_new;
+            cap = cap_new;
+        }
+        buf[n] = atoi(s);
+        n++;
+        s = NULL;
+    }
+
+    ranks = d_rank_list_alloc(n);
+    if (ranks == NULL)
+        goto out_s;
+    memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
+
+out_s:
+    if (s)
+        free(s);
+out_buf:
+    free(buf);
+out:
+    return ranks;
+}
+
 int
 dfs_init(void) {
-	int rc;
-
+        char			*pool_str, *svcl_str, *group_str;
+	uuid_t			pool_uuid, co_uuid;
+	daos_pool_info_t	pool_info;
+	daos_cont_info_t	co_info;
+	d_rank_list_t		*svcl = NULL;
+	int			rc;
+        
 	rc = daos_init();
 	if (rc) {
 		fprintf(stderr, "daos_init() failed with %d\n", rc);
 		return rc;
 	}
 
-	rc = dfs_mount(&dfs);
+        pool_str = getenv("DAOS_POOL");
+	if (!pool_str) {
+		fprintf(stderr, "missing pool uuid\n");
+                return -1;
+	}
+	if (uuid_parse(pool_str, pool_uuid) < 0) {
+		fprintf(stderr, "Invalid pool uuid\n");
+                return -1;
+	}
+
+        svcl_str = getenv("DAOS_SVCL");
+	if (!svcl_str) {
+		fprintf(stderr, "missing pool service rank list\n");
+                return -1;
+	}
+	svcl = daos_rank_list_parse(svcl_str, ":");
+	if (svcl == NULL) {
+		fprintf(stderr, "Invalid pool service rank list\n");
+                return -1;
+	}
+
+        group_str = getenv("DAOS_GROUP");
+
+	/** Connect to DAOS pool */
+	rc = daos_pool_connect(pool_uuid, group_str, svcl, DAOS_PC_RW,
+			       &poh, &pool_info, NULL);
+	if (rc < 0) {
+		fprintf(stderr, "Failed to connect to pool %s %s (%d)\n",
+                        pool_str, svcl_str, rc);
+                return -1;
+	}
+
+        uuid_generate(co_uuid);
+        rc = daos_cont_create(poh, co_uuid, NULL);
+	if (rc) {
+		fprintf(stderr, "Failed to create container (%d)\n", rc);
+		return -1;
+	}
+
+        rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	if (rc) {
+		fprintf(stderr, "Failed to open container (%d)\n", rc);
+		return -1;
+	}
+
+	rc = dfs_mount(poh, coh, &dfs);
 	if (rc) {
 		fprintf(stderr, "dfs_mount failed (%d)\n", rc);
-		return 1;
+                return -1;
 	}
 
 	return rc;
@@ -173,6 +275,8 @@ dfs_init(void) {
 int dfs_finalize(void)
 {
 	dfs_umount(dfs);
+	daos_cont_close(coh, NULL);
+        daos_pool_disconnect(poh, NULL);
 	daos_fini();
         return 0;
 }
@@ -198,7 +302,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 	assert(dir_name);
 	assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
@@ -238,7 +342,7 @@ static void *DFS_Open(char *testFileName, IOR_param_t *param)
 	assert(dir_name);
 	assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
@@ -346,11 +450,11 @@ static void DFS_Delete(char *testFileName, IOR_param_t * param)
 	assert(dir_name);
 	assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
-	rc = dfs_remove(dfs, parent, name);
+	rc = dfs_remove(dfs, parent, name, false);
 	if (rc)
                 goto out;
 
@@ -381,7 +485,7 @@ static IOR_offset_t DFS_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         daos_size_t fsize, tmpMin, tmpMax, tmpSum;
         int rc;
 
-	rc = dfs_lookup(dfs, testFileName, &obj, NULL);
+	rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL);
 	if (rc)
                 return -1;
 
@@ -436,7 +540,7 @@ DFS_Mkdir (const char *path, mode_t mode, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
@@ -469,11 +573,11 @@ DFS_Rmdir (const char *path, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
-	rc = dfs_remove(dfs, parent, name);
+	rc = dfs_remove(dfs, parent, name, false);
 	if (rc)
                 goto out;
 
@@ -503,7 +607,7 @@ DFS_Access (const char *path, int mode, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
@@ -543,7 +647,7 @@ DFS_Stat (const char *path, struct stat *buf, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
