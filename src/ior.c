@@ -258,7 +258,7 @@ DisplayOutliers(int numTasks,
                 char *timeString, int access, int outlierThreshold)
 {
         char accessString[MAX_STR];
-        double sum, mean, sqrDiff, var, sd;
+        double sum, mean, median, sqrDiff, var, sd;
 
         /* for local timerVal, don't compensate for wall clock delta */
         timerVal += wall_clock_delta;
@@ -1653,11 +1653,40 @@ struct results {
         double min;
         double max;
         double mean;
+        double median;
         double var;
         double sd;
         double sum;
         double *val;
 };
+
+static int res_compare(const void *a, const void *b)
+{
+      return *(double*)a - *(double*)b;
+}
+
+/*
+ * Find the median for one operation over all iterations */
+static double compute_median(const int reps, double *vals)
+{
+    double res;
+    const int middle = reps / 2;
+    double *sorted_values = malloc(sizeof(double) * reps);
+    if (sorted_values == NULL)
+            ERR("malloc failed");
+
+    memcpy(sorted_values, vals, sizeof(double) * reps);
+
+    qsort(sorted_values, reps, sizeof(double), res_compare);
+
+    if (reps % 2)
+        res = sorted_values[middle];
+    else
+        res = (sorted_values[middle - 1] + sorted_values[middle]) / 2;
+
+    free(sorted_values);
+    return res;
+}
 
 static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *vals)
 {
@@ -1682,6 +1711,7 @@ static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *
                 r->sum += r->val[i];
         }
         r->mean = r->sum / reps;
+        r->median = compute_median(reps, r->val);
         r->var = 0.0;
         for (i = 0; i < reps; i++) {
                 r->var += pow((r->mean - r->val[i]), 2);
@@ -1717,6 +1747,7 @@ static struct results *ops_values(int reps, IOR_offset_t *agg_file_size,
                 r->sum += r->val[i];
         }
         r->mean = r->sum / reps;
+        r->median = compute_median(reps, r->val);
         r->var = 0.0;
         for (i = 0; i < reps; i++) {
                 r->var += pow((r->mean - r->val[i]), 2);
@@ -1753,10 +1784,12 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(stdout, "%10.2f ", bw->max / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->min / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->mean / MEBIBYTE);
+        fprintf(stdout, "%10.2f ", bw->median / MEBIBYTE);
         fprintf(stdout, "%10.2f ", bw->sd / MEBIBYTE);
         fprintf(stdout, "%10.2f ", ops->max);
         fprintf(stdout, "%10.2f ", ops->min);
         fprintf(stdout, "%10.2f ", ops->mean);
+        fprintf(stdout, "%10.2f ", ops->median);
         fprintf(stdout, "%10.2f ", ops->sd);
         fprintf(stdout, "%10.5f ",
                 mean_of_array_of_doubles(times, reps));
@@ -1799,9 +1832,9 @@ static void PrintLongSummaryHeader()
                 return;
 
         fprintf(stdout, "\n");
-        fprintf(stdout, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s",
-                "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
-                "Max(OPs)", "Min(OPs)", "Mean(OPs)", "StdDev",
+        fprintf(stdout, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s %10s %10s",
+                "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "Median(MiB)", "StdDev",
+                "Max(OPs)", "Min(OPs)", "Mean(OPs)", "Median(OPs)", "StdDev",
                 "Mean(s)");
         fprintf(stdout, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
                 " segcnt blksiz xsize aggsize API RefNum\n");
