@@ -22,4 +22,8 @@ See also NOTES.txt
 3. Optionally, run "make install".  The installation prefix
    can be changed as an option to the "configure" script.
 
-4. To run basic functionality tests that we use for continuous integration, see ./testing/
+# Testing
+
+  * To run basic functionality tests that we use for continuous integration, see ./testing/
+  * There are docker scripts provided to test various distributions at once.
+  * See ./testing/docker/

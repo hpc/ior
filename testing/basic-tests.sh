@@ -12,7 +12,6 @@ IOR_OUT=${IOR_OUT:-./build/test}
 IOR_EXTRA=${IOR_EXTRA:-./build/test} # Add global options like verbosity
 
 ################################################################################
-
 mkdir -p ${IOR_OUT}
 
 ## Sanity check
@@ -38,7 +37,7 @@ function TEST(){
   else
     echo -n "OK "
   fi
-  echo " ${IOR_OUT}/${I} ${IOR_MPIRUN} ${@}"
+  echo " ${IOR_OUT}/${I} ${IOR_MPIRUN} -o /dev/shm/ior ${@}"
   I=$((${I}+1))
 }
 
