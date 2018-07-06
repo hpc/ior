@@ -1,4 +1,4 @@
-This repo now contains both IOR and mdtest.
+This repo now contains both IOR and mdtest. [![Build Status](https://travis-ci.org/hpc/ior.svg?branch=master)](https://travis-ci.org/hpc/ior) 
 
 [See also NOTES.txt]
 
