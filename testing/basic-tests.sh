@@ -37,7 +37,7 @@ function TEST(){
   else
     echo -n "OK "
   fi
-  echo " ${IOR_OUT}/${I} ${IOR_MPIRUN} -o /dev/shm/ior ${@}"
+  echo " ${IOR_OUT}/${I} ${IOR_MPIRUN} ${@} -o /dev/shm/ior"
   I=$((${I}+1))
 }
 
