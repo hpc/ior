@@ -30,14 +30,15 @@ fi
 ERRORS=0 # Number of errors detected while running
 I=0
 function TEST(){
-  ${IOR_MPIRUN} ${@} ${IOR_EXTRA} 1>${IOR_OUT}/$I 2>&1
+  WHAT="${IOR_MPIRUN} ${@} ${IOR_EXTRA} -o /dev/shm/ior"
+  $WHAT 1>${IOR_OUT}/$I 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
     ERRORS=$(($ERRORS + 1))
   else
     echo -n "OK "
   fi
-  echo " ${IOR_OUT}/${I} ${IOR_MPIRUN} ${@} -o /dev/shm/ior"
+  echo " $WHAT"
   I=$((${I}+1))
 }
 

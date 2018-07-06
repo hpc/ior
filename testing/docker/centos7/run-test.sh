@@ -2,13 +2,8 @@
 
 BUILD="$1"
 
-if [[ $UID == 0 ]]; then
-  groupadd -g $3 testuser
-  useradd -r -u $2 -g testuser testuser
-  sudo -u testuser $0 $1
-  exit $?
-fi
-
+groupadd -g $3 testuser
+useradd -r -u $2 -g testuser testuser
 ERROR=0
 
 function runTest(){
@@ -17,18 +12,16 @@ function runTest(){
   MPI_DIR="$2"
 
   echo $FLAVOR in $BUILD/$FLAVOR
-	mkdir -p $BUILD/$FLAVOR
+	sudo -u testuser mkdir -p $BUILD/$FLAVOR
 
 	pushd $BUILD/$FLAVOR > /dev/null
-  
+
   export PATH=$MPI_DIR/bin:$PATH
-  /data/configure || exit 1
-  make || exit 1
+  sudo -u testuser PATH=$PATH /data/configure || exit 1
+  sudo -u testuser PATH=$PATH make || exit 1
 
 	cd /data/
-	export IOR_EXEC=$BUILD/$FLAVOR/src/ior
-	export IOR_OUT=$BUILD/$FLAVOR/test
-	./testing/basic-tests.sh
+	sudo -u testuser PATH=$PATH IOR_EXEC=$BUILD/$FLAVOR/src/ior IOR_OUT=$BUILD/$FLAVOR/test ./testing/basic-tests.sh
 
   ERROR=$(($ERROR + $?))
   popd  > /dev/null
