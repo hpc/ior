@@ -1,93 +1,71 @@
-#!/bin/bash -x
+#!/bin/bash
 
-#PBS -N IOR
-#PBS -j oe
-#PBS -q batch
-#PBS -A stf006
-#PBS -V
-#PBS -l walltime=0:60:00,nodes=8:ppn=2
+# Test script for basic IOR functionality testing various patterns
+# It is kept as simple as possible and outputs the parameters used such that any test can be rerun easily.
 
-VERS=IOR-2.10.1
-WORK=/tmp/work/${USER}
-echo $PBS_O_WORKDIR
+# You can override the defaults by setting the variables before invoking the script, or simply set them here...
+# Example: export IOR_EXTRA="-v -v -v"
 
-cd /ccs/proj/quadcore
-tar -czvf ${WORK}/${VERS}.tar.gz ./${VERS}
-cd ${WORK}
-rm -fr ./${VERS}
-tar -xzvf ${WORK}/${VERS}.tar.gz
-cd ${WORK}/${VERS}
-gmake clean
-gmake mpiio
-EXEC=${WORK}/${VERS}/src/C/IOR
-IODIR=/tmp/work/swh13/test_files_x
-cd ${WORK}/${VERS}/tests
+IOR_MPIRUN=${IOR_MPIRUN:-mpiexec -np}
+IOR_EXEC=${IOR_EXEC:-./build/src/ior}
+IOR_OUT=${IOR_OUT:-./build/test}
+IOR_EXTRA=${IOR_EXTRA:-./build/test} # Add global options like verbosity
 
-which mpirun
+################################################################################
 
-rm -fr $IODIR
-mkdir  $IODIR
+mkdir -p ${IOR_OUT}
 
-let "w=128"
-let "s=1024*1024"
-let "i=3"
+## Sanity check
 
-MPIRUN="mpirun -np"
+if [[ ! -e ${IOR_OUT} ]]; then
+  echo "Could not create output dir ${IOR_OUT}"
+  exit 1
+fi
 
-RESULTS="."
+if [[ ! -e $IOR_EXEC ]]; then
+  echo "IOR Executable \"$IOR_EXEC\" does not exist! Call me from the root directory!"
+  exit 1
+fi
 
-let "tid=1"
-XFERS="1048576 262144 32768 4096 1024"
-XFERS="262144"
-for xfer in `echo $XFERS`
-do
-       let "n=8"
-until [ "$n" -gt 8 ]
-do
 
-    let "m=$n/4"
-  #TESTS="POSIX MPIIO HDF5 NCMPI"
-  TESTS="POSIX MPIIO"
-  for test in `echo $TESTS`
-  do
-    runid="p$n.$xfer.${test}"
-    date 
+ERRORS=0 # Number of errors detected while running
+I=0
+function TEST(){
+  ${IOR_MPIRUN} ${@} ${IOR_EXTRA} 1>${IOR_OUT}/$I 2>&1
+  if [[ $? != 0 ]]; then
+    echo -n "ERR"
+    ERRORS=$(($ERRORS + 1))
+  else
+    echo -n "OK "
+  fi
+  echo " ${IOR_OUT}/${I} ${IOR_MPIRUN} ${@}"
+  I=$((${I}+1))
+}
 
-    V="  "
-    BLOCKS="1 10 1 10 1 10"
-    for blocks in `echo $BLOCKS`
-    do
+TEST 1 ${IOR_EXEC} -a POSIX -w    -z                  -F -Y -e -i1 -m -t 100k -b 1000k
+TEST 1 ${IOR_EXEC} -a POSIX -w    -z                  -F -k -e -i2 -m -t 100k -b 100k
+TEST 1 ${IOR_EXEC} -a POSIX -r    -z                  -F -k -e -i1 -m -t 100k -b 100k
 
-      let "block=${xfer} * ${blocks}"
+TEST 2 ${IOR_EXEC} -a POSIX -w    -z  -C              -F -k -e -i1 -m -t 100k -b 100k
+TEST 2 ${IOR_EXEC} -a POSIX -w    -z  -C -Q 1        -F -k -e -i1 -m -t 100k -b 100k
+TEST 2 ${IOR_EXEC} -a POSIX -r    -z  -Z -Q 2        -F -k -e -i1 -m -t 100k -b 100k
+TEST 2 ${IOR_EXEC} -a POSIX -r    -z  -Z -Q 3 -X  13 -F -k -e -i1 -m -t 100k -b 100k
+TEST 2 ${IOR_EXEC} -a POSIX -w    -z  -Z -Q 1 -X -13 -F    -e -i1 -m -t 100k -b 100k
 
-    #fileperproc tests
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -w    -z                  ${V} -F -o $IODIR/testwrite.${runid} -Y -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -w    -z                  ${V} -F -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z                  ${V} -F -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z  -C              ${V} -F -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z  -C -Q $m        ${V} -F -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z  -Z -Q $m        ${V} -F -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z  -Z -Q $m -X  13 ${V} -F -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z  -Z -Q $m -X -13 ${V} -F -o $IODIR/testwrite.${runid}    -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
+#shared tests
+TEST 2 ${IOR_EXEC} -a POSIX -w    -z                     -Y -e -i1 -m -t 100k -b 100k
+TEST 2 ${IOR_EXEC} -a POSIX -w                            -k -e -i1 -m -t 100k -b 100k
+TEST 2 ${IOR_EXEC} -a POSIX -r    -z                      -k -e -i1 -m -t 100k -b 100k
 
-    #shared tests
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -w    -z                  ${V}    -o $IODIR/testwrite.${runid} -Y -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -w                        ${V}    -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z                  ${V}    -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
+#test mutually exclusive options
+TEST 2 ${IOR_EXEC} -a POSIX -w    -z                    -k -e -i1 -m -t 100k -b 100k
+TEST 2 ${IOR_EXEC} -a POSIX -w    -z  -                 -k -e -i1 -m -t 100k -b 100k
+TEST 2 ${IOR_EXEC} -a POSIX -w -Z                             -i1 -m -t 100k -b 100k  -d 0.1
 
-    #test mutually exclusive options
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z  -C              ${V}    -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r    -z  -Z              ${V}    -o $IODIR/testwrite.${runid} -k -e -i${i} -m -t ${xfer} -b ${block}  -d 0.1 
-    ${MPIRUN} $n ${EXEC} -A ${tid} -a ${test} -r -Z -C                  ${V}    -o $IODIR/testwrite.${runid}       -i${i} -m -t ${xfer} -b ${block}  -d 0.0 
-    let "tid=$tid + 17"
+if [[ ${ERRORS} == 0 ]] ; then
+  echo "PASSED"
+else
+  echo "Error, check the output files!"
+fi
 
-    V=$V" -v"
-
-    done #blocks
-
-    date 
-  done #test
-  let "n = $n * 2"
- done #n
-done #xfer
-exit
+exit ${ERRORS}
