@@ -1,4 +1,9 @@
 #!/bin/bash
+cd "${0%/*}"
+if [[ ! -e run-all-tests.sh ]] ; then
+	echo "Error, this script must run from the ./testing/docker directory"
+	exit 1
+fi
 
 echo "Checking docker"
 docker ps
