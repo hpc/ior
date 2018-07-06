@@ -1,9 +1,9 @@
-This repo now contains both IOR and mdtest. [![Build Status](https://travis-ci.org/hpc/ior.svg?branch=master)](https://travis-ci.org/hpc/ior) 
+# HPC IO Benchmark Repository [![Build Status](https://travis-ci.org/hpc/ior.svg?branch=master)](https://travis-ci.org/hpc/ior)
 
-[See also NOTES.txt]
+This repo now contains both IOR and mdtest.
+See also NOTES.txt
 
-Building
---------
+# Building
 
 0. If "configure" is missing from the top level directory, you
    probably retrieved this code directly from the repository.
@@ -21,3 +21,5 @@ Building
 
 3. Optionally, run "make install".  The installation prefix
    can be changed as an option to the "configure" script.
+
+4. To run basic functionality tests that we use for continuous integration, see ./testing/
