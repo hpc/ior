@@ -370,9 +370,10 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void MPIIO_Fsync(void *fd, IOR_param_t * param)
+static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 {
-        ;
+    MPI_File * fd = (MPI_File*) fdp;
+    MPI_File_sync(*fd);
 }
 
 /*
@@ -438,7 +439,7 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
                 if (param->filePerProc) {
                         tempOffset = tempOffset / param->transferSize;
                 } else {
-                        /* 
+                        /*
                          * this formula finds a file view offset for a task
                          * from an absolute offset
                          */
