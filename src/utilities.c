@@ -586,3 +586,14 @@ void StoreStoneWallingIterations(char * const filename, int64_t count){
   fprintf(out, "%lld", (long long) count);
   fclose(out);
 }
+
+/*
+ * Sleep for 'delay' seconds.
+ */
+void DelaySecs(int delay){
+  if (rank == 0 && delay > 0) {
+    if (verbose >= VERBOSE_1)
+            fprintf(out_logfile, "delaying %d seconds . . .\n", delay);
+    sleep(delay);
+  }
+}

@@ -671,18 +671,6 @@ static void DestroyTests(IOR_test_t *tests_head)
 }
 
 /*
- * Sleep for 'delay' seconds.
- */
-static void DelaySecs(int delay)
-{
-        if (rank == 0 && delay > 0) {
-                if (verbose >= VERBOSE_1)
-                        fprintf(out_logfile, "delaying %d seconds . . .\n", delay);
-                sleep(delay);
-        }
-}
-
-/*
  * Display freespace (df).
  */
 static void DisplayFreespace(IOR_param_t * test)

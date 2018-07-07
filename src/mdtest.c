@@ -174,25 +174,6 @@ typedef struct{
 enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
 
 
-
-void delay_secs(int delay) {
-
-
-    if (( rank == 0 ) && ( verbose >= 1 )) {
-        fprintf( out_logfile, "V-1: Entering delay_secs...\n" );
-        fflush( out_logfile );
-    }
-
-    if (rank == 0 && delay > 0) {
-        if (verbose >= 1) {
-            fprintf(out_logfile, "delaying %d seconds . . .\n", delay);
-            fflush(out_logfile);
-        }
-        sleep(delay);
-    }
-    MPI_Barrier(testComm);
-}
-
 void offset_timers(double * t, int tcount) {
     double toffset;
     int i;
@@ -1938,13 +1919,13 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
       if (dirs_only && !shared_file) {
           if (pre_delay) {
-              delay_secs(pre_delay);
+              DelaySecs(pre_delay);
           }
           directory_test(j, i, unique_mk_dir, progress);
       }
       if (files_only) {
           if (pre_delay) {
-              delay_secs(pre_delay);
+              DelaySecs(pre_delay);
           }
           file_test(j, i, unique_mk_dir, progress);
       }
