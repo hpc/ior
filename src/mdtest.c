@@ -1646,6 +1646,10 @@ void valid_tests() {
         FAIL("-c not compatible with -B");
     }
 
+    if ( strcasecmp(backend_name, "POSIX") != 0) {
+      FAIL("-a only supported interface is POSIX right now!");
+    }
+
     /* check for shared file incompatibilities */
     if (unique_dir_per_task && shared_file && rank == 0) {
         FAIL("-u not compatible with -S");

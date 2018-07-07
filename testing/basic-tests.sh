@@ -11,6 +11,7 @@ ROOT=${0%/*}
 source $ROOT/test-lib.sh
 
 MDTEST 1 -a POSIX
+#MDTEST 2 -a POSIX -W 2
 
 IOR 1 -a POSIX -w    -z                  -F -Y -e -i1 -m -t 100k -b 1000k
 IOR 1 -a POSIX -w    -z                  -F -k -e -i2 -m -t 100k -b 100k

@@ -2701,7 +2701,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                 offsetArray = GetOffsetArraySequential(test, pretendRank);
         }
 
-
         /* check for stonewall */
         startForStonewall = GetTimeStamp();
         hitStonewall = ((test->deadlineForStonewalling != 0)
