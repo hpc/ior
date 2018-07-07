@@ -188,16 +188,16 @@ int CountTasksPerNode(MPI_Comm comm) {
         /* MPI_receive all hostnames, and compares them to the local hostname */
         for (i = 0; i < size-1; i++) {
             MPI_Recv(hostname, MAX_PATHLEN, MPI_CHAR, MPI_ANY_SOURCE,
-                     MPI_ANY_TAG, testComm, &status);
+                     MPI_ANY_TAG, comm, &status);
             if (strcmp(hostname, localhost) == 0) {
                 count++;
             }
         }
     } else {
         /* MPI_send hostname to root node */
-        MPI_Send(localhost, MAX_PATHLEN, MPI_CHAR, 0, 0, testComm);
+        MPI_Send(localhost, MAX_PATHLEN, MPI_CHAR, 0, 0, comm);
     }
-    MPI_Bcast(&count, 1, MPI_INT, 0, testComm);
+    MPI_Bcast(&count, 1, MPI_INT, 0, comm);
 
     return(count);
 }
