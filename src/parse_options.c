@@ -21,6 +21,8 @@
 #include <ctype.h>
 #include <string.h>
 
+#include "getopt/optlist.h"
+
 #include "ior.h"
 #include "aiori.h"
 #include "parse_options.h"
@@ -317,7 +319,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
                         ERR("beegfsNumTargets must be >= 1");
         } else if (strcasecmp(option, "beegfsChunkSize") == 0) {
  #ifndef HAVE_BEEGFS_BEEGFS_H
-                 ERR("ior was not compiled with BeeGFS support"); 
+                 ERR("ior was not compiled with BeeGFS support");
  #endif
                  params->beegfs_chunkSize = StringToBytes(value);
                  if (!ISPOWEROFTWO(params->beegfs_chunkSize) || params->beegfs_chunkSize < (1<<16))
@@ -453,9 +455,9 @@ IOR_test_t *ReadConfigScript(char *scriptName)
  */
 IOR_test_t *ParseCommandLine(int argc, char **argv)
 {
-        static const char *opts =
+        static char * const opts =
           "a:A:b:BcCd:D:eEf:FgG:hHi:Ij:J:kKl:mM:nN:o:O:pPqQ:rRs:St:T:uU:vVwWxX:YzZ";
-        int c, i;
+        int i;
         static IOR_test_t *tests = NULL;
 
         /* suppress getopt() error message when a character is unrecognized */
@@ -466,8 +468,14 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         initialTestParams.writeFile = initialTestParams.readFile = FALSE;
         initialTestParams.checkWrite = initialTestParams.checkRead = FALSE;
 
-        while ((c = getopt(argc, argv, opts)) != -1) {
-                switch (c) {
+        option_t *optList, *thisOpt;
+        optList = GetOptList(argc, argv, opts);
+
+        while (optList != NULL) {
+                thisOpt = optList;
+                optarg = thisOpt->argument;
+                optList = optList->next;
+                switch (thisOpt->option) {
                 case 'a':
                         strcpy(initialTestParams.api, optarg);
                         break;

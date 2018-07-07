@@ -38,6 +38,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "getopt/optlist.h"
+
 #if HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #endif
@@ -1802,7 +1804,7 @@ void create_remove_directory_tree(int create,
 }
 
 int main(int argc, char **argv) {
-    int i, j, k, c;
+    int i, j, k;
     int nodeCount;
     MPI_Group worldgroup, testgroup;
     struct {
@@ -1852,13 +1854,15 @@ int main(int argc, char **argv) {
     }
 
     /* Parse command line options */
-    while (1) {
-        c = getopt(argc, argv, "a:b:BcCd:De:Ef:Fhi:I:l:Ln:N:p:rR::s:StTuvV:w:yz:");
-        if (c == -1) {
-            break;
-        }
+    option_t *optList, *thisOpt;
+    optList = GetOptList(argc, argv, "a:b:BcCd:De:Ef:Fhi:I:l:Ln:N:p:rR::s:StTuvV:w:W:yz:Z");
 
-        switch (c) {
+    while (optList != NULL) {
+        thisOpt = optList;
+        optarg = thisOpt->argument;
+        optList = optList->next;
+
+        switch (thisOpt->option) {
         case 'a':
             backend_name = optarg; break;
         case 'b':

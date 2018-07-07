@@ -3,19 +3,19 @@ if USE_CAPS
 bin_PROGRAMS += IOR MDTEST
 endif
 
-noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h
+noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h getopt/optlist.h
 
 extraSOURCES = aiori.c
 extraLDADD =
 extraLDFLAGS =
 extraCPPFLAGS =
 
-ior_SOURCES = ior.c utilities.c parse_options.c
+ior_SOURCES = ior.c utilities.c parse_options.c getopt/optlist.c
 ior_LDFLAGS =
 ior_LDADD =
 ior_CPPFLAGS =
 
-mdtest_SOURCES = mdtest.c utilities.c
+mdtest_SOURCES = mdtest.c utilities.c getopt/optlist.c
 mdtest_LDFLAGS =
 mdtest_LDADD =
 mdtest_CPPFLAGS =
