@@ -1614,8 +1614,8 @@ void valid_tests() {
         FAIL("-c not compatible with -B");
     }
 
-    if ( strcasecmp(backend_name, "POSIX") != 0) {
-      FAIL("-a only supported interface is POSIX right now!");
+    if ( strcasecmp(backend_name, "POSIX") != 0 && strcasecmp(backend_name, "DUMMY") != 0) {
+      FAIL("-a only supported interface is POSIX (and DUMMY) right now!");
     }
 
     /* check for shared file incompatibilities */
