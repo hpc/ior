@@ -100,7 +100,7 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
                 TestIoSys(tptr);
 
                 if(rank == 0 && tptr->params.stoneWallingWearOut){
-                  if (tptr->params.stoneWallingStatusFile){
+                  if (tptr->params.stoneWallingStatusFile[0]){
                     StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
                   }else{
                     fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
@@ -201,7 +201,7 @@ int ior_main(int argc, char **argv)
             }
             TestIoSys(tptr);
 
-            if (tptr->params.stoneWallingStatusFile){
+            if (tptr->params.stoneWallingStatusFile[0]){
               StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
             }else{
               fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
@@ -2714,7 +2714,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                         && ((GetTimeStamp() - startForStonewall)
                             > test->deadlineForStonewalling));
 
-        if(access == READ && test->stoneWallingStatusFile){
+        if(access == READ && test->stoneWallingStatusFile[0]){
           test->stoneWallingWearOutIterations = ReadStoneWallingIterations(test->stoneWallingStatusFile);
           if(test->stoneWallingWearOutIterations == -1){
             ERR("Could not read back the stonewalling status from the file!");
