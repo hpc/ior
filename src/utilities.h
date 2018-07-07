@@ -18,6 +18,15 @@
 #include <mpi.h>
 #include "ior.h"
 
+extern int numTasksWorld;
+extern int rank;
+extern int rankOffset;
+extern int tasksPerNode;
+extern int verbose;
+extern MPI_Comm testComm;
+extern MPI_Comm mpi_comm_world;
+extern FILE * out_logfile;
+
 void set_o_direct_flag(int *fd);
 
 char *CurrentTimeString(void);
@@ -29,4 +38,9 @@ void SeedRandGen(MPI_Comm);
 void SetHints (MPI_Info *, char *);
 void ShowHints (MPI_Info *);
 
+void init_clock(void);
+double GetTimeStamp(void);
+
+extern double wall_clock_deviation;
+extern double wall_clock_delta;
 #endif  /* !_UTILITIES_H */

@@ -16,10 +16,6 @@
 #  include "config.h"
 #endif
 
-#ifdef __linux__
-#  define _GNU_SOURCE            /* Needed for O_DIRECT in fcntl */
-#endif                           /* __linux__ */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -51,9 +47,16 @@
 
 extern int errno;
 extern int numTasks;
-extern int rank;
-extern int rankOffset;
-extern int verbose;
+
+/* globals used by other files, also defined "extern" in ior.h */
+int      numTasksWorld = 0;
+int      rank = 0;
+int      rankOffset = 0;
+int      tasksPerNode = 0;           /* tasks per node */
+int      verbose = VERBOSE_0;        /* verbose output */
+MPI_Comm testComm;
+MPI_Comm mpi_comm_world;
+FILE * out_logfile;
 
 /***************************** F U N C T I O N S ******************************/
 
@@ -120,9 +123,9 @@ void DumpBuffer(void *buffer,
            to assume that it must always be */
         for (i = 0; i < ((size / sizeof(IOR_size_t)) / 4); i++) {
                 for (j = 0; j < 4; j++) {
-                        fprintf(stdout, IOR_format" ", dumpBuf[4 * i + j]);
+                        fprintf(out_logfile, IOR_format" ", dumpBuf[4 * i + j]);
                 }
-                fprintf(stdout, "\n");
+                fprintf(out_logfile, "\n");
         }
         return;
 }                               /* DumpBuffer() */
@@ -188,7 +191,7 @@ void OutputToRoot(int numTasks, MPI_Comm comm, char *stringToDisplay)
         /* display strings */
         if (rank == 0) {
                 for (i = 0; i < numTasks; i++) {
-                        fprintf(stdout, "%s\n", stringArray[i]);
+                        fprintf(out_logfile, "%s\n", stringArray[i]);
                 }
         }
 
@@ -217,7 +220,7 @@ void ExtractHint(char *settingVal, char *valueVal, char *hintString)
                 tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__GPFS__");
                 if (tmpPtr1 == tmpPtr2) {
                         settingPtr += strlen("IOR_HINT__GPFS__");
-                        fprintf(stdout,
+                        fprintf(out_logfile,
                                 "WARNING: Unable to set GPFS hints (not implemented.)\n");
                 }
         }
@@ -304,7 +307,7 @@ void ShowHints(MPI_Info * mpiHints)
                 MPI_CHECK(MPI_Info_get(*mpiHints, key, MPI_MAX_INFO_VAL - 1,
                                        value, &flag),
                           "cannot get info object value");
-                fprintf(stdout, "\t%s = %s\n", key, value);
+                fprintf(out_logfile, "\t%s = %s\n", key, value);
         }
 }
 
@@ -399,14 +402,14 @@ void ShowFileSystemSize(char *fileSystem)
         if (realpath(fileSystem, realPath) == NULL) {
                 ERR("unable to use realpath()");
         }
-        fprintf(stdout, "Path: %s\n", realPath);
-        fprintf(stdout, "FS: %.1f %s   Used FS: %2.1f%%   ",
+        fprintf(out_logfile, "Path: %s\n", realPath);
+        fprintf(out_logfile, "FS: %.1f %s   Used FS: %2.1f%%   ",
                 totalFileSystemSizeHR, fileSystemUnitStr,
                 usedFileSystemPercentage);
-        fprintf(stdout, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
+        fprintf(out_logfile, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
                 (double)totalInodes / (double)(1<<20),
                 usedInodePercentage);
-        fflush(stdout);
+        fflush(out_logfile);
 #endif /* !_WIN32 */
 
         return;
@@ -474,3 +477,65 @@ int uname(struct utsname *name)
         return 0;
 }
 #endif /* _WIN32 */
+
+
+double wall_clock_deviation;
+double wall_clock_delta = 0;
+
+/*
+ * Get time stamp.  Use MPI_Timer() unless _NO_MPI_TIMER is defined,
+ * in which case use gettimeofday().
+ */
+double GetTimeStamp(void)
+{
+        double timeVal;
+#ifdef _NO_MPI_TIMER
+        struct timeval timer;
+
+        if (gettimeofday(&timer, (struct timezone *)NULL) != 0)
+                ERR("cannot use gettimeofday()");
+        timeVal = (double)timer.tv_sec + ((double)timer.tv_usec / 1000000);
+#else                           /* not _NO_MPI_TIMER */
+        timeVal = MPI_Wtime();  /* no MPI_CHECK(), just check return value */
+        if (timeVal < 0)
+                ERR("cannot use MPI_Wtime()");
+#endif                          /* _NO_MPI_TIMER */
+
+        /* wall_clock_delta is difference from root node's time */
+        timeVal -= wall_clock_delta;
+
+        return (timeVal);
+}
+
+/*
+ * Determine any spread (range) between node times.
+ */
+static double TimeDeviation(void)
+{
+        double timestamp;
+        double min = 0;
+        double max = 0;
+        double roottimestamp;
+
+        MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
+        timestamp = GetTimeStamp();
+        MPI_CHECK(MPI_Reduce(&timestamp, &min, 1, MPI_DOUBLE,
+                             MPI_MIN, 0, mpi_comm_world),
+                  "cannot reduce tasks' times");
+        MPI_CHECK(MPI_Reduce(&timestamp, &max, 1, MPI_DOUBLE,
+                             MPI_MAX, 0, mpi_comm_world),
+                  "cannot reduce tasks' times");
+
+        /* delta between individual nodes' time and root node's time */
+        roottimestamp = timestamp;
+        MPI_CHECK(MPI_Bcast(&roottimestamp, 1, MPI_DOUBLE, 0, mpi_comm_world),
+                  "cannot broadcast root's time");
+        wall_clock_delta = timestamp - roottimestamp;
+
+        return max - min;
+}
+
+void init_clock(){
+  /* check for skew between tasks' start times */
+  wall_clock_deviation = TimeDeviation();
+}

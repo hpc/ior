@@ -21,7 +21,7 @@ function runTest(){
   sudo -u testuser PATH=$PATH make || exit 1
 
 	cd /data/
-	sudo -u testuser PATH=$PATH IOR_EXEC=$BUILD/$FLAVOR/src/ior IOR_OUT=$BUILD/$FLAVOR/test ./testing/basic-tests.sh
+	sudo -u testuser PATH=$PATH IOR_BIN_DIR=$BUILD/$FLAVOR/src  IOR_OUT=$BUILD/$FLAVOR/test ./testing/basic-tests.sh
 
   ERROR=$(($ERROR + $?))
   popd  > /dev/null

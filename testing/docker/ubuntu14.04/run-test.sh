@@ -21,7 +21,7 @@ function runTest(){
   ln -sf $(which mpiexec.$FLAVOR) /usr/bin/mpiexec
 
 	cd /data/
-	sudo -u testuser IOR_EXEC=$BUILD/$FLAVOR/src/ior IOR_OUT=$BUILD/$FLAVOR/test ./testing/basic-tests.sh
+	sudo -u testuser IOR_BIN_DIR=$BUILD/$FLAVOR/src IOR_OUT=$BUILD/$FLAVOR/test ./testing/basic-tests.sh
 
   ERROR=$(($ERROR + $?))
   popd  > /dev/null

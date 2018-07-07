@@ -36,19 +36,9 @@
 #include "parse_options.h"
 
 
-/* globals used by other files, also defined "extern" in ior.h */
-int      numTasksWorld = 0;
-int      rank = 0;
-int      rankOffset = 0;
-int      tasksPerNode = 0;           /* tasks per node */
-int      verbose = VERBOSE_0;        /* verbose output */
-MPI_Comm testComm;
-
 /* file scope globals */
 extern char **environ;
 int totalErrorCount = 0;
-double wall_clock_delta = 0;
-double wall_clock_deviation;
 
 const ior_aiori_t *backend;
 
@@ -76,6 +66,8 @@ int main(int argc, char **argv)
         int i;
         IOR_test_t *tests_head;
         IOR_test_t *tptr;
+
+        mpi_comm_world = MPI_COMM_WORLD;
 
         /*
          * check -h option from commandline without starting MPI;
@@ -504,7 +496,7 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
  * NOTE: This also assumes that the task count on all nodes is equal
  * to the task count on the host running MPI task 0.
  */
-static int CountTasksPerNode(int numTasks, MPI_Comm comm)
+int CountTasksPerNode(int numTasks, MPI_Comm comm)
 {
         /* for debugging and testing */
         if (getenv("IOR_FAKE_TASK_PER_NODES")){
@@ -989,31 +981,6 @@ static void GetTestFileName(char *testFileName, IOR_param_t * test)
 }
 
 /*
- * Get time stamp.  Use MPI_Timer() unless _NO_MPI_TIMER is defined,
- * in which case use gettimeofday().
- */
-static double GetTimeStamp(void)
-{
-        double timeVal;
-#ifdef _NO_MPI_TIMER
-        struct timeval timer;
-
-        if (gettimeofday(&timer, (struct timezone *)NULL) != 0)
-                ERR("cannot use gettimeofday()");
-        timeVal = (double)timer.tv_sec + ((double)timer.tv_usec / 1000000);
-#else                           /* not _NO_MPI_TIMER */
-        timeVal = MPI_Wtime();  /* no MPI_CHECK(), just check return value */
-        if (timeVal < 0)
-                ERR("cannot use MPI_Wtime()");
-#endif                          /* _NO_MPI_TIMER */
-
-        /* wall_clock_delta is difference from root node's time */
-        timeVal -= wall_clock_delta;
-
-        return (timeVal);
-}
-
-/*
  * Convert IOR_offset_t value to human readable string.  This routine uses a
  * statically-allocated buffer internally and so is not re-entrant.
  */
@@ -1266,7 +1233,7 @@ static void PrintRemoveTiming(double start, double finish, int rep)
  */
 static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
 {
-        int tmpRankOffset;
+        int tmpRankOffset = 0;
         if (filePerProc) {
                 /* in random tasks, delete own file */
                 if (test->reorderTasksRandom == TRUE) {
@@ -1885,9 +1852,9 @@ static void *malloc_and_touch(size_t size)
 
 static void file_hits_histogram(IOR_param_t *params)
 {
-        int *rankoffs;
-        int *filecont;
-        int *filehits;
+        int *rankoffs = NULL;
+        int *filecont = NULL;
+        int *filehits = NULL;
         int ifile;
         int jfile;
 
@@ -2614,7 +2581,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
 
 static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offsetArray, int pretendRank,
   IOR_offset_t * transferCount, int * errors, IOR_param_t * test, int * fd, IOR_io_buffers* ioBuffers, int access){
-  IOR_offset_t amtXferred;
+  IOR_offset_t amtXferred = 0;
   IOR_offset_t transfer;
 
   void *buffer = ioBuffers->buffer;

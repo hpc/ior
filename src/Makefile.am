@@ -15,7 +15,7 @@ ior_LDFLAGS =
 ior_LDADD =
 ior_CPPFLAGS =
 
-mdtest_SOURCES = mdtest.c utilities.c getopt/optlist.c
+mdtest_SOURCES = mdtest-main.c mdtest.c utilities.c getopt/optlist.c
 mdtest_LDFLAGS =
 mdtest_LDADD =
 mdtest_CPPFLAGS =
