@@ -5,7 +5,7 @@ endif
 
 noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h getopt/optlist.h
 
-extraSOURCES = aiori.c
+extraSOURCES = aiori.c aiori-DUMMY.c
 extraLDADD =
 extraLDFLAGS =
 extraCPPFLAGS =

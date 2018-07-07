@@ -79,6 +79,7 @@ typedef struct ior_aiori {
         int (*stat) (const char *path, struct stat *buf, IOR_param_t * param);
 } ior_aiori_t;
 
+extern ior_aiori_t dummy_aiori;
 extern ior_aiori_t hdf5_aiori;
 extern ior_aiori_t hdfs_aiori;
 extern ior_aiori_t mpiio_aiori;

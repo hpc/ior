@@ -28,7 +28,8 @@
  */
 
 ior_aiori_t *available_aiori[] = {
-
+        & dummy_aiori,
+        
 #ifdef USE_HDF5_AIORI
         &hdf5_aiori,
 #endif
