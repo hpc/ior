@@ -100,6 +100,8 @@ static char unique_rm_dir[MAX_PATHLEN];
 static char unique_rm_uni_dir[MAX_PATHLEN];
 static char *write_buffer;
 static char *read_buffer;
+static char *stoneWallingStatusFile;
+
 
 static int barriers;
 static int create_only;
@@ -155,9 +157,10 @@ typedef struct{
   double start_time;
 
   int stone_wall_timer_seconds;
+
+  long long unsigned items_start;
   long long unsigned items_done;
 
-  int items_start;
   uint64_t items_per_dir;
 } rank_progress_t;
 
@@ -222,8 +225,6 @@ void parse_dirpath(char *dirpath_arg) {
  */
 
 void unique_dir_access(int opt, char *to) {
-
-
     if (( rank == 0 ) && ( verbose >= 1 )) {
         fprintf( out_logfile, "V-1: Entering unique_dir_access...\n" );
         fflush( out_logfile );
@@ -382,7 +383,7 @@ void create_remove_items_helper(const int dirs, const int create, const char *pa
         fflush( out_logfile );
     }
 
-    for (uint64_t i = progress->items_start ; i < progress->items_per_dir ; ++i) {
+    for (uint64_t i = progress->items_start; i < progress->items_per_dir ; ++i) {
         if (!dirs) {
             if (create) {
                 create_file (path, itemNum + i);
@@ -397,7 +398,7 @@ void create_remove_items_helper(const int dirs, const int create, const char *pa
           return;
         }
     }
-    progress->items_done = items_per_dir;
+    progress->items_done = progress->items_per_dir;
 }
 
 /* helper function to do collective operations */
@@ -408,7 +409,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
         fprintf( out_logfile, "V-1: Entering collective_helper...\n" );
         fflush( out_logfile );
     }
-    for (uint64_t i = 0 ; i < items_per_dir ; ++i) {
+    for (uint64_t i = progress->items_start ; i < progress->items_per_dir ; ++i) {
         if (dirs) {
             create_remove_dirs (path, create, itemNum + i);
             continue;
@@ -440,7 +441,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
           return;
         }
     }
-    progress->items_done = items_per_dir;
+    progress->items_done = progress->items_per_dir;
 }
 
 /* recusive function to create and remove files/directories from the
@@ -1020,6 +1021,36 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     }
 }
 
+/* Returns if the stonewall was hit */
+int updateStoneWallIterations(int iteration, rank_progress_t * progress, double tstart){
+  int hit = 0;
+  if (verbose >= 1 ) {
+    fprintf( out_logfile, "V-1: rank %d stonewall hit with %lld items\n", rank, progress->items_done );
+    fflush( out_logfile );
+  }
+  progress->items_start = progress->items_done;
+  long long unsigned max_iter = 0;
+  MPI_Allreduce(& progress->items_done, & max_iter, 1, MPI_INT, MPI_MAX, testComm);
+  summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = MPI_Wtime() - tstart;
+
+  // continue to the maximum...
+  long long min_accessed = 0;
+  MPI_Reduce(& progress->items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm);
+  long long sum_accessed = 0;
+  MPI_Reduce(& progress->items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
+
+  if (rank == 0 && items != (sum_accessed / size)) {
+    summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
+    summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
+    fprintf( out_logfile, "V-1: continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
+    fflush( out_logfile );
+    hit = 1;
+  }
+  progress->items_per_dir = max_iter;
+
+  return hit;
+}
+
 void file_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
     double t[5] = {0};
@@ -1061,37 +1092,27 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         /* create files */
         create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
         if(stone_wall_timer_seconds){
-	        /* TODO */
-          if (verbose >= 1 ) {
-            fprintf( out_logfile, "V-1: rank %d stonewall hit with %lld items\n", rank, progress->items_done );
-            fflush( out_logfile );
+	        int hit = updateStoneWallIterations(iteration, progress, t[0]);
+
+          if (hit){
+            progress->stone_wall_timer_seconds = 0;
+            create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
+            // now reset the values
+            progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
+            items = progress->items_per_dir;
           }
-          long long unsigned max_iter = 0;
-          MPI_Allreduce(& progress->items_done, & max_iter, 1, MPI_INT, MPI_MAX, testComm);
-          summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = MPI_Wtime() - t[0];
-
-          // continue to the maximum...
-          long long min_accessed = 0;
-          MPI_Reduce(& progress->items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm);
-
-          long long sum_accessed = 0;
-          MPI_Reduce(& progress->items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
-
-          if (rank == 0 && items != sum_accessed / size) {
-            summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
-            summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
-            fprintf( out_logfile, "V-1: continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
-            fflush( out_logfile );
+          if (stoneWallingStatusFile){
+            StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_per_dir);
           }
-
-          progress->stone_wall_timer_seconds = 0;
-          progress->items_start = progress->items_done;
-          progress->items_per_dir = max_iter;
-          create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
-          progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
-          items = max_iter;
-          progress->items_done = max_iter;
         }
+    }else{
+      if (stoneWallingStatusFile){
+        /* The number of items depends on the stonewalling file */
+        items = ReadStoneWallingIterations(stoneWallingStatusFile);
+        if (verbose >= 1 && rank == 0) {
+          printf("read stonewall file items: "LLU"\n", items);
+        }
+      }
     }
 
     if (barriers) {
@@ -1116,11 +1137,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         }
 
         /* stat files */
-        if (random_seed > 0) {
-                mdtest_stat(1,0,temp_path, progress);
-        } else {
-                mdtest_stat(0,0,temp_path, progress);
-        }
+        mdtest_stat((random_seed > 0 ? 1 : 0), 0, temp_path, progress);
     }
 
     if (barriers) {
@@ -1279,7 +1296,8 @@ void print_help (void) {
         "\t-v: verbosity (each instance of option increments by one)\n"
         "\t-V: verbosity value\n"
         "\t-w: bytes to write to each file after it is created\n"
-        "\t-W: number in seconds; stonewall timer, write as many seconds and ensure all processes did the same number of operations\n"
+        "\t-W: number in seconds; stonewall timer, write as many seconds and ensure all processes did the same number of operations (currently only stops during create phase)\n"
+        "\t-x: StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs\n"
         "\t-y: sync file after writing\n"
         "\t-z: depth of hierarchical directory structure\n"
         "\t-Z: print time instead of rate\n"
@@ -1769,7 +1787,14 @@ void create_remove_directory_tree(int create,
     }
 }
 
-static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t * summary_table, rank_progress_t * progress){
+static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t * summary_table){
+  rank_progress_t progress_o;
+  memset(& progress_o, 0 , sizeof(progress_o));
+  progress_o.start_time = GetTimeStamp();
+  progress_o.stone_wall_timer_seconds = stone_wall_timer_seconds;
+  progress_o.items_per_dir = items_per_dir;
+  rank_progress_t * progress = & progress_o;
+
   /* start and end times of directory tree create/remove */
   double startCreate, endCreate;
   int k, c;
@@ -2024,6 +2049,7 @@ void mdtest_init_args(){
    barriers = 1;
    branch_factor = 1;
    throttle = 1;
+   stoneWallingStatusFile = NULL;
    create_only = 0;
    stat_only = 0;
    read_only = 0;
@@ -2107,7 +2133,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     verbose = 0;
     option_t *optList, *thisOpt;
-    optList = GetOptList(argc, argv, "a:b:BcCd:De:Ef:Fhi:I:l:Ln:N:p:rR::s:StTuvV:w:W:yz:Z");
+    optList = GetOptList(argc, argv, "a:b:BcCd:De:Ef:Fhi:I:l:Ln:N:p:rR::s:StTuvV:w:W:x:yz:Z");
 
 
     while (optList != NULL) {
@@ -2186,6 +2212,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
             write_bytes = ( size_t )strtoul( optarg, ( char ** )NULL, 10 );   break;
         case 'W':
             stone_wall_timer_seconds = atoi( optarg );   break;
+        case 'x':
+            stoneWallingStatusFile = strdup(optarg); break;
         case 'y':
             sync_file = 1;                break;
         case 'z':
@@ -2404,13 +2432,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     MPI_Comm_group(testComm, &worldgroup);
 
-    // keep track of the current status for stonewalling
-    rank_progress_t progress;
-    memset(& progress, 0 , sizeof(progress));
-    progress.start_time = GetTimeStamp();
-    progress.stone_wall_timer_seconds = stone_wall_timer_seconds;
-    progress.items_per_dir = items_per_dir;
-
     /* Run the tests */
     for (i = first; i <= last && i <= size; i += stride) {
         range.last = i - 1;
@@ -2437,26 +2458,16 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         }
 
         for (j = 0; j < iterations; j++) {
-            mdtest_iteration(i, j, testgroup, & summary_table[j], & progress);
-            if(CHECK_STONE_WALL(& progress)){
-              iterations = j + 1;
-              break;
-            }
+            // keep track of the current status for stonewalling
+            mdtest_iteration(i, j, testgroup, & summary_table[j]);
         }
-        items = progress.items_done;
         summarize_results(iterations);
         if (i == 1 && stride > 1) {
             i = 0;
         }
-        if(CHECK_STONE_WALL(& progress)){
-          break;
-        }
     }
 
     if (rank == 0) {
-        if(CHECK_STONE_WALL(& progress)){
-          fprintf(out_logfile, "\n-- hit stonewall\n");
-        }
         fprintf(out_logfile, "\n-- finished at %s --\n", PrintTimestamp());
         fflush(out_logfile);
     }

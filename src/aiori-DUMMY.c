@@ -21,6 +21,9 @@ static void *DUMMY_Create(char *testFileName, IOR_param_t * param)
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY create: %s = %p\n", testFileName, current);
   }
+  if (rank == 0){
+    usleep(100000);
+  }  
   return current++;
 }
 
