@@ -21,14 +21,15 @@ typedef enum {
 
 typedef struct
 {
-    double rate[MDTEST_LAST_NUM];
-    double time[MDTEST_LAST_NUM];
-    uint64_t items[MDTEST_LAST_NUM];
+    double rate[MDTEST_LAST_NUM]; /* Calculated throughput */
+    double time[MDTEST_LAST_NUM]; /* Time */
+    uint64_t items[MDTEST_LAST_NUM]; /* Number of operations done */
 
-    uint64_t stonewall_last_item[MDTEST_LAST_NUM];
-    double stonewall_time[MDTEST_LAST_NUM];
-    uint64_t stonewall_item_min[MDTEST_LAST_NUM];
-    uint64_t stonewall_item_sum[MDTEST_LAST_NUM];
+    /* Statistics when hitting the stonewall */
+    double   stonewall_time[MDTEST_LAST_NUM];     /* runtime until completion / hit of the stonewall */
+    uint64_t stonewall_last_item[MDTEST_LAST_NUM]; /* Max number of items a process has accessed */
+    uint64_t stonewall_item_min[MDTEST_LAST_NUM];  /* Min number of items a process has accessed */
+    uint64_t stonewall_item_sum[MDTEST_LAST_NUM];  /* Total number of items accessed until stonewall */
 } mdtest_results_t;
 
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * out_logfile);

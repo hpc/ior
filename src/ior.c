@@ -550,77 +550,6 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
 }
 
 /*
- * Count the number of tasks that share a host.
- *
- * This function employees the gethostname() call, rather than using
- * MPI_Get_processor_name().  We are interested in knowing the number
- * of tasks that share a file system client (I/O node, compute node,
- * whatever that may be).  However on machines like BlueGene/Q,
- * MPI_Get_processor_name() uniquely identifies a cpu in a compute node,
- * not the node where the I/O is function shipped to.  gethostname()
- * is assumed to identify the shared filesystem client in more situations.
- *
- * NOTE: This also assumes that the task count on all nodes is equal
- * to the task count on the host running MPI task 0.
- */
-int CountTasksPerNode(int numTasks, MPI_Comm comm)
-{
-        /* for debugging and testing */
-        if (getenv("IOR_FAKE_TASK_PER_NODES")){
-          int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
-          int rank;
-          MPI_Comm_rank(comm, & rank);
-          if(rank == 0){
-            printf("Fake tasks per node: using %d\n", tasksPerNode);
-          }
-          return tasksPerNode;
-        }
-
-        char localhost[MAX_STR];
-        char hostname0[MAX_STR];
-        static int firstPass = TRUE;
-        unsigned count;
-        unsigned flag;
-        int rc;
-
-        rc = gethostname(localhost, MAX_STR);
-        if (rc == -1) {
-                /* This node won't match task 0's hostname...except in the
-                   case where ALL gethostname() calls fail, in which
-                   case ALL nodes will appear to be on the same node.
-                   We'll handle that later. */
-                localhost[0] = '\0';
-                if (rank == 0)
-                        perror("gethostname() failed");
-        }
-
-        if (verbose >= VERBOSE_2 && firstPass) {
-                char tmp[MAX_STR];
-                sprintf(tmp, "task %d on %s", rank, localhost);
-                OutputToRoot(numTasks, comm, tmp);
-                firstPass = FALSE;
-        }
-
-        /* send task 0's hostname to all tasks */
-        if (rank == 0)
-                strcpy(hostname0, localhost);
-        MPI_CHECK(MPI_Bcast(hostname0, MAX_STR, MPI_CHAR, 0, comm),
-                  "broadcast of task 0's hostname failed");
-        if (strcmp(hostname0, localhost) == 0)
-                flag = 1;
-        else
-                flag = 0;
-
-        /* count the tasks share the same host as task 0 */
-        MPI_Allreduce(&flag, &count, 1, MPI_UNSIGNED, MPI_SUM, comm);
-
-        if (hostname0[0] == '\0')
-                count = 1;
-
-        return (int)count;
-}
-
-/*
  * Allocate a page-aligned (required by O_DIRECT) buffer.
  */
 static void *aligned_buffer_alloc(size_t size)
@@ -1349,7 +1278,7 @@ static IOR_test_t *SetupTests(int argc, char **argv)
         IOR_test_t *tests, *testsHead;
 
         /* count the tasks per node */
-        tasksPerNode = CountTasksPerNode(numTasksWorld, mpi_comm_world);
+        tasksPerNode = CountTasksPerNode(mpi_comm_world);
 
         testsHead = tests = ParseCommandLine(argc, argv);
         /*
@@ -2042,7 +1971,7 @@ static void TestIoSys(IOR_test_t *test)
                         "Using reorderTasks '-C' (expecting block, not cyclic, task assignment)\n");
                 fflush(out_logfile);
         }
-        params->tasksPerNode = CountTasksPerNode(params->numTasks, testComm);
+        params->tasksPerNode = CountTasksPerNode(testComm);
 
         /* setup timers */
         for (i = 0; i < 12; i++) {

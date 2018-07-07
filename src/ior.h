@@ -135,7 +135,7 @@ typedef struct
     int deadlineForStonewalling;     /* max time in seconds to run any test phase */
     int stoneWallingWearOut;         /* wear out the stonewalling, once the timout is over, each process has to write the same amount */
     uint64_t stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
-    char stoneWallingStatusFile[MAXPATHLEN]; 
+    char stoneWallingStatusFile[MAXPATHLEN];
 
     int maxTimeDuration;             /* max time in minutes to run each test */
     int outlierThreshold;            /* warn on outlier N seconds from mean */
@@ -240,7 +240,6 @@ IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
 void AllocResults(IOR_test_t *test);
 void GetPlatformName(char *);
 void init_IOR_Param_t(IOR_param_t *p);
-int CountTasksPerNode(int numTasks, MPI_Comm comm);
 
 /*
  * This function runs IOR given by command line, useful for testing

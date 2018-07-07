@@ -130,77 +130,77 @@ void DumpBuffer(void *buffer,
         return;
 }                               /* DumpBuffer() */
 
-/*
- * Sends all strings to root nodes and displays.
- */
-void OutputToRoot(int numTasks, MPI_Comm comm, char *stringToDisplay)
-{
-        int i;
-        int swapNeeded = TRUE;
-        int pairsToSwap;
-        char **stringArray;
-        char tmpString[MAX_STR];
-        MPI_Status status;
+#if MPI_VERSION >= 3
+int CountTasksPerNode(MPI_Comm comm) {
+    /* modern MPI provides a simple way to get the local process count */
+    MPI_Comm shared_comm;
+    int rc, count;
 
-        /* malloc string array */
-        stringArray = (char **)malloc(sizeof(char *) * numTasks);
-        if (stringArray == NULL)
-                ERR("out of memory");
-        for (i = 0; i < numTasks; i++) {
-                stringArray[i] = (char *)malloc(sizeof(char) * MAX_STR);
-                if (stringArray[i] == NULL)
-                        ERR("out of memory");
-        }
+    MPI_Comm_split_type (comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm);
+    MPI_Comm_size (shared_comm, &count);
+    MPI_Comm_free (&shared_comm);
 
-        strcpy(stringArray[rank], stringToDisplay);
-
-        if (rank == 0) {
-                /* MPI_receive all strings */
-                for (i = 1; i < numTasks; i++) {
-                        MPI_CHECK(MPI_Recv(stringArray[i], MAX_STR, MPI_CHAR,
-                                           MPI_ANY_SOURCE, MPI_ANY_TAG, comm,
-                                           &status), "MPI_Recv() error");
-                }
-        } else {
-                /* MPI_send string to root node */
-                MPI_CHECK(MPI_Send
-                          (stringArray[rank], MAX_STR, MPI_CHAR, 0, 0, comm),
-                          "MPI_Send() error");
-        }
-        MPI_CHECK(MPI_Barrier(comm), "barrier error");
-
-        /* sort strings using bubblesort */
-        if (rank == 0) {
-                pairsToSwap = numTasks - 1;
-                while (swapNeeded) {
-                        swapNeeded = FALSE;
-                        for (i = 0; i < pairsToSwap; i++) {
-                                if (strcmp(stringArray[i], stringArray[i + 1]) >
-                                    0) {
-                                        strcpy(tmpString, stringArray[i]);
-                                        strcpy(stringArray[i],
-                                               stringArray[i + 1]);
-                                        strcpy(stringArray[i + 1], tmpString);
-                                        swapNeeded = TRUE;
-                                }
-                        }
-                        pairsToSwap--;
-                }
-        }
-
-        /* display strings */
-        if (rank == 0) {
-                for (i = 0; i < numTasks; i++) {
-                        fprintf(out_logfile, "%s\n", stringArray[i]);
-                }
-        }
-
-        /* free strings */
-        for (i = 0; i < numTasks; i++) {
-                free(stringArray[i]);
-        }
-        free(stringArray);
+    return count;
 }
+#else
+/*
+ * Count the number of tasks that share a host.
+ *
+ * This function employees the gethostname() call, rather than using
+ * MPI_Get_processor_name().  We are interested in knowing the number
+ * of tasks that share a file system client (I/O node, compute node,
+ * whatever that may be).  However on machines like BlueGene/Q,
+ * MPI_Get_processor_name() uniquely identifies a cpu in a compute node,
+ * not the node where the I/O is function shipped to.  gethostname()
+ * is assumed to identify the shared filesystem client in more situations.
+ *
+ * NOTE: This also assumes that the task count on all nodes is equal
+ * to the task count on the host running MPI task 0.
+ */
+int CountTasksPerNode(MPI_Comm comm) {
+    /* for debugging and testing */
+    if (getenv("IOR_FAKE_TASK_PER_NODES")){
+      int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
+      int rank;
+      MPI_Comm_rank(comm, & rank);
+      if(rank == 0){
+        printf("Fake tasks per node: using %d\n", tasksPerNode);
+      }
+      return tasksPerNode;
+    }
+    char       localhost[MAX_LEN],
+        hostname[MAX_LEN];
+    int        count               = 1,
+        i;
+    MPI_Status status;
+
+    if (( rank == 0 ) && ( verbose >= 1 )) {
+        fprintf( out_logfile, "V-1: Entering count_tasks_per_node...\n" );
+        fflush( out_logfile );
+    }
+
+    if (gethostname(localhost, MAX_LEN) != 0) {
+        FAIL("gethostname()");
+    }
+    if (rank == 0) {
+        /* MPI_receive all hostnames, and compare to local hostname */
+        for (i = 0; i < size-1; i++) {
+            MPI_Recv(hostname, MAX_LEN, MPI_CHAR, MPI_ANY_SOURCE,
+                     MPI_ANY_TAG, testComm, &status);
+            if (strcmp(hostname, localhost) == 0) {
+                count++;
+            }
+        }
+    } else {
+        /* MPI_send hostname to root node */
+        MPI_Send(localhost, MAX_LEN, MPI_CHAR, 0, 0, testComm);
+    }
+    MPI_Bcast(&count, 1, MPI_INT, 0, testComm);
+
+    return(count);
+}
+#endif
+
 
 /*
  * Extract key/value pair from hint string.

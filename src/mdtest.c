@@ -86,7 +86,6 @@
 
 #define LLU "%lu"
 
-//int rank;
 static int size;
 static uint64_t *rand_array;
 static char testdir[MAX_LEN];
@@ -175,55 +174,6 @@ typedef struct{
 enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
 
 
-
-#if MPI_VERSION >= 3
-int count_tasks_per_node(void) {
-    /* modern MPI provides a simple way to get the local process count */
-    MPI_Comm shared_comm;
-    int rc, count;
-
-    MPI_Comm_split_type (testComm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm);
-
-    MPI_Comm_size (shared_comm, &count);
-
-    MPI_Comm_free (&shared_comm);
-
-    return count;
-}
-#else
-int count_tasks_per_node(void) {
-    char       localhost[MAX_LEN],
-        hostname[MAX_LEN];
-    int        count               = 1,
-        i;
-    MPI_Status status;
-
-    if (( rank == 0 ) && ( verbose >= 1 )) {
-        fprintf( out_logfile, "V-1: Entering count_tasks_per_node...\n" );
-        fflush( out_logfile );
-    }
-
-    if (gethostname(localhost, MAX_LEN) != 0) {
-        FAIL("gethostname()");
-    }
-    if (rank == 0) {
-        /* MPI_receive all hostnames, and compare to local hostname */
-        for (i = 0; i < size-1; i++) {
-            MPI_Recv(hostname, MAX_LEN, MPI_CHAR, MPI_ANY_SOURCE,
-                     MPI_ANY_TAG, testComm, &status);
-            if (strcmp(hostname, localhost) == 0) {
-                count++;
-            }
-        }
-    } else {
-        /* MPI_send hostname to root node */
-        MPI_Send(localhost, MAX_LEN, MPI_CHAR, 0, 0, testComm);
-    }
-    MPI_Bcast(&count, 1, MPI_INT, 0, testComm);
-
-    return(count);
-}
-#endif
 
 void delay_secs(int delay) {
 
@@ -1023,7 +973,6 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             fflush( out_logfile );
         }
 
-        double start_timer = GetTimeStamp();
         /* remove directories */
         if (collective_creates) {
             if (rank == 0) {
@@ -1112,7 +1061,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     t[0] = MPI_Wtime();
 
     /* create phase */
-    if (create_only && ! CHECK_STONE_WALL(progress)) {
+    if (create_only ) {
         if (unique_dir_per_task) {
             unique_dir_access(MK_UNI_DIR, temp_path);
             if (!time_unique_dir_overhead) {
@@ -1138,6 +1087,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         /* create files */
         create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
         if(stone_wall_timer_seconds){
+	        /* TODO */
           if (verbose >= 1 ) {
             fprintf( out_logfile, "V-1: rank %d stonewall hit with %lld items\n", rank, progress->items_done );
             fflush( out_logfile );
@@ -1176,7 +1126,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     t[1] = MPI_Wtime();
 
     /* stat phase */
-    if (stat_only && ! CHECK_STONE_WALL(progress)) {
+    if (stat_only ) {
         if (unique_dir_per_task) {
             unique_dir_access(STAT_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
@@ -1205,7 +1155,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     t[2] = MPI_Wtime();
 
     /* read phase */
-    if (read_only && ! CHECK_STONE_WALL(progress)) {
+    if (read_only ) {
         if (unique_dir_per_task) {
             unique_dir_access(READ_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
@@ -1233,7 +1183,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     }
     t[3] = MPI_Wtime();
 
-    if (remove_only && ! CHECK_STONE_WALL(progress)) {
+    if (remove_only) {
         if (unique_dir_per_task) {
             unique_dir_access(RM_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
@@ -1261,7 +1211,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         MPI_Barrier(testComm);
     }
     t[4] = MPI_Wtime();
-    if (remove_only && ! CHECK_STONE_WALL(progress)) {
+    if (remove_only) {
         if (unique_dir_per_task) {
             unique_dir_access(RM_UNI_DIR, temp_path);
         } else {
@@ -2009,9 +1959,6 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
   }
 
   MPI_Barrier(testComm);
-  if(CHECK_STONE_WALL(progress)){
-    return;
-  }
   if (remove_only) {
       startCreate = MPI_Wtime();
       if (unique_dir_per_task) {
@@ -2164,7 +2111,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     pid = getpid();
     uid = getuid();
 
-    nodeCount = size / count_tasks_per_node();
+    nodeCount = size / CountTasksPerNode(testComm);
 
     if (rank == 0) {
         fprintf(out_logfile, "-- started at %s --\n\n", PrintTimestamp());
@@ -2384,9 +2331,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
              * range 0 .. 1. Multiply that by n and you get a number in
              * the range 0 .. n.
              */
-
-            uint64_t k =
-                ( uint64_t ) ((( double )rand() / ( double )RAND_MAX ) * ( double )n );
+            uint64_t k = ( uint64_t ) ((( double )rand() / ( double )RAND_MAX ) * ( double )n );
 
             /*
              * Now move the nth element to the kth (randomly chosen)

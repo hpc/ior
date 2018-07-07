@@ -48,13 +48,13 @@ extern FILE * out_logfile;
 void set_o_direct_flag(int *fd);
 
 char *CurrentTimeString(void);
-void OutputToRoot(int, MPI_Comm, char *);
 int Regex(char *, char *);
 void ShowFileSystemSize(char *);
 void DumpBuffer(void *, size_t);
 void SeedRandGen(MPI_Comm);
 void SetHints (MPI_Info *, char *);
 void ShowHints (MPI_Info *);
+int CountTasksPerNode(MPI_Comm comm);
 
 /* Returns -1, if cannot be read  */
 int64_t ReadStoneWallingIterations(char * const filename);
