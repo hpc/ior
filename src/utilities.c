@@ -168,8 +168,8 @@ int CountTasksPerNode(MPI_Comm comm) {
       }
       return tasksPerNode;
     }
-    char       localhost[MAX_LEN],
-        hostname[MAX_LEN];
+    char       localhost[MAX_PATHLEN],
+        hostname[MAX_PATHLEN];
     int        count               = 1,
         i;
     MPI_Status status;
@@ -179,13 +179,13 @@ int CountTasksPerNode(MPI_Comm comm) {
         fflush( out_logfile );
     }
 
-    if (gethostname(localhost, MAX_LEN) != 0) {
+    if (gethostname(localhost, MAX_PATHLEN) != 0) {
         FAIL("gethostname()");
     }
     if (rank == 0) {
         /* MPI_receive all hostnames, and compare to local hostname */
         for (i = 0; i < size-1; i++) {
-            MPI_Recv(hostname, MAX_LEN, MPI_CHAR, MPI_ANY_SOURCE,
+            MPI_Recv(hostname, MAX_PATHLEN, MPI_CHAR, MPI_ANY_SOURCE,
                      MPI_ANY_TAG, testComm, &status);
             if (strcmp(hostname, localhost) == 0) {
                 count++;
@@ -193,7 +193,7 @@ int CountTasksPerNode(MPI_Comm comm) {
         }
     } else {
         /* MPI_send hostname to root node */
-        MPI_Send(localhost, MAX_LEN, MPI_CHAR, 0, 0, testComm);
+        MPI_Send(localhost, MAX_PATHLEN, MPI_CHAR, 0, 0, testComm);
     }
     MPI_Bcast(&count, 1, MPI_INT, 0, testComm);
 
