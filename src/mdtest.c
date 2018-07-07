@@ -174,39 +174,7 @@ typedef struct{
 /* for making/removing unique directory && stating/deleting subdirectory */
 enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
 
-#ifdef __linux__
-#define FAIL(msg) do {                                                  \
-        fprintf(out_logfile, "%s: Process %d(%s): FAILED in %s, %s: %s\n",   \
-                print_timestamp(), rank, hostname, __func__,            \
-                msg, strerror(errno));                                  \
-        fflush(out_logfile);                                                 \
-        MPI_Abort(testComm, 1);                                   \
-    } while(0)
-#else
-#define FAIL(msg) do {                                                  \
-        fprintf(out_logfile, "%s: Process %d(%s): FAILED at %d, %s: %s\n",   \
-                print_timestamp(), rank, hostname, __LINE__,            \
-                msg, strerror(errno));                                  \
-        fflush(out_logfile);                                                 \
-        MPI_Abort(testComm, 1);                                   \
-    } while(0)
-#endif
 
-static char *print_timestamp() {
-    static char datestring[80];
-    time_t cur_timestamp;
-
-
-    if (( rank == 0 ) && ( verbose >= 1 )) {
-        fprintf( out_logfile, "V-1: Entering print_timestamp...\n" );
-    }
-
-    fflush(out_logfile);
-    cur_timestamp = time(NULL);
-    strftime(datestring, 80, "%m/%d/%Y %T", localtime(&cur_timestamp));
-
-    return datestring;
-}
 
 #if MPI_VERSION >= 3
 int count_tasks_per_node(void) {
@@ -2199,7 +2167,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     nodeCount = size / count_tasks_per_node();
 
     if (rank == 0) {
-        fprintf(out_logfile, "-- started at %s --\n\n", print_timestamp());
+        fprintf(out_logfile, "-- started at %s --\n\n", PrintTimestamp());
         fprintf(out_logfile, "mdtest-%s was launched with %d total task(s) on %d node(s)\n",
                RELEASE_VERS, size, nodeCount);
         fflush(out_logfile);
@@ -2570,7 +2538,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         if(CHECK_STONE_WALL(& progress)){
           fprintf(out_logfile, "\n-- hit stonewall\n");
         }
-        fprintf(out_logfile, "\n-- finished at %s --\n", print_timestamp());
+        fprintf(out_logfile, "\n-- finished at %s --\n", PrintTimestamp());
         fflush(out_logfile);
     }
 

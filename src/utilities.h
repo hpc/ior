@@ -27,6 +27,24 @@ extern MPI_Comm testComm;
 extern MPI_Comm mpi_comm_world;
 extern FILE * out_logfile;
 
+#ifdef __linux__
+#define FAIL(msg) do {                                                   \
+        fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n",   \
+                PrintTimestamp(), rank, __func__,                       \
+                msg, strerror(errno));                                   \
+        fflush(out_logfile);                                             \
+        MPI_Abort(testComm, 1);                                          \
+    } while(0)
+#else
+#define FAIL(msg) do {                                                   \
+        fprintf(out_logfile, "%s: Process %d: FAILED at %d, %s: %s\n",   \
+                PrintTimestamp(), rank, __LINE__,                       \
+                msg, strerror(errno));                                   \
+        fflush(out_logfile);                                             \
+        MPI_Abort(testComm, 1);                                          \
+    } while(0)
+#endif
+
 void set_o_direct_flag(int *fd);
 
 char *CurrentTimeString(void);
@@ -38,8 +56,13 @@ void SeedRandGen(MPI_Comm);
 void SetHints (MPI_Info *, char *);
 void ShowHints (MPI_Info *);
 
+/* Returns -1, if cannot be read  */
+int64_t ReadStoneWallingIterations(char * const filename);
+void StoreStoneWallingIterations(char * const filename, int64_t count);
+
 void init_clock(void);
 double GetTimeStamp(void);
+char * PrintTimestamp(); // TODO remove this function
 
 extern double wall_clock_deviation;
 extern double wall_clock_delta;

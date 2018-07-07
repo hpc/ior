@@ -539,3 +539,50 @@ void init_clock(){
   /* check for skew between tasks' start times */
   wall_clock_deviation = TimeDeviation();
 }
+
+char * PrintTimestamp() {
+    static char datestring[80];
+    time_t cur_timestamp;
+
+    if (( rank == 0 ) && ( verbose >= 1 )) {
+        fprintf( out_logfile, "V-1: Entering PrintTimestamp...\n" );
+    }
+
+    fflush(out_logfile);
+    cur_timestamp = time(NULL);
+    strftime(datestring, 80, "%m/%d/%Y %T", localtime(&cur_timestamp));
+
+    return datestring;
+}
+
+int64_t ReadStoneWallingIterations(char * const filename){
+  long long data;
+  if(rank != 0){
+    MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, mpi_comm_world);
+    return data;
+  }else{
+    FILE * out = fopen(filename, "r");
+    if (out == NULL){
+      return -1;
+    }
+    int ret = fscanf(out, "%lld", & data);
+    if (ret != 1){
+      return -1;
+    }
+    fclose(out);
+    MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, mpi_comm_world);
+    return data;
+  }
+}
+
+void StoreStoneWallingIterations(char * const filename, int64_t count){
+  if(rank != 0){
+    return;
+  }
+  FILE * out = fopen(filename, "w");
+  if (out == NULL){
+    FAIL("Cannot write to the stonewalling file!");
+  }
+  fprintf(out, "%lld", (long long) count);
+  fclose(out);
+}

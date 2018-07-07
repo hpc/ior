@@ -100,7 +100,11 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
                 TestIoSys(tptr);
 
                 if(rank == 0 && tptr->params.stoneWallingWearOut){
-                  fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
+                  if (tptr->params.stoneWallingStatusFile){
+                    StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
+                  }else{
+                    fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
+                  }
                 }
                 tptr->results->errors = totalErrorCount;
         }
@@ -197,7 +201,9 @@ int ior_main(int argc, char **argv)
             }
             TestIoSys(tptr);
 
-            if(rank == 0 && tptr->params.stoneWallingWearOut){
+            if (tptr->params.stoneWallingStatusFile){
+              StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
+            }else{
               fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
             }
     }
@@ -796,6 +802,7 @@ static void DisplayUsage(char **argv)
                 " -D N  deadlineForStonewalling -- seconds before stopping write or read phase",
                 " -O stoneWallingWearOut=1 -- once the stonewalling timout is over, all process finish to access the amount of data",
                 " -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut",
+                " -O stoneWallingStatusFile=FILE -- this file keeps the number of iterations from stonewalling during write and allows to use them for read"
                 " -e    fsync -- perform fsync/msync upon POSIX/MMAP write close",
                 " -E    useExistingTestFile -- do not remove test file before write access",
                 " -f S  scriptFile -- test script name",
@@ -2706,6 +2713,13 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
         hitStonewall = ((test->deadlineForStonewalling != 0)
                         && ((GetTimeStamp() - startForStonewall)
                             > test->deadlineForStonewalling));
+
+        if(access == READ && test->stoneWallingStatusFile){
+          test->stoneWallingWearOutIterations = ReadStoneWallingIterations(test->stoneWallingStatusFile);
+          if(test->stoneWallingWearOutIterations == -1){
+            ERR("Could not read back the stonewalling status from the file!");
+          }
+        }
 
         /* loop over offsets to access */
         while ((offsetArray[pairCnt] != -1) && !hitStonewall ) {

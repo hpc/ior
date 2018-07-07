@@ -186,6 +186,8 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->stoneWallingWearOut = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOutIterations") == 0) {
                 params->stoneWallingWearOutIterations = atoll(value);
+        } else if (strcasecmp(option, "stoneWallingStatusFile") == 0) {
+                strcpy(params->stoneWallingStatusFile, value);
         } else if (strcasecmp(option, "maxtimeduration") == 0) {
                 params->maxTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {

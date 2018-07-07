@@ -8,6 +8,12 @@ ROOT=${0%/*}
 
 source $ROOT/test-lib.sh
 
+#stonewalling tests
+IOR 2 -a DUMMY -w -O stoneWallingStatusFile=stonewall.log -O stoneWallingWearOut=1 -D 1 -t 1000 -b 1000 -s 15
+IOR 2 -a DUMMY -r -O stoneWallingStatusFile=stonewall.log -D 1 -t 1000 -b 1000 -s 30 # max 15 still!
+IOR 2 -a DUMMY -r -O stoneWallingStatusFile=stonewall.log -t 1000 -b 1000 -s 30
+
+
 #shared tests
 IOR 2 -a POSIX -w -z -Y -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -w -k -e -i1 -m -t 100k -b 100k
