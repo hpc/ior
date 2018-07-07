@@ -826,7 +826,7 @@ static void DisplayUsage(char **argv)
                 " -s N  segmentCount -- number of segments",
                 " -S    useStridedDatatype -- put strided access into datatype [not working]",
                 " -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)",
-                " -T N  maxTimeDuration -- max time in minutes for each test",
+                " -T N  maxTimeDuration -- max time in minutes executing repeated test; it aborts only between iterations and not within a test!",
                 " -u    uniqueDir -- use unique directory name for each file-per-process",
                 " -U S  hintsFileName -- full name for hints file",
                 " -v    verbose -- output information (repeating flag increases level)",
