@@ -27,6 +27,12 @@ extern MPI_Comm testComm;
 extern MPI_Comm mpi_comm_world;
 extern FILE * out_logfile;
 
+/*
+ * Try using the system's PATH_MAX, which is what realpath and such use.
+ */
+#define MAX_PATHLEN PATH_MAX
+
+
 #ifdef __linux__
 #define FAIL(msg) do {                                                   \
         fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n",   \

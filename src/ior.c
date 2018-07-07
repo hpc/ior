@@ -251,7 +251,7 @@ void init_IOR_Param_t(IOR_param_t * p)
 
         strncpy(p->api, default_aiori, MAX_STR);
         strncpy(p->platform, "HOST(OSTYPE)", MAX_STR);
-        strncpy(p->testFileName, "testFile", MAXPATHLEN);
+        strncpy(p->testFileName, "testFile", MAX_PATHLEN);
 
         p->nodes = 1;
         p->tasksPerNode = 1;
@@ -425,7 +425,7 @@ CompareBuffers(void *expectedBuffer,
                size_t size,
                IOR_offset_t transferCount, IOR_param_t *test, int access)
 {
-        char testFileName[MAXPATHLEN];
+        char testFileName[MAX_PATHLEN];
         char bufferLabel1[MAX_STR];
         char bufferLabel2[MAX_STR];
         size_t i, j, length, first, last;
@@ -923,7 +923,7 @@ void GetPlatformName(char *platformName)
 static void GetTestFileName(char *testFileName, IOR_param_t * test)
 {
         char **fileNames;
-        char   initialTestFileName[MAXPATHLEN];
+        char   initialTestFileName[MAX_PATHLEN];
         char   testFileNameRoot[MAX_STR];
         char   tmpString[MAX_STR];
         int count;

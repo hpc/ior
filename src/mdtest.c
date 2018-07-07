@@ -73,13 +73,6 @@
 
 #define FILEMODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #define DIRMODE S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IXOTH
-/*
- * Try using the system's PATH_MAX, which is what realpath and such use.
- */
-#define MAX_LEN PATH_MAX
-/*
-  #define MAX_LEN 1024
-*/
 #define RELEASE_VERS "1.9.3"
 #define TEST_DIR "#test-dir"
 #define ITEM_COUNT 25000
@@ -88,23 +81,23 @@
 
 static int size;
 static uint64_t *rand_array;
-static char testdir[MAX_LEN];
-static char testdirpath[MAX_LEN];
-static char top_dir[MAX_LEN];
-static char base_tree_name[MAX_LEN];
+static char testdir[MAX_PATHLEN];
+static char testdirpath[MAX_PATHLEN];
+static char top_dir[MAX_PATHLEN];
+static char base_tree_name[MAX_PATHLEN];
 static char **filenames;
-static char hostname[MAX_LEN];
-static char unique_dir[MAX_LEN];
-static char mk_name[MAX_LEN];
-static char stat_name[MAX_LEN];
-static char read_name[MAX_LEN];
-static char rm_name[MAX_LEN];
-static char unique_mk_dir[MAX_LEN];
-static char unique_chdir_dir[MAX_LEN];
-static char unique_stat_dir[MAX_LEN];
-static char unique_read_dir[MAX_LEN];
-static char unique_rm_dir[MAX_LEN];
-static char unique_rm_uni_dir[MAX_LEN];
+static char hostname[MAX_PATHLEN];
+static char unique_dir[MAX_PATHLEN];
+static char mk_name[MAX_PATHLEN];
+static char stat_name[MAX_PATHLEN];
+static char read_name[MAX_PATHLEN];
+static char rm_name[MAX_PATHLEN];
+static char unique_mk_dir[MAX_PATHLEN];
+static char unique_chdir_dir[MAX_PATHLEN];
+static char unique_stat_dir[MAX_PATHLEN];
+static char unique_read_dir[MAX_PATHLEN];
+static char unique_rm_dir[MAX_PATHLEN];
+static char unique_rm_uni_dir[MAX_PATHLEN];
 static char *write_buffer;
 static char *read_buffer;
 
@@ -251,7 +244,7 @@ void unique_dir_access(int opt, char *to) {
 }
 
 static void create_remove_dirs (const char *path, bool create, uint64_t itemNum) {
-    char curr_item[MAX_LEN];
+    char curr_item[MAX_PATHLEN];
     const char *operation = create ? "create" : "remove";
 
     if (( rank == 0 )                                         &&
@@ -281,7 +274,7 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
 }
 
 static void remove_file (const char *path, uint64_t itemNum) {
-    char curr_item[MAX_LEN];
+    char curr_item[MAX_PATHLEN];
 
     if (( rank == 0 )                                       &&
         ( verbose >= 3 )                                    &&
@@ -304,7 +297,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
 }
 
 static void create_file (const char *path, uint64_t itemNum) {
-    char curr_item[MAX_LEN];
+    char curr_item[MAX_PATHLEN];
     void *aiori_fh;
 
     if (( rank == 0 )                                             &&
@@ -382,7 +375,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 void create_remove_items_helper(const int dirs, const int create, const char *path,
                                 uint64_t itemNum, rank_progress_t * progress) {
 
-    char curr_item[MAX_LEN];
+    char curr_item[MAX_PATHLEN];
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
         fprintf( out_logfile, "V-1: Entering create_remove_items_helper...\n" );
@@ -409,7 +402,7 @@ void create_remove_items_helper(const int dirs, const int create, const char *pa
 
 /* helper function to do collective operations */
 void collective_helper(const int dirs, const int create, const char* path, uint64_t itemNum, rank_progress_t * progress) {
-    char curr_item[MAX_LEN];
+    char curr_item[MAX_PATHLEN];
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
         fprintf( out_logfile, "V-1: Entering collective_helper...\n" );
@@ -454,8 +447,8 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
    directory tree */
 void create_remove_items(int currDepth, const int dirs, const int create, const int collective, const char *path, uint64_t dirNum, rank_progress_t * progress) {
     unsigned i;
-    char dir[MAX_LEN];
-    char temp_path[MAX_LEN];
+    char dir[MAX_PATHLEN];
+    char temp_path[MAX_PATHLEN];
     unsigned long long currDir = dirNum;
 
 
@@ -465,7 +458,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
     }
 
 
-    memset(dir, 0, MAX_LEN);
+    memset(dir, 0, MAX_PATHLEN);
     strcpy(temp_path, path);
 
     if (rank == 0 && verbose >= 3) {
@@ -534,7 +527,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
 void mdtest_stat(const int random, const int dirs, const char *path, rank_progress_t * progress) {
     struct stat buf;
     uint64_t parent_dir, item_num = 0;
-    char item[MAX_LEN], temp[MAX_LEN];
+    char item[MAX_PATHLEN], temp[MAX_PATHLEN];
     uint64_t stop;
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
@@ -556,10 +549,10 @@ void mdtest_stat(const int random, const int dirs, const char *path, rank_progre
          * be like passing char **. Tested it on a Cray and it seems to work either
          * way, but it seems that it is correct without the "&".
          *
-         memset(&item, 0, MAX_LEN);
+         memset(&item, 0, MAX_PATHLEN);
         */
-        memset(item, 0, MAX_LEN);
-        memset(temp, 0, MAX_LEN);
+        memset(item, 0, MAX_PATHLEN);
+        memset(temp, 0, MAX_PATHLEN);
 
         /* determine the item number to stat */
         if (random) {
@@ -642,7 +635,7 @@ void mdtest_stat(const int random, const int dirs, const char *path, rank_progre
 /* reads all of the items created as specified by the input parameters */
 void mdtest_read(int random, int dirs, char *path) {
     uint64_t stop, parent_dir, item_num = 0;
-    char item[MAX_LEN], temp[MAX_LEN];
+    char item[MAX_PATHLEN], temp[MAX_PATHLEN];
     void *aiori_fh;
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
@@ -674,10 +667,10 @@ void mdtest_read(int random, int dirs, char *path) {
          *
          * NTH: Both are technically correct in C.
          *
-         * memset(&item, 0, MAX_LEN);
+         * memset(&item, 0, MAX_PATHLEN);
          */
-        memset(item, 0, MAX_LEN);
-        memset(temp, 0, MAX_LEN);
+        memset(item, 0, MAX_PATHLEN);
+        memset(temp, 0, MAX_PATHLEN);
 
         /* determine the item number to read */
         if (random) {
@@ -752,7 +745,7 @@ void mdtest_read(int random, int dirs, char *path) {
 /* This method should be called by rank 0.  It subsequently does all of
    the creates and removes for the other ranks */
 void collective_create_remove(const int create, const int dirs, const int ntasks, const char *path, rank_progress_t * progress) {
-    char temp[MAX_LEN];
+    char temp[MAX_PATHLEN];
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
         fprintf( out_logfile, "V-1: Entering collective_create_remove...\n" );
@@ -761,7 +754,7 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
 
     /* rank 0 does all of the creates and removes for all of the ranks */
     for (int i = 0 ; i < ntasks ; ++i) {
-        memset(temp, 0, MAX_LEN);
+        memset(temp, 0, MAX_PATHLEN);
 
         strcpy(temp, testdir);
         strcat(temp, "/");
@@ -837,7 +830,7 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
 void directory_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
     double t[5] = {0};
-    char temp_path[MAX_LEN];
+    char temp_path[MAX_PATHLEN];
 
     MPI_Comm_size(testComm, &size);
 
@@ -1030,7 +1023,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 void file_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
     double t[5] = {0};
-    char temp_path[MAX_LEN];
+    char temp_path[MAX_PATHLEN];
     MPI_Comm_size(testComm, &size);
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
@@ -1300,7 +1293,7 @@ void print_help (void) {
 }
 
 void summarize_results(int iterations) {
-    char access[MAX_LEN];
+    char access[MAX_PATHLEN];
     int i, j, k;
     int start, stop, tableSize = MDTEST_LAST_NUM;
     double min, max, mean, sd, sum = 0, var = 0, curr = 0;
@@ -1585,9 +1578,9 @@ void valid_tests() {
 }
 
 void show_file_system_size(char *file_system) {
-    char          real_path[MAX_LEN];
-    char          file_system_unit_str[MAX_LEN] = "GiB";
-    char          inode_unit_str[MAX_LEN]       = "Mi";
+    char          real_path[MAX_PATHLEN];
+    char          file_system_unit_str[MAX_PATHLEN] = "GiB";
+    char          inode_unit_str[MAX_PATHLEN]       = "Mi";
     int64_t       file_system_unit_val          = 1024 * 1024 * 1024;
     int64_t       inode_unit_val                = 1024 * 1024;
     int64_t       total_file_system_size,
@@ -1649,7 +1642,7 @@ void show_file_system_size(char *file_system) {
 
 void display_freespace(char *testdirpath)
 {
-    char dirpath[MAX_LEN] = {0};
+    char dirpath[MAX_PATHLEN] = {0};
     int  i;
     int  directoryFound   = 0;
 
@@ -1700,7 +1693,7 @@ void create_remove_directory_tree(int create,
                                   int currDepth, char* path, int dirNum, rank_progress_t * progress) {
 
     unsigned i;
-    char dir[MAX_LEN];
+    char dir[MAX_PATHLEN];
 
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
@@ -1736,7 +1729,7 @@ void create_remove_directory_tree(int create,
         }
     } else if (currDepth <= depth) {
 
-        char temp_path[MAX_LEN];
+        char temp_path[MAX_PATHLEN];
         strcpy(temp_path, path);
         int currDir = dirNum;
 
@@ -2336,7 +2329,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* setup directory path to work in */
     if (path_count == 0) { /* special case where no directory path provided with '-d' option */
-        char * dir = getcwd(testdirpath, MAX_LEN);
+        char * dir = getcwd(testdirpath, MAX_PATHLEN);
         path_count = 1;
     } else {
         strcpy(testdirpath, filenames[rank%path_count]);
@@ -2373,7 +2366,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         }
     }
 
-    if (gethostname(hostname, MAX_LEN) == -1) {
+    if (gethostname(hostname, MAX_PATHLEN) == -1) {
         perror("gethostname");
         MPI_Abort(testComm, 2);
     }
