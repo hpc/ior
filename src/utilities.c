@@ -158,6 +158,8 @@ int CountTasksPerNode(MPI_Comm comm) {
  * to the task count on the host running MPI task 0.
  */
 int CountTasksPerNode(MPI_Comm comm) {
+    int size;
+    MPI_Comm_size(comm, & size);
     /* for debugging and testing */
     if (getenv("IOR_FAKE_TASK_PER_NODES")){
       int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
@@ -183,7 +185,7 @@ int CountTasksPerNode(MPI_Comm comm) {
         FAIL("gethostname()");
     }
     if (rank == 0) {
-        /* MPI_receive all hostnames, and compare to local hostname */
+        /* MPI_receive all hostnames, and compares them to the local hostname */
         for (i = 0; i < size-1; i++) {
             MPI_Recv(hostname, MAX_PATHLEN, MPI_CHAR, MPI_ANY_SOURCE,
                      MPI_ANY_TAG, testComm, &status);
