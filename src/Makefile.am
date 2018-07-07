@@ -10,7 +10,7 @@ extraLDADD =
 extraLDFLAGS =
 extraCPPFLAGS =
 
-ior_SOURCES = ior.c utilities.c parse_options.c getopt/optlist.c
+ior_SOURCES = ior-main.c ior.c utilities.c parse_options.c getopt/optlist.c
 ior_LDFLAGS =
 ior_LDADD =
 ior_CPPFLAGS =

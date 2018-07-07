@@ -7,7 +7,7 @@
 # Example: export IOR_EXTRA="-v -v -v"
 
 IOR_MPIRUN=${IOR_MPIRUN:-mpiexec -np}
-IOR_BIN_DIR=${IOR_EXEC:-./build/src}
+IOR_BIN_DIR=${IOR_BIN_DIR:-./build/src}
 IOR_OUT=${IOR_OUT:-./build/test}
 IOR_EXTRA=${IOR_EXTRA:-} # Add global options like verbosity
 MDTEST_EXTRA=${MDTEST_EXTRA:-}

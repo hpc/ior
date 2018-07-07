@@ -245,4 +245,7 @@ int CountTasksPerNode(int numTasks, MPI_Comm comm);
  */
 IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * out_logfile);
 
+/* Actual IOR Main function, renamed to allow library usage */
+int ior_main(int argc, char **argv);
+
 #endif /* !_IOR_H */

@@ -38,9 +38,8 @@
 
 /* file scope globals */
 extern char **environ;
-int totalErrorCount = 0;
-
-const ior_aiori_t *backend;
+static int totalErrorCount;
+static const ior_aiori_t *backend;
 
 static void DestroyTests(IOR_test_t *tests_head);
 static void DisplayUsage(char **);
@@ -59,45 +58,15 @@ static void ValidateTests(IOR_param_t *);
 static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers);
 static void WriteTimes(IOR_param_t *, double **, int, int);
 
-/********************************** M A I N ***********************************/
-
-int main(int argc, char **argv)
-{
-        int i;
+IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out){
         IOR_test_t *tests_head;
         IOR_test_t *tptr;
+        out_logfile = world_out;
+        mpi_comm_world = world_com;
 
-        mpi_comm_world = MPI_COMM_WORLD;
-
-        /*
-         * check -h option from commandline without starting MPI;
-         * if the help option is requested in a script file (showHelp=TRUE),
-         * the help output will be displayed in the MPI job
-         */
-        for (i = 1; i < argc; i++) {
-                if (strcmp(argv[i], "-h") == 0) {
-                        DisplayUsage(argv);
-                        return (0);
-                }
-        }
-
-#ifdef USE_S3_AIORI
-        /* This is supposed to be done before *any* threads are created.
-         * Could MPI_Init() create threads (or call multi-threaded
-         * libraries)?  We'll assume so. */
-        AWS4C_CHECK( aws_init() );
-#endif
-
-        /* start the MPI code */
-        MPI_CHECK(MPI_Init(&argc, &argv), "cannot initialize MPI");
-        MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &numTasksWorld),
-                  "cannot get number of tasks");
-        MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank), "cannot get rank");
+        MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld), "cannot get number of tasks");
+        MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
         PrintEarlyHeader();
-
-        /* set error-handling */
-        /*MPI_CHECK(MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN),
-           "cannot set errhandler"); */
 
         /* Sanity check, we were compiled with SOME backend, right? */
         if (0 == aiori_count ()) {
@@ -108,7 +77,7 @@ int main(int argc, char **argv)
         /* setup tests, and validate parameters */
         tests_head = SetupTests(argc, argv);
         verbose = tests_head->params.verbose;
-        tests_head->params.testComm = MPI_COMM_WORLD;
+        tests_head->params.testComm = world_com;
 
         /* check for commandline 'help' request */
         if (rank == 0 && tests_head->params.showHelp == TRUE) {
@@ -119,6 +88,7 @@ int main(int argc, char **argv)
 
         /* perform each test */
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
+                totalErrorCount = 0;
                 verbose = tptr->params.verbose;
                 if (rank == 0 && verbose >= VERBOSE_0) {
                         ShowTestInfo(&tptr->params);
@@ -127,42 +97,133 @@ int main(int argc, char **argv)
                         ShowTest(&tptr->params);
                 }
 
-                // This is useful for trapping a running MPI process.  While
-                // this is sleeping, run the script 'testing/hdfs/gdb.attach'
-                if (verbose >= VERBOSE_4) {
-                        printf("\trank %d: sleeping\n", rank);
-                        sleep(5);
-                        printf("\trank %d: awake.\n", rank);
-                }
                 TestIoSys(tptr);
 
                 if(rank == 0 && tptr->params.stoneWallingWearOut){
-                  fprintf(stdout, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
+                  fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
                 }
+                tptr->results->errors = totalErrorCount;
         }
 
-        if (verbose < 0)
-                /* always print final summary */
-                verbose = 0;
         PrintLongSummaryAllTests(tests_head);
 
         /* display finish time */
         if (rank == 0 && verbose >= VERBOSE_0) {
-                fprintf(stdout, "\n");
-                fprintf(stdout, "Finished: %s", CurrentTimeString());
+                fprintf(out_logfile, "\n");
+                fprintf(out_logfile, "Finished: %s", CurrentTimeString());
         }
+        return tests_head;
+}
 
-        DestroyTests(tests_head);
 
-        MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
 
-#ifdef USE_S3_AIORI
-        /* done once per program, after exiting all threads.
-         * NOTE: This fn doesn't return a value that can be checked for success. */
-        aws_cleanup();
-#endif
+int ior_main(int argc, char **argv)
+{
+    int i;
+    IOR_test_t *tests_head;
+    IOR_test_t *tptr;
+    out_logfile = stdout;
 
-        return (totalErrorCount);
+    /*
+     * check -h option from commandline without starting MPI;
+     * if the help option is requested in a script file (showHelp=TRUE),
+     * the help output will be displayed in the MPI job
+     */
+    for (i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "-h") == 0) {
+                    DisplayUsage(argv);
+                    return (0);
+            }
+    }
+
+  #ifdef USE_S3_AIORI
+    /* This is supposed to be done before *any* threads are created.
+     * Could MPI_Init() create threads (or call multi-threaded
+     * libraries)?  We'll assume so. */
+    AWS4C_CHECK( aws_init() );
+  #endif
+
+    /* start the MPI code */
+    MPI_CHECK(MPI_Init(&argc, &argv), "cannot initialize MPI");
+
+    mpi_comm_world = MPI_COMM_WORLD;
+    MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld),
+              "cannot get number of tasks");
+    MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
+    PrintEarlyHeader();
+
+    /* set error-handling */
+    /*MPI_CHECK(MPI_Errhandler_set(mpi_comm_world, MPI_ERRORS_RETURN),
+       "cannot set errhandler"); */
+
+    /* Sanity check, we were compiled with SOME backend, right? */
+    if (0 == aiori_count ()) {
+            ERR("No IO backends compiled into ior.  "
+                "Run 'configure --with-<backend>', and recompile.");
+    }
+
+    /* setup tests, and validate parameters */
+    tests_head = SetupTests(argc, argv);
+    verbose = tests_head->params.verbose;
+    tests_head->params.testComm = mpi_comm_world;
+
+    /* check for commandline 'help' request */
+    if (tests_head->params.showHelp == TRUE) {
+            if( rank == 0 ){
+              DisplayUsage(argv);
+            }
+            MPI_Finalize();
+            exit(0);
+    }
+
+    PrintHeader(argc, argv);
+
+    /* perform each test */
+    for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
+            verbose = tptr->params.verbose;
+            if (rank == 0 && verbose >= VERBOSE_0) {
+                    ShowTestInfo(&tptr->params);
+            }
+            if (rank == 0 && verbose >= VERBOSE_3) {
+                    ShowTest(&tptr->params);
+            }
+
+            // This is useful for trapping a running MPI process.  While
+            // this is sleeping, run the script 'testing/hdfs/gdb.attach'
+            if (verbose >= VERBOSE_4) {
+                    fprintf(out_logfile, "\trank %d: sleeping\n", rank);
+                    sleep(5);
+                    fprintf(out_logfile, "\trank %d: awake.\n", rank);
+            }
+            TestIoSys(tptr);
+
+            if(rank == 0 && tptr->params.stoneWallingWearOut){
+              fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
+            }
+    }
+
+    if (verbose < 0)
+            /* always print final summary */
+            verbose = 0;
+    PrintLongSummaryAllTests(tests_head);
+
+    /* display finish time */
+    if (rank == 0 && verbose >= VERBOSE_0) {
+            fprintf(out_logfile, "\n");
+            fprintf(out_logfile, "Finished: %s", CurrentTimeString());
+    }
+
+    DestroyTests(tests_head);
+
+    MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
+
+  #ifdef USE_S3_AIORI
+    /* done once per program, after exiting all threads.
+     * NOTE: This fn doesn't return a value that can be checked for success. */
+    aws_cleanup();
+  #endif
+
+    return totalErrorCount;
 }
 
 /***************************** F U N C T I O N S ******************************/
@@ -197,7 +258,7 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->transferSize = 262144;
         p->randomSeed = -1;
         p->incompressibleSeed = 573;
-        p->testComm = MPI_COMM_WORLD;
+        p->testComm = mpi_comm_world;
         p->setAlignment = 1;
         p->lustre_start_ost = -1;
 
@@ -272,10 +333,10 @@ DisplayOutliers(int numTasks,
                 strcpy(accessString, "read");
         }
         if (fabs(timerVal - mean) > (double)outlierThreshold) {
-                fprintf(stdout, "WARNING: for task %d, %s %s is %f\n",
+                fprintf(out_logfile, "WARNING: for task %d, %s %s is %f\n",
                         rank, accessString, timeString, timerVal);
-                fprintf(stdout, "         (mean=%f, stddev=%f)\n", mean, sd);
-                fflush(stdout);
+                fprintf(out_logfile, "         (mean=%f, stddev=%f)\n", mean, sd);
+                fflush(out_logfile);
         }
 }
 
@@ -329,17 +390,17 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                              != results->aggFileSizeFromXfer[rep])
                             || (results->aggFileSizeFromStat[rep]
                                 != results->aggFileSizeFromXfer[rep])) {
-                                fprintf(stdout,
+                                fprintf(out_logfile,
                                         "WARNING: Expected aggregate file size       = %lld.\n",
                                         (long long) params->expectedAggFileSize);
-                                fprintf(stdout,
+                                fprintf(out_logfile,
                                         "WARNING: Stat() of aggregate file size      = %lld.\n",
                                         (long long) results->aggFileSizeFromStat[rep]);
-                                fprintf(stdout,
+                                fprintf(out_logfile,
                                         "WARNING: Using actual aggregate bytes moved = %lld.\n",
                                         (long long) results->aggFileSizeFromXfer[rep]);
                                 if(params->deadlineForStonewalling){
-                                  fprintf(stdout,
+                                  fprintf(out_logfile,
                                         "WARNING: maybe caused by deadlineForStonewalling\n");
                                 }
                         }
@@ -377,7 +438,7 @@ CompareBuffers(void *expectedBuffer,
         length = size / sizeof(IOR_size_t);
         first = -1;
         if (verbose >= VERBOSE_3) {
-                fprintf(stdout,
+                fprintf(out_logfile,
                         "[%d] At file byte offset %lld, comparing %llu-byte transfer\n",
                         rank, test->offset, (long long)size);
         }
@@ -385,15 +446,15 @@ CompareBuffers(void *expectedBuffer,
                 if (testbuf[i] != goodbuf[i]) {
                         errorCount++;
                         if (verbose >= VERBOSE_2) {
-                                fprintf(stdout,
+                                fprintf(out_logfile,
                                         "[%d] At transfer buffer #%lld, index #%lld (file byte offset %lld):\n",
                                         rank, transferCount - 1, (long long)i,
                                         test->offset +
                                         (IOR_size_t) (i * sizeof(IOR_size_t)));
-                                fprintf(stdout, "[%d] %s0x", rank, bufferLabel1);
-                                fprintf(stdout, "%016llx\n", goodbuf[i]);
-                                fprintf(stdout, "[%d] %s0x", rank, bufferLabel2);
-                                fprintf(stdout, "%016llx\n", testbuf[i]);
+                                fprintf(out_logfile, "[%d] %s0x", rank, bufferLabel1);
+                                fprintf(out_logfile, "%016llx\n", goodbuf[i]);
+                                fprintf(out_logfile, "[%d] %s0x", rank, bufferLabel2);
+                                fprintf(out_logfile, "%016llx\n", testbuf[i]);
                         }
                         if (!inError) {
                                 inError = 1;
@@ -403,47 +464,47 @@ CompareBuffers(void *expectedBuffer,
                                 last = i;
                         }
                 } else if (verbose >= VERBOSE_5 && i % 4 == 0) {
-                        fprintf(stdout,
+                        fprintf(out_logfile,
                                 "[%d] PASSED offset = %lld bytes, transfer %lld\n",
                                 rank,
                                 ((i * sizeof(unsigned long long)) +
                                  test->offset), transferCount);
-                        fprintf(stdout, "[%d] GOOD %s0x", rank, bufferLabel1);
+                        fprintf(out_logfile, "[%d] GOOD %s0x", rank, bufferLabel1);
                         for (j = 0; j < 4; j++)
-                                fprintf(stdout, "%016llx ", goodbuf[i + j]);
-                        fprintf(stdout, "\n[%d] GOOD %s0x", rank, bufferLabel2);
+                                fprintf(out_logfile, "%016llx ", goodbuf[i + j]);
+                        fprintf(out_logfile, "\n[%d] GOOD %s0x", rank, bufferLabel2);
                         for (j = 0; j < 4; j++)
-                                fprintf(stdout, "%016llx ", testbuf[i + j]);
-                        fprintf(stdout, "\n");
+                                fprintf(out_logfile, "%016llx ", testbuf[i + j]);
+                        fprintf(out_logfile, "\n");
                 }
         }
         if (inError) {
                 inError = 0;
                 GetTestFileName(testFileName, test);
-                fprintf(stdout,
+                fprintf(out_logfile,
                         "[%d] FAILED comparison of buffer containing %d-byte ints:\n",
                         rank, (int)sizeof(unsigned long long int));
-                fprintf(stdout, "[%d]   File name = %s\n", rank, testFileName);
-                fprintf(stdout, "[%d]   In transfer %lld, ", rank,
+                fprintf(out_logfile, "[%d]   File name = %s\n", rank, testFileName);
+                fprintf(out_logfile, "[%d]   In transfer %lld, ", rank,
                         transferCount);
-                fprintf(stdout,
+                fprintf(out_logfile,
                         "%lld errors between buffer indices %lld and %lld.\n",
                         (long long)errorCount, (long long)first,
                         (long long)last);
-                fprintf(stdout, "[%d]   File byte offset = %lld:\n", rank,
+                fprintf(out_logfile, "[%d]   File byte offset = %lld:\n", rank,
                         ((first * sizeof(unsigned long long)) + test->offset));
 
-                fprintf(stdout, "[%d]     %s0x", rank, bufferLabel1);
+                fprintf(out_logfile, "[%d]     %s0x", rank, bufferLabel1);
                 for (j = first; j < length && j < first + 4; j++)
-                        fprintf(stdout, "%016llx ", goodbuf[j]);
+                        fprintf(out_logfile, "%016llx ", goodbuf[j]);
                 if (j == length)
-                        fprintf(stdout, "[end of buffer]");
-                fprintf(stdout, "\n[%d]     %s0x", rank, bufferLabel2);
+                        fprintf(out_logfile, "[end of buffer]");
+                fprintf(out_logfile, "\n[%d]     %s0x", rank, bufferLabel2);
                 for (j = first; j < length && j < first + 4; j++)
-                        fprintf(stdout, "%016llx ", testbuf[j]);
+                        fprintf(out_logfile, "%016llx ", testbuf[j]);
                 if (j == length)
-                        fprintf(stdout, "[end of buffer]");
-                fprintf(stdout, "\n");
+                        fprintf(out_logfile, "[end of buffer]");
+                fprintf(out_logfile, "\n");
                 if (test->quitOnError == TRUE)
                         ERR("data check error, aborting execution");
         }
@@ -471,9 +532,9 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
                                 WARN("overflow in errors counted");
                                 allErrors = -1;
                         }
-                        fprintf(stdout, "WARNING: incorrect data on %s (%d errors found).\n",
+                        fprintf(out_logfile, "WARNING: incorrect data on %s (%d errors found).\n",
                                 access == WRITECHECK ? "write" : "read", allErrors);
-                        fprintf(stdout,
+                        fprintf(out_logfile,
                                 "Used Time Stamp %u (0x%x) for Data Signature\n",
                                 test->timeStampSignatureValue,
                                 test->timeStampSignatureValue);
@@ -681,7 +742,7 @@ static void DelaySecs(int delay)
 {
         if (rank == 0 && delay > 0) {
                 if (verbose >= VERBOSE_1)
-                        fprintf(stdout, "delaying %d seconds . . .\n", delay);
+                        fprintf(out_logfile, "delaying %d seconds . . .\n", delay);
                 sleep(delay);
         }
 }
@@ -784,9 +845,9 @@ static void DisplayUsage(char **argv)
         };
         int i = 0;
 
-        fprintf(stdout, "Usage: %s [OPTIONS]\n\n", *argv);
+        fprintf(out_logfile, "Usage: %s [OPTIONS]\n\n", *argv);
         for (i = 0; strlen(opts[i]) > 0; i++)
-                fprintf(stdout, "%s\n", opts[i]);
+                fprintf(out_logfile, "%s\n", opts[i]);
 
         return;
 }
@@ -987,30 +1048,41 @@ static void GetTestFileName(char *testFileName, IOR_param_t * test)
 static char *HumanReadable(IOR_offset_t value, int base)
 {
         static char valueStr[MAX_STR];
-        int m = 0, g = 0;
-        char m_str[8], g_str[8];
+        IOR_offset_t m = 0, g = 0, t = 0;
+        char m_str[8], g_str[8], t_str[8];
 
         if (base == BASE_TWO) {
                 m = MEBIBYTE;
                 g = GIBIBYTE;
+                t = GIBIBYTE * 1024llu;
                 strcpy(m_str, "MiB");
                 strcpy(g_str, "GiB");
+                strcpy(t_str, "TiB");
         } else if (base == BASE_TEN) {
                 m = MEGABYTE;
                 g = GIGABYTE;
+                t = GIGABYTE * 1000llu;
                 strcpy(m_str, "MB");
                 strcpy(g_str, "GB");
+                strcpy(t_str, "TB");
         }
 
-        if (value >= g) {
-                if (value % (IOR_offset_t) g) {
+        if (value >= t) {
+                if (value % t) {
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
+                                (double)((double)value / t), t_str);
+                } else {
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / t), t_str);
+                }
+        }else if (value >= g) {
+                if (value % g) {
                         snprintf(valueStr, MAX_STR-1, "%.2f %s",
                                 (double)((double)value / g), g_str);
                 } else {
                         snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / g), g_str);
                 }
         } else if (value >= m) {
-                if (value % (IOR_offset_t) m) {
+                if (value % m) {
                         snprintf(valueStr, MAX_STR-1, "%.2f %s",
                                 (double)((double)value / m), m_str);
                 } else {
@@ -1075,7 +1147,7 @@ static void PPDouble(int leftjustify, double number, char *append)
         int precision;
 
         if (number < 0) {
-                fprintf(stdout, "   -      %s", append);
+                fprintf(out_logfile, "   -      %s", append);
                 return;
         }
 
@@ -1090,7 +1162,7 @@ static void PPDouble(int leftjustify, double number, char *append)
                 leftjustify ? "-" : "",
                 width, precision);
 
-        printf(format, number, append);
+        fprintf(out_logfile, format, number, append);
 }
 
 /*
@@ -1203,7 +1275,7 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
     return;
   }
 
-  fprintf(stdout, "%-10s", access == WRITE ? "write" : "read");
+  fprintf(out_logfile, "%-10s", access == WRITE ? "write" : "read");
   bw = (double)test->results->aggFileSizeForBW[rep] / totalTime;
   PPDouble(LEFT, bw / MEBIBYTE, " ");
   PPDouble(LEFT, (double)test->params.blockSize / KIBIBYTE, " ");
@@ -1212,9 +1284,9 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
   PPDouble(LEFT, diff_subset[1], " ");
   PPDouble(LEFT, diff_subset[2], " ");
   PPDouble(LEFT, totalTime, " ");
-  fprintf(stdout, "%-4d\n", rep);
+  fprintf(out_logfile, "%-4d\n", rep);
 
-  fflush(stdout);
+  fflush(out_logfile);
 }
 
 static void PrintRemoveTiming(double start, double finish, int rep)
@@ -1222,9 +1294,9 @@ static void PrintRemoveTiming(double start, double finish, int rep)
         if (rank != 0 || verbose < VERBOSE_0)
     return;
 
-        printf("remove    -          -          -          -          -          -          ");
+        fprintf(out_logfile, "remove    -          -          -          -          -          -          ");
         PPDouble(1, finish-start, " ");
-        printf("%-4d\n", rep);
+        fprintf(out_logfile, "%-4d\n", rep);
 }
 
 /*
@@ -1262,34 +1334,6 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
 }
 
 /*
- * Determine any spread (range) between node times.
- */
-static double TimeDeviation(void)
-{
-        double timestamp;
-        double min = 0;
-        double max = 0;
-        double roottimestamp;
-
-        MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
-        timestamp = GetTimeStamp();
-        MPI_CHECK(MPI_Reduce(&timestamp, &min, 1, MPI_DOUBLE,
-                             MPI_MIN, 0, MPI_COMM_WORLD),
-                  "cannot reduce tasks' times");
-        MPI_CHECK(MPI_Reduce(&timestamp, &max, 1, MPI_DOUBLE,
-                             MPI_MAX, 0, MPI_COMM_WORLD),
-                  "cannot reduce tasks' times");
-
-        /* delta between individual nodes' time and root node's time */
-        roottimestamp = timestamp;
-        MPI_CHECK(MPI_Bcast(&roottimestamp, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD),
-                  "cannot broadcast root's time");
-        wall_clock_delta = timestamp - roottimestamp;
-
-        return max - min;
-}
-
-/*
  * Setup tests by parsing commandline and creating test script.
  * Perform a sanity-check on the configured parameters.
  */
@@ -1298,13 +1342,13 @@ static IOR_test_t *SetupTests(int argc, char **argv)
         IOR_test_t *tests, *testsHead;
 
         /* count the tasks per node */
-        tasksPerNode = CountTasksPerNode(numTasksWorld, MPI_COMM_WORLD);
+        tasksPerNode = CountTasksPerNode(numTasksWorld, mpi_comm_world);
 
         testsHead = tests = ParseCommandLine(argc, argv);
         /*
          * Since there is no guarantee that anyone other than
          * task 0 has the environment settings for the hints, pass
-         * the hint=value pair to everyone else in MPI_COMM_WORLD
+         * the hint=value pair to everyone else in mpi_comm_world
          */
         DistributeHints();
 
@@ -1314,11 +1358,10 @@ static IOR_test_t *SetupTests(int argc, char **argv)
                 tests = tests->next;
         }
 
-        /* check for skew between tasks' start times */
-        wall_clock_deviation = TimeDeviation();
+        init_clock();
 
         /* seed random number generator */
-        SeedRandGen(MPI_COMM_WORLD);
+        SeedRandGen(mpi_comm_world);
 
         return (testsHead);
 }
@@ -1369,9 +1412,9 @@ static void PrintEarlyHeader()
         if (rank != 0)
                 return;
 
-        printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
-        printf("\n");
-        fflush(stdout);
+        fprintf(out_logfile, "IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
+        fprintf(out_logfile, "\n");
+        fflush(out_logfile);
 }
 
 static void PrintHeader(int argc, char **argv)
@@ -1382,48 +1425,48 @@ static void PrintHeader(int argc, char **argv)
         if (rank != 0)
                 return;
 
-        fprintf(stdout, "Began: %s", CurrentTimeString());
-        fprintf(stdout, "Command line used:");
-        for (i = 0; i < argc; i++) {
-                fprintf(stdout, " %s", argv[i]);
+        fprintf(out_logfile, "Began: %s", CurrentTimeString());
+        fprintf(out_logfile, "Command line used: %s", argv[0]);
+        for (i = 1; i < argc; i++) {
+                fprintf(out_logfile, " \"%s\"", argv[i]);
         }
-        fprintf(stdout, "\n");
+        fprintf(out_logfile, "\n");
         if (uname(&unamebuf) != 0) {
                 EWARN("uname failed");
-                fprintf(stdout, "Machine: Unknown");
+                fprintf(out_logfile, "Machine: Unknown");
         } else {
-                fprintf(stdout, "Machine: %s %s", unamebuf.sysname,
+                fprintf(out_logfile, "Machine: %s %s", unamebuf.sysname,
                         unamebuf.nodename);
                 if (verbose >= VERBOSE_2) {
-                        fprintf(stdout, " %s %s %s", unamebuf.release,
+                        fprintf(out_logfile, " %s %s %s", unamebuf.release,
                                 unamebuf.version, unamebuf.machine);
                 }
         }
-        fprintf(stdout, "\n");
+        fprintf(out_logfile, "\n");
 #ifdef _NO_MPI_TIMER
         if (verbose >= VERBOSE_2)
-                fprintf(stdout, "Using unsynchronized POSIX timer\n");
+                fprintf(out_logfile, "Using unsynchronized POSIX timer\n");
 #else                           /* not _NO_MPI_TIMER */
         if (MPI_WTIME_IS_GLOBAL) {
                 if (verbose >= VERBOSE_2)
-                        fprintf(stdout, "Using synchronized MPI timer\n");
+                        fprintf(out_logfile, "Using synchronized MPI timer\n");
         } else {
                 if (verbose >= VERBOSE_2)
-                        fprintf(stdout, "Using unsynchronized MPI timer\n");
+                        fprintf(out_logfile, "Using unsynchronized MPI timer\n");
         }
 #endif                          /* _NO_MPI_TIMER */
         if (verbose >= VERBOSE_1) {
-                fprintf(stdout, "Start time skew across all tasks: %.02f sec\n",
+                fprintf(out_logfile, "Start time skew across all tasks: %.02f sec\n",
                         wall_clock_deviation);
         }
         if (verbose >= VERBOSE_3) {     /* show env */
-                fprintf(stdout, "STARTING ENVIRON LOOP\n");
+                fprintf(out_logfile, "STARTING ENVIRON LOOP\n");
                 for (i = 0; environ[i] != NULL; i++) {
-                        fprintf(stdout, "%s\n", environ[i]);
+                        fprintf(out_logfile, "%s\n", environ[i]);
                 }
-                fprintf(stdout, "ENDING ENVIRON LOOP\n");
+                fprintf(out_logfile, "ENDING ENVIRON LOOP\n");
         }
-        fflush(stdout);
+        fflush(out_logfile);
 }
 
 /*
@@ -1431,15 +1474,15 @@ static void PrintHeader(int argc, char **argv)
  */
 static void ShowTestInfo(IOR_param_t *params)
 {
-        fprintf(stdout, "\n");
-        fprintf(stdout, "Test %d started: %s", params->id, CurrentTimeString());
+        fprintf(out_logfile, "\n");
+        fprintf(out_logfile, "Test %d started: %s", params->id, CurrentTimeString());
         if (verbose >= VERBOSE_1) {
                 /* if pvfs2:, then skip */
                 if (Regex(params->testFileName, "^[a-z][a-z].*:") == 0) {
                         DisplayFreespace(params);
                 }
         }
-        fflush(stdout);
+        fflush(out_logfile);
 }
 
 /*
@@ -1449,79 +1492,79 @@ static void ShowSetup(IOR_param_t *params)
 {
 
         if (strcmp(params->debug, "") != 0) {
-                printf("\n*** DEBUG MODE ***\n");
-                printf("*** %s ***\n\n", params->debug);
+                fprintf(out_logfile, "\n*** DEBUG MODE ***\n");
+                fprintf(out_logfile, "*** %s ***\n\n", params->debug);
         }
-        printf("Summary:\n");
-        printf("\tapi                = %s\n", params->apiVersion);
-        printf("\ttest filename      = %s\n", params->testFileName);
-        printf("\taccess             = ");
-        printf(params->filePerProc ? "file-per-process" : "single-shared-file");
-        if (verbose >= VERBOSE_1 && strcasecmp(params->api, "POSIX") != 0) {
-                printf(params->collective == FALSE ? ", independent" : ", collective");
+        fprintf(out_logfile, "Summary:\n");
+        fprintf(out_logfile, "\tapi                = %s\n", params->apiVersion);
+        fprintf(out_logfile, "\ttest filename      = %s\n", params->testFileName);
+        fprintf(out_logfile, "\taccess             = ");
+        fprintf(out_logfile, params->filePerProc ? "file-per-process" : "single-shared-file");
+        if (verbose >= VERBOSE_1 && strcmp(params->api, "POSIX") != 0) {
+                fprintf(out_logfile, params->collective == FALSE ? ", independent" : ", collective");
         }
-        printf("\n");
+        fprintf(out_logfile, "\n");
         if (verbose >= VERBOSE_1) {
                 if (params->segmentCount > 1) {
-                        fprintf(stdout,
+                        fprintf(out_logfile,
                                 "\tpattern            = strided (%d segments)\n",
                                 (int)params->segmentCount);
                 } else {
-                        fprintf(stdout,
+                        fprintf(out_logfile,
                                 "\tpattern            = segmented (1 segment)\n");
                 }
         }
-        printf("\tordering in a file =");
+        fprintf(out_logfile, "\tordering in a file =");
         if (params->randomOffset == FALSE) {
-                printf(" sequential offsets\n");
+                fprintf(out_logfile, " sequential offsets\n");
         } else {
-                printf(" random offsets\n");
+                fprintf(out_logfile, " random offsets\n");
         }
-        printf("\tordering inter file=");
+        fprintf(out_logfile, "\tordering inter file=");
         if (params->reorderTasks == FALSE && params->reorderTasksRandom == FALSE) {
-                printf(" no tasks offsets\n");
+                fprintf(out_logfile, " no tasks offsets\n");
         }
         if (params->reorderTasks == TRUE) {
-                printf(" constant task offsets = %d\n",
+                fprintf(out_logfile, " constant task offsets = %d\n",
                         params->taskPerNodeOffset);
         }
         if (params->reorderTasksRandom == TRUE) {
-                printf(" random task offsets >= %d, seed=%d\n",
+                fprintf(out_logfile, " random task offsets >= %d, seed=%d\n",
                         params->taskPerNodeOffset, params->reorderTasksRandomSeed);
         }
-        printf("\tclients            = %d (%d per node)\n",
+        fprintf(out_logfile, "\tclients            = %d (%d per node)\n",
                 params->numTasks, params->tasksPerNode);
         if (params->memoryPerTask != 0)
-                printf("\tmemoryPerTask      = %s\n",
+                fprintf(out_logfile, "\tmemoryPerTask      = %s\n",
                        HumanReadable(params->memoryPerTask, BASE_TWO));
         if (params->memoryPerNode != 0)
-                printf("\tmemoryPerNode      = %s\n",
+                fprintf(out_logfile, "\tmemoryPerNode      = %s\n",
                        HumanReadable(params->memoryPerNode, BASE_TWO));
-        printf("\trepetitions        = %d\n", params->repetitions);
-        printf("\txfersize           = %s\n",
+        fprintf(out_logfile, "\trepetitions        = %d\n", params->repetitions);
+        fprintf(out_logfile, "\txfersize           = %s\n",
                 HumanReadable(params->transferSize, BASE_TWO));
-        printf("\tblocksize          = %s\n",
+        fprintf(out_logfile, "\tblocksize          = %s\n",
                 HumanReadable(params->blockSize, BASE_TWO));
-        printf("\taggregate filesize = %s\n",
+        fprintf(out_logfile, "\taggregate filesize = %s\n",
                 HumanReadable(params->expectedAggFileSize, BASE_TWO));
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
         if (params->lustre_set_striping) {
-                printf("\tLustre stripe size = %s\n",
+                fprintf(out_logfile, "\tLustre stripe size = %s\n",
                        ((params->lustre_stripe_size == 0) ? "Use default" :
                         HumanReadable(params->lustre_stripe_size, BASE_TWO)));
                 if (params->lustre_stripe_count == 0) {
-                        printf("\t      stripe count = %s\n", "Use default");
+                        fprintf(out_logfile, "\t      stripe count = %s\n", "Use default");
                 } else {
-                        printf("\t      stripe count = %d\n",
+                        fprintf(out_logfile, "\t      stripe count = %d\n",
                                params->lustre_stripe_count);
                 }
         }
 #endif /* HAVE_LUSTRE_LUSTRE_USER_H */
         if (params->deadlineForStonewalling > 0) {
-                printf("\tUsing stonewalling = %d second(s)%s\n",
+                fprintf(out_logfile, "\tUsing stonewalling = %d second(s)%s\n",
                         params->deadlineForStonewalling, params->stoneWallingWearOut ? " with phase out" : "");
         }
-        fflush(stdout);
+        fflush(out_logfile);
 }
 
 /*
@@ -1531,77 +1574,77 @@ static void ShowTest(IOR_param_t * test)
 {
         const char* data_packets[] = {"g", "t","o","i"};
 
-        fprintf(stdout, "TEST:\t%s=%d\n", "id", test->id);
-        fprintf(stdout, "\t%s=%d\n", "refnum", test->referenceNumber);
-        fprintf(stdout, "\t%s=%s\n", "api", test->api);
-        fprintf(stdout, "\t%s=%s\n", "platform", test->platform);
-        fprintf(stdout, "\t%s=%s\n", "testFileName", test->testFileName);
-        fprintf(stdout, "\t%s=%s\n", "hintsFileName", test->hintsFileName);
-        fprintf(stdout, "\t%s=%d\n", "deadlineForStonewall",
+        fprintf(out_logfile, "TEST:\t%s=%d\n", "id", test->id);
+        fprintf(out_logfile, "\t%s=%d\n", "refnum", test->referenceNumber);
+        fprintf(out_logfile, "\t%s=%s\n", "api", test->api);
+        fprintf(out_logfile, "\t%s=%s\n", "platform", test->platform);
+        fprintf(out_logfile, "\t%s=%s\n", "testFileName", test->testFileName);
+        fprintf(out_logfile, "\t%s=%s\n", "hintsFileName", test->hintsFileName);
+        fprintf(out_logfile, "\t%s=%d\n", "deadlineForStonewall",
                 test->deadlineForStonewalling);
-        fprintf(stdout, "\t%s=%d\n", "stoneWallingWearOut", test->stoneWallingWearOut);
-        fprintf(stdout, "\t%s=%d\n", "maxTimeDuration", test->maxTimeDuration);
-        fprintf(stdout, "\t%s=%d\n", "outlierThreshold",
+        fprintf(out_logfile, "\t%s=%d\n", "stoneWallingWearOut", test->stoneWallingWearOut);
+        fprintf(out_logfile, "\t%s=%d\n", "maxTimeDuration", test->maxTimeDuration);
+        fprintf(out_logfile, "\t%s=%d\n", "outlierThreshold",
                 test->outlierThreshold);
-        fprintf(stdout, "\t%s=%s\n", "options", test->options);
-        fprintf(stdout, "\t%s=%d\n", "nodes", test->nodes);
-        fprintf(stdout, "\t%s=%lu\n", "memoryPerTask", (unsigned long) test->memoryPerTask);
-        fprintf(stdout, "\t%s=%lu\n", "memoryPerNode", (unsigned long) test->memoryPerNode);
-        fprintf(stdout, "\t%s=%d\n", "tasksPerNode", tasksPerNode);
-        fprintf(stdout, "\t%s=%d\n", "repetitions", test->repetitions);
-        fprintf(stdout, "\t%s=%d\n", "multiFile", test->multiFile);
-        fprintf(stdout, "\t%s=%d\n", "interTestDelay", test->interTestDelay);
-        fprintf(stdout, "\t%s=%d\n", "fsync", test->fsync);
-        fprintf(stdout, "\t%s=%d\n", "fsYncperwrite", test->fsyncPerWrite);
-        fprintf(stdout, "\t%s=%d\n", "useExistingTestFile",
+        fprintf(out_logfile, "\t%s=%s\n", "options", test->options);
+        fprintf(out_logfile, "\t%s=%d\n", "nodes", test->nodes);
+        fprintf(out_logfile, "\t%s=%lu\n", "memoryPerTask", (unsigned long) test->memoryPerTask);
+        fprintf(out_logfile, "\t%s=%lu\n", "memoryPerNode", (unsigned long) test->memoryPerNode);
+        fprintf(out_logfile, "\t%s=%d\n", "tasksPerNode", tasksPerNode);
+        fprintf(out_logfile, "\t%s=%d\n", "repetitions", test->repetitions);
+        fprintf(out_logfile, "\t%s=%d\n", "multiFile", test->multiFile);
+        fprintf(out_logfile, "\t%s=%d\n", "interTestDelay", test->interTestDelay);
+        fprintf(out_logfile, "\t%s=%d\n", "fsync", test->fsync);
+        fprintf(out_logfile, "\t%s=%d\n", "fsYncperwrite", test->fsyncPerWrite);
+        fprintf(out_logfile, "\t%s=%d\n", "useExistingTestFile",
                 test->useExistingTestFile);
-        fprintf(stdout, "\t%s=%d\n", "showHints", test->showHints);
-        fprintf(stdout, "\t%s=%d\n", "uniqueDir", test->uniqueDir);
-        fprintf(stdout, "\t%s=%d\n", "showHelp", test->showHelp);
-        fprintf(stdout, "\t%s=%d\n", "individualDataSets",
+        fprintf(out_logfile, "\t%s=%d\n", "showHints", test->showHints);
+        fprintf(out_logfile, "\t%s=%d\n", "uniqueDir", test->uniqueDir);
+        fprintf(out_logfile, "\t%s=%d\n", "showHelp", test->showHelp);
+        fprintf(out_logfile, "\t%s=%d\n", "individualDataSets",
                 test->individualDataSets);
-        fprintf(stdout, "\t%s=%d\n", "singleXferAttempt",
+        fprintf(out_logfile, "\t%s=%d\n", "singleXferAttempt",
                 test->singleXferAttempt);
-        fprintf(stdout, "\t%s=%d\n", "readFile", test->readFile);
-        fprintf(stdout, "\t%s=%d\n", "writeFile", test->writeFile);
-        fprintf(stdout, "\t%s=%d\n", "filePerProc", test->filePerProc);
-        fprintf(stdout, "\t%s=%d\n", "reorderTasks", test->reorderTasks);
-        fprintf(stdout, "\t%s=%d\n", "reorderTasksRandom",
+        fprintf(out_logfile, "\t%s=%d\n", "readFile", test->readFile);
+        fprintf(out_logfile, "\t%s=%d\n", "writeFile", test->writeFile);
+        fprintf(out_logfile, "\t%s=%d\n", "filePerProc", test->filePerProc);
+        fprintf(out_logfile, "\t%s=%d\n", "reorderTasks", test->reorderTasks);
+        fprintf(out_logfile, "\t%s=%d\n", "reorderTasksRandom",
                 test->reorderTasksRandom);
-        fprintf(stdout, "\t%s=%d\n", "reorderTasksRandomSeed",
+        fprintf(out_logfile, "\t%s=%d\n", "reorderTasksRandomSeed",
                 test->reorderTasksRandomSeed);
-        fprintf(stdout, "\t%s=%d\n", "randomOffset", test->randomOffset);
-        fprintf(stdout, "\t%s=%d\n", "checkWrite", test->checkWrite);
-        fprintf(stdout, "\t%s=%d\n", "checkRead", test->checkRead);
-        fprintf(stdout, "\t%s=%d\n", "preallocate", test->preallocate);
-        fprintf(stdout, "\t%s=%d\n", "useFileView", test->useFileView);
-        fprintf(stdout, "\t%s=%lld\n", "setAlignment", test->setAlignment);
-        fprintf(stdout, "\t%s=%d\n", "storeFileOffset", test->storeFileOffset);
-        fprintf(stdout, "\t%s=%d\n", "useSharedFilePointer",
+        fprintf(out_logfile, "\t%s=%d\n", "randomOffset", test->randomOffset);
+        fprintf(out_logfile, "\t%s=%d\n", "checkWrite", test->checkWrite);
+        fprintf(out_logfile, "\t%s=%d\n", "checkRead", test->checkRead);
+        fprintf(out_logfile, "\t%s=%d\n", "preallocate", test->preallocate);
+        fprintf(out_logfile, "\t%s=%d\n", "useFileView", test->useFileView);
+        fprintf(out_logfile, "\t%s=%lld\n", "setAlignment", test->setAlignment);
+        fprintf(out_logfile, "\t%s=%d\n", "storeFileOffset", test->storeFileOffset);
+        fprintf(out_logfile, "\t%s=%d\n", "useSharedFilePointer",
                 test->useSharedFilePointer);
-        fprintf(stdout, "\t%s=%d\n", "useO_DIRECT", test->useO_DIRECT);
-        fprintf(stdout, "\t%s=%d\n", "useStridedDatatype",
+        fprintf(out_logfile, "\t%s=%d\n", "useO_DIRECT", test->useO_DIRECT);
+        fprintf(out_logfile, "\t%s=%d\n", "useStridedDatatype",
                 test->useStridedDatatype);
-        fprintf(stdout, "\t%s=%d\n", "keepFile", test->keepFile);
-        fprintf(stdout, "\t%s=%d\n", "keepFileWithError",
+        fprintf(out_logfile, "\t%s=%d\n", "keepFile", test->keepFile);
+        fprintf(out_logfile, "\t%s=%d\n", "keepFileWithError",
                 test->keepFileWithError);
-        fprintf(stdout, "\t%s=%d\n", "quitOnError", test->quitOnError);
-        fprintf(stdout, "\t%s=%d\n", "verbose", verbose);
-        fprintf(stdout, "\t%s=%s\n", "data packet type", data_packets[test->dataPacketType]);
-        fprintf(stdout, "\t%s=%d\n", "setTimeStampSignature/incompressibleSeed",
+        fprintf(out_logfile, "\t%s=%d\n", "quitOnError", test->quitOnError);
+        fprintf(out_logfile, "\t%s=%d\n", "verbose", verbose);
+        fprintf(out_logfile, "\t%s=%s\n", "data packet type", data_packets[test->dataPacketType]);
+        fprintf(out_logfile, "\t%s=%d\n", "setTimeStampSignature/incompressibleSeed",
                 test->setTimeStampSignature); /* Seed value was copied into setTimeStampSignature as well */
-        fprintf(stdout, "\t%s=%d\n", "collective", test->collective);
-        fprintf(stdout, "\t%s=%lld", "segmentCount", test->segmentCount);
+        fprintf(out_logfile, "\t%s=%d\n", "collective", test->collective);
+        fprintf(out_logfile, "\t%s=%lld", "segmentCount", test->segmentCount);
 #ifdef HAVE_GPFS_FCNTL_H
-        fprintf(stdout, "\t%s=%d\n", "gpfsHintAccess", test->gpfs_hint_access);
-        fprintf(stdout, "\t%s=%d\n", "gpfsReleaseToken", test->gpfs_release_token);
+        fprintf(out_logfile, "\t%s=%d\n", "gpfsHintAccess", test->gpfs_hint_access);
+        fprintf(out_logfile, "\t%s=%d\n", "gpfsReleaseToken", test->gpfs_release_token);
 #endif
         if (strcasecmp(test->api, "HDF5") == 0) {
-                fprintf(stdout, " (datasets)");
+                fprintf(out_logfile, " (datasets)");
         }
-        fprintf(stdout, "\n");
-        fprintf(stdout, "\t%s=%lld\n", "transferSize", test->transferSize);
-        fprintf(stdout, "\t%s=%lld\n", "blockSize", test->blockSize);
+        fprintf(out_logfile, "\n");
+        fprintf(out_logfile, "\t%s=%lld\n", "transferSize", test->transferSize);
+        fprintf(out_logfile, "\t%s=%lld\n", "blockSize", test->blockSize);
 }
 
 static double mean_of_array_of_doubles(double *values, int len)
@@ -1716,34 +1759,34 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         ops = ops_values(reps, results->aggFileSizeForBW,
                          params->transferSize, times);
 
-        fprintf(stdout, "%-9s ", operation);
-        fprintf(stdout, "%10.2f ", bw->max / MEBIBYTE);
-        fprintf(stdout, "%10.2f ", bw->min / MEBIBYTE);
-        fprintf(stdout, "%10.2f ", bw->mean / MEBIBYTE);
-        fprintf(stdout, "%10.2f ", bw->sd / MEBIBYTE);
-        fprintf(stdout, "%10.2f ", ops->max);
-        fprintf(stdout, "%10.2f ", ops->min);
-        fprintf(stdout, "%10.2f ", ops->mean);
-        fprintf(stdout, "%10.2f ", ops->sd);
-        fprintf(stdout, "%10.5f ",
+        fprintf(out_logfile, "%-9s ", operation);
+        fprintf(out_logfile, "%10.2f ", bw->max / MEBIBYTE);
+        fprintf(out_logfile, "%10.2f ", bw->min / MEBIBYTE);
+        fprintf(out_logfile, "%10.2f ", bw->mean / MEBIBYTE);
+        fprintf(out_logfile, "%10.2f ", bw->sd / MEBIBYTE);
+        fprintf(out_logfile, "%10.2f ", ops->max);
+        fprintf(out_logfile, "%10.2f ", ops->min);
+        fprintf(out_logfile, "%10.2f ", ops->mean);
+        fprintf(out_logfile, "%10.2f ", ops->sd);
+        fprintf(out_logfile, "%10.5f ",
                 mean_of_array_of_doubles(times, reps));
-        fprintf(stdout, "%d ", params->id);
-        fprintf(stdout, "%d ", params->numTasks);
-        fprintf(stdout, "%d ", params->tasksPerNode);
-        fprintf(stdout, "%d ", params->repetitions);
-        fprintf(stdout, "%d ", params->filePerProc);
-        fprintf(stdout, "%d ", params->reorderTasks);
-        fprintf(stdout, "%d ", params->taskPerNodeOffset);
-        fprintf(stdout, "%d ", params->reorderTasksRandom);
-        fprintf(stdout, "%d ", params->reorderTasksRandomSeed);
-        fprintf(stdout, "%lld ", params->segmentCount);
-        fprintf(stdout, "%lld ", params->blockSize);
-        fprintf(stdout, "%lld ", params->transferSize);
-        fprintf(stdout, "%lld ", results->aggFileSizeForBW[0]);
-        fprintf(stdout, "%s ", params->api);
-        fprintf(stdout, "%d", params->referenceNumber);
-        fprintf(stdout, "\n");
-        fflush(stdout);
+        fprintf(out_logfile, "%d ", params->id);
+        fprintf(out_logfile, "%d ", params->numTasks);
+        fprintf(out_logfile, "%d ", params->tasksPerNode);
+        fprintf(out_logfile, "%d ", params->repetitions);
+        fprintf(out_logfile, "%d ", params->filePerProc);
+        fprintf(out_logfile, "%d ", params->reorderTasks);
+        fprintf(out_logfile, "%d ", params->taskPerNodeOffset);
+        fprintf(out_logfile, "%d ", params->reorderTasksRandom);
+        fprintf(out_logfile, "%d ", params->reorderTasksRandomSeed);
+        fprintf(out_logfile, "%lld ", params->segmentCount);
+        fprintf(out_logfile, "%lld ", params->blockSize);
+        fprintf(out_logfile, "%lld ", params->transferSize);
+        fprintf(out_logfile, "%lld ", results->aggFileSizeForBW[0]);
+        fprintf(out_logfile, "%s ", params->api);
+        fprintf(out_logfile, "%d", params->referenceNumber);
+        fprintf(out_logfile, "\n");
+        fflush(out_logfile);
 
         free(bw);
         free(ops);
@@ -1765,12 +1808,12 @@ static void PrintLongSummaryHeader()
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
 
-        fprintf(stdout, "\n");
-        fprintf(stdout, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s",
+        fprintf(out_logfile, "\n");
+        fprintf(out_logfile, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s",
                 "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
                 "Max(OPs)", "Min(OPs)", "Mean(OPs)", "StdDev",
                 "Mean(s)");
-        fprintf(stdout, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
+        fprintf(out_logfile, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
                 " segcnt blksiz xsize aggsize API RefNum\n");
 }
 
@@ -1781,8 +1824,8 @@ static void PrintLongSummaryAllTests(IOR_test_t *tests_head)
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
 
-        fprintf(stdout, "\n");
-        fprintf(stdout, "Summary of all tests:");
+        fprintf(out_logfile, "\n");
+        fprintf(out_logfile, "Summary of all tests:");
         PrintLongSummaryHeader();
 
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
@@ -1814,13 +1857,13 @@ static void PrintShortSummary(IOR_test_t * test)
                 max_read = MAX(bw, max_read);
         }
 
-        fprintf(stdout, "\n");
+        fprintf(out_logfile, "\n");
         if (params->writeFile) {
-                fprintf(stdout, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
+                fprintf(out_logfile, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
                         max_write/MEBIBYTE, max_write/MEGABYTE);
         }
         if (params->readFile) {
-                fprintf(stdout, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
+                fprintf(out_logfile, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
                         max_read/MEBIBYTE, max_read/MEGABYTE);
         }
 }
@@ -1865,7 +1908,7 @@ static void file_hits_histogram(IOR_param_t *params)
         }
 
         MPI_CHECK(MPI_Gather(&rankOffset, 1, MPI_INT, rankoffs,
-                             1, MPI_INT, 0, MPI_COMM_WORLD),
+                             1, MPI_INT, 0, mpi_comm_world),
                   "MPI_Gather error");
 
         if (rank != 0)
@@ -1881,14 +1924,14 @@ static void file_hits_histogram(IOR_param_t *params)
                         if (ifile == filecont[jfile])
                                 filehits[ifile]++;
                 }
-        fprintf(stdout, "#File Hits Dist:");
+        fprintf(out_logfile, "#File Hits Dist:");
         jfile = 0;
         ifile = 0;
         while (jfile < params->numTasks && ifile < params->numTasks) {
-                fprintf(stdout, " %d", filehits[ifile]);
+                fprintf(out_logfile, " %d", filehits[ifile]);
                 jfile += filehits[ifile], ifile++;
         }
-        fprintf(stdout, "\n");
+        fprintf(out_logfile, "\n");
         free(rankoffs);
         free(filecont);
         free(filehits);
@@ -1919,7 +1962,7 @@ static void *HogMemory(IOR_param_t *params)
                 size = params->memoryPerTask;
         } else if (params->memoryPerNode != 0) {
                 if (verbose >= VERBOSE_3)
-                        fprintf(stderr, "This node hogging %ld bytes of memory\n",
+                        fprintf(out_logfile, "This node hogging %ld bytes of memory\n",
                                 params->memoryPerNode);
                 size = params->memoryPerNode / params->tasksPerNode;
         } else {
@@ -1927,7 +1970,7 @@ static void *HogMemory(IOR_param_t *params)
         }
 
         if (verbose >= VERBOSE_3)
-                fprintf(stderr, "This task hogging %ld bytes of memory\n", size);
+                fprintf(out_logfile, "This task hogging %ld bytes of memory\n", size);
 
         buf = malloc_and_touch(size);
         if (buf == NULL)
@@ -1958,39 +2001,39 @@ static void TestIoSys(IOR_test_t *test)
         /* set up communicator for test */
         if (params->numTasks > numTasksWorld) {
                 if (rank == 0) {
-                        fprintf(stdout,
+                        fprintf(out_logfile,
                                 "WARNING: More tasks requested (%d) than available (%d),",
                                 params->numTasks, numTasksWorld);
-                        fprintf(stdout, "         running on %d tasks.\n",
+                        fprintf(out_logfile, "         running on %d tasks.\n",
                                 numTasksWorld);
                 }
                 params->numTasks = numTasksWorld;
         }
-        MPI_CHECK(MPI_Comm_group(MPI_COMM_WORLD, &orig_group),
+        MPI_CHECK(MPI_Comm_group(mpi_comm_world, &orig_group),
                   "MPI_Comm_group() error");
         range[0] = 0;                     /* first rank */
         range[1] = params->numTasks - 1;  /* last rank */
         range[2] = 1;                     /* stride */
         MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
                   "MPI_Group_range_incl() error");
-        MPI_CHECK(MPI_Comm_create(MPI_COMM_WORLD, new_group, &testComm),
+        MPI_CHECK(MPI_Comm_create(mpi_comm_world, new_group, &testComm),
                   "MPI_Comm_create() error");
         MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
         MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
         params->testComm = testComm;
         if (testComm == MPI_COMM_NULL) {
                 /* tasks not in the group do not participate in this test */
-                MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
+                MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
                 return;
         }
         if (rank == 0 && verbose >= VERBOSE_1) {
-                fprintf(stdout, "Participating tasks: %d\n", params->numTasks);
-                fflush(stdout);
+                fprintf(out_logfile, "Participating tasks: %d\n", params->numTasks);
+                fflush(out_logfile);
         }
         if (rank == 0 && params->reorderTasks == TRUE && verbose >= VERBOSE_1) {
-                fprintf(stdout,
+                fprintf(out_logfile,
                         "Using reorderTasks '-C' (expecting block, not cyclic, task assignment)\n");
-                fflush(stdout);
+                fflush(out_logfile);
         }
         params->tasksPerNode = CountTasksPerNode(params->numTasks, testComm);
 
@@ -2037,16 +2080,16 @@ static void TestIoSys(IOR_test_t *test)
                                 params->timeStampSignatureValue =
                                         (unsigned int)currentTime;
                                 if (verbose >= VERBOSE_2) {
-                                        fprintf(stdout,
+                                        fprintf(out_logfile,
                                                 "Using Time Stamp %u (0x%x) for Data Signature\n",
                                                 params->timeStampSignatureValue,
                                                 params->timeStampSignatureValue);
                                 }
                         }
                         if (rep == 0 && verbose >= VERBOSE_0) {
-                                fprintf(stdout, "\n");
-                                fprintf(stdout, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
-                                fprintf(stdout, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
+                                fprintf(out_logfile, "\n");
+                                fprintf(out_logfile, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
+                                fprintf(out_logfile, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
                         }
                 }
                 MPI_CHECK(MPI_Bcast
@@ -2065,7 +2108,7 @@ static void TestIoSys(IOR_test_t *test)
                 if (params->writeFile && !test_time_elapsed(params, startTime)) {
                         GetTestFileName(testFileName, params);
                         if (verbose >= VERBOSE_3) {
-                                fprintf(stdout, "task %d writing %s\n", rank,
+                                fprintf(out_logfile, "task %d writing %s\n", rank,
                                         testFileName);
                         }
                         DelaySecs(params->interTestDelay);
@@ -2082,15 +2125,15 @@ static void TestIoSys(IOR_test_t *test)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
-                                fprintf(stderr,
+                                fprintf(out_logfile,
                                         "Commencing write performance test: %s",
                                         CurrentTimeString());
                         }
                         timer[2][rep] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, results, fd, WRITE, &ioBuffers);
                         if (params->verbose >= VERBOSE_4) {
-                          printf("* data moved = %llu\n", dataMoved);
-                          fflush(stdout);
+                          fprintf(out_logfile, "* data moved = %llu\n", dataMoved);
+                          fflush(out_logfile);
                         }
                         timer[3][rep] = GetTimeStamp();
                         if (params->intraTestBarriers)
@@ -2125,9 +2168,9 @@ static void TestIoSys(IOR_test_t *test)
                 if (params->checkWrite && !test_time_elapsed(params, startTime)) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
-                                fprintf(stdout,
+                                fprintf(out_logfile,
                                         "Verifying contents of the file(s) just written.\n");
-                                fprintf(stdout, "%s\n", CurrentTimeString());
+                                fprintf(out_logfile, "%s\n", CurrentTimeString());
                         }
                         if (params->reorderTasks) {
                                 /* move two nodes away from writing node */
@@ -2197,7 +2240,7 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
 
                         if (verbose >= VERBOSE_3) {
-                                fprintf(stdout, "task %d reading %s\n", rank,
+                                fprintf(out_logfile, "task %d reading %s\n", rank,
                                         testFileName);
                         }
                         DelaySecs(params->interTestDelay);
@@ -2210,7 +2253,7 @@ static void TestIoSys(IOR_test_t *test)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
-                                fprintf(stderr,
+                                fprintf(out_logfile,
                                         "Commencing read performance test: %s",
                                         CurrentTimeString());
                         }
@@ -2275,7 +2318,7 @@ static void TestIoSys(IOR_test_t *test)
         }
 
         /* Sync with the tasks that did not participate in this test */
-        MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
+        MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
 
 }
 
@@ -2495,7 +2538,7 @@ static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
 }
 
 /**
- * Returns a precomputed array of IOR_offsett_t for the inner benchmark loop.
+ * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
  * They get created sequentially and mixed up in the end. The last array element
  * is set to -1 as end marker.
  * It should be noted that as the seeds get synchronised across all processes
@@ -2642,7 +2685,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
         int errors = 0;
         IOR_offset_t amtXferred;
         IOR_offset_t transferCount = 0;
-        IOR_offset_t pairCnt = 0;
+        uint64_t pairCnt = 0;
         IOR_offset_t *offsetArray;
         int pretendRank;
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
@@ -2675,10 +2718,31 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                                     > test->deadlineForStonewalling)) || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
         }
         if (test->stoneWallingWearOut){
+          if (verbose >= VERBOSE_1){
+            fprintf(out_logfile, "%d: stonewalling pairs accessed: %lld\n", rank, (long long) pairCnt);
+          }
+          long long data_moved_ll = (long long) dataMoved;
+          long long pairs_accessed_min = 0;
           MPI_CHECK(MPI_Allreduce(& pairCnt, &results->pairs_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_MAX, testComm), "cannot reduce pairs moved");
-          if (verbose >= VERBOSE_1){
-            printf("%d: stonewalling pairs accessed globally: %lld this rank: %lld\n", rank, (long long) results->pairs_accessed, (long long) pairCnt);
+          double stonewall_runtime = GetTimeStamp() - startForStonewall;
+          results->stonewall_time = stonewall_runtime;
+          MPI_CHECK(MPI_Reduce(& pairCnt, & pairs_accessed_min,
+                                  1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "cannot reduce pairs moved");
+          MPI_CHECK(MPI_Reduce(& data_moved_ll, & results->stonewall_min_data_accessed,
+                                  1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "cannot reduce pairs moved");
+          MPI_CHECK(MPI_Reduce(& data_moved_ll, & results->stonewall_avg_data_accessed,
+                                  1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm), "cannot reduce pairs moved");
+
+          if(rank == 0){
+            fprintf(out_logfile, "stonewalling pairs accessed min: %lld max: %zu -- min data: %.1f GiB mean data: %.1f GiB time: %.1fs\n",
+             pairs_accessed_min, results->pairs_accessed,
+             results->stonewall_min_data_accessed /1024.0 / 1024 / 1024,  results->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 / test->numTasks , results->stonewall_time);
+             results->stonewall_min_data_accessed *= test->numTasks;
+          }
+          if(pairs_accessed_min == pairCnt){
+            results->stonewall_min_data_accessed = 0;
+            results->stonewall_avg_data_accessed = 0;
           }
           if(pairCnt != results->pairs_accessed){
             // some work needs still to be done !
@@ -2709,7 +2773,7 @@ WriteTimes(IOR_param_t * test, double **timer, int iteration, int writeOrRead)
 {
         char accessType[MAX_STR];
         char timerName[MAX_STR];
-        int i, start, stop;
+        int i, start = 0, stop = 0;
 
         if (writeOrRead == WRITE) {
                 start = 0;
@@ -2765,7 +2829,7 @@ WriteTimes(IOR_param_t * test, double **timer, int iteration, int writeOrRead)
                         strcpy(timerName, "invalid timer");
                         break;
                 }
-                fprintf(stdout, "Test %d: Iter=%d, Task=%d, Time=%f, %s\n",
+                fprintf(out_logfile, "Test %d: Iter=%d, Task=%d, Time=%f, %s\n",
                         test->id, iteration, (int)rank, timer[i][iteration],
                         timerName);
         }

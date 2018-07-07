@@ -32,7 +32,7 @@
 #   include <io.h>
 #   include <direct.h>
 
-#   define MAXPATHLEN 1024
+#   define MAXPATHLEN 2048
 #   define F_OK 00
 #   define W_OK 02
 #   define R_OK 04
