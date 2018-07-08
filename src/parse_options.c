@@ -171,8 +171,8 @@ void DecodeDirective(char *line, IOR_param_t *params)
         if (strcasecmp(option, "api") == 0) {
                 strcpy(params->api, value);
         } else if (strcasecmp(option, "summaryFile") == 0) {
-          out_logfile = fopen(value, "w");
-          if (out_logfile == NULL){
+          out_resultfile = fopen(value, "w");
+          if (out_resultfile == NULL){
             FAIL("Cannot open output file for writes!");
           }
           printf("Writing output to %s\n", value);

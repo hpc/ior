@@ -56,6 +56,7 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         IOR_test_t *tests_head;
         IOR_test_t *tptr;
         out_logfile = world_out;
+        out_resultfile = world_out;
         mpi_comm_world = world_com;
 
         MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld), "cannot get number of tasks");
@@ -122,6 +123,7 @@ int ior_main(int argc, char **argv)
     IOR_test_t *tptr;
 
     out_logfile = stdout;
+    out_resultfile = stdout;
 
     /*
      * check -h option from commandline without starting MPI;
@@ -213,8 +215,7 @@ int ior_main(int argc, char **argv)
 
     /* display finish time */
     if (rank == 0 && verbose >= VERBOSE_0) {
-            fprintf(out_logfile, "\n");
-            fprintf(out_logfile, "Finished: %s", CurrentTimeString());
+            PrintTestEnds();
     }
 
     DestroyTests(tests_head);
@@ -730,6 +731,8 @@ static void DisplayUsage(char **argv)
                 " -Y    fsyncPerWrite -- perform fsync/msync after each POSIX/MMAP write",
                 " -z    randomOffset -- access is to random, not sequential, offsets within a file",
                 " -Z    reorderTasksRandom -- changes task ordering to random ordering for readback",
+                " -O    summaryFile=FILE -- store result data into this file",
+                " -O    summaryFormat=[default,JSON,CSV] -- use the format for outputing the summary",
                 " ",
                 "         NOTE: S is a string, N is an integer number.",
                 " ",
@@ -1407,9 +1410,7 @@ static void TestIoSys(IOR_test_t *test)
                                 }
                         }
                         if (rep == 0 && verbose >= VERBOSE_0) {
-                                fprintf(out_logfile, "\n");
-                                fprintf(out_logfile, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
-                                fprintf(out_logfile, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
+                                PrintTableHeader();
                         }
                 }
                 MPI_CHECK(MPI_Bcast
