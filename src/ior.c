@@ -94,23 +94,14 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
                 }
 
                 TestIoSys(tptr);
-                if(rank == 0 && tptr->params.stoneWallingWearOut){
-                  if (tptr->params.stoneWallingStatusFile[0]){
-                    StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
-                  }else{
-                    fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
-                  }
-                }
                 tptr->results->errors = totalErrorCount;
+                ShowTestEnd(tptr);
         }
 
         PrintLongSummaryAllTests(tests_head);
 
         /* display finish time */
-        if (rank == 0 && verbose >= VERBOSE_0) {
-                fprintf(out_logfile, "\n");
-                fprintf(out_logfile, "Finished: %s", CurrentTimeString());
-        }
+        PrintTestEnds();
         return tests_head;
 }
 
@@ -198,14 +189,7 @@ int ior_main(int argc, char **argv)
                     fprintf(out_logfile, "\trank %d: awake.\n", rank);
             }
             TestIoSys(tptr);
-
-            if(rank == 0 && tptr->params.stoneWallingWearOut){
-              if (tptr->params.stoneWallingStatusFile[0]){
-                StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
-              }else{
-                fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
-              }
-            }
+            ShowTestEnd(tptr);
     }
 
     if (verbose < 0)
@@ -214,9 +198,7 @@ int ior_main(int argc, char **argv)
     PrintLongSummaryAllTests(tests_head);
 
     /* display finish time */
-    if (rank == 0 && verbose >= VERBOSE_0) {
-            PrintTestEnds();
-    }
+    PrintTestEnds();
 
     DestroyTests(tests_head);
 
@@ -227,8 +209,6 @@ int ior_main(int argc, char **argv)
      * NOTE: This fn doesn't return a value that can be checked for success. */
     aws_cleanup();
   #endif
-
-    fflush(out_logfile);
 
     return totalErrorCount;
 }

@@ -406,14 +406,28 @@ void ShowFileSystemSize(char *fileSystem)
         if (realpath(fileSystem, realPath) == NULL) {
                 ERR("unable to use realpath()");
         }
-        fprintf(out_logfile, "Path: %s\n", realPath);
-        fprintf(out_logfile, "FS: %.1f %s   Used FS: %2.1f%%   ",
-                totalFileSystemSizeHR, fileSystemUnitStr,
-                usedFileSystemPercentage);
-        fprintf(out_logfile, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
-                (double)totalInodes / (double)(1<<20),
-                usedInodePercentage);
-        fflush(out_logfile);
+
+        if(outputFormat == OUTPUT_DEFAULT){
+          fprintf(out_resultfile, "Path: %s\n", realPath);
+          fprintf(out_resultfile, "FS: %.1f %s   Used FS: %2.1f%%   ",
+                  totalFileSystemSizeHR, fileSystemUnitStr,
+                  usedFileSystemPercentage);
+          fprintf(out_resultfile, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
+                  (double)totalInodes / (double)(1<<20),
+                  usedInodePercentage);
+          fflush(out_logfile);
+        }else if(outputFormat == OUTPUT_JSON){
+          fprintf(out_resultfile, "    \"Path\": \"%s\",", realPath);
+          fprintf(out_resultfile, "\"Capacity\": \"%.1f %s\", \"Used Capacity\": \"%2.1f%%\",",
+                  totalFileSystemSizeHR, fileSystemUnitStr,
+                  usedFileSystemPercentage);
+          fprintf(out_resultfile, "\"Inodes\": \"%.1f Mi\", \"Used Inodes\" : \"%2.1f%%\",\n",
+                  (double)totalInodes / (double)(1<<20),
+                  usedInodePercentage);
+        }else if(outputFormat == OUTPUT_CSV){
+
+        }
+
 #endif /* !_WIN32 */
 
         return;

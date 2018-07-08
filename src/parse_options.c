@@ -171,17 +171,19 @@ void DecodeDirective(char *line, IOR_param_t *params)
         if (strcasecmp(option, "api") == 0) {
                 strcpy(params->api, value);
         } else if (strcasecmp(option, "summaryFile") == 0) {
-          out_resultfile = fopen(value, "w");
-          if (out_resultfile == NULL){
-            FAIL("Cannot open output file for writes!");
+          if (rank == 0){
+            out_resultfile = fopen(value, "w");
+            if (out_resultfile == NULL){
+              FAIL("Cannot open output file for writes!");
+            }
+            printf("Writing output to %s\n", value);
           }
-          printf("Writing output to %s\n", value);
         } else if (strcasecmp(option, "summaryFormat") == 0) {
-                if(strcasecmp(value, "default")){
+                if(strcasecmp(value, "default") == 0){
                   outputFormat = OUTPUT_DEFAULT;
-                }else if(strcasecmp(value, "JSON")){
+                }else if(strcasecmp(value, "JSON") == 0){
                   outputFormat = OUTPUT_JSON;
-                }else if(strcasecmp(value, "CSV")){
+                }else if(strcasecmp(value, "CSV") == 0){
                   outputFormat = OUTPUT_CSV;
                 }else{
                   FAIL("Unknown summaryFormat");

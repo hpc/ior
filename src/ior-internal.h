@@ -9,6 +9,7 @@
 void PrintEarlyHeader();
 void PrintHeader(int argc, char **argv);
 void ShowTestInfo(IOR_param_t *params);
+void ShowTestEnd(IOR_test_t *tptr);
 void ShowSetup(IOR_param_t *params);
 void ShowTest(IOR_param_t * test);
 void PrintShortSummary(IOR_test_t * test);

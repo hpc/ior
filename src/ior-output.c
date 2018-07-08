@@ -16,14 +16,128 @@ static double mean_of_array_of_doubles(double *values, int len);
 static void PPDouble(int leftjustify, double number, char *append);
 
 void PrintTableHeader(){
-  fprintf(out_resultfile, "\n");
-  fprintf(out_resultfile, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
-  fprintf(out_resultfile, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
+  if (outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "\n");
+    fprintf(out_resultfile, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
+    fprintf(out_resultfile, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
+  }
+}
+
+static int indent = 0;
+
+static void PrintKeyValStart(char * key){
+  if (outputFormat == OUTPUT_DEFAULT){
+    for(int i=0; i < indent; i++){
+      fprintf(out_resultfile, " ");
+    }
+    fprintf(out_resultfile, "%s: ", key);
+    return;
+  }
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\"%s\": \"", key);
+  }else if(outputFormat == OUTPUT_CSV){
+
+  }
+}
+
+static void PrintNextToken(){
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, ", \n");
+  }
+}
+
+static void PrintKeyValEnd(){
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\"");
+  }
+  if (outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "\n");
+  }
+}
+
+static void PrintIndent(){
+  if(outputFormat == OUTPUT_CSV){
+    return;
+  }
+  for(int i=0; i < indent; i++){
+    fprintf(out_resultfile, "  ");
+  }
+}
+
+static void PrintKeyVal(char * key, char * value){
+  if(value[strlen(value) -1 ] == '\n'){
+    // remove \n
+    value[strlen(value) -1 ] = 0;
+  }
+  PrintIndent();
+  if (outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "%s: %s\n", key, value);
+    return;
+  }
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\"%s\": \"%s\"", key, value);
+  }else if(outputFormat == OUTPUT_CSV){
+    fprintf(out_resultfile, "%s", value);
+  }
+}
+
+static void PrintKeyValInt(char * key, int64_t value){
+  PrintIndent();
+  if (outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "%s: %lld\n", key, (long long) value);
+    return;
+  }
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\"%s\": %lld", key, (long long)  value);
+  }else if(outputFormat == OUTPUT_CSV){
+    fprintf(out_resultfile, "%lld", (long long) value);
+  }
+}
+
+static void PrintStartSection(){
+  indent++;
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "{\n");
+  }
+}
+
+static void PrintNamedSectionStart(char * key){
+  PrintIndent();
+  indent++;
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\"%s\": {\n", key);
+  }else if(outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "%s: \n", key);
+  }
+}
+
+static void PrintEndSection(){
+  indent--;
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\n}\n");
+  }
+}
+
+static void PrintArrayStart(char * key){
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\"%s\": [\n", key);
+  }
+}
+
+static void PrintArrayEnd(){
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "]\n");
+  }
 }
 
 void PrintTestEnds(){
-  fprintf(out_resultfile, "\n");
-  fprintf(out_resultfile, "Finished: %s", CurrentTimeString());
+  if (rank != 0 ||  verbose < VERBOSE_0) {
+    PrintEndSection();
+    return;
+  }
+
+  PrintKeyVal("Finished", CurrentTimeString());
+  PrintEndSection();
 }
 
 void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_subset, double totalTime, int rep){
@@ -60,49 +174,59 @@ void PrintHeader(int argc, char **argv)
 
         if (rank != 0)
                 return;
+        PrintStartSection();
 
-        fprintf(out_resultfile, "Began: %s", CurrentTimeString());
-        fprintf(out_resultfile, "Command line used: %s", argv[0]);
+        PrintKeyVal("Began", CurrentTimeString());
+        PrintNextToken();
+        PrintKeyValStart("Command line");
+        fprintf(out_resultfile, "%s", argv[0]);
         for (i = 1; i < argc; i++) {
-                fprintf(out_resultfile, " \"%s\"", argv[i]);
+                fprintf(out_resultfile, " %s", argv[i]);
         }
-        fprintf(out_resultfile, "\n");
+        PrintKeyValEnd();
+        PrintNextToken();
         if (uname(&unamebuf) != 0) {
                 EWARN("uname failed");
-                fprintf(out_resultfile, "Machine: Unknown");
+                PrintKeyVal("Machine", "Unknown");
         } else {
-                fprintf(out_resultfile, "Machine: %s %s", unamebuf.sysname,
+                PrintKeyValStart("Machine");
+                fprintf(out_resultfile, "%s %s", unamebuf.sysname,
                         unamebuf.nodename);
                 if (verbose >= VERBOSE_2) {
                         fprintf(out_resultfile, " %s %s %s", unamebuf.release,
                                 unamebuf.version, unamebuf.machine);
                 }
+                PrintKeyValEnd();
         }
-        fprintf(out_resultfile, "\n");
+
 #ifdef _NO_MPI_TIMER
         if (verbose >= VERBOSE_2)
-                fprintf(out_resultfile, "Using unsynchronized POSIX timer\n");
+                fprintf(out_logfile, "Using unsynchronized POSIX timer\n");
 #else                           /* not _NO_MPI_TIMER */
         if (MPI_WTIME_IS_GLOBAL) {
                 if (verbose >= VERBOSE_2)
-                        fprintf(out_resultfile, "Using synchronized MPI timer\n");
+                    fprintf(out_logfile, "Using synchronized MPI timer\n");
         } else {
                 if (verbose >= VERBOSE_2)
-                        fprintf(out_resultfile, "Using unsynchronized MPI timer\n");
+                  fprintf(out_logfile, "Using unsynchronized MPI timer\n");
         }
 #endif                          /* _NO_MPI_TIMER */
         if (verbose >= VERBOSE_1) {
-                fprintf(out_resultfile, "Start time skew across all tasks: %.02f sec\n",
+                fprintf(out_logfile, "Start time skew across all tasks: %.02f sec\n",
                         wall_clock_deviation);
         }
         if (verbose >= VERBOSE_3) {     /* show env */
-                fprintf(out_resultfile, "STARTING ENVIRON LOOP\n");
+                fprintf(out_logfile, "STARTING ENVIRON LOOP\n");
                 for (i = 0; environ[i] != NULL; i++) {
-                        fprintf(out_resultfile, "%s\n", environ[i]);
+                        fprintf(out_logfile, "%s\n", environ[i]);
                 }
-                fprintf(out_resultfile, "ENDING ENVIRON LOOP\n");
+                fprintf(out_logfile, "ENDING ENVIRON LOOP\n");
         }
+
+        PrintNextToken();
+        PrintArrayStart("tests");
         fflush(out_resultfile);
+        fflush(out_logfile);
 }
 
 /*
@@ -110,15 +234,27 @@ void PrintHeader(int argc, char **argv)
  */
 void ShowTestInfo(IOR_param_t *params)
 {
-        fprintf(out_resultfile, "\n");
-        fprintf(out_resultfile, "Test %d started: %s", params->id, CurrentTimeString());
-        if (verbose >= VERBOSE_1) {
-                /* if pvfs2:, then skip */
-                if (Regex(params->testFileName, "^[a-z][a-z].*:") == 0) {
-                        DisplayFreespace(params);
-                }
-        }
-        fflush(out_resultfile);
+  PrintStartSection();
+  PrintKeyValInt("TestID", params->id);
+  PrintNextToken();
+  PrintKeyVal("StartTime", CurrentTimeString());
+  PrintNextToken();
+  /* if pvfs2:, then skip */
+  if (Regex(params->testFileName, "^[a-z][a-z].*:") == 0) {
+          DisplayFreespace(params);
+  }
+  fflush(out_resultfile);
+}
+
+void ShowTestEnd(IOR_test_t *tptr){
+  if(rank == 0 && tptr->params.stoneWallingWearOut){
+    if (tptr->params.stoneWallingStatusFile[0]){
+      StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
+    }else{
+      fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
+    }
+  }
+  PrintEndSection();
 }
 
 /*
@@ -126,20 +262,19 @@ void ShowTestInfo(IOR_param_t *params)
  */
 void ShowSetup(IOR_param_t *params)
 {
-
-        if (strcmp(params->debug, "") != 0) {
-                fprintf(out_resultfile, "\n*** DEBUG MODE ***\n");
-                fprintf(out_resultfile, "*** %s ***\n\n", params->debug);
-        }
-        fprintf(out_resultfile, "Summary:\n");
-        fprintf(out_resultfile, "\tapi                = %s\n", params->apiVersion);
-        fprintf(out_resultfile, "\ttest filename      = %s\n", params->testFileName);
-        fprintf(out_resultfile, "\taccess             = ");
-        fprintf(out_resultfile, params->filePerProc ? "file-per-process" : "single-shared-file");
-        if (verbose >= VERBOSE_1 && strcmp(params->api, "POSIX") != 0) {
-                fprintf(out_resultfile, params->collective == FALSE ? ", independent" : ", collective");
-        }
-        fprintf(out_resultfile, "\n");
+  if (strcmp(params->debug, "") != 0) {
+      fprintf(out_logfile, "\n*** DEBUG MODE ***\n");
+      fprintf(out_logfile, "*** %s ***\n\n", params->debug);
+  }
+  PrintNamedSectionStart("Flags");
+  PrintKeyVal("api", params->apiVersion);
+  PrintNextToken();
+  PrintKeyVal("test filename", params->testFileName);
+  PrintNextToken();
+  PrintKeyVal("access", params->filePerProc ? "file-per-process" : "single-shared-file");
+  PrintNextToken();
+  PrintKeyVal("type", params->collective == FALSE ? "independent" : "collective");
+  PrintNextToken();
         if (verbose >= VERBOSE_1) {
                 if (params->segmentCount > 1) {
                         fprintf(out_resultfile,
@@ -200,6 +335,7 @@ void ShowSetup(IOR_param_t *params)
                 fprintf(out_resultfile, "\tUsing stonewalling = %d second(s)%s\n",
                         params->deadlineForStonewalling, params->stoneWallingWearOut ? " with phase out" : "");
         }
+        PrintEndSection();
         fflush(out_resultfile);
 }
 
@@ -443,8 +579,6 @@ void DisplayFreespace(IOR_param_t * test)
         }
 
         ShowFileSystemSize(fileName);
-
-        return;
 }
 
 
