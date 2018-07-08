@@ -14,6 +14,7 @@ static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *
 static struct results *ops_values(int reps, IOR_offset_t *agg_file_size, IOR_offset_t transfer_size, double *vals);
 static double mean_of_array_of_doubles(double *values, int len);
 static void PPDouble(int leftjustify, double number, char *append);
+static void PrintNextToken();
 
 void PrintTableHeader(){
   if (outputFormat == OUTPUT_DEFAULT){
@@ -24,8 +25,20 @@ void PrintTableHeader(){
 }
 
 static int indent = 0;
+static int needNextToken = 0;
+
+static void PrintIndent(){
+  if(outputFormat == OUTPUT_CSV){
+    return;
+  }
+  for(int i=0; i < indent; i++){
+    fprintf(out_resultfile, "  ");
+  }
+}
+
 
 static void PrintKeyValStart(char * key){
+  PrintNextToken();
   if (outputFormat == OUTPUT_DEFAULT){
     for(int i=0; i < indent; i++){
       fprintf(out_resultfile, " ");
@@ -41,9 +54,13 @@ static void PrintKeyValStart(char * key){
 }
 
 static void PrintNextToken(){
-  if(outputFormat == OUTPUT_JSON){
-    fprintf(out_resultfile, ", \n");
+  if(needNextToken){
+    needNextToken = 0;
+    if(outputFormat == OUTPUT_JSON){
+      fprintf(out_resultfile, ", \n");
+    }
   }
+  PrintIndent();
 }
 
 static void PrintKeyValEnd(){
@@ -53,15 +70,7 @@ static void PrintKeyValEnd(){
   if (outputFormat == OUTPUT_DEFAULT){
     fprintf(out_resultfile, "\n");
   }
-}
-
-static void PrintIndent(){
-  if(outputFormat == OUTPUT_CSV){
-    return;
-  }
-  for(int i=0; i < indent; i++){
-    fprintf(out_resultfile, "  ");
-  }
+  needNextToken = 1;
 }
 
 static void PrintKeyVal(char * key, char * value){
@@ -69,7 +78,8 @@ static void PrintKeyVal(char * key, char * value){
     // remove \n
     value[strlen(value) -1 ] = 0;
   }
-  PrintIndent();
+  PrintNextToken();
+  needNextToken = 1;
   if (outputFormat == OUTPUT_DEFAULT){
     fprintf(out_resultfile, "%s: %s\n", key, value);
     return;
@@ -81,8 +91,24 @@ static void PrintKeyVal(char * key, char * value){
   }
 }
 
+static void PrintKeyValDouble(char * key, double value){
+  PrintNextToken();
+  needNextToken = 1;
+  if (outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "%s: %.4f\n", key, value);
+    return;
+  }
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\"%s\": %.4f", key, value);
+  }else if(outputFormat == OUTPUT_CSV){
+    fprintf(out_resultfile, "%.4f", value);
+  }
+}
+
+
 static void PrintKeyValInt(char * key, int64_t value){
-  PrintIndent();
+  PrintNextToken();
+  needNextToken = 1;
   if (outputFormat == OUTPUT_DEFAULT){
     fprintf(out_resultfile, "%s: %lld\n", key, (long long) value);
     return;
@@ -95,14 +121,18 @@ static void PrintKeyValInt(char * key, int64_t value){
 }
 
 static void PrintStartSection(){
-  indent++;
+  PrintNextToken();
+  needNextToken = 0;
   if(outputFormat == OUTPUT_JSON){
+    PrintIndent();
     fprintf(out_resultfile, "{\n");
   }
+  indent++;
 }
 
 static void PrintNamedSectionStart(char * key){
-  PrintIndent();
+  PrintNextToken();
+  needNextToken = 0;
   indent++;
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": {\n", key);
@@ -111,23 +141,52 @@ static void PrintNamedSectionStart(char * key){
   }
 }
 
-static void PrintEndSection(){
-  indent--;
+static void PrintNamedArrayStart(char * key){
+  PrintNextToken();
+  needNextToken = 0;
+  indent++;
   if(outputFormat == OUTPUT_JSON){
-    fprintf(out_resultfile, "\n}\n");
+    fprintf(out_resultfile, "\"%s\": [\n", key);
+  }else if(outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "%s: \n", key);
   }
 }
 
+static void PrintEndSection(){
+  indent--;
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "\n");
+    PrintIndent();
+    fprintf(out_resultfile, "}\n");
+  }
+  needNextToken = 1;
+}
+
 static void PrintArrayStart(char * key){
+  PrintNextToken();
+  needNextToken = 0;
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": [\n", key);
   }
 }
 
 static void PrintArrayEnd(){
+  indent--;
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "]\n");
   }
+  needNextToken = 1;
+}
+
+void PrintRepeatEnd(){
+  PrintEndSection();
+}
+
+void PrintRepeatStart(){
+  if( outputFormat == OUTPUT_DEFAULT){
+    return;
+  }
+  PrintStartSection();
 }
 
 void PrintTestEnds(){
@@ -141,15 +200,26 @@ void PrintTestEnds(){
 }
 
 void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_subset, double totalTime, int rep){
-  fprintf(out_resultfile, "%-10s", access == WRITE ? "write" : "read");
-  PPDouble(1, bw / MEBIBYTE, " ");
-  PPDouble(1, (double)test->params.blockSize / KIBIBYTE, " ");
-  PPDouble(1, (double)test->params.transferSize / KIBIBYTE, " ");
-  PPDouble(1, diff_subset[0], " ");
-  PPDouble(1, diff_subset[1], " ");
-  PPDouble(1, diff_subset[2], " ");
-  PPDouble(1, totalTime, " ");
-  fprintf(out_resultfile, "%-4d\n", rep);
+  if (outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "%-10s", access == WRITE ? "write" : "read");
+    PPDouble(1, bw / MEBIBYTE, " ");
+    PPDouble(1, (double)test->params.blockSize / KIBIBYTE, " ");
+    PPDouble(1, (double)test->params.transferSize / KIBIBYTE, " ");
+    PPDouble(1, diff_subset[0], " ");
+    PPDouble(1, diff_subset[1], " ");
+    PPDouble(1, diff_subset[2], " ");
+    PPDouble(1, totalTime, " ");
+    fprintf(out_resultfile, "%-4d\n", rep);
+  }else if (outputFormat == OUTPUT_JSON){
+    PrintKeyVal("access", access == WRITE ? "write" : "read");
+    PrintKeyValDouble("bwMiB", bw / MEBIBYTE);
+    PrintKeyValDouble("blockKiB", (double)test->params.blockSize / KIBIBYTE);
+    PrintKeyValDouble("xferKiB", (double)test->params.transferSize / KIBIBYTE);
+    PrintKeyValDouble("openTime", diff_subset[0]);
+    PrintKeyValDouble("wrRdTime", diff_subset[1]);
+    PrintKeyValDouble("closeTime", diff_subset[2]);
+    PrintKeyValDouble("totalTime", totalTime);
+  }
   fflush(out_resultfile);
 }
 
@@ -177,14 +247,12 @@ void PrintHeader(int argc, char **argv)
         PrintStartSection();
 
         PrintKeyVal("Began", CurrentTimeString());
-        PrintNextToken();
         PrintKeyValStart("Command line");
         fprintf(out_resultfile, "%s", argv[0]);
         for (i = 1; i < argc; i++) {
                 fprintf(out_resultfile, " %s", argv[i]);
         }
         PrintKeyValEnd();
-        PrintNextToken();
         if (uname(&unamebuf) != 0) {
                 EWARN("uname failed");
                 PrintKeyVal("Machine", "Unknown");
@@ -223,7 +291,6 @@ void PrintHeader(int argc, char **argv)
                 fprintf(out_logfile, "ENDING ENVIRON LOOP\n");
         }
 
-        PrintNextToken();
         PrintArrayStart("tests");
         fflush(out_resultfile);
         fflush(out_logfile);
@@ -232,17 +299,79 @@ void PrintHeader(int argc, char **argv)
 /*
  * Print header information for test output.
  */
-void ShowTestInfo(IOR_param_t *params)
+void ShowTestStart(IOR_param_t *test)
 {
   PrintStartSection();
-  PrintKeyValInt("TestID", params->id);
-  PrintNextToken();
+  PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
-  PrintNextToken();
   /* if pvfs2:, then skip */
-  if (Regex(params->testFileName, "^[a-z][a-z].*:") == 0) {
-          DisplayFreespace(params);
+  if (Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
+      DisplayFreespace(test);
   }
+
+  if (verbose >= VERBOSE_3 || outputFormat == OUTPUT_JSON) {
+    char* data_packets[] = {"g","t","o","i"};
+
+    PrintNamedSectionStart("Parameters");
+    PrintKeyValInt("testID", test->id);
+    PrintKeyValInt("refnum", test->referenceNumber);
+    PrintKeyVal("api", test->api);
+    PrintKeyVal("platform", test->platform);
+    PrintKeyVal("testFileName", test->testFileName);
+    PrintKeyVal("hintsFileName", test->hintsFileName);
+    PrintKeyValInt("deadlineForStonewall", test->deadlineForStonewalling);
+    PrintKeyValInt("stoneWallingWearOut", test->stoneWallingWearOut);
+    PrintKeyValInt("maxTimeDuration", test->maxTimeDuration);
+    PrintKeyValInt("outlierThreshold", test->outlierThreshold);
+    PrintKeyVal("options", test->options);
+    PrintKeyValInt("nodes", test->nodes);
+    PrintKeyValInt("memoryPerTask", (unsigned long) test->memoryPerTask);
+    PrintKeyValInt("memoryPerNode", (unsigned long) test->memoryPerNode);
+    PrintKeyValInt("tasksPerNode", tasksPerNode);
+    PrintKeyValInt("repetitions", test->repetitions);
+    PrintKeyValInt("multiFile", test->multiFile);
+    PrintKeyValInt("interTestDelay", test->interTestDelay);
+    PrintKeyValInt("fsync", test->fsync);
+    PrintKeyValInt("fsyncperwrite", test->fsyncPerWrite);
+    PrintKeyValInt("useExistingTestFile", test->useExistingTestFile);
+    PrintKeyValInt("showHints", test->showHints);
+    PrintKeyValInt("uniqueDir", test->uniqueDir);
+    PrintKeyValInt("showHelp", test->showHelp);
+    PrintKeyValInt("individualDataSets", test->individualDataSets);
+    PrintKeyValInt("singleXferAttempt", test->singleXferAttempt);
+    PrintKeyValInt("readFile", test->readFile);
+    PrintKeyValInt("writeFile", test->writeFile);
+    PrintKeyValInt("filePerProc", test->filePerProc);
+    PrintKeyValInt("reorderTasks", test->reorderTasks);
+    PrintKeyValInt("reorderTasksRandom", test->reorderTasksRandom);
+    PrintKeyValInt("reorderTasksRandomSeed", test->reorderTasksRandomSeed);
+    PrintKeyValInt("randomOffset", test->randomOffset);
+    PrintKeyValInt("checkWrite", test->checkWrite);
+    PrintKeyValInt("checkRead", test->checkRead);
+    PrintKeyValInt("preallocate", test->preallocate);
+    PrintKeyValInt("useFileView", test->useFileView);
+    PrintKeyValInt("setAlignment", test->setAlignment);
+    PrintKeyValInt("storeFileOffset", test->storeFileOffset);
+    PrintKeyValInt("useSharedFilePointer", test->useSharedFilePointer);
+    PrintKeyValInt("useO_DIRECT", test->useO_DIRECT);
+    PrintKeyValInt("useStridedDatatype", test->useStridedDatatype);
+    PrintKeyValInt("keepFile", test->keepFile);
+    PrintKeyValInt("keepFileWithError", test->keepFileWithError);
+    PrintKeyValInt("quitOnError", test->quitOnError);
+    PrintKeyValInt("verbose", verbose);
+    PrintKeyVal("data packet type", data_packets[test->dataPacketType]);
+    PrintKeyValInt("setTimeStampSignature/incompressibleSeed", test->setTimeStampSignature); /* Seed value was copied into setTimeStampSignature as well */
+    PrintKeyValInt("collective", test->collective);
+    PrintKeyValInt("segmentCount", test->segmentCount);
+    #ifdef HAVE_GPFS_FCNTL_H
+    PrintKeyValInt("gpfsHintAccess", test->gpfs_hint_access);
+    PrintKeyValInt("gpfsReleaseToken", test->gpfs_release_token);
+    #endif
+    PrintKeyValInt("transferSize", test->transferSize);
+    PrintKeyValInt("blockSize", test->blockSize);
+    PrintEndSection();
+  }
+
   fflush(out_resultfile);
 }
 
@@ -266,158 +395,56 @@ void ShowSetup(IOR_param_t *params)
       fprintf(out_logfile, "\n*** DEBUG MODE ***\n");
       fprintf(out_logfile, "*** %s ***\n\n", params->debug);
   }
-  PrintNamedSectionStart("Flags");
+  PrintNamedSectionStart("Options");
   PrintKeyVal("api", params->apiVersion);
-  PrintNextToken();
   PrintKeyVal("test filename", params->testFileName);
-  PrintNextToken();
   PrintKeyVal("access", params->filePerProc ? "file-per-process" : "single-shared-file");
-  PrintNextToken();
   PrintKeyVal("type", params->collective == FALSE ? "independent" : "collective");
-  PrintNextToken();
-        if (verbose >= VERBOSE_1) {
-                if (params->segmentCount > 1) {
-                        fprintf(out_resultfile,
-                                "\tpattern            = strided (%d segments)\n",
-                                (int)params->segmentCount);
-                } else {
-                        fprintf(out_resultfile,
-                                "\tpattern            = segmented (1 segment)\n");
-                }
-        }
-        fprintf(out_resultfile, "\tordering in a file =");
-        if (params->randomOffset == FALSE) {
-                fprintf(out_resultfile, " sequential offsets\n");
-        } else {
-                fprintf(out_resultfile, " random offsets\n");
-        }
-        fprintf(out_resultfile, "\tordering inter file=");
-        if (params->reorderTasks == FALSE && params->reorderTasksRandom == FALSE) {
-                fprintf(out_resultfile, " no tasks offsets\n");
-        }
-        if (params->reorderTasks == TRUE) {
-                fprintf(out_resultfile, " constant task offsets = %d\n",
-                        params->taskPerNodeOffset);
-        }
-        if (params->reorderTasksRandom == TRUE) {
-                fprintf(out_resultfile, " random task offsets >= %d, seed=%d\n",
-                        params->taskPerNodeOffset, params->reorderTasksRandomSeed);
-        }
-        fprintf(out_resultfile, "\tclients            = %d (%d per node)\n",
-                params->numTasks, params->tasksPerNode);
-        if (params->memoryPerTask != 0)
-                fprintf(out_resultfile, "\tmemoryPerTask      = %s\n",
-                       HumanReadable(params->memoryPerTask, BASE_TWO));
-        if (params->memoryPerNode != 0)
-                fprintf(out_resultfile, "\tmemoryPerNode      = %s\n",
-                       HumanReadable(params->memoryPerNode, BASE_TWO));
-        fprintf(out_resultfile, "\trepetitions        = %d\n", params->repetitions);
-        fprintf(out_resultfile, "\txfersize           = %s\n",
-                HumanReadable(params->transferSize, BASE_TWO));
-        fprintf(out_resultfile, "\tblocksize          = %s\n",
-                HumanReadable(params->blockSize, BASE_TWO));
-        fprintf(out_resultfile, "\taggregate filesize = %s\n",
-                HumanReadable(params->expectedAggFileSize, BASE_TWO));
+  PrintKeyValInt("segments", params->segmentCount);
+  PrintKeyVal("ordering in a file", params->randomOffset ? "sequential" : "random");
+  if (params->reorderTasks == FALSE && params->reorderTasksRandom == FALSE) {
+    PrintKeyVal("ordering inter file", "no tasks offsets");
+  }
+  if (params->reorderTasks == TRUE) {
+    PrintKeyVal("ordering inter file", "constant task offset");
+    PrintKeyValInt("task offset", params->taskPerNodeOffset);
+  }
+  if (params->reorderTasksRandom == TRUE) {
+    PrintKeyVal("ordering inter file", "random task offset");
+    PrintKeyValInt("task offset", params->taskPerNodeOffset);
+    PrintKeyValInt("reorder random seed", params->reorderTasksRandomSeed);
+  }
+  PrintKeyValInt("tasks", params->numTasks);
+  PrintKeyValInt("clients per node", params->tasksPerNode);
+  if (params->memoryPerTask != 0){
+    PrintKeyVal("memoryPerTask", HumanReadable(params->memoryPerTask, BASE_TWO));
+  }
+  if (params->memoryPerNode != 0){
+    PrintKeyVal("memoryPerNode", HumanReadable(params->memoryPerNode, BASE_TWO));
+  }
+  PrintKeyValInt("repetitions", params->repetitions);
+  PrintKeyVal("xfersize", HumanReadable(params->transferSize, BASE_TWO));
+  PrintKeyVal("blocksize", HumanReadable(params->blockSize, BASE_TWO));
+  PrintKeyVal("aggregate filesize", HumanReadable(params->expectedAggFileSize, BASE_TWO));
+
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
-        if (params->lustre_set_striping) {
-                fprintf(out_resultfile, "\tLustre stripe size = %s\n",
-                       ((params->lustre_stripe_size == 0) ? "Use default" :
-                        HumanReadable(params->lustre_stripe_size, BASE_TWO)));
-                if (params->lustre_stripe_count == 0) {
-                        fprintf(out_resultfile, "\t      stripe count = %s\n", "Use default");
-                } else {
-                        fprintf(out_resultfile, "\t      stripe count = %d\n",
-                               params->lustre_stripe_count);
-                }
-        }
+  if (params->lustre_set_striping) {
+    PrintKeyVal("Lustre stripe size", ((params->lustre_stripe_size == 0) ? "Use default" :
+     HumanReadable(params->lustre_stripe_size, BASE_TWO)));
+    PrintKeyVal("stripe count", (params->lustre_stripe_count == 0 ? "Use default" : HumanReadable(params->lustre_stripe_count, BASE_TWO)));
+  }
 #endif /* HAVE_LUSTRE_LUSTRE_USER_H */
-        if (params->deadlineForStonewalling > 0) {
-                fprintf(out_resultfile, "\tUsing stonewalling = %d second(s)%s\n",
-                        params->deadlineForStonewalling, params->stoneWallingWearOut ? " with phase out" : "");
-        }
-        PrintEndSection();
-        fflush(out_resultfile);
+  if (params->deadlineForStonewalling > 0) {
+    PrintKeyValInt("stonewallingTime", params->deadlineForStonewalling);
+    PrintKeyValInt("stoneWallingWearOut", params->stoneWallingWearOut );
+  }
+  PrintEndSection();
+
+  PrintNamedArrayStart("Results");
+
+  fflush(out_resultfile);
 }
 
-/*
- * Show test description.
- */
-void ShowTest(IOR_param_t * test)
-{
-        const char* data_packets[] = {"g", "t","o","i"};
-
-        fprintf(out_resultfile, "TEST:\t%s=%d\n", "id", test->id);
-        fprintf(out_resultfile, "\t%s=%d\n", "refnum", test->referenceNumber);
-        fprintf(out_resultfile, "\t%s=%s\n", "api", test->api);
-        fprintf(out_resultfile, "\t%s=%s\n", "platform", test->platform);
-        fprintf(out_resultfile, "\t%s=%s\n", "testFileName", test->testFileName);
-        fprintf(out_resultfile, "\t%s=%s\n", "hintsFileName", test->hintsFileName);
-        fprintf(out_resultfile, "\t%s=%d\n", "deadlineForStonewall",
-                test->deadlineForStonewalling);
-        fprintf(out_resultfile, "\t%s=%d\n", "stoneWallingWearOut", test->stoneWallingWearOut);
-        fprintf(out_resultfile, "\t%s=%d\n", "maxTimeDuration", test->maxTimeDuration);
-        fprintf(out_resultfile, "\t%s=%d\n", "outlierThreshold",
-                test->outlierThreshold);
-        fprintf(out_resultfile, "\t%s=%s\n", "options", test->options);
-        fprintf(out_resultfile, "\t%s=%d\n", "nodes", test->nodes);
-        fprintf(out_resultfile, "\t%s=%lu\n", "memoryPerTask", (unsigned long) test->memoryPerTask);
-        fprintf(out_resultfile, "\t%s=%lu\n", "memoryPerNode", (unsigned long) test->memoryPerNode);
-        fprintf(out_resultfile, "\t%s=%d\n", "tasksPerNode", tasksPerNode);
-        fprintf(out_resultfile, "\t%s=%d\n", "repetitions", test->repetitions);
-        fprintf(out_resultfile, "\t%s=%d\n", "multiFile", test->multiFile);
-        fprintf(out_resultfile, "\t%s=%d\n", "interTestDelay", test->interTestDelay);
-        fprintf(out_resultfile, "\t%s=%d\n", "fsync", test->fsync);
-        fprintf(out_resultfile, "\t%s=%d\n", "fsYncperwrite", test->fsyncPerWrite);
-        fprintf(out_resultfile, "\t%s=%d\n", "useExistingTestFile",
-                test->useExistingTestFile);
-        fprintf(out_resultfile, "\t%s=%d\n", "showHints", test->showHints);
-        fprintf(out_resultfile, "\t%s=%d\n", "uniqueDir", test->uniqueDir);
-        fprintf(out_resultfile, "\t%s=%d\n", "showHelp", test->showHelp);
-        fprintf(out_resultfile, "\t%s=%d\n", "individualDataSets",
-                test->individualDataSets);
-        fprintf(out_resultfile, "\t%s=%d\n", "singleXferAttempt",
-                test->singleXferAttempt);
-        fprintf(out_resultfile, "\t%s=%d\n", "readFile", test->readFile);
-        fprintf(out_resultfile, "\t%s=%d\n", "writeFile", test->writeFile);
-        fprintf(out_resultfile, "\t%s=%d\n", "filePerProc", test->filePerProc);
-        fprintf(out_resultfile, "\t%s=%d\n", "reorderTasks", test->reorderTasks);
-        fprintf(out_resultfile, "\t%s=%d\n", "reorderTasksRandom",
-                test->reorderTasksRandom);
-        fprintf(out_resultfile, "\t%s=%d\n", "reorderTasksRandomSeed",
-                test->reorderTasksRandomSeed);
-        fprintf(out_resultfile, "\t%s=%d\n", "randomOffset", test->randomOffset);
-        fprintf(out_resultfile, "\t%s=%d\n", "checkWrite", test->checkWrite);
-        fprintf(out_resultfile, "\t%s=%d\n", "checkRead", test->checkRead);
-        fprintf(out_resultfile, "\t%s=%d\n", "preallocate", test->preallocate);
-        fprintf(out_resultfile, "\t%s=%d\n", "useFileView", test->useFileView);
-        fprintf(out_resultfile, "\t%s=%lld\n", "setAlignment", test->setAlignment);
-        fprintf(out_resultfile, "\t%s=%d\n", "storeFileOffset", test->storeFileOffset);
-        fprintf(out_resultfile, "\t%s=%d\n", "useSharedFilePointer",
-                test->useSharedFilePointer);
-        fprintf(out_resultfile, "\t%s=%d\n", "useO_DIRECT", test->useO_DIRECT);
-        fprintf(out_resultfile, "\t%s=%d\n", "useStridedDatatype",
-                test->useStridedDatatype);
-        fprintf(out_resultfile, "\t%s=%d\n", "keepFile", test->keepFile);
-        fprintf(out_resultfile, "\t%s=%d\n", "keepFileWithError",
-                test->keepFileWithError);
-        fprintf(out_resultfile, "\t%s=%d\n", "quitOnError", test->quitOnError);
-        fprintf(out_resultfile, "\t%s=%d\n", "verbose", verbose);
-        fprintf(out_resultfile, "\t%s=%s\n", "data packet type", data_packets[test->dataPacketType]);
-        fprintf(out_resultfile, "\t%s=%d\n", "setTimeStampSignature/incompressibleSeed",
-                test->setTimeStampSignature); /* Seed value was copied into setTimeStampSignature as well */
-        fprintf(out_resultfile, "\t%s=%d\n", "collective", test->collective);
-        fprintf(out_resultfile, "\t%s=%lld", "segmentCount", test->segmentCount);
-#ifdef HAVE_GPFS_FCNTL_H
-        fprintf(out_resultfile, "\t%s=%d\n", "gpfsHintAccess", test->gpfs_hint_access);
-        fprintf(out_resultfile, "\t%s=%d\n", "gpfsReleaseToken", test->gpfs_release_token);
-#endif
-        if (strcasecmp(test->api, "HDF5") == 0) {
-                fprintf(out_resultfile, " (datasets)");
-        }
-        fprintf(out_resultfile, "\n");
-        fprintf(out_resultfile, "\t%s=%lld\n", "transferSize", test->transferSize);
-        fprintf(out_resultfile, "\t%s=%lld\n", "blockSize", test->blockSize);
-}
 
 
 /*
@@ -441,32 +468,68 @@ void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *operati
         ops = ops_values(reps, results->aggFileSizeForBW,
                          params->transferSize, times);
 
-        fprintf(out_resultfile, "%-9s ", operation);
-        fprintf(out_resultfile, "%10.2f ", bw->max / MEBIBYTE);
-        fprintf(out_resultfile, "%10.2f ", bw->min / MEBIBYTE);
-        fprintf(out_resultfile, "%10.2f ", bw->mean / MEBIBYTE);
-        fprintf(out_resultfile, "%10.2f ", bw->sd / MEBIBYTE);
-        fprintf(out_resultfile, "%10.2f ", ops->max);
-        fprintf(out_resultfile, "%10.2f ", ops->min);
-        fprintf(out_resultfile, "%10.2f ", ops->mean);
-        fprintf(out_resultfile, "%10.2f ", ops->sd);
-        fprintf(out_resultfile, "%10.5f ", mean_of_array_of_doubles(times, reps));
-        fprintf(out_resultfile, "%5d ", params->id);
-        fprintf(out_resultfile, "%6d ", params->numTasks);
-        fprintf(out_resultfile, "%3d ", params->tasksPerNode);
-        fprintf(out_resultfile, "%4d ", params->repetitions);
-        fprintf(out_resultfile, "%3d ", params->filePerProc);
-        fprintf(out_resultfile, "%5d ", params->reorderTasks);
-        fprintf(out_resultfile, "%8d ", params->taskPerNodeOffset);
-        fprintf(out_resultfile, "%9d ", params->reorderTasksRandom);
-        fprintf(out_resultfile, "%4d ", params->reorderTasksRandomSeed);
-        fprintf(out_resultfile, "%6lld ", params->segmentCount);
-        fprintf(out_resultfile, "%8lld ", params->blockSize);
-        fprintf(out_resultfile, "%8lld ", params->transferSize);
-        fprintf(out_resultfile, "%9.1f ", (float)results->aggFileSizeForBW[0] / MEBIBYTE);
-        fprintf(out_resultfile, "%3s ", params->api);
-        fprintf(out_resultfile, "%6d", params->referenceNumber);
-        fprintf(out_resultfile, "\n");
+        if(outputFormat == OUTPUT_DEFAULT){
+          fprintf(out_resultfile, "%-9s ", operation);
+          fprintf(out_resultfile, "%10.2f ", bw->max / MEBIBYTE);
+          fprintf(out_resultfile, "%10.2f ", bw->min / MEBIBYTE);
+          fprintf(out_resultfile, "%10.2f ", bw->mean / MEBIBYTE);
+          fprintf(out_resultfile, "%10.2f ", bw->sd / MEBIBYTE);
+          fprintf(out_resultfile, "%10.2f ", ops->max);
+          fprintf(out_resultfile, "%10.2f ", ops->min);
+          fprintf(out_resultfile, "%10.2f ", ops->mean);
+          fprintf(out_resultfile, "%10.2f ", ops->sd);
+          fprintf(out_resultfile, "%10.5f ", mean_of_array_of_doubles(times, reps));
+          fprintf(out_resultfile, "%5d ", params->id);
+          fprintf(out_resultfile, "%6d ", params->numTasks);
+          fprintf(out_resultfile, "%3d ", params->tasksPerNode);
+          fprintf(out_resultfile, "%4d ", params->repetitions);
+          fprintf(out_resultfile, "%3d ", params->filePerProc);
+          fprintf(out_resultfile, "%5d ", params->reorderTasks);
+          fprintf(out_resultfile, "%8d ", params->taskPerNodeOffset);
+          fprintf(out_resultfile, "%9d ", params->reorderTasksRandom);
+          fprintf(out_resultfile, "%4d ", params->reorderTasksRandomSeed);
+          fprintf(out_resultfile, "%6lld ", params->segmentCount);
+          fprintf(out_resultfile, "%8lld ", params->blockSize);
+          fprintf(out_resultfile, "%8lld ", params->transferSize);
+          fprintf(out_resultfile, "%9.1f ", (float)results->aggFileSizeForBW[0] / MEBIBYTE);
+          fprintf(out_resultfile, "%3s ", params->api);
+          fprintf(out_resultfile, "%6d", params->referenceNumber);
+          fprintf(out_resultfile, "\n");
+        }else if (outputFormat == OUTPUT_JSON){
+          PrintStartSection();
+          PrintKeyVal("operation", operation);
+          PrintKeyVal("API", params->api);
+          PrintKeyValInt("TestID", params->id);
+          PrintKeyValInt("ReferenceNumber", params->referenceNumber);
+          PrintKeyValInt("segmentCount", params->segmentCount);
+          PrintKeyValInt("blockSize", params->blockSize);
+          PrintKeyValInt("transferSize", params->transferSize);
+          PrintKeyValInt("numTasks", params->numTasks);
+          PrintKeyValInt("tasksPerNode", params->tasksPerNode);
+          PrintKeyValInt("repetitions", params->repetitions);
+          PrintKeyValInt("filePerProc", params->filePerProc);
+          PrintKeyValInt("reorderTasks", params->reorderTasks);
+          PrintKeyValInt("taskPerNodeOffset", params->taskPerNodeOffset);
+          PrintKeyValInt("reorderTasksRandom", params->reorderTasksRandom);
+          PrintKeyValInt("reorderTasksRandomSeed", params->reorderTasksRandomSeed);
+          PrintKeyValInt("segmentCount", params->segmentCount);
+          PrintKeyValInt("blockSize", params->blockSize);
+          PrintKeyValInt("transferSize", params->transferSize);
+          PrintKeyValDouble("bwMaxMIB", bw->max / MEBIBYTE);
+          PrintKeyValDouble("bwMinMIB", bw->min / MEBIBYTE);
+          PrintKeyValDouble("bwMeanMIB", bw->mean / MEBIBYTE);
+          PrintKeyValDouble("bwStdMIB", bw->sd / MEBIBYTE);
+          PrintKeyValDouble("OPsMax", ops->max);
+          PrintKeyValDouble("OPsMin", ops->min);
+          PrintKeyValDouble("OPsMean", ops->mean);
+          PrintKeyValDouble("OPsSD", ops->sd);
+          PrintKeyValDouble("MeanTime", mean_of_array_of_doubles(times, reps));
+          PrintKeyValDouble("xsizeMiB", (double) results->aggFileSizeForBW[0] / MEBIBYTE);
+          PrintEndSection();
+        }else if (outputFormat == OUTPUT_CSV){
+
+        }
+
         fflush(out_resultfile);
 
         free(bw);
@@ -488,6 +551,9 @@ void PrintLongSummaryHeader()
 {
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
+        if(outputFormat != OUTPUT_DEFAULT){
+          return;
+        }
 
         fprintf(out_resultfile, "\n");
         fprintf(out_resultfile, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s",
@@ -502,17 +568,28 @@ void PrintLongSummaryHeader()
 
 void PrintLongSummaryAllTests(IOR_test_t *tests_head)
 {
-        IOR_test_t *tptr;
-        if (rank != 0 || verbose < VERBOSE_0)
-                return;
+  IOR_test_t *tptr;
+  if (rank != 0 || verbose < VERBOSE_0)
+          return;
 
-        fprintf(out_resultfile, "\n");
-        fprintf(out_resultfile, "Summary of all tests:");
-        PrintLongSummaryHeader();
+  PrintArrayEnd();
 
-        for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-                PrintLongSummaryOneTest(tptr);
-        }
+  if(outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "\n");
+    fprintf(out_resultfile, "Summary of all tests:");
+  }else if (outputFormat == OUTPUT_JSON){
+    PrintNamedArrayStart("summary");
+  }else if (outputFormat == OUTPUT_CSV){
+
+  }
+
+  PrintLongSummaryHeader();
+
+  for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
+          PrintLongSummaryOneTest(tptr);
+  }
+
+  PrintArrayEnd();
 }
 
 void PrintShortSummary(IOR_test_t * test)
@@ -528,6 +605,8 @@ void PrintShortSummary(IOR_test_t * test)
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
 
+        PrintArrayEnd();
+
         reps = params->repetitions;
 
         max_write = results->writeTime[0];
@@ -539,14 +618,26 @@ void PrintShortSummary(IOR_test_t * test)
                 max_read = MAX(bw, max_read);
         }
 
-        fprintf(out_resultfile, "\n");
-        if (params->writeFile) {
-                fprintf(out_resultfile, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
-                        max_write/MEBIBYTE, max_write/MEGABYTE);
-        }
-        if (params->readFile) {
-                fprintf(out_resultfile, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
-                        max_read/MEBIBYTE, max_read/MEGABYTE);
+        if(outputFormat == OUTPUT_DEFAULT){
+          if (params->writeFile) {
+                  fprintf(out_resultfile, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
+                          max_write/MEBIBYTE, max_write/MEGABYTE);
+          }
+          if (params->readFile) {
+                  fprintf(out_resultfile, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
+                          max_read/MEBIBYTE, max_read/MEGABYTE);
+          }
+        }else if (outputFormat == OUTPUT_JSON){
+          PrintNamedSectionStart("max");
+          if (params->writeFile) {
+            PrintKeyValDouble("writeMiB", max_write/MEBIBYTE);
+            PrintKeyValDouble("writeMB", max_write/MEGABYTE);
+          }
+          if (params->readFile) {
+            PrintKeyValDouble("readMiB", max_read/MEBIBYTE);
+            PrintKeyValDouble("readMB", max_read/MEGABYTE);
+          }
+          PrintEndSection();
         }
 }
 
@@ -587,9 +678,13 @@ void PrintRemoveTiming(double start, double finish, int rep)
   if (rank != 0 || verbose < VERBOSE_0)
     return;
 
-  fprintf(out_resultfile, "remove    -          -          -          -          -          -          ");
-  PPDouble(1, finish-start, " ");
-  fprintf(out_resultfile, "%-4d\n", rep);
+  if (outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "remove    -          -          -          -          -          -          ");
+    PPDouble(1, finish-start, " ");
+    fprintf(out_resultfile, "%-4d\n", rep);
+  }else if (outputFormat == OUTPUT_JSON){
+    PrintKeyValDouble("removeTime", finish - start);
+  }
 }
 
 

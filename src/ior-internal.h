@@ -8,10 +8,12 @@
 /* Part of ior-output.c */
 void PrintEarlyHeader();
 void PrintHeader(int argc, char **argv);
-void ShowTestInfo(IOR_param_t *params);
+void ShowTestStart(IOR_param_t *params);
 void ShowTestEnd(IOR_test_t *tptr);
 void ShowSetup(IOR_param_t *params);
-void ShowTest(IOR_param_t * test);
+void PrintRepeatEnd();
+void PrintRepeatStart();
+
 void PrintShortSummary(IOR_test_t * test);
 void PrintLongSummaryAllTests(IOR_test_t *tests_head);
 void PrintLongSummaryHeader();

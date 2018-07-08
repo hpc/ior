@@ -87,12 +87,8 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
                 verbose = tptr->params.verbose;
                 tptr->params.testComm = world_com;
                 if (rank == 0 && verbose >= VERBOSE_0) {
-                        ShowTestInfo(&tptr->params);
+                        ShowTestStart(&tptr->params);
                 }
-                if (rank == 0 && verbose >= VERBOSE_3) {
-                        ShowTest(&tptr->params);
-                }
-
                 TestIoSys(tptr);
                 tptr->results->errors = totalErrorCount;
                 ShowTestEnd(tptr);
@@ -175,10 +171,7 @@ int ior_main(int argc, char **argv)
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
             verbose = tptr->params.verbose;
             if (rank == 0 && verbose >= VERBOSE_0) {
-                    ShowTestInfo(&tptr->params);
-            }
-            if (rank == 0 && verbose >= VERBOSE_3) {
-                    ShowTest(&tptr->params);
+                    ShowTestStart(&tptr->params);
             }
 
             // This is useful for trapping a running MPI process.  While
@@ -1371,7 +1364,7 @@ static void TestIoSys(IOR_test_t *test)
 
         /* loop over test iterations */
         for (rep = 0; rep < params->repetitions; rep++) {
-
+                PrintRepeatStart();
                 /* Get iteration start time in seconds in task 0 and broadcast to
                    all tasks */
                 if (rank == 0) {
@@ -1599,6 +1592,8 @@ static void TestIoSys(IOR_test_t *test)
                 }
                 params->errorFound = FALSE;
                 rankOffset = 0;
+
+                PrintRepeatEnd();
         }
 
         MPI_CHECK(MPI_Comm_free(&testComm), "MPI_Comm_free() error");

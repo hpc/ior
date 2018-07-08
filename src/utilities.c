@@ -417,11 +417,11 @@ void ShowFileSystemSize(char *fileSystem)
                   usedInodePercentage);
           fflush(out_logfile);
         }else if(outputFormat == OUTPUT_JSON){
-          fprintf(out_resultfile, "    \"Path\": \"%s\",", realPath);
+          fprintf(out_resultfile, "    , \"Path\": \"%s\",", realPath);
           fprintf(out_resultfile, "\"Capacity\": \"%.1f %s\", \"Used Capacity\": \"%2.1f%%\",",
                   totalFileSystemSizeHR, fileSystemUnitStr,
                   usedFileSystemPercentage);
-          fprintf(out_resultfile, "\"Inodes\": \"%.1f Mi\", \"Used Inodes\" : \"%2.1f%%\",\n",
+          fprintf(out_resultfile, "\"Inodes\": \"%.1f Mi\", \"Used Inodes\" : \"%2.1f%%\"\n",
                   (double)totalInodes / (double)(1<<20),
                   usedInodePercentage);
         }else if(outputFormat == OUTPUT_CSV){
