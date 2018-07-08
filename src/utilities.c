@@ -408,9 +408,9 @@ void ShowFileSystemSize(char *fileSystem)
         }
 
         if(outputFormat == OUTPUT_DEFAULT){
-          fprintf(out_resultfile, "Path: %s\n", realPath);
-          fprintf(out_resultfile, "FS: %.1f %s   Used FS: %2.1f%%   ",
-                  totalFileSystemSizeHR, fileSystemUnitStr,
+          fprintf(out_resultfile, "%-20s: %s\n", "Path", realPath);
+          fprintf(out_resultfile, "%-20s: %.1f %s   Used FS: %2.1f%%   ",
+                  "FS", totalFileSystemSizeHR, fileSystemUnitStr,
                   usedFileSystemPercentage);
           fprintf(out_resultfile, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
                   (double)totalInodes / (double)(1<<20),

@@ -28,7 +28,7 @@ static int indent = 0;
 static int needNextToken = 0;
 
 static void PrintIndent(){
-  if(outputFormat == OUTPUT_CSV){
+  if(outputFormat != OUTPUT_JSON){
     return;
   }
   for(int i=0; i < indent; i++){
@@ -40,16 +40,20 @@ static void PrintIndent(){
 static void PrintKeyValStart(char * key){
   PrintNextToken();
   if (outputFormat == OUTPUT_DEFAULT){
-    for(int i=0; i < indent; i++){
-      fprintf(out_resultfile, " ");
-    }
-    fprintf(out_resultfile, "%s: ", key);
+    PrintIndent();
+    fprintf(out_resultfile, "%-20s: ", key);
     return;
   }
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": \"", key);
   }else if(outputFormat == OUTPUT_CSV){
 
+  }
+}
+
+static void PrintNewLine(){
+  if (outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "\n");
   }
 }
 
@@ -81,7 +85,7 @@ static void PrintKeyVal(char * key, char * value){
   PrintNextToken();
   needNextToken = 1;
   if (outputFormat == OUTPUT_DEFAULT){
-    fprintf(out_resultfile, "%s: %s\n", key, value);
+    fprintf(out_resultfile, "%-20s: %s\n", key, value);
     return;
   }
   if(outputFormat == OUTPUT_JSON){
@@ -95,7 +99,7 @@ static void PrintKeyValDouble(char * key, double value){
   PrintNextToken();
   needNextToken = 1;
   if (outputFormat == OUTPUT_DEFAULT){
-    fprintf(out_resultfile, "%s: %.4f\n", key, value);
+    fprintf(out_resultfile, "%-20s: %.4f\n", key, value);
     return;
   }
   if(outputFormat == OUTPUT_JSON){
@@ -110,7 +114,7 @@ static void PrintKeyValInt(char * key, int64_t value){
   PrintNextToken();
   needNextToken = 1;
   if (outputFormat == OUTPUT_DEFAULT){
-    fprintf(out_resultfile, "%s: %lld\n", key, (long long) value);
+    fprintf(out_resultfile, "%-20s: %lld\n", key, (long long) value);
     return;
   }
   if(outputFormat == OUTPUT_JSON){
@@ -134,10 +138,11 @@ static void PrintNamedSectionStart(char * key){
   PrintNextToken();
   needNextToken = 0;
   indent++;
+
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": {\n", key);
   }else if(outputFormat == OUTPUT_DEFAULT){
-    fprintf(out_resultfile, "%s: \n", key);
+    fprintf(out_resultfile, "\n%s: \n", key);
   }
 }
 
@@ -148,7 +153,7 @@ static void PrintNamedArrayStart(char * key){
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": [\n", key);
   }else if(outputFormat == OUTPUT_DEFAULT){
-    fprintf(out_resultfile, "%s: \n", key);
+    fprintf(out_resultfile, "\n%s: \n", key);
   }
 }
 
@@ -323,6 +328,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("stoneWallingWearOut", test->stoneWallingWearOut);
     PrintKeyValInt("maxTimeDuration", test->maxTimeDuration);
     PrintKeyValInt("outlierThreshold", test->outlierThreshold);
+
     PrintKeyVal("options", test->options);
     PrintKeyValInt("nodes", test->nodes);
     PrintKeyValInt("memoryPerTask", (unsigned long) test->memoryPerTask);
