@@ -61,6 +61,12 @@ extern int verbose;                            /* verbose output */
 
 /*************************** D E F I N I T I O N S ****************************/
 
+enum OutputFormat_t{
+  OUTPUT_DEFAULT,
+  OUTPUT_CSV,
+  OUTPUT_JSON
+};
+
 #ifndef FALSE
 #   define FALSE           0
 #endif /* not FALSE */

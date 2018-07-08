@@ -170,6 +170,21 @@ void DecodeDirective(char *line, IOR_param_t *params)
         }
         if (strcasecmp(option, "api") == 0) {
                 strcpy(params->api, value);
+        } else if (strcasecmp(option, "summaryFile") == 0) {
+          out_logfile = fopen(value, "w");
+          if (out_logfile == NULL){
+            FAIL("Cannot open output file for writes!");
+          }
+        } else if (strcasecmp(option, "summaryFormat") == 0) {
+                if(strcasecmp(value, "default")){
+                  outputFormat = OUTPUT_DEFAULT;
+                }else if(strcasecmp(value, "JSON")){
+                  outputFormat = OUTPUT_JSON;
+                }else if(strcasecmp(value, "CSV")){
+                  outputFormat = OUTPUT_CSV;
+                }else{
+                  FAIL("Unknown summaryFormat");
+                }
         } else if (strcasecmp(option, "refnum") == 0) {
                 params->referenceNumber = atoi(value);
         } else if (strcasecmp(option, "debug") == 0) {

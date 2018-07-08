@@ -23,10 +23,10 @@ Index:
 *******************
 * 1.  DESCRIPTION *
 *******************
-IOR can be used for testing performance of parallel file systems using various 
-interfaces and access patterns.  IOR uses MPI for process synchronization.  
-IOR version 2 is a complete rewrite of the original IOR (Interleaved-Or-Random) 
-version 1 code.  
+IOR can be used for testing performance of parallel file systems using various
+interfaces and access patterns.  IOR uses MPI for process synchronization.
+IOR version 2 is a complete rewrite of the original IOR (Interleaved-Or-Random)
+version 1 code.
 
 
 ******************
@@ -39,7 +39,7 @@ Two ways to run IOR:
     E.g., to execute:  IOR -w -r -o filename
     This performs a write and a read to the file 'filename'.
 
-  * Command line with scripts -- any arguments on the command line will 
+  * Command line with scripts -- any arguments on the command line will
     establish the default for the test run, but a script may be used in
     conjunction with this for varying specific tests during an execution of the
     code.
@@ -125,7 +125,7 @@ GENERAL:
                            S3_EMC, or NCMPI, depending on test [POSIX]
 
   * testFile             - name of the output file [testFile]
-                           NOTE: with filePerProc set, the tasks can round 
+                           NOTE: with filePerProc set, the tasks can round
                                  robin across multiple file names '-o S@S@S'
 
   * hintsFileName        - name of the hints file []
@@ -267,7 +267,7 @@ GENERAL:
                                     data, this option measures the amount of
                                     data moved in a fixed amount of time.  The
                                     objective is to prevent tasks slow to
-                                    complete from skewing the performance. 
+                                    complete from skewing the performance.
                                   * setting this to zero (0) unsets this option
                                   * this option is incompatible w/data checking
 
@@ -280,7 +280,8 @@ GENERAL:
   * summaryAlways        - Always print the long summary for each test.
                            Useful for long runs that may be interrupted, preventing
                            the final long summary for ALL tests to be printed.
-
+  * summaryFile=File     - Output the summary to the file instead on stdout/stderr.
+  * summaryFormat=FMT    - Choose the output format -- default, JSON, CSV
 
 POSIX-ONLY:
 ===========
@@ -319,7 +320,7 @@ HDF5-ONLY:
                            NOTE: default IOR creates a dataset the size of
                                  numTasks * blockSize to be accessed by all
                                  tasks
- 
+
   * noFill               - no pre-filling of data in HDF5 file creation [0=FALSE]
 
   * setAlignment         - HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g) [1]
@@ -483,8 +484,8 @@ zip, gzip, and bzip.
 
 2) gzip: For gzipped files, a transfer size of 1k is sufficient.
 
-3) bzip2: For bziped files a transfer size of 1k is insufficient (~50% compressed).  
-   To avoid compression a transfer size of greater than the bzip block size is required 
+3) bzip2: For bziped files a transfer size of 1k is insufficient (~50% compressed).
+   To avoid compression a transfer size of greater than the bzip block size is required
    (default = 900KB). I suggest a transfer size of greather than 1MB to avoid bzip2 compression.
 
 Be aware of the block size your compression algorithm will look at, and adjust the transfer size
@@ -508,9 +509,9 @@ HOW DO I PERFORM MULTIPLE DATA CHECKS ON AN EXISTING FILE?
   and -r implied using both.  This semantic has been subsequently altered to be
   omitting -w, -r, -W, and -R implied using both -w and -r.)
 
-  If you're running new tests to create a file and want repeat data checking on 
-  this file multiple times, there is an undocumented option for this.  It's -O 
-  multiReRead=1, and you'd need to have an IOR version compiled with the 
+  If you're running new tests to create a file and want repeat data checking on
+  this file multiple times, there is an undocumented option for this.  It's -O
+  multiReRead=1, and you'd need to have an IOR version compiled with the
   USE_UNDOC_OPT=1 (in iordef.h).  The command line would look like this:
 
   IOR -k -E -w -W -i 5 -o file -O multiReRead=1
@@ -586,7 +587,7 @@ HOW DO I USE STONEWALLING?
   actually reading the same amount from disk in the allotted time, but they
   are also reading the cached data from the previous test each time to get the
   increased performance.  Setting -D high enough so that the cache is
-  overfilled will prevent this.  
+  overfilled will prevent this.
 
 
 HOW DO I BYPASS CACHING WHEN READING BACK A FILE I'VE JUST WRITTEN?

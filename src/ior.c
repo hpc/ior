@@ -90,6 +90,7 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
                 totalErrorCount = 0;
                 verbose = tptr->params.verbose;
+                tptr->params.testComm = world_com;
                 if (rank == 0 && verbose >= VERBOSE_0) {
                         ShowTestInfo(&tptr->params);
                 }
@@ -125,6 +126,7 @@ int ior_main(int argc, char **argv)
     int i;
     IOR_test_t *tests_head;
     IOR_test_t *tptr;
+
     out_logfile = stdout;
 
     /*
@@ -153,6 +155,7 @@ int ior_main(int argc, char **argv)
     MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld),
               "cannot get number of tasks");
     MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
+
     PrintEarlyHeader();
 
     /* set error-handling */
@@ -229,6 +232,8 @@ int ior_main(int argc, char **argv)
      * NOTE: This fn doesn't return a value that can be checked for success. */
     aws_cleanup();
   #endif
+
+    fflush(out_logfile);
 
     return totalErrorCount;
 }
@@ -1668,7 +1673,6 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         struct results *bw;
         struct results *ops;
         int reps;
-
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
 
@@ -1682,14 +1686,12 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *
         fprintf(out_logfile, "%10.2f ", bw->max / MEBIBYTE);
         fprintf(out_logfile, "%10.2f ", bw->min / MEBIBYTE);
         fprintf(out_logfile, "%10.2f ", bw->mean / MEBIBYTE);
-
         fprintf(out_logfile, "%10.2f ", bw->sd / MEBIBYTE);
         fprintf(out_logfile, "%10.2f ", ops->max);
         fprintf(out_logfile, "%10.2f ", ops->min);
         fprintf(out_logfile, "%10.2f ", ops->mean);
         fprintf(out_logfile, "%10.2f ", ops->sd);
-        fprintf(out_logfile, "%10.5f ",
-                mean_of_array_of_doubles(times, reps));
+        fprintf(out_logfile, "%10.5f ", mean_of_array_of_doubles(times, reps));
         fprintf(out_logfile, "%5d ", params->id);
         fprintf(out_logfile, "%6d ", params->numTasks);
         fprintf(out_logfile, "%3d ", params->tasksPerNode);
@@ -1742,7 +1744,6 @@ static void PrintLongSummaryHeader()
 static void PrintLongSummaryAllTests(IOR_test_t *tests_head)
 {
         IOR_test_t *tptr;
-
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
 

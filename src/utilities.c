@@ -57,6 +57,7 @@ int      verbose = VERBOSE_0;        /* verbose output */
 MPI_Comm testComm;
 MPI_Comm mpi_comm_world;
 FILE * out_logfile;
+enum OutputFormat_t outputFormat;
 
 /***************************** F U N C T I O N S ******************************/
 
