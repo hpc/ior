@@ -103,6 +103,9 @@ int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param);
 
 IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName);
+/* NOTE: these 3 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
+void MPIIO_Delete(char *testFileName, IOR_param_t * param);
+int MPIIO_Access(const char *, int, IOR_param_t *);
 
 void *POSIX_Create(char *testFileName, IOR_param_t *test);
 void *POSIX_Open(char *testFileName, IOR_param_t *test);

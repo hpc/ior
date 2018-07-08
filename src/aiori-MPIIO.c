@@ -38,10 +38,10 @@ static void *MPIIO_Open(char *, IOR_param_t *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
                                    IOR_offset_t, IOR_param_t *);
 static void MPIIO_Close(void *, IOR_param_t *);
-static void MPIIO_Delete(char *, IOR_param_t *);
+void MPIIO_Delete(char *, IOR_param_t *);
 static void MPIIO_SetVersion(IOR_param_t *);
 static void MPIIO_Fsync(void *, IOR_param_t *);
-static int MPIIO_Access(const char *, int, IOR_param_t *);
+int MPIIO_Access(const char *, int, IOR_param_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -63,7 +63,7 @@ ior_aiori_t mpiio_aiori = {
 /*
  * Try to access a file through the MPIIO interface.
  */
-static int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
+int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
 {
     MPI_File fd;
     int mpi_mode = MPI_MODE_UNIQUE_OPEN;
@@ -397,7 +397,7 @@ static void MPIIO_Close(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the MPIIO interface.
  */
-static void MPIIO_Delete(char *testFileName, IOR_param_t * param)
+void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 {
         MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
                   "cannot delete file");
