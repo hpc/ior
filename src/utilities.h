@@ -61,6 +61,7 @@ void DumpBuffer(void *, size_t);
 void SeedRandGen(MPI_Comm);
 void SetHints (MPI_Info *, char *);
 void ShowHints (MPI_Info *);
+char *HumanReadable(IOR_offset_t value, int base);
 int CountTasksPerNode(MPI_Comm comm);
 void DelaySecs(int delay);
 

@@ -175,6 +175,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
           if (out_logfile == NULL){
             FAIL("Cannot open output file for writes!");
           }
+          printf("Writing output to %s\n", value);
         } else if (strcasecmp(option, "summaryFormat") == 0) {
                 if(strcasecmp(value, "default")){
                   outputFormat = OUTPUT_DEFAULT;

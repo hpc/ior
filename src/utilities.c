@@ -600,3 +600,59 @@ void DelaySecs(int delay){
     sleep(delay);
   }
 }
+
+
+/*
+ * Convert IOR_offset_t value to human readable string.  This routine uses a
+ * statically-allocated buffer internally and so is not re-entrant.
+ */
+char *HumanReadable(IOR_offset_t value, int base)
+{
+        static char valueStr[MAX_STR];
+        IOR_offset_t m = 0, g = 0, t = 0;
+        char m_str[8], g_str[8], t_str[8];
+
+        if (base == BASE_TWO) {
+                m = MEBIBYTE;
+                g = GIBIBYTE;
+                t = GIBIBYTE * 1024llu;
+                strcpy(m_str, "MiB");
+                strcpy(g_str, "GiB");
+                strcpy(t_str, "TiB");
+        } else if (base == BASE_TEN) {
+                m = MEGABYTE;
+                g = GIGABYTE;
+                t = GIGABYTE * 1000llu;
+                strcpy(m_str, "MB");
+                strcpy(g_str, "GB");
+                strcpy(t_str, "TB");
+        }
+
+        if (value >= t) {
+                if (value % t) {
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
+                                (double)((double)value / t), t_str);
+                } else {
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / t), t_str);
+                }
+        }else if (value >= g) {
+                if (value % g) {
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
+                                (double)((double)value / g), g_str);
+                } else {
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / g), g_str);
+                }
+        } else if (value >= m) {
+                if (value % m) {
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
+                                (double)((double)value / m), m_str);
+                } else {
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / m), m_str);
+                }
+        } else if (value >= 0) {
+                snprintf(valueStr, MAX_STR-1, "%d bytes", (int)value);
+        } else {
+                snprintf(valueStr, MAX_STR-1, "-");
+        }
+        return valueStr;
+}
