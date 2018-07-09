@@ -167,7 +167,15 @@ static void PrintEndSection(){
   needNextToken = 1;
 }
 
-static void PrintArrayStart(char * key){
+static void PrintArrayStart(){
+  PrintNextToken();
+  needNextToken = 0;
+  if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "[ ");
+  }
+}
+
+static void PrintArrayNamedStart(char * key){
   PrintNextToken();
   needNextToken = 0;
   if(outputFormat == OUTPUT_JSON){
@@ -184,14 +192,14 @@ static void PrintArrayEnd(){
 }
 
 void PrintRepeatEnd(){
-  PrintEndSection();
+  PrintArrayEnd();
 }
 
 void PrintRepeatStart(){
   if( outputFormat == OUTPUT_DEFAULT){
     return;
   }
-  PrintStartSection();
+  PrintArrayStart();
 }
 
 void PrintTestEnds(){
@@ -216,6 +224,7 @@ void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_su
     PPDouble(1, totalTime, " ");
     fprintf(out_resultfile, "%-4d\n", rep);
   }else if (outputFormat == OUTPUT_JSON){
+    PrintStartSection();
     PrintKeyVal("access", access == WRITE ? "write" : "read");
     PrintKeyValDouble("bwMiB", bw / MEBIBYTE);
     PrintKeyValDouble("blockKiB", (double)test->params.blockSize / KIBIBYTE);
@@ -224,6 +233,7 @@ void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_su
     PrintKeyValDouble("wrRdTime", diff_subset[1]);
     PrintKeyValDouble("closeTime", diff_subset[2]);
     PrintKeyValDouble("totalTime", totalTime);
+    PrintEndSection();
   }
   fflush(out_resultfile);
 }
@@ -296,7 +306,7 @@ void PrintHeader(int argc, char **argv)
                 fprintf(out_logfile, "ENDING ENVIRON LOOP\n");
         }
 
-        PrintArrayStart("tests");
+        PrintArrayNamedStart("tests");
         fflush(out_resultfile);
         fflush(out_logfile);
 }
@@ -689,7 +699,10 @@ void PrintRemoveTiming(double start, double finish, int rep)
     PPDouble(1, finish-start, " ");
     fprintf(out_resultfile, "%-4d\n", rep);
   }else if (outputFormat == OUTPUT_JSON){
-    PrintKeyValDouble("removeTime", finish - start);
+    PrintStartSection();
+    PrintKeyVal("access", "remove");
+    PrintKeyValDouble("totalTime", finish - start);
+    PrintEndSection();
   }
 }
 
