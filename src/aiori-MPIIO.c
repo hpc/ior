@@ -38,10 +38,8 @@ static void *MPIIO_Open(char *, IOR_param_t *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
                                    IOR_offset_t, IOR_param_t *);
 static void MPIIO_Close(void *, IOR_param_t *);
-void MPIIO_Delete(char *, IOR_param_t *);
 static void MPIIO_SetVersion(IOR_param_t *);
 static void MPIIO_Fsync(void *, IOR_param_t *);
-int MPIIO_Access(const char *, int, IOR_param_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -63,30 +61,6 @@ ior_aiori_t mpiio_aiori = {
 };
 
 /***************************** F U N C T I O N S ******************************/
-
-/*
- * Try to access a file through the MPIIO interface.
- */
-int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
-{
-    MPI_File fd;
-    int mpi_mode = MPI_MODE_UNIQUE_OPEN;
-
-    if ((mode & W_OK) && (mode & R_OK))
-        mpi_mode |= MPI_MODE_RDWR;
-    else if (mode & W_OK)
-        mpi_mode |= MPI_MODE_WRONLY;
-    else
-        mpi_mode |= MPI_MODE_RDONLY;
-
-    int ret = MPI_File_open(MPI_COMM_SELF, path, mpi_mode,
-                            MPI_INFO_NULL, &fd);
-
-    if (!ret)
-        MPI_File_close(&fd);
-
-    return ret;
-}
 
 /*
  * Create and open a file through the MPIIO interface.
@@ -368,6 +342,8 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
                         }
                 }
         }
+        if((access == WRITE) && (param->fsyncPerWrite == TRUE))
+               MPIIO_Fsync(fd, param);
         return (length);
 }
 
@@ -376,8 +352,9 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
  */
 static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 {
-    MPI_File * fd = (MPI_File*) fdp;
-    MPI_File_sync(*fd);
+         MPI_File * fd = (MPI_File*) fdp;
+         if (MPI_File_sync(*fd) != MPI_SUCCESS)
+                EWARN("fsync() failed");
 }
 
 /*
@@ -506,4 +483,28 @@ IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         }
 
         return (aggFileSizeFromStat);
+}
+
+/*
+ * Try to access a file through the MPIIO interface.
+ */
+int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
+{
+    MPI_File fd;
+    int mpi_mode = MPI_MODE_UNIQUE_OPEN;
+
+    if ((mode & W_OK) && (mode & R_OK))
+        mpi_mode |= MPI_MODE_RDWR;
+    else if (mode & W_OK)
+        mpi_mode |= MPI_MODE_WRONLY;
+    else
+        mpi_mode |= MPI_MODE_RDONLY;
+
+    int ret = MPI_File_open(MPI_COMM_SELF, path, mpi_mode,
+                            MPI_INFO_NULL, &fd);
+
+    if (!ret)
+        MPI_File_close(&fd);
+
+    return ret;
 }
