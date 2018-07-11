@@ -350,9 +350,10 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void MPIIO_Fsync(void *fd, IOR_param_t * param)
+static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 {
-        if (MPI_File_sync(*(MPI_File *)fd) != MPI_SUCCESS)
+         MPI_File * fd = (MPI_File*) fdp;
+         if (MPI_File_sync(*fd) != MPI_SUCCESS)
                 EWARN("fsync() failed");
 }
 
@@ -419,7 +420,7 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
                 if (param->filePerProc) {
                         tempOffset = tempOffset / param->transferSize;
                 } else {
-                        /* 
+                        /*
                          * this formula finds a file view offset for a task
                          * from an absolute offset
                          */
@@ -445,8 +446,15 @@ IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
 {
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
         MPI_File fd;
+        MPI_Comm comm;
 
-        MPI_CHECK(MPI_File_open(testComm, testFileName, MPI_MODE_RDONLY,
+        if (test->filePerProc == TRUE) {
+                comm = MPI_COMM_SELF;
+        } else {
+                comm = testComm;
+        }
+
+        MPI_CHECK(MPI_File_open(comm, testFileName, MPI_MODE_RDONLY,
                                 MPI_INFO_NULL, &fd),
                   "cannot open file to get file size");
         MPI_CHECK(MPI_File_get_size(fd, (MPI_Offset *) & aggFileSizeFromStat),

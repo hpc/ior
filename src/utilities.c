@@ -16,10 +16,6 @@
 #  include "config.h"
 #endif
 
-#ifdef __linux__
-#  define _GNU_SOURCE            /* Needed for O_DIRECT in fcntl */
-#endif                           /* __linux__ */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -51,9 +47,18 @@
 
 extern int errno;
 extern int numTasks;
-extern int rank;
-extern int rankOffset;
-extern int verbose;
+
+/* globals used by other files, also defined "extern" in ior.h */
+int      numTasksWorld = 0;
+int      rank = 0;
+int      rankOffset = 0;
+int      tasksPerNode = 0;           /* tasks per node */
+int      verbose = VERBOSE_0;        /* verbose output */
+MPI_Comm testComm;
+MPI_Comm mpi_comm_world;
+FILE * out_logfile;
+FILE * out_resultfile;
+enum OutputFormat_t outputFormat;
 
 /***************************** F U N C T I O N S ******************************/
 
@@ -120,84 +125,86 @@ void DumpBuffer(void *buffer,
            to assume that it must always be */
         for (i = 0; i < ((size / sizeof(IOR_size_t)) / 4); i++) {
                 for (j = 0; j < 4; j++) {
-                        fprintf(stdout, IOR_format" ", dumpBuf[4 * i + j]);
+                        fprintf(out_logfile, IOR_format" ", dumpBuf[4 * i + j]);
                 }
-                fprintf(stdout, "\n");
+                fprintf(out_logfile, "\n");
         }
         return;
 }                               /* DumpBuffer() */
 
-/*
- * Sends all strings to root nodes and displays.
- */
-void OutputToRoot(int numTasks, MPI_Comm comm, char *stringToDisplay)
-{
-        int i;
-        int swapNeeded = TRUE;
-        int pairsToSwap;
-        char **stringArray;
-        char tmpString[MAX_STR];
-        MPI_Status status;
+#if MPI_VERSION >= 3
+int CountTasksPerNode(MPI_Comm comm) {
+    /* modern MPI provides a simple way to get the local process count */
+    MPI_Comm shared_comm;
+    int rc, count;
 
-        /* malloc string array */
-        stringArray = (char **)malloc(sizeof(char *) * numTasks);
-        if (stringArray == NULL)
-                ERR("out of memory");
-        for (i = 0; i < numTasks; i++) {
-                stringArray[i] = (char *)malloc(sizeof(char) * MAX_STR);
-                if (stringArray[i] == NULL)
-                        ERR("out of memory");
-        }
+    MPI_Comm_split_type (comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm);
+    MPI_Comm_size (shared_comm, &count);
+    MPI_Comm_free (&shared_comm);
 
-        strcpy(stringArray[rank], stringToDisplay);
-
-        if (rank == 0) {
-                /* MPI_receive all strings */
-                for (i = 1; i < numTasks; i++) {
-                        MPI_CHECK(MPI_Recv(stringArray[i], MAX_STR, MPI_CHAR,
-                                           MPI_ANY_SOURCE, MPI_ANY_TAG, comm,
-                                           &status), "MPI_Recv() error");
-                }
-        } else {
-                /* MPI_send string to root node */
-                MPI_CHECK(MPI_Send
-                          (stringArray[rank], MAX_STR, MPI_CHAR, 0, 0, comm),
-                          "MPI_Send() error");
-        }
-        MPI_CHECK(MPI_Barrier(comm), "barrier error");
-
-        /* sort strings using bubblesort */
-        if (rank == 0) {
-                pairsToSwap = numTasks - 1;
-                while (swapNeeded) {
-                        swapNeeded = FALSE;
-                        for (i = 0; i < pairsToSwap; i++) {
-                                if (strcmp(stringArray[i], stringArray[i + 1]) >
-                                    0) {
-                                        strcpy(tmpString, stringArray[i]);
-                                        strcpy(stringArray[i],
-                                               stringArray[i + 1]);
-                                        strcpy(stringArray[i + 1], tmpString);
-                                        swapNeeded = TRUE;
-                                }
-                        }
-                        pairsToSwap--;
-                }
-        }
-
-        /* display strings */
-        if (rank == 0) {
-                for (i = 0; i < numTasks; i++) {
-                        fprintf(stdout, "%s\n", stringArray[i]);
-                }
-        }
-
-        /* free strings */
-        for (i = 0; i < numTasks; i++) {
-                free(stringArray[i]);
-        }
-        free(stringArray);
+    return count;
 }
+#else
+/*
+ * Count the number of tasks that share a host.
+ *
+ * This function employees the gethostname() call, rather than using
+ * MPI_Get_processor_name().  We are interested in knowing the number
+ * of tasks that share a file system client (I/O node, compute node,
+ * whatever that may be).  However on machines like BlueGene/Q,
+ * MPI_Get_processor_name() uniquely identifies a cpu in a compute node,
+ * not the node where the I/O is function shipped to.  gethostname()
+ * is assumed to identify the shared filesystem client in more situations.
+ *
+ * NOTE: This also assumes that the task count on all nodes is equal
+ * to the task count on the host running MPI task 0.
+ */
+int CountTasksPerNode(MPI_Comm comm) {
+    int size;
+    MPI_Comm_size(comm, & size);
+    /* for debugging and testing */
+    if (getenv("IOR_FAKE_TASK_PER_NODES")){
+      int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
+      int rank;
+      MPI_Comm_rank(comm, & rank);
+      if(rank == 0){
+        printf("Fake tasks per node: using %d\n", tasksPerNode);
+      }
+      return tasksPerNode;
+    }
+    char       localhost[MAX_PATHLEN],
+        hostname[MAX_PATHLEN];
+    int        count               = 1,
+        i;
+    MPI_Status status;
+
+    if (( rank == 0 ) && ( verbose >= 1 )) {
+        fprintf( out_logfile, "V-1: Entering count_tasks_per_node...\n" );
+        fflush( out_logfile );
+    }
+
+    if (gethostname(localhost, MAX_PATHLEN) != 0) {
+        FAIL("gethostname()");
+    }
+    if (rank == 0) {
+        /* MPI_receive all hostnames, and compares them to the local hostname */
+        for (i = 0; i < size-1; i++) {
+            MPI_Recv(hostname, MAX_PATHLEN, MPI_CHAR, MPI_ANY_SOURCE,
+                     MPI_ANY_TAG, comm, &status);
+            if (strcmp(hostname, localhost) == 0) {
+                count++;
+            }
+        }
+    } else {
+        /* MPI_send hostname to root node */
+        MPI_Send(localhost, MAX_PATHLEN, MPI_CHAR, 0, 0, comm);
+    }
+    MPI_Bcast(&count, 1, MPI_INT, 0, comm);
+
+    return(count);
+}
+#endif
+
 
 /*
  * Extract key/value pair from hint string.
@@ -217,7 +224,7 @@ void ExtractHint(char *settingVal, char *valueVal, char *hintString)
                 tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__GPFS__");
                 if (tmpPtr1 == tmpPtr2) {
                         settingPtr += strlen("IOR_HINT__GPFS__");
-                        fprintf(stdout,
+                        fprintf(out_logfile,
                                 "WARNING: Unable to set GPFS hints (not implemented.)\n");
                 }
         }
@@ -304,7 +311,7 @@ void ShowHints(MPI_Info * mpiHints)
                 MPI_CHECK(MPI_Info_get(*mpiHints, key, MPI_MAX_INFO_VAL - 1,
                                        value, &flag),
                           "cannot get info object value");
-                fprintf(stdout, "\t%s = %s\n", key, value);
+                fprintf(out_logfile, "\t%s = %s\n", key, value);
         }
 }
 
@@ -399,14 +406,28 @@ void ShowFileSystemSize(char *fileSystem)
         if (realpath(fileSystem, realPath) == NULL) {
                 ERR("unable to use realpath()");
         }
-        fprintf(stdout, "Path: %s\n", realPath);
-        fprintf(stdout, "FS: %.1f %s   Used FS: %2.1f%%   ",
-                totalFileSystemSizeHR, fileSystemUnitStr,
-                usedFileSystemPercentage);
-        fprintf(stdout, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
-                (double)totalInodes / (double)(1<<20),
-                usedInodePercentage);
-        fflush(stdout);
+
+        if(outputFormat == OUTPUT_DEFAULT){
+          fprintf(out_resultfile, "%-20s: %s\n", "Path", realPath);
+          fprintf(out_resultfile, "%-20s: %.1f %s   Used FS: %2.1f%%   ",
+                  "FS", totalFileSystemSizeHR, fileSystemUnitStr,
+                  usedFileSystemPercentage);
+          fprintf(out_resultfile, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
+                  (double)totalInodes / (double)(1<<20),
+                  usedInodePercentage);
+          fflush(out_logfile);
+        }else if(outputFormat == OUTPUT_JSON){
+          fprintf(out_resultfile, "    , \"Path\": \"%s\",", realPath);
+          fprintf(out_resultfile, "\"Capacity\": \"%.1f %s\", \"Used Capacity\": \"%2.1f%%\",",
+                  totalFileSystemSizeHR, fileSystemUnitStr,
+                  usedFileSystemPercentage);
+          fprintf(out_resultfile, "\"Inodes\": \"%.1f Mi\", \"Used Inodes\" : \"%2.1f%%\"\n",
+                  (double)totalInodes / (double)(1<<20),
+                  usedInodePercentage);
+        }else if(outputFormat == OUTPUT_CSV){
+
+        }
+
 #endif /* !_WIN32 */
 
         return;
@@ -474,3 +495,179 @@ int uname(struct utsname *name)
         return 0;
 }
 #endif /* _WIN32 */
+
+
+double wall_clock_deviation;
+double wall_clock_delta = 0;
+
+/*
+ * Get time stamp.  Use MPI_Timer() unless _NO_MPI_TIMER is defined,
+ * in which case use gettimeofday().
+ */
+double GetTimeStamp(void)
+{
+        double timeVal;
+#ifdef _NO_MPI_TIMER
+        struct timeval timer;
+
+        if (gettimeofday(&timer, (struct timezone *)NULL) != 0)
+                ERR("cannot use gettimeofday()");
+        timeVal = (double)timer.tv_sec + ((double)timer.tv_usec / 1000000);
+#else                           /* not _NO_MPI_TIMER */
+        timeVal = MPI_Wtime();  /* no MPI_CHECK(), just check return value */
+        if (timeVal < 0)
+                ERR("cannot use MPI_Wtime()");
+#endif                          /* _NO_MPI_TIMER */
+
+        /* wall_clock_delta is difference from root node's time */
+        timeVal -= wall_clock_delta;
+
+        return (timeVal);
+}
+
+/*
+ * Determine any spread (range) between node times.
+ */
+static double TimeDeviation(void)
+{
+        double timestamp;
+        double min = 0;
+        double max = 0;
+        double roottimestamp;
+
+        MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
+        timestamp = GetTimeStamp();
+        MPI_CHECK(MPI_Reduce(&timestamp, &min, 1, MPI_DOUBLE,
+                             MPI_MIN, 0, mpi_comm_world),
+                  "cannot reduce tasks' times");
+        MPI_CHECK(MPI_Reduce(&timestamp, &max, 1, MPI_DOUBLE,
+                             MPI_MAX, 0, mpi_comm_world),
+                  "cannot reduce tasks' times");
+
+        /* delta between individual nodes' time and root node's time */
+        roottimestamp = timestamp;
+        MPI_CHECK(MPI_Bcast(&roottimestamp, 1, MPI_DOUBLE, 0, mpi_comm_world),
+                  "cannot broadcast root's time");
+        wall_clock_delta = timestamp - roottimestamp;
+
+        return max - min;
+}
+
+void init_clock(){
+  /* check for skew between tasks' start times */
+  wall_clock_deviation = TimeDeviation();
+}
+
+char * PrintTimestamp() {
+    static char datestring[80];
+    time_t cur_timestamp;
+
+    if (( rank == 0 ) && ( verbose >= 1 )) {
+        fprintf( out_logfile, "V-1: Entering PrintTimestamp...\n" );
+    }
+
+    fflush(out_logfile);
+    cur_timestamp = time(NULL);
+    strftime(datestring, 80, "%m/%d/%Y %T", localtime(&cur_timestamp));
+
+    return datestring;
+}
+
+int64_t ReadStoneWallingIterations(char * const filename){
+  long long data;
+  if(rank != 0){
+    MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, mpi_comm_world);
+    return data;
+  }else{
+    FILE * out = fopen(filename, "r");
+    if (out == NULL){
+      return -1;
+    }
+    int ret = fscanf(out, "%lld", & data);
+    if (ret != 1){
+      return -1;
+    }
+    fclose(out);
+    MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, mpi_comm_world);
+    return data;
+  }
+}
+
+void StoreStoneWallingIterations(char * const filename, int64_t count){
+  if(rank != 0){
+    return;
+  }
+  FILE * out = fopen(filename, "w");
+  if (out == NULL){
+    FAIL("Cannot write to the stonewalling file!");
+  }
+  fprintf(out, "%lld", (long long) count);
+  fclose(out);
+}
+
+/*
+ * Sleep for 'delay' seconds.
+ */
+void DelaySecs(int delay){
+  if (rank == 0 && delay > 0) {
+    if (verbose >= VERBOSE_1)
+            fprintf(out_logfile, "delaying %d seconds . . .\n", delay);
+    sleep(delay);
+  }
+}
+
+
+/*
+ * Convert IOR_offset_t value to human readable string.  This routine uses a
+ * statically-allocated buffer internally and so is not re-entrant.
+ */
+char *HumanReadable(IOR_offset_t value, int base)
+{
+        static char valueStr[MAX_STR];
+        IOR_offset_t m = 0, g = 0, t = 0;
+        char m_str[8], g_str[8], t_str[8];
+
+        if (base == BASE_TWO) {
+                m = MEBIBYTE;
+                g = GIBIBYTE;
+                t = GIBIBYTE * 1024llu;
+                strcpy(m_str, "MiB");
+                strcpy(g_str, "GiB");
+                strcpy(t_str, "TiB");
+        } else if (base == BASE_TEN) {
+                m = MEGABYTE;
+                g = GIGABYTE;
+                t = GIGABYTE * 1000llu;
+                strcpy(m_str, "MB");
+                strcpy(g_str, "GB");
+                strcpy(t_str, "TB");
+        }
+
+        if (value >= t) {
+                if (value % t) {
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
+                                (double)((double)value / t), t_str);
+                } else {
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / t), t_str);
+                }
+        }else if (value >= g) {
+                if (value % g) {
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
+                                (double)((double)value / g), g_str);
+                } else {
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / g), g_str);
+                }
+        } else if (value >= m) {
+                if (value % m) {
+                        snprintf(valueStr, MAX_STR-1, "%.2f %s",
+                                (double)((double)value / m), m_str);
+                } else {
+                        snprintf(valueStr, MAX_STR-1, "%d %s", (int)(value / m), m_str);
+                }
+        } else if (value >= 0) {
+                snprintf(valueStr, MAX_STR-1, "%d bytes", (int)value);
+        } else {
+                snprintf(valueStr, MAX_STR-1, "-");
+        }
+        return valueStr;
+}

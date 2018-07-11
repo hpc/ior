@@ -65,15 +65,9 @@
 #endif
 
 /**************************** P R O T O T Y P E S *****************************/
-static void *POSIX_Create(char *, IOR_param_t *);
-static void *POSIX_Open(char *, IOR_param_t *);
 static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
-static void POSIX_Close(void *, IOR_param_t *);
-static void POSIX_Delete(char *, IOR_param_t *);
-static void POSIX_SetVersion(IOR_param_t *);
 static void POSIX_Fsync(void *, IOR_param_t *);
-static IOR_offset_t POSIX_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -267,7 +261,7 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 /*
  * Creat and open a file through the POSIX interface.
  */
-static void *POSIX_Create(char *testFileName, IOR_param_t * param)
+void *POSIX_Create(char *testFileName, IOR_param_t * param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
@@ -371,7 +365,7 @@ static void *POSIX_Create(char *testFileName, IOR_param_t * param)
 /*
  * Open a file through the POSIX interface.
  */
-static void *POSIX_Open(char *testFileName, IOR_param_t * param)
+void *POSIX_Open(char *testFileName, IOR_param_t * param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
@@ -499,7 +493,7 @@ static void POSIX_Fsync(void *fd, IOR_param_t * param)
 /*
  * Close a file through the POSIX interface.
  */
-static void POSIX_Close(void *fd, IOR_param_t * param)
+void POSIX_Close(void *fd, IOR_param_t * param)
 {
         if (close(*(int *)fd) != 0)
                 ERR("close() failed");
@@ -509,7 +503,7 @@ static void POSIX_Close(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the POSIX interface.
  */
-static void POSIX_Delete(char *testFileName, IOR_param_t * param)
+void POSIX_Delete(char *testFileName, IOR_param_t * param)
 {
         char errmsg[256];
         sprintf(errmsg, "[RANK %03d]: unlink() of file \"%s\" failed\n",
@@ -521,7 +515,7 @@ static void POSIX_Delete(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-static void POSIX_SetVersion(IOR_param_t * test)
+void POSIX_SetVersion(IOR_param_t * test)
 {
         strcpy(test->apiVersion, test->api);
 }
@@ -529,7 +523,7 @@ static void POSIX_SetVersion(IOR_param_t * test)
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-static IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
+IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                       char *testFileName)
 {
         struct stat stat_buf;

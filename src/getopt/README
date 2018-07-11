@@ -1,0 +1,82 @@
+DESCRIPTION
+-----------
+This archive contains the source code and supporting documentation for OptList,
+an ANSI C command line option parser library.
+
+OptList is released under the GNU LGPL version 3.0.
+
+The latest revision of this program may be found at:
+http://michael.dipperstein.com/optlist.html
+
+FILES
+-----
+COPYING         - Rules for copying and distributing GNU GPL software
+COPYING.LESSER  - Rules for copying and distributing GNU LGPL software
+optlist.c       - Source code for the Optlist function and supporting
+                  function.
+optlist.h       - Header file to be included by code using OptList
+Makefile        - Makefile for this project (assumes gcc compiler and GNU make)
+README          - This file
+sample.c        - A small program demonstrating how to use OptList
+
+BUILDING
+--------
+To build these files with GNU make and gcc:
+1. Windows users should define the environment variable OS to be Windows or
+   Windows_NT.  This is often already done.
+2. Enter the command "make" from the command line.
+
+USAGE
+-----
+The file sample.c demonstrates the usage of OptList.
+
+SYNOPSIS
+typedef struct option_t
+{
+    char option;
+    char *argument;
+    int argIndex;
+    struct option_t *next;
+} option_t;
+
+option_t *GetOptList(int argc, char *const argv[], char *const options);
+
+
+DESCRIPTION
+The GetOptList() function is similar to getopt().  Its most notable differences
+are that it returns a linked list to the command line arguments and their
+parameters.  One call to GetOptList() will return all of the command line
+options and their arguments.  GetOptList() will not modify argc or argv.
+
+GetOptList()'s parameters "argc" and "argv" are the argument count and array as
+passed to the main() function on program invocation.  An element of argv that
+starts with "-" is an option element.  The character following the "-" is option
+an character.
+
+The parameter "options" is a string containing the legitimate option characters.
+If such a character is followed by a colon, the option requires an argument.
+(e.g. "a:bc?" a, b ,c, and, ? are all options.  a should be followed by an
+argument.)
+
+GetOptList() returns a linked list of type option_t.  The "*next" field of the
+element at the end of the list will be set to NULL.  The "option" field will
+contain the option character.  A pointer to the following text in the same
+argv-element, or the text of the following argv-element will be stored in the
+"arguement" field, otherwise the "arguement" field is set to NULL.  The index
+of the argv-element containing the argument will be stored in the "argIndex".
+If there is no argument, the field will contain OL_NOINDEX.
+
+HISTORY
+-------
+08/01/07  - Initial release
+09/13/14  - Added FindFileName function, because I always use it with GetOptList
+            Tighter adherence to Michael Barr's "Top 10 Bug-Killing Coding
+            Standard Rules" (http://www.barrgroup.com/webinars/10rules).
+
+TODO
+----
+- Add support for --option_name
+
+AUTHOR
+------
+Michael Dipperstein (mdipper@alumni.engr.ucsb.edu)

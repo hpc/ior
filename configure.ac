@@ -15,7 +15,7 @@ AC_CONFIG_HEADER([src/config.h])
 AC_CANONICAL_HOST
 
 # Automake support
-AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define])
+AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define foreign subdir-objects])
 AM_MAINTAINER_MODE
 
 # Checks for programs
@@ -118,6 +118,17 @@ AC_ARG_WITH([ncmpi],
 AM_CONDITIONAL([USE_NCMPI_AIORI], [test x$with_ncmpi = xyes])
 AM_COND_IF([USE_NCMPI_AIORI],[
         AC_DEFINE([USE_NCMPI_AIORI], [], [Build NCMPI backend AIORI])
+])
+
+# MMAP IO support
+AC_ARG_WITH([mmap],
+        [AS_HELP_STRING([--with-mmap],
+           [support IO with MMAP backend @<:@default=yes@:>@])],
+        [],
+        [with_mmap=yes])
+AM_CONDITIONAL([USE_MMAP_AIORI], [test x$with_mmap = xyes])
+AM_COND_IF([USE_MMAP_AIORI],[
+        AC_DEFINE([USE_MMAP_AIORI], [], [Build MMAP backend AIORI])
 ])
 
 # POSIX IO support

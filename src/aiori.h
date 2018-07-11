@@ -79,11 +79,13 @@ typedef struct ior_aiori {
         int (*stat) (const char *path, struct stat *buf, IOR_param_t * param);
 } ior_aiori_t;
 
+extern ior_aiori_t dummy_aiori;
 extern ior_aiori_t hdf5_aiori;
 extern ior_aiori_t hdfs_aiori;
 extern ior_aiori_t mpiio_aiori;
 extern ior_aiori_t ncmpi_aiori;
 extern ior_aiori_t posix_aiori;
+extern ior_aiori_t mmap_aiori;
 extern ior_aiori_t s3_aiori;
 extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
@@ -105,5 +107,13 @@ void MPIIO_Delete(char *testFileName, IOR_param_t * param);
 IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName);
 int MPIIO_Access(const char *, int, IOR_param_t *);
+
+void *POSIX_Create(char *testFileName, IOR_param_t *test);
+void *POSIX_Open(char *testFileName, IOR_param_t *test);
+void POSIX_Close(void *fd, IOR_param_t *test);
+void POSIX_Delete(char *testFileName, IOR_param_t *test);
+void POSIX_SetVersion(IOR_param_t *test);
+IOR_offset_t POSIX_GetFileSize(IOR_param_t *test, MPI_Comm testComm,
+                               char *testFileName);
 
 #endif /* not _AIORI_H */

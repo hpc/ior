@@ -28,7 +28,10 @@
  */
 
 ior_aiori_t *available_aiori[] = {
-
+#ifdef USE_POSIX_AIORI
+        &posix_aiori,
+#endif
+        & dummy_aiori,
 #ifdef USE_HDF5_AIORI
         &hdf5_aiori,
 #endif
@@ -41,8 +44,8 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_NCMPI_AIORI
         &ncmpi_aiori,
 #endif
-#ifdef USE_POSIX_AIORI
-        &posix_aiori,
+#ifdef USE_MMAP_AIORI
+        &mmap_aiori,
 #endif
 #ifdef USE_S3_AIORI
         &s3_aiori,
