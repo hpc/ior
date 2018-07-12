@@ -96,11 +96,18 @@ int aiori_count (void);
 const char *aiori_default (void);
 
 /* some generic POSIX-based backend calls */
+void aiori_set_version(IOR_param_t * test);
 int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param);
 int aiori_posix_mkdir (const char *path, mode_t mode, IOR_param_t * param);
 int aiori_posix_rmdir (const char *path, IOR_param_t * param);
 int aiori_posix_access (const char *path, int mode, IOR_param_t * param);
 int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param);
+
+void *POSIX_Create(char *testFileName, IOR_param_t * param);
+void *POSIX_Open(char *testFileName, IOR_param_t * param);
+IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName);
+void POSIX_Delete(char *testFileName, IOR_param_t * param);
+void POSIX_Close(void *fd, IOR_param_t * param);
 
 /* NOTE: these 3 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
 void MPIIO_Delete(char *testFileName, IOR_param_t * param);

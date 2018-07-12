@@ -15,7 +15,7 @@ MDTEST 2 -a POSIX -W 2
 
 IOR 1 -a POSIX -w    -z                  -F -Y -e -i1 -m -t 100k -b 1000k
 IOR 1 -a POSIX -w    -z                  -F -k -e -i2 -m -t 100k -b 100k
-IOR 1 -a POSIX -r    -z                  -F -k -e -i1 -m -t 100k -b 100k
+IOR 1 -a MMAP -r    -z                  -F -k -e -i1 -m -t 100k -b 100k
 
 IOR 2 -a POSIX -w    -z  -C             -F -k -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -w    -z  -C -Q 1        -F -k -e -i1 -m -t 100k -b 100k

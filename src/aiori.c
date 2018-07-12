@@ -112,6 +112,13 @@ int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param)
         return stat (path, buf);
 }
 
+void aiori_set_version(IOR_param_t * test)
+{
+        strcpy(test->apiVersion, test->api);
+}
+
+
+
 const ior_aiori_t *aiori_select (const char *api)
 {
         char warn_str[256] = {0};

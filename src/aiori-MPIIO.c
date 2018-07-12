@@ -377,7 +377,7 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
  */
 static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 {
-        if (MPI_File_sync(*(MPI_File *)fd) != MPI_SUCCESS)
+        if (MPI_File_sync(*(MPI_File *)fdp) != MPI_SUCCESS)
                 EWARN("fsync() failed");
 }
 
