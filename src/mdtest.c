@@ -38,7 +38,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "getopt/optlist.h"
+#include "option.h"
 #include "utilities.h"
 
 #if HAVE_SYS_PARAM_H
@@ -1520,6 +1520,18 @@ void summarize_results(int iterations) {
 /* Checks to see if the test setup is valid.  If it isn't, fail. */
 void valid_tests() {
 
+    if(stone_wall_timer_seconds > 0 && branch_factor > 1 || ! barriers){
+      fprintf(out_logfile, "Error, stone wall timer does only work with a branch factor <= 1 and with barriers\n");
+      MPI_Abort(testComm, 1);
+    }
+
+    if (!create_only && !stat_only && !read_only && !remove_only) {
+        create_only = stat_only = read_only = remove_only = 1;
+        if (( rank == 0 ) && ( verbose >= 1 )) {
+            fprintf( out_logfile, "V-1: main: Setting create/stat/read/remove_only to True\n" );
+            fflush( out_logfile );
+        }
+    }
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
         fprintf( out_logfile, "V-1: Entering valid_tests...\n" );
@@ -2076,6 +2088,7 @@ void mdtest_init_args(){
    nstride = 0;
 }
 
+
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
     testComm = world_com;
     out_logfile = world_out;
@@ -2097,13 +2110,75 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     int stride = 1;
     int iterations = 1;
 
-    /* Check for -h parameter before MPI_Init so the mdtest binary can be
-       called directly, without, for instance, mpirun. */
-    for (i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            print_help();
-        }
+    verbose = 0;
+    int no_barriers = 0;
+    char * path = "./out";
+    int randomize = 0;
+    option_help options [] = {
+      {'a', NULL,        "API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]", OPTION_OPTIONAL_ARGUMENT, 's', & backend_name},
+      {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & branch_factor},
+      {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
+      {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
+      {'C', NULL,        "only create files/dirs", OPTION_FLAG, 'd', & create_only},
+      {'T', NULL,        "only stat files/dirs", OPTION_FLAG, 'd', & stat_only},
+      {'E', NULL,        "only read files/dir", OPTION_FLAG, 'd', & read_only},
+      {'r', NULL,        "only remove files or directories left behind by previous runs", OPTION_FLAG, 'd', & remove_only},
+      {'D', NULL,        "perform test on directories only (no files)", OPTION_FLAG, 'd', & dirs_only},
+      {'e', NULL,        "bytes to read from each file", OPTION_OPTIONAL_ARGUMENT, 'l', & read_bytes},
+      {'f', NULL,        "first number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & first},
+      {'F', NULL,        "perform test on files only (no directories)", OPTION_FLAG, 'd', & files_only},
+      {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'i', & iterations},
+      {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & items_per_dir},
+      {'l', NULL,        "last number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & last},
+      {'L', NULL,        "files only at leaf level of tree", OPTION_FLAG, 'd', & leaf_only},
+      {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & items},
+      {'N', NULL,        "stride # between neighbor tasks for file/dir operation (local=0)", OPTION_OPTIONAL_ARGUMENT, 'd', & nstride},
+      {'p', NULL,        "pre-iteration delay (in seconds)", OPTION_OPTIONAL_ARGUMENT, 'd', & pre_delay},
+      {'R', NULL,        "randomly stat files", OPTION_FLAG, 'd', & randomize},
+      {0, "random-seed", "random seed for -R", OPTION_OPTIONAL_ARGUMENT, 'd', & random_seed},
+      {'s', NULL,        "stride between the number of tasks for each test", OPTION_OPTIONAL_ARGUMENT, 'd', & stride},
+      {'S', NULL,        "shared file access (file only, no directories)", OPTION_FLAG, 'd', & shared_file},
+      {'c', NULL,        "collective creates: task 0 does all creates", OPTION_FLAG, 'd', & collective_creates},
+      {'t', NULL,        "time unique working directory overhead", OPTION_FLAG, 'd', & time_unique_dir_overhead},
+      {'u', NULL,        "unique working directory for each task", OPTION_FLAG, 'd', & unique_dir_per_task},
+      {'v', NULL,        "verbosity (each instance of option increments by one)", OPTION_FLAG, 'd', & verbose},
+      {'V', NULL,        "verbosity value", OPTION_OPTIONAL_ARGUMENT, 'd', & verbose},
+      {'w', NULL,        "bytes to write to each file after it is created", OPTION_OPTIONAL_ARGUMENT, 'l', & write_bytes},
+      {'W', NULL,        "number in seconds; stonewall timer, write as many seconds and ensure all processes did the same number of operations (currently only stops during create phase)", OPTION_OPTIONAL_ARGUMENT, 'd', & stone_wall_timer_seconds},
+      {'x', NULL,        "StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs", OPTION_OPTIONAL_ARGUMENT, 's', & stoneWallingStatusFile},
+      {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & sync_file},
+      {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
+      {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
+      LAST_OPTION
+    };
+    int printhelp = 0;
+    int parsed_options = option_parse(argc, argv, options, & printhelp);
+
+    backend = aiori_select (backend_name);
+    if (NULL == backend) {
+        FAIL("Could not find suitable backend to use");
     }
+
+    if(backend->get_options != NULL){
+      option_parse(argc - parsed_options, argv + parsed_options, backend->get_options(), & printhelp);
+    }
+
+    if(printhelp != 0){
+      printf("\nSynopsis: %s ", argv[0]);
+
+      option_print_help(options, 0);
+
+      if(backend->get_options != NULL){
+        printf("\nPlugin options for backend %s\n", backend_name);
+        option_print_help(backend->get_options(), 1);
+      }
+      if(printhelp == 1){
+        exit(0);
+      }else{
+        exit(1);
+      }
+    }
+
 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
@@ -2129,116 +2204,25 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         fflush(out_logfile);
     }
 
-    /* Parse command line options */
-
-    verbose = 0;
-    option_t *optList, *thisOpt;
-    optList = GetOptList(argc, argv, "a:b:BcCd:De:Ef:Fhi:I:l:Ln:N:p:rR::s:StTuvV:w:W:x:yz:Z");
-
-
-    while (optList != NULL) {
-        thisOpt = optList;
-        optarg = thisOpt->argument;
-        optList = optList->next;
-        switch (thisOpt->option) {
-        case 'a':
-            backend_name = optarg; break;
-        case 'b':
-            branch_factor = atoi(optarg); break;
-        case 'B':
-            barriers = 0;                 break;
-        case 'c':
-            collective_creates = 1;       break;
-        case 'C':
-            create_only = 1;              break;
-        case 'd':
-            parse_dirpath(optarg);        break;
-        case 'D':
-            dirs_only = 1;                break;
-        case 'e':
-            read_bytes = ( size_t )strtoul( optarg, ( char ** )NULL, 10 );   break;
-            //read_bytes = atoi(optarg);    break;
-        case 'E':
-            read_only = 1;                break;
-        case 'f':
-            first = atoi(optarg);         break;
-        case 'F':
-            files_only = 1;               break;
-        case 'h':
-            print_help();                 break;
-        case 'i':
-            iterations = atoi(optarg);    break;
-        case 'I':
-            items_per_dir = (uint64_t) strtoul( optarg, ( char ** )NULL, 10 );   break;
-            //items_per_dir = atoi(optarg); break;
-        case 'l':
-            last = atoi(optarg);          break;
-        case 'L':
-            leaf_only = 1;                break;
-        case 'n':
-            items = (uint64_t) strtoul( optarg, ( char ** )NULL, 10 );   break;
-            //items = atoi(optarg);         break;
-        case 'N':
-            nstride = atoi(optarg);       break;
-        case 'p':
-            pre_delay = atoi(optarg);     break;
-        case 'r':
-            remove_only = 1;              break;
-        case 'R':
-            if (optarg == NULL) {
-                random_seed = time(NULL);
-                MPI_Barrier(testComm);
-                MPI_Bcast(&random_seed, 1, MPI_INT, 0, testComm);
-                random_seed += rank;
-            } else {
-                random_seed = atoi(optarg)+rank;
-            }
-            break;
-        case 's':
-            stride = atoi(optarg);        break;
-        case 'S':
-            shared_file = 1;              break;
-        case 't':
-            time_unique_dir_overhead = 1; break;
-        case 'T':
-            stat_only = 1;                break;
-        case 'u':
-            unique_dir_per_task = 1;      break;
-        case 'v':
-            verbose += 1;                 break;
-        case 'V':
-            verbose = atoi(optarg);       break;
-        case 'w':
-            write_bytes = ( size_t )strtoul( optarg, ( char ** )NULL, 10 );   break;
-        case 'W':
-            stone_wall_timer_seconds = atoi( optarg );   break;
-        case 'x':
-            stoneWallingStatusFile = strdup(optarg); break;
-        case 'y':
-            sync_file = 1;                break;
-        case 'z':
-            depth = atoi(optarg);                  break;
-        case 'Z':
-            print_time = TRUE;                  break;
-        }
+    /* adjust special variables */
+    barriers = ! no_barriers;
+    if (path != NULL){
+      parse_dirpath(path);
     }
-
-    if(stone_wall_timer_seconds > 0 && branch_factor > 1 || ! barriers){
-      fprintf(out_logfile, "Error, stone wall timer does only work with a branch factor <= 1 and with barriers\n");
-      MPI_Abort(testComm, 1);
-    }
-
-    if (!create_only && !stat_only && !read_only && !remove_only) {
-        create_only = stat_only = read_only = remove_only = 1;
-        if (( rank == 0 ) && ( verbose >= 1 )) {
-            fprintf( out_logfile, "V-1: main: Setting create/stat/read/remove_only to True\n" );
-            fflush( out_logfile );
-        }
+    if( randomize > 0 ){
+      if (random_seed == 0) {
+        /* Ensure all procs have the same random number */
+          random_seed = time(NULL);
+          MPI_Barrier(testComm);
+          MPI_Bcast(&random_seed, 1, MPI_INT, 0, testComm);
+      }
+      random_seed += rank;
     }
 
     valid_tests();
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
+        // option_print_current(options);
         fprintf (out_logfile, "api                     : %s\n", backend_name);
         fprintf( out_logfile, "barriers                : %s\n", ( barriers ? "True" : "False" ));
         fprintf( out_logfile, "collective_creates      : %s\n", ( collective_creates ? "True" : "False" ));
@@ -2361,11 +2345,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         path_count = 1;
     } else {
         strcpy(testdirpath, filenames[rank%path_count]);
-    }
-
-    backend = aiori_select (backend_name);
-    if (NULL == backend) {
-        FAIL("Could not find suitable backend to use");
     }
 
     /*   if directory does not exist, create it */

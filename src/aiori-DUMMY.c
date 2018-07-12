@@ -14,16 +14,40 @@
 #include "aiori.h"
 #include "utilities.h"
 
+
+/************************** O P T I O N S *****************************/
+struct dummy_options{
+  uint64_t delay_creates;
+  int delay_rank_0_only;
+};
+
+static struct dummy_options o = {
+  .delay_creates = 0,
+  .delay_rank_0_only = 0,
+};
+
+static option_help options [] = {
+      {'c', "delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_creates},
+      {'z', "delay-only-rank0",    "Delay only Rank0", OPTION_FLAG, 'd', & o.delay_rank_0_only},
+      LAST_OPTION
+};
+
 static char * current = (char*) 1;
+
+static option_help * DUMMY_options(){
+  return options;
+}
 
 static void *DUMMY_Create(char *testFileName, IOR_param_t * param)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY create: %s = %p\n", testFileName, current);
   }
-  if (rank == 0){
-    usleep(100000);
-  }  
+  if (o.delay_creates){
+    if (! o.delay_rank_0_only || (o.delay_rank_0_only && rank == 0)){
+      usleep(o.delay_creates);
+    }
+  }
   return current++;
 }
 
@@ -58,7 +82,7 @@ static void DUMMY_Delete(char *testFileName, IOR_param_t * param)
 
 static void DUMMY_SetVersion(IOR_param_t * test)
 {
-  sprintf(test->apiVersion, "DUMMY");
+  sprintf(test->apiVersion, "DUMMY-0.5");
 }
 
 static IOR_offset_t DUMMY_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
@@ -119,5 +143,6 @@ ior_aiori_t dummy_aiori = {
   DUMMY_mkdir,
   DUMMY_rmdir,
   DUMMY_access,
-  DUMMY_stat
+  DUMMY_stat,
+  DUMMY_options
 };

@@ -25,6 +25,7 @@
 
 #include "ior.h"
 #include "iordef.h"                                     /* IOR Definitions */
+#include "option.h"
 
 /*************************** D E F I N I T I O N S ****************************/
 
@@ -61,6 +62,7 @@ typedef struct ior_aiori_statfs {
         uint64_t f_ffree;
 } ior_aiori_statfs_t;
 
+
 typedef struct ior_aiori {
         char *name;
         void *(*create)(char *, IOR_param_t *);
@@ -77,6 +79,7 @@ typedef struct ior_aiori {
         int (*rmdir) (const char *path, IOR_param_t * param);
         int (*access) (const char *path, int mode, IOR_param_t * param);
         int (*stat) (const char *path, struct stat *buf, IOR_param_t * param);
+        option_help * (*get_options)();
 } ior_aiori_t;
 
 extern ior_aiori_t dummy_aiori;

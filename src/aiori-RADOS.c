@@ -27,6 +27,21 @@
 #include "aiori.h"
 #include "utilities.h"
 
+/************************** O P T I O N S *****************************/
+struct rados_options{
+  char * username;
+};
+
+static struct rados_options o = {
+  .username = "admin",
+};
+
+static option_help options [] = {
+      {'u', "username",        "Username for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.username},
+      LAST_OPTION
+};
+
+
 /**************************** P R O T O T Y P E S *****************************/
 static void *RADOS_Create(char *, IOR_param_t *);
 static void *RADOS_Open(char *, IOR_param_t *);
@@ -42,9 +57,9 @@ static int RADOS_MkDir(const char *, mode_t, IOR_param_t *);
 static int RADOS_RmDir(const char *, IOR_param_t *);
 static int RADOS_Access(const char *, int, IOR_param_t *);
 static int RADOS_Stat(const char *, struct stat *, IOR_param_t *);
+static option_help * RADIOS_options();
 
 /************************** D E C L A R A T I O N S ***************************/
-
 ior_aiori_t rados_aiori = {
         .name = "RADOS",
         .create = RADOS_Create,
@@ -60,6 +75,7 @@ ior_aiori_t rados_aiori = {
         .rmdir = RADOS_RmDir,
         .access = RADOS_Access,
         .stat = RADOS_Stat,
+        .get_options = RADIOS_options,
 };
 
 #define RADOS_ERR(__err_str, __ret) do { \
@@ -68,14 +84,16 @@ ior_aiori_t rados_aiori = {
 } while(0)
 
 /***************************** F U N C T I O N S ******************************/
+static option_help * RADIOS_options(){
+  return options;
+}
 
 static void RADOS_Cluster_Init(IOR_param_t * param)
 {
         int ret;
 
         /* create RADOS cluster handle */
-        /* XXX: HARDCODED RADOS USER NAME */
-        ret = rados_create(&param->rados_cluster, "admin");
+        ret = rados_create(&param->rados_cluster, o.username);
         if (ret)
                 RADOS_ERR("unable to create RADOS cluster handle", ret);
 
