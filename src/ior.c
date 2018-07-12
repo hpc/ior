@@ -1685,11 +1685,11 @@ static void ValidateTests(IOR_param_t * test)
         if ((strcasecmp(test->api, "POSIX") != 0) && test->singleXferAttempt)
                 WARN_RESET("retry only available in POSIX",
                            test, &defaults, singleXferAttempt);
-        if ((strcasecmp(test->api, "POSIX") != 0) &&
-            (strcasecmp(test->api, "MMAP") != 0) &&
-            (strcasecmp(test->api, "MPIIO") != 0)
-            && test->fsync)
-                WARN_RESET("fsync() only available in POSIX/MMAP",
+        if (((strcasecmp(test->api, "POSIX") != 0)
+            && (strcasecmp(test->api, "MPIIO") != 0)
+            && (strcasecmp(test->api, "MMAP") != 0) &&             
+            && (strcasecmp(test->api, "HDFS") != 0)) && test->fsync)
+                WARN_RESET("fsync() not supported in selected backend",
                            test, &defaults, fsync);
         if ((strcasecmp(test->api, "MPIIO") != 0) && test->preallocate)
                 WARN_RESET("preallocation only available in MPIIO",

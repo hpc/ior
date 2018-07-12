@@ -38,10 +38,9 @@ static void *MPIIO_Open(char *, IOR_param_t *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
                                    IOR_offset_t, IOR_param_t *);
 static void MPIIO_Close(void *, IOR_param_t *);
-void MPIIO_Delete(char *, IOR_param_t *);
 static void MPIIO_SetVersion(IOR_param_t *);
 static void MPIIO_Fsync(void *, IOR_param_t *);
-int MPIIO_Access(const char *, int, IOR_param_t *);
+
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -368,6 +367,8 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
                         }
                 }
         }
+        if((access == WRITE) && (param->fsyncPerWrite == TRUE))
+               MPIIO_Fsync(fd, param);
         return (length);
 }
 
@@ -376,8 +377,8 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
  */
 static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 {
-    MPI_File * fd = (MPI_File*) fdp;
-    MPI_File_sync(*fd);
+        if (MPI_File_sync(*(MPI_File *)fd) != MPI_SUCCESS)
+                EWARN("fsync() failed");
 }
 
 /*

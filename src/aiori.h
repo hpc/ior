@@ -89,6 +89,7 @@ extern ior_aiori_t mmap_aiori;
 extern ior_aiori_t s3_aiori;
 extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
+extern ior_aiori_t rados_aiori;
 
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
@@ -101,18 +102,10 @@ int aiori_posix_rmdir (const char *path, IOR_param_t * param);
 int aiori_posix_access (const char *path, int mode, IOR_param_t * param);
 int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param);
 
-IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
-                               char *testFileName);
 /* NOTE: these 3 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
 void MPIIO_Delete(char *testFileName, IOR_param_t * param);
-int MPIIO_Access(const char *, int, IOR_param_t *);
-
-void *POSIX_Create(char *testFileName, IOR_param_t *test);
-void *POSIX_Open(char *testFileName, IOR_param_t *test);
-void POSIX_Close(void *fd, IOR_param_t *test);
-void POSIX_Delete(char *testFileName, IOR_param_t *test);
-void POSIX_SetVersion(IOR_param_t *test);
-IOR_offset_t POSIX_GetFileSize(IOR_param_t *test, MPI_Comm testComm,
+IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName);
+int MPIIO_Access(const char *, int, IOR_param_t *);
 
 #endif /* not _AIORI_H */
