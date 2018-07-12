@@ -21,6 +21,9 @@
 #include <ctype.h>
 #include <string.h>
 
+
+#include <getopt/optlist.h>
+#include "utilities.h"
 #include "ior.h"
 #include "aiori.h"
 #include "parse_options.h"
@@ -52,6 +55,14 @@ static IOR_offset_t StringToBytes(char *size_str)
                 case 'g':
                 case 'G':
                         size <<= 30;
+                        break;
+                case 't':
+                case 'T':
+                        size <<= 40;
+                        break;
+                case 'p':
+                case 'P':
+                        size <<= 50;
                         break;
                 }
         } else if (rc == 0) {
@@ -134,7 +145,7 @@ static void CheckRunSettings(IOR_test_t *tests)
 
                 /* If numTasks set to 0, use all tasks */
                 if (params->numTasks == 0) {
-                        MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD,
+                        MPI_CHECK(MPI_Comm_size(mpi_comm_world,
                                                 &params->numTasks),
                                   "MPI_Comm_size() error");
                         RecalculateExpectedFileSize(params);
@@ -153,12 +164,30 @@ void DecodeDirective(char *line, IOR_param_t *params)
 
         rc = sscanf(line, " %[^=# \t\r\n] = %[^# \t\r\n] ", option, value);
         if (rc != 2 && rank == 0) {
-                fprintf(stdout, "Syntax error in configuration options: %s\n",
+                fprintf(out_logfile, "Syntax error in configuration options: %s\n",
                         line);
                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
         }
         if (strcasecmp(option, "api") == 0) {
                 strcpy(params->api, value);
+        } else if (strcasecmp(option, "summaryFile") == 0) {
+          if (rank == 0){
+            out_resultfile = fopen(value, "w");
+            if (out_resultfile == NULL){
+              FAIL("Cannot open output file for writes!");
+            }
+            printf("Writing output to %s\n", value);
+          }
+        } else if (strcasecmp(option, "summaryFormat") == 0) {
+                if(strcasecmp(value, "default") == 0){
+                  outputFormat = OUTPUT_DEFAULT;
+                }else if(strcasecmp(value, "JSON") == 0){
+                  outputFormat = OUTPUT_JSON;
+                }else if(strcasecmp(value, "CSV") == 0){
+                  outputFormat = OUTPUT_CSV;
+                }else{
+                  FAIL("Unknown summaryFormat");
+                }
         } else if (strcasecmp(option, "refnum") == 0) {
                 params->referenceNumber = atoi(value);
         } else if (strcasecmp(option, "debug") == 0) {
@@ -174,7 +203,9 @@ void DecodeDirective(char *line, IOR_param_t *params)
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
                 params->stoneWallingWearOut = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOutIterations") == 0) {
-                params->stoneWallingWearOutIterations = atoi(value);
+                params->stoneWallingWearOutIterations = atoll(value);
+        } else if (strcasecmp(option, "stoneWallingStatusFile") == 0) {
+                strcpy(params->stoneWallingStatusFile, value);
         } else if (strcasecmp(option, "maxtimeduration") == 0) {
                 params->maxTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {
@@ -313,7 +344,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
                         ERR("beegfsNumTargets must be >= 1");
         } else if (strcasecmp(option, "beegfsChunkSize") == 0) {
  #ifndef HAVE_BEEGFS_BEEGFS_H
-                 ERR("ior was not compiled with BeeGFS support"); 
+                 ERR("ior was not compiled with BeeGFS support");
  #endif
                  params->beegfs_chunkSize = StringToBytes(value);
                  if (!ISPOWEROFTWO(params->beegfs_chunkSize) || params->beegfs_chunkSize < (1<<16))
@@ -325,7 +356,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->summary_every_test = atoi(value);
         } else {
                 if (rank == 0)
-                        fprintf(stdout, "Unrecognized parameter \"%s\"\n",
+                        fprintf(out_logfile, "Unrecognized parameter \"%s\"\n",
                                 option);
                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
         }
@@ -449,21 +480,25 @@ IOR_test_t *ReadConfigScript(char *scriptName)
  */
 IOR_test_t *ParseCommandLine(int argc, char **argv)
 {
-        static const char *opts =
+        char * const opts =
           "a:A:b:BcCd:D:eEf:FgG:hHi:Ij:J:kKl:mM:nN:o:O:pPqQ:rRs:St:T:uU:vVwWxX:YzZ";
-        int c, i;
-        static IOR_test_t *tests = NULL;
-
-        /* suppress getopt() error message when a character is unrecognized */
-        opterr = 0;
+        int i;
+        IOR_test_t *tests = NULL;
+        char * optarg;
 
         init_IOR_Param_t(&initialTestParams);
         GetPlatformName(initialTestParams.platform);
         initialTestParams.writeFile = initialTestParams.readFile = FALSE;
         initialTestParams.checkWrite = initialTestParams.checkRead = FALSE;
 
-        while ((c = getopt(argc, argv, opts)) != -1) {
-                switch (c) {
+        option_t *optList, *thisOpt;
+        optList = GetOptList(argc, argv, opts);
+
+        while (optList != NULL) {
+                thisOpt = optList;
+                optarg = thisOpt->argument;
+                optList = optList->next;
+                switch (thisOpt->option) {
                 case 'a':
                         strcpy(initialTestParams.api, optarg);
                         break;
@@ -550,7 +585,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                                 initialTestParams.dataPacketType = offset;
                                 break;
                         default:
-                                fprintf(stdout,
+                                fprintf(out_logfile,
                                         "Unknown arguement for -l  %s generic assumed\n", optarg);
                                 break;
                         }
@@ -640,20 +675,14 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
                         initialTestParams.reorderTasksRandom = TRUE;
                         break;
                 default:
-                        fprintf(stdout,
+                        fprintf(out_logfile,
                                 "ParseCommandLine: unknown option `-%c'.\n",
                                 optopt);
                 }
         }
 
-        for (i = optind; i < argc; i++)
-                fprintf(stdout, "non-option argument: %s\n", argv[i]);
-
-        /* If an IOR script was not used, initialize test queue to the defaults */
-        if (tests == NULL) {
-                tests = CreateTest(&initialTestParams, 0);
-                AllocResults(tests);
-        }
+        tests = CreateTest(&initialTestParams, 0);
+        AllocResults(tests);
 
         CheckRunSettings(tests);
 

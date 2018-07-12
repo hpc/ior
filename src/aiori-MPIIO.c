@@ -41,6 +41,7 @@ static void MPIIO_Close(void *, IOR_param_t *);
 static void MPIIO_SetVersion(IOR_param_t *);
 static void MPIIO_Fsync(void *, IOR_param_t *);
 
+
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t mpiio_aiori = {
@@ -61,6 +62,30 @@ ior_aiori_t mpiio_aiori = {
 };
 
 /***************************** F U N C T I O N S ******************************/
+
+/*
+ * Try to access a file through the MPIIO interface.
+ */
+int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
+{
+    MPI_File fd;
+    int mpi_mode = MPI_MODE_UNIQUE_OPEN;
+
+    if ((mode & W_OK) && (mode & R_OK))
+        mpi_mode |= MPI_MODE_RDWR;
+    else if (mode & W_OK)
+        mpi_mode |= MPI_MODE_WRONLY;
+    else
+        mpi_mode |= MPI_MODE_RDONLY;
+
+    int ret = MPI_File_open(MPI_COMM_SELF, path, mpi_mode,
+                            MPI_INFO_NULL, &fd);
+
+    if (!ret)
+        MPI_File_close(&fd);
+
+    return ret;
+}
 
 /*
  * Create and open a file through the MPIIO interface.
@@ -350,7 +375,7 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void MPIIO_Fsync(void *fd, IOR_param_t * param)
+static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 {
         if (MPI_File_sync(*(MPI_File *)fd) != MPI_SUCCESS)
                 EWARN("fsync() failed");
@@ -419,7 +444,7 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
                 if (param->filePerProc) {
                         tempOffset = tempOffset / param->transferSize;
                 } else {
-                        /* 
+                        /*
                          * this formula finds a file view offset for a task
                          * from an absolute offset
                          */
@@ -445,8 +470,15 @@ IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
 {
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
         MPI_File fd;
+        MPI_Comm comm;
 
-        MPI_CHECK(MPI_File_open(testComm, testFileName, MPI_MODE_RDONLY,
+        if (test->filePerProc == TRUE) {
+                comm = MPI_COMM_SELF;
+        } else {
+                comm = testComm;
+        }
+
+        MPI_CHECK(MPI_File_open(comm, testFileName, MPI_MODE_RDONLY,
                                 MPI_INFO_NULL, &fd),
                   "cannot open file to get file size");
         MPI_CHECK(MPI_File_get_size(fd, (MPI_Offset *) & aggFileSizeFromStat),
@@ -475,28 +507,4 @@ IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         }
 
         return (aggFileSizeFromStat);
-}
-
-/*
- * Try to access a file through the MPIIO interface.
- */
-int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
-{
-    MPI_File fd;
-    int mpi_mode = MPI_MODE_UNIQUE_OPEN;
-
-    if ((mode & W_OK) && (mode & R_OK))
-        mpi_mode |= MPI_MODE_RDWR;
-    else if (mode & W_OK)
-        mpi_mode |= MPI_MODE_WRONLY;
-    else
-        mpi_mode |= MPI_MODE_RDONLY;
-
-    int ret = MPI_File_open(MPI_COMM_SELF, path, mpi_mode,
-                            MPI_INFO_NULL, &fd);
-
-    if (!ret)
-        MPI_File_close(&fd);
-
-    return ret;
 }

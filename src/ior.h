@@ -45,15 +45,6 @@
 #endif
 
 #include "iordef.h"
-
-extern int numTasksWorld;
-extern int rank;
-extern int rankOffset;
-extern int tasksPerNode;
-extern int verbose;
-extern MPI_Comm testComm;
-
-
 /******************** DATA Packet Type ***************************************/
 /* Holds the types of data packets: generic, offset, timestamp, incompressible */
 
@@ -147,7 +138,9 @@ typedef struct
     int storeFileOffset;             /* use file offset as stored signature */
     int deadlineForStonewalling;     /* max time in seconds to run any test phase */
     int stoneWallingWearOut;         /* wear out the stonewalling, once the timout is over, each process has to write the same amount */
-    int stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
+    uint64_t stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
+    char stoneWallingStatusFile[MAXPATHLEN];
+
     int maxTimeDuration;             /* max time in minutes to run each test */
     int outlierThreshold;            /* warn on outlier N seconds from mean */
     int verbose;                     /* verbosity */
@@ -166,6 +159,8 @@ typedef struct
     int singleXferAttempt;           /* do not retry transfer if incomplete */
     int fsyncPerWrite;               /* fsync() after each write */
     int fsync;                       /* fsync() after write */
+
+    void* mmap_ptr;
 
     /* MPI variables */
     MPI_Comm     testComm;           /* MPI communicator */
@@ -229,7 +224,13 @@ typedef struct
 typedef struct {
    double *writeTime;
    double *readTime;
+   int errors;
    size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
+
+   double stonewall_time;
+   long long stonewall_min_data_accessed;
+   long long stonewall_avg_data_accessed;
+
    IOR_offset_t *aggFileSizeFromStat;
    IOR_offset_t *aggFileSizeFromXfer;
    IOR_offset_t *aggFileSizeForBW;
@@ -247,5 +248,13 @@ IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
 void AllocResults(IOR_test_t *test);
 void GetPlatformName(char *);
 void init_IOR_Param_t(IOR_param_t *p);
+
+/*
+ * This function runs IOR given by command line, useful for testing
+ */
+IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * out_logfile);
+
+/* Actual IOR Main function, renamed to allow library usage */
+int ior_main(int argc, char **argv);
 
 #endif /* !_IOR_H */

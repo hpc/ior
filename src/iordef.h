@@ -31,9 +31,7 @@
 #   include <Windows.h>
 #   include <io.h>
 #   include <direct.h>
-#   include "win/getopt.h"
 
-#   define MAXPATHLEN 1024
 #   define F_OK 00
 #   define W_OK 02
 #   define R_OK 04
@@ -41,7 +39,7 @@
 
 #   define lseek _lseeki64
 #   define fsync _commit
-#   define mkdir(dir, mode) _mkdir(dir) 
+#   define mkdir(dir, mode) _mkdir(dir)
 #   define strcasecmp _stricmp
 #   define strncasecmp _strnicmp
 #   define srandom srand
@@ -62,6 +60,12 @@ extern int rankOffset;
 extern int verbose;                            /* verbose output */
 
 /*************************** D E F I N I T I O N S ****************************/
+
+enum OutputFormat_t{
+  OUTPUT_DEFAULT,
+  OUTPUT_CSV,
+  OUTPUT_JSON
+};
 
 #ifndef FALSE
 #   define FALSE           0
@@ -102,8 +106,8 @@ extern int verbose;                            /* verbose output */
 #define VERBOSE_4          4
 #define VERBOSE_5          5
 
-#define MAX_STR            1024                /* max string length */  
-#define MAX_HINTS          16                  /* max number of hints */  
+#define MAX_STR            1024                /* max string length */
+#define MAX_HINTS          16                  /* max number of hints */
 #define MAX_RETRY          10000               /* max retries for POSIX xfer */
 #ifndef PATH_MAX
 #define PATH_MAX           4096
@@ -211,7 +215,7 @@ struct utsname {
     char nodename[257];
     char release [16];
     char version [16];
-    char machine [16];	
+    char machine [16];
 };
 
 extern int uname(struct utsname *name);
