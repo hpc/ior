@@ -12,7 +12,7 @@ mkdir -p $TARGET
 
 ARGS="$@"
 GID=$(id -g $USER)
-OPT="-it --rm -v $PWD/../../:/data/"
+OPT="-it --rm -v $PWD/../../:/data/:z"
 ERROR=0
 VERBOSE=0
 
