@@ -1107,10 +1107,18 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         }
     }else{
       if (stoneWallingStatusFile){
+        int64_t expected_items;
         /* The number of items depends on the stonewalling file */
-        items = ReadStoneWallingIterations(stoneWallingStatusFile);
-        if (verbose >= 1 && rank == 0) {
-          printf("read stonewall file items: "LLU"\n", items);
+        expected_items = ReadStoneWallingIterations(stoneWallingStatusFile);
+        if(expected_items >= 0){
+          items = expected_items;
+        }
+        if (rank == 0) {
+          if(expected_items == -1){
+            fprintf(out_logfile, "WARNING: could not read stonewall status file\n");
+          }else if(verbose >= 1){
+            fprintf(out_logfile, "Read stonewall status; items: "LLU"\n", items);
+          }
         }
       }
     }

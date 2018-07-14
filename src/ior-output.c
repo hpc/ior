@@ -392,7 +392,7 @@ void ShowTestStart(IOR_param_t *test)
 
 void ShowTestEnd(IOR_test_t *tptr){
   if(rank == 0 && tptr->params.stoneWallingWearOut){
-    if (tptr->params.stoneWallingStatusFile[0]){
+    if (tptr->params.stoneWallingStatusFile){
       StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
     }else{
       fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
@@ -411,7 +411,8 @@ void ShowSetup(IOR_param_t *params)
       fprintf(out_logfile, "*** %s ***\n\n", params->debug);
   }
   PrintNamedSectionStart("Options");
-  PrintKeyVal("api", params->apiVersion);
+  PrintKeyVal("api", params->api);
+  PrintKeyVal("apiVersion", params->apiVersion);
   PrintKeyVal("test filename", params->testFileName);
   PrintKeyVal("access", params->filePerProc ? "file-per-process" : "single-shared-file");
   PrintKeyVal("type", params->collective == FALSE ? "independent" : "collective");

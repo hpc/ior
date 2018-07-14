@@ -1869,10 +1869,11 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                         && ((GetTimeStamp() - startForStonewall)
                             > test->deadlineForStonewalling));
 
-        if(access == READ && test->stoneWallingStatusFile){
+        if(test->stoneWallingStatusFile && (access == READ || access == READCHECK)){
           test->stoneWallingWearOutIterations = ReadStoneWallingIterations(test->stoneWallingStatusFile);
-          if(test->stoneWallingWearOutIterations == -1){
-            ERR("Could not read back the stonewalling status from the file!");
+          if(test->stoneWallingWearOutIterations == -1 && rank == 0){
+            fprintf(out_logfile, "WARNING: Could not read back the stonewalling status from the file!");
+            test->stoneWallingWearOutIterations = 0;
           }
         }
 
@@ -1881,8 +1882,8 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                 dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
 
-                hitStonewall = ((test->deadlineForStonewalling != 0)
-                                && ((GetTimeStamp() - startForStonewall)
+                hitStonewall = ((test->deadlineForStonewalling != 0
+                                && (GetTimeStamp() - startForStonewall)
                                     > test->deadlineForStonewalling)) || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
         }
         if (test->stoneWallingWearOut){

@@ -581,7 +581,9 @@ int64_t ReadStoneWallingIterations(char * const filename){
   }else{
     FILE * out = fopen(filename, "r");
     if (out == NULL){
-      return -1;
+      data = -1;
+      MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, mpi_comm_world);
+      return data;
     }
     int ret = fscanf(out, "%lld", & data);
     if (ret != 1){
