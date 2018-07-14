@@ -149,5 +149,7 @@ ior_aiori_t dummy_aiori = {
   DUMMY_rmdir,
   DUMMY_access,
   DUMMY_stat,
+  NULL,
+  NULL,
   DUMMY_options
 };

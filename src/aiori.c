@@ -117,6 +117,28 @@ char* aiori_get_version()
   return "";
 }
 
+void aiori_initialize(){
+  /* Sanity check, we were compiled with SOME backend, right? */
+  if (0 == aiori_count ()) {
+          ERR("No IO backends compiled into aiori.  "
+              "Run 'configure --with-<backend>', and recompile.");
+  }
+
+  for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
+    if((*tmp)->initialize){
+      (*tmp)->initialize();
+    }
+  }
+}
+
+void aiori_finalize(){
+  for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
+    if((*tmp)->finalize){
+      (*tmp)->finalize();
+    }
+  }
+}
+
 const ior_aiori_t *aiori_select (const char *api)
 {
         char warn_str[256] = {0};

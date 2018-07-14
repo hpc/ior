@@ -124,6 +124,8 @@ static void         EMC_Close(void*, IOR_param_t*);
 static void         S3_Delete(char*, IOR_param_t*);
 static void         S3_Fsync(void*, IOR_param_t*);
 static IOR_offset_t S3_GetFileSize(IOR_param_t*, MPI_Comm, char*);
+static void S3_init();
+static void S3_finalize();
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -140,6 +142,8 @@ ior_aiori_t s3_aiori = {
 	.get_version = aiori_get_version,
 	.fsync = S3_Fsync,
 	.get_file_size = S3_GetFileSize,
+	.initialize = S3_init,
+	.finalize = S3_finalize
 };
 
 // "S3", plus EMC-extensions enabled
@@ -155,6 +159,8 @@ ior_aiori_t s3_plus_aiori = {
 	.set_version = S3_SetVersion,
 	.fsync = S3_Fsync,
 	.get_file_size = S3_GetFileSize,
+	.initialize = S3_init,
+	.finalize = S3_finalize
 };
 
 // Use EMC-extensions for N:1 write, as well
@@ -170,8 +176,22 @@ ior_aiori_t s3_emc_aiori = {
 	.set_version = S3_SetVersion,
 	.fsync = S3_Fsync,
 	.get_file_size = S3_GetFileSize,
+	.initialize = S3_init,
+	.finalize = S3_finalize
 };
 
+static void S3_init(){
+    /* This is supposed to be done before *any* threads are created.
+     * Could MPI_Init() create threads (or call multi-threaded
+     * libraries)?  We'll assume so. */
+    AWS4C_CHECK( aws_init() );
+}
+
+static void S3_finalize(){
+    /* done once per program, after exiting all threads.
+     * NOTE: This fn doesn't return a value that can be checked for success. */
+    aws_cleanup();
+}
 
 /* modelled on similar macros in iordef.h */
 #define CURL_ERR(MSG, CURL_ERRNO, PARAM)										\

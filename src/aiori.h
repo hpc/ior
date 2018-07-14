@@ -79,6 +79,8 @@ typedef struct ior_aiori {
         int (*rmdir) (const char *path, IOR_param_t * param);
         int (*access) (const char *path, int mode, IOR_param_t * param);
         int (*stat) (const char *path, struct stat *buf, IOR_param_t * param);
+        void (*initialize)(); /* called once per program before MPI is started */
+        void (*finalize)(); /* called once per program after MPI is shutdown */
         option_help * (*get_options)();
 } ior_aiori_t;
 
@@ -94,6 +96,8 @@ extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
 extern ior_aiori_t rados_aiori;
 
+void aiori_initialize();
+void aiori_finalize();
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
 const char *aiori_default (void);

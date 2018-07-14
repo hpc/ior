@@ -62,12 +62,6 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
         PrintEarlyHeader();
 
-        /* Sanity check, we were compiled with SOME backend, right? */
-        if (0 == aiori_count ()) {
-                ERR("No IO backends compiled into ior.  "
-                    "Run 'configure --with-<backend>', and recompile.");
-        }
-
         /* setup tests, and validate parameters */
         tests_head = ParseCommandLine(argc, argv);
         InitTests(tests_head, world_com);
@@ -105,17 +99,12 @@ int ior_main(int argc, char **argv)
     out_logfile = stdout;
     out_resultfile = stdout;
 
+    aiori_initialize();
+
     /*
      * check -h option from commandline without starting MPI;
      */
     tests_head = ParseCommandLine(argc, argv);
-
-  #ifdef USE_S3_AIORI
-    /* This is supposed to be done before *any* threads are created.
-     * Could MPI_Init() create threads (or call multi-threaded
-     * libraries)?  We'll assume so. */
-    AWS4C_CHECK( aws_init() );
-  #endif
 
     /* start the MPI code */
     MPI_CHECK(MPI_Init(&argc, &argv), "cannot initialize MPI");
@@ -130,12 +119,6 @@ int ior_main(int argc, char **argv)
     /* set error-handling */
     /*MPI_CHECK(MPI_Errhandler_set(mpi_comm_world, MPI_ERRORS_RETURN),
        "cannot set errhandler"); */
-
-    /* Sanity check, we were compiled with SOME backend, right? */
-    if (0 == aiori_count ()) {
-            ERR("No IO backends compiled into ior.  "
-                "Run 'configure --with-<backend>', and recompile.");
-    }
 
     /* setup tests, and validate parameters */
     InitTests(tests_head, mpi_comm_world);
@@ -173,11 +156,7 @@ int ior_main(int argc, char **argv)
 
     MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
 
-  #ifdef USE_S3_AIORI
-    /* done once per program, after exiting all threads.
-     * NOTE: This fn doesn't return a value that can be checked for success. */
-    aws_cleanup();
-  #endif
+    aiori_finalize();
 
     return totalErrorCount;
 }
