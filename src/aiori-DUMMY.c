@@ -18,16 +18,19 @@
 /************************** O P T I O N S *****************************/
 struct dummy_options{
   uint64_t delay_creates;
+  uint64_t delay_xfer;
   int delay_rank_0_only;
 };
 
 static struct dummy_options o = {
   .delay_creates = 0,
+  .delay_xfer = 0,
   .delay_rank_0_only = 0,
 };
 
 static option_help options [] = {
       {'c', "delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_creates},
+      {'x', "delay-xfer",          "Delay per xfer in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_xfer},
       {'z', "delay-only-rank0",    "Delay only Rank0", OPTION_FLAG, 'd', & o.delay_rank_0_only},
       LAST_OPTION
 };
@@ -97,8 +100,10 @@ static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY xfer: %p\n", file);
   }
-  if (rank == 0){
-    usleep(100000);
+  if (o.delay_xfer){
+    if (! o.delay_rank_0_only || (o.delay_rank_0_only && rank == 0)){
+      usleep(o.delay_xfer);
+    }
   }
   return length;
 }
