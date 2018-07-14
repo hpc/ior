@@ -38,7 +38,7 @@ static void *MPIIO_Open(char *, IOR_param_t *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
                                    IOR_offset_t, IOR_param_t *);
 static void MPIIO_Close(void *, IOR_param_t *);
-static void MPIIO_SetVersion(IOR_param_t *);
+static char* MPIIO_GetVersion();
 static void MPIIO_Fsync(void *, IOR_param_t *);
 
 
@@ -51,7 +51,7 @@ ior_aiori_t mpiio_aiori = {
         .xfer = MPIIO_Xfer,
         .close = MPIIO_Close,
         .delete = MPIIO_Delete,
-        .set_version = MPIIO_SetVersion,
+        .get_version = MPIIO_GetVersion,
         .fsync = MPIIO_Fsync,
         .get_file_size = MPIIO_GetFileSize,
         .statfs = aiori_posix_statfs,
@@ -411,13 +411,16 @@ void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-static void MPIIO_SetVersion(IOR_param_t * test)
+static char* MPIIO_GetVersion()
 {
-        int version, subversion;
-        MPI_CHECK(MPI_Get_version(&version, &subversion),
-                  "cannot get MPI version");
-        sprintf(test->apiVersion, "%s (version=%d, subversion=%d)",
-                test->api, version, subversion);
+  static char ver[1024] = {};
+  if (ver){
+    return ver;
+  }
+  int version, subversion;
+  MPI_CHECK(MPI_Get_version(&version, &subversion), "cannot get MPI version");
+  sprintf(ver, "(%d.%d)", version, subversion);
+  return ver;
 }
 
 /*

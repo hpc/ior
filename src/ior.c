@@ -43,10 +43,9 @@ static int totalErrorCount;
 static const ior_aiori_t *backend;
 
 static void DestroyTests(IOR_test_t *tests_head);
-static void DisplayUsage(char **);
 static char *PrependDir(IOR_param_t *, char *);
 static char **ParseFileName(char *, int *);
-static IOR_test_t *SetupTests(int, char **);
+static void InitTests(IOR_test_t * , MPI_Comm);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t *);
 static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers);
@@ -70,14 +69,9 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         }
 
         /* setup tests, and validate parameters */
-        tests_head = SetupTests(argc, argv);
+        tests_head = ParseCommandLine(argc, argv);
+        InitTests(tests_head, world_com);
         verbose = tests_head->params.verbose;
-        tests_head->params.testComm = world_com;
-
-        /* check for commandline 'help' request */
-        if (rank == 0 && tests_head->params.showHelp == TRUE) {
-                DisplayUsage(argv);
-        }
 
         PrintHeader(argc, argv);
 
@@ -85,7 +79,6 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
                 totalErrorCount = 0;
                 verbose = tptr->params.verbose;
-                tptr->params.testComm = world_com;
                 if (rank == 0 && verbose >= VERBOSE_0) {
                         ShowTestStart(&tptr->params);
                 }
@@ -114,15 +107,8 @@ int ior_main(int argc, char **argv)
 
     /*
      * check -h option from commandline without starting MPI;
-     * if the help option is requested in a script file (showHelp=TRUE),
-     * the help output will be displayed in the MPI job
      */
-    for (i = 1; i < argc; i++) {
-            if (strcmp(argv[i], "-h") == 0) {
-                    DisplayUsage(argv);
-                    return (0);
-            }
-    }
+    tests_head = ParseCommandLine(argc, argv);
 
   #ifdef USE_S3_AIORI
     /* This is supposed to be done before *any* threads are created.
@@ -152,18 +138,8 @@ int ior_main(int argc, char **argv)
     }
 
     /* setup tests, and validate parameters */
-    tests_head = SetupTests(argc, argv);
+    InitTests(tests_head, mpi_comm_world);
     verbose = tests_head->params.verbose;
-    tests_head->params.testComm = mpi_comm_world;
-
-    /* check for commandline 'help' request */
-    if (tests_head->params.showHelp == TRUE) {
-            if( rank == 0 ){
-              DisplayUsage(argv);
-            }
-            MPI_Finalize();
-            exit(0);
-    }
 
     PrintHeader(argc, argv);
 
@@ -223,9 +199,12 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->mode = IOR_IRUSR | IOR_IWUSR | IOR_IRGRP | IOR_IWGRP;
         p->openFlags = IOR_RDWR | IOR_CREAT;
 
-        strncpy(p->api, default_aiori, MAX_STR);
-        strncpy(p->platform, "HOST(OSTYPE)", MAX_STR);
-        strncpy(p->testFileName, "testFile", MAX_PATHLEN);
+        p->api = strdup(default_aiori);
+        p->platform = strdup("HOST(OSTYPE)");
+        p->testFileName = strdup("testFile");
+
+        p->writeFile = p->readFile = FALSE;
+        p->checkWrite = p->checkRead = FALSE;
 
         p->nodes = 1;
         p->tasksPerNode = 1;
@@ -244,8 +223,8 @@ void init_IOR_Param_t(IOR_param_t * p)
 
         hdfs_user = getenv("USER");
         if (!hdfs_user)
-                hdfs_user = "";
-        strncpy(p->hdfs_user, hdfs_user, MAX_STR);
+          hdfs_user = "";
+        p->hdfs_user = strdup(hdfs_user);
         p->hdfs_name_node      = "default";
         p->hdfs_name_node_port = 0; /* ??? */
         p->hdfs_fs = NULL;
@@ -557,7 +536,7 @@ static void aligned_buffer_free(void *buf)
         free(*(void **)((char *)buf - sizeof(char *)));
 }
 
-void AllocResults(IOR_test_t *test)
+static void AllocResults(IOR_test_t *test)
 {
         int reps;
         if (test->results != NULL)
@@ -619,12 +598,12 @@ IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num)
         if (newTest == NULL)
                 ERR("malloc() of IOR_test_t failed");
         newTest->params = *init_params;
-        GetPlatformName(newTest->params.platform);
-        newTest->params.nodes = init_params->numTasks / tasksPerNode;
-        newTest->params.tasksPerNode = tasksPerNode;
+        newTest->params.platform = GetPlatformName();
         newTest->params.id = test_num;
         newTest->next = NULL;
         newTest->results = NULL;
+
+        AllocResults(newTest);
         return newTest;
 }
 
@@ -642,82 +621,6 @@ static void DestroyTests(IOR_test_t *tests_head)
                 next = tptr->next;
                 DestroyTest(tptr);
         }
-}
-
-/*
- * Display usage of script file.
- */
-static void DisplayUsage(char **argv)
-{
-        char *opts[] = {
-                "OPTIONS:",
-                " -a S  api --  API for I/O [POSIX|MMAP|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]",
-                " -A N  refNum -- user supplied reference number to include in the summary",
-                " -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)",
-                " -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers",
-                " -c    collective -- collective I/O",
-                " -C    reorderTasks -- changes task ordering to n+1 ordering for readback",
-                " -d N  interTestDelay -- delay between reps in seconds",
-                " -D N  deadlineForStonewalling -- seconds before stopping write or read phase",
-                " -O stoneWallingWearOut=1 -- once the stonewalling timout is over, all process finish to access the amount of data",
-                " -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut",
-                " -O stoneWallingStatusFile=FILE -- this file keeps the number of iterations from stonewalling during write and allows to use them for read",
-                " -e    fsync -- perform fsync/msync upon POSIX/MMAP write close",
-                " -E    useExistingTestFile -- do not remove test file before write access",
-                " -f S  scriptFile -- test script name",
-                " -F    filePerProc -- file-per-process",
-                " -g    intraTestBarriers -- use barriers between open, write/read, and close",
-                " -G N  setTimeStampSignature -- set value for time stamp signature/random seed",
-                " -h    showHelp -- displays options and help",
-                " -H    showHints -- show hints",
-                " -i N  repetitions -- number of repetitions of test",
-                " -I    individualDataSets -- datasets not shared by all procs [not working]",
-                " -j N  outlierThreshold -- warn on outlier N seconds from mean",
-                " -J N  setAlignment -- HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g)",
-                " -k    keepFile -- don't remove the test file(s) on program exit",
-                " -K    keepFileWithError  -- keep error-filled file(s) after data-checking",
-                " -l    datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]",
-                " -m    multiFile -- use number of reps (-i) for multiple file count",
-                " -M N  memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)",
-                " -n    noFill -- no fill in HDF5 file creation",
-                " -N N  numTasks -- number of tasks that should participate in the test",
-                " -o S  testFile -- full name for test",
-                " -O S  string of IOR directives (e.g. -O checkRead=1,lustreStripeCount=32)",
-                " -p    preallocate -- preallocate file size",
-                " -P    useSharedFilePointer -- use shared file pointer [not working]",
-                " -q    quitOnError -- during file error-checking, abort on error",
-                " -Q N  taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)",
-                " -r    readFile -- read existing file",
-                " -R    checkRead -- verify that the output of read matches the expected signature (used with -G)",
-                " -s N  segmentCount -- number of segments",
-                " -S    useStridedDatatype -- put strided access into datatype [not working]",
-                " -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)",
-                " -T N  maxTimeDuration -- max time in minutes executing repeated test; it aborts only between iterations and not within a test!",
-                " -u    uniqueDir -- use unique directory name for each file-per-process",
-                " -U S  hintsFileName -- full name for hints file",
-                " -v    verbose -- output information (repeating flag increases level)",
-                " -V    useFileView -- use MPI_File_set_view",
-                " -w    writeFile -- write file",
-                " -W    checkWrite -- check read after write",
-                " -x    singleXferAttempt -- do not retry transfer if incomplete",
-                " -X N  reorderTasksRandomSeed -- random seed for -Z option",
-                " -Y    fsyncPerWrite -- perform fsync/msync after each POSIX/MMAP write",
-                " -z    randomOffset -- access is to random, not sequential, offsets within a file",
-                " -Z    reorderTasksRandom -- changes task ordering to random ordering for readback",
-                " -O    summaryFile=FILE -- store result data into this file",
-                " -O    summaryFormat=[default,JSON,CSV] -- use the format for outputing the summary",
-                " ",
-                "         NOTE: S is a string, N is an integer number.",
-                " ",
-                ""
-        };
-        int i = 0;
-
-        fprintf(out_logfile, "Usage: %s [OPTIONS]\n\n", *argv);
-        for (i = 0; strlen(opts[i]) > 0; i++)
-                fprintf(out_logfile, "%s\n", opts[i]);
-
-        return;
 }
 
 /*
@@ -823,9 +726,10 @@ FillBuffer(void *buffer,
 /*
  * Return string describing machine name and type.
  */
-void GetPlatformName(char *platformName)
+char * GetPlatformName()
 {
         char nodeName[MAX_STR], *p, *start, sysName[MAX_STR];
+        char platformName[MAX_STR];
         struct utsname name;
 
         if (uname(&name) != 0) {
@@ -858,6 +762,7 @@ void GetPlatformName(char *platformName)
         }
 
         sprintf(platformName, "%s(%s)", nodeName, sysName);
+        return strdup(platformName);
 }
 
 
@@ -1097,14 +1002,16 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
  * Setup tests by parsing commandline and creating test script.
  * Perform a sanity-check on the configured parameters.
  */
-static IOR_test_t *SetupTests(int argc, char **argv)
+static void InitTests(IOR_test_t *tests, MPI_Comm com)
 {
-        IOR_test_t *tests, *testsHead;
+        IOR_test_t *testsHead = tests;
+        int size;
+
+        MPI_CHECK(MPI_Comm_size(com, & size), "MPI_Comm_size() error");
 
         /* count the tasks per node */
-        tasksPerNode = CountTasksPerNode(mpi_comm_world);
+        tasksPerNode = CountTasksPerNode(com);
 
-        testsHead = tests = ParseCommandLine(argc, argv);
         /*
          * Since there is no guarantee that anyone other than
          * task 0 has the environment settings for the hints, pass
@@ -1114,6 +1021,16 @@ static IOR_test_t *SetupTests(int argc, char **argv)
 
         /* check validity of tests and create test queue */
         while (tests != NULL) {
+                IOR_param_t *params = & tests->params;
+                params->testComm = com;
+                params->nodes = params->numTasks / tasksPerNode;
+                params->tasksPerNode = tasksPerNode;
+                if (params->numTasks == 0) {
+                  params->numTasks = size;
+                }
+                params->expectedAggFileSize =
+                  params->blockSize * params->segmentCount * params->numTasks;
+
                 ValidateTests(&tests->params);
                 tests = tests->next;
         }
@@ -1122,8 +1039,6 @@ static IOR_test_t *SetupTests(int argc, char **argv)
 
         /* seed random number generator */
         SeedRandGen(mpi_comm_world);
-
-        return (testsHead);
 }
 
 /*
@@ -1468,8 +1383,7 @@ static void TestIoSys(IOR_test_t *test)
                         }
                         if (params->reorderTasks) {
                                 /* move two nodes away from writing node */
-                                rankOffset =
-                                        (2 * params->tasksPerNode) % params->numTasks;
+                                rankOffset = (2 * params->tasksPerNode) % params->numTasks;
                         }
 
                         // update the check buffer
@@ -1497,9 +1411,8 @@ static void TestIoSys(IOR_test_t *test)
                         /* Constant process offset reading */
                         if (params->reorderTasks) {
                                 /* move taskPerNodeOffset nodes[1==default] away from writing node */
-                                rankOffset =
-                                        (params->taskPerNodeOffset *
-                                         params->tasksPerNode) % params->numTasks;
+                                rankOffset = (params->taskPerNodeOffset *
+                                          params->tasksPerNode) % params->numTasks;
                         }
                         /* random process offset reading */
                         if (params->reorderTasksRandom) {
@@ -1625,10 +1538,6 @@ static void ValidateTests(IOR_param_t * test)
 {
         IOR_param_t defaults;
         init_IOR_Param_t(&defaults);
-
-        /* get the version of the tests */
-        AioriBind(test->api, test);
-        backend->set_version(test);
 
         if (test->repetitions <= 0)
                 WARN_RESET("too few test repetitions",
@@ -2005,7 +1914,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                         && ((GetTimeStamp() - startForStonewall)
                             > test->deadlineForStonewalling));
 
-        if(access == READ && test->stoneWallingStatusFile[0]){
+        if(access == READ && test->stoneWallingStatusFile){
           test->stoneWallingWearOutIterations = ReadStoneWallingIterations(test->stoneWallingStatusFile);
           if(test->stoneWallingWearOutIterations == -1){
             ERR("Could not read back the stonewalling status from the file!");

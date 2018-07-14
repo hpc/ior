@@ -2154,7 +2154,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     int printhelp = 0;
     int parsed_options = option_parse(argc, argv, options, & printhelp);
 
-    backend = aiori_select (backend_name);
+    backend = aiori_select(backend_name);
     if (NULL == backend) {
         FAIL("Could not find suitable backend to use");
     }
@@ -2164,7 +2164,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     if(printhelp != 0){
-      printf("\nSynopsis: %s ", argv[0]);
+      printf("Usage: %s ", argv[0]);
 
       option_print_help(options, 0);
 

@@ -1,5 +1,7 @@
-#ifndef IOR_OPTION_H
-#define IOR_OPTION_H
+#ifndef _IOR_OPTION_H
+#define _IOR_OPTION_H
+
+#include <stdint.h>
 
 /*
  * Initial revision by JK
@@ -23,6 +25,7 @@ typedef struct{
 
 #define LAST_OPTION {0, 0, 0, (option_value_type) 0, 0, NULL}
 
+int64_t string_to_bytes(char *size_str);
 void option_print_help(option_help * args, int is_plugin);
 void option_print_current(option_help * args);
 

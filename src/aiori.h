@@ -71,7 +71,7 @@ typedef struct ior_aiori {
                              IOR_offset_t, IOR_param_t *);
         void (*close)(void *, IOR_param_t *);
         void (*delete)(char *, IOR_param_t *);
-        void (*set_version)(IOR_param_t *);
+        char* (*get_version)();
         void (*fsync)(void *, IOR_param_t *);
         IOR_offset_t (*get_file_size)(IOR_param_t *, MPI_Comm, char *);
         int (*statfs) (const char *, ior_aiori_statfs_t *, IOR_param_t * param);
@@ -99,7 +99,7 @@ int aiori_count (void);
 const char *aiori_default (void);
 
 /* some generic POSIX-based backend calls */
-void aiori_set_version(IOR_param_t * test);
+char * aiori_get_version();
 int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param);
 int aiori_posix_mkdir (const char *path, mode_t mode, IOR_param_t * param);
 int aiori_posix_rmdir (const char *path, IOR_param_t * param);

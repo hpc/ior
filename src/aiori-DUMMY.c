@@ -80,9 +80,9 @@ static void DUMMY_Delete(char *testFileName, IOR_param_t * param)
     }
 }
 
-static void DUMMY_SetVersion(IOR_param_t * test)
+static char * DUMMY_getVersion()
 {
-  sprintf(test->apiVersion, "DUMMY-0.5");
+  return "0.5";
 }
 
 static IOR_offset_t DUMMY_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
@@ -136,7 +136,7 @@ ior_aiori_t dummy_aiori = {
   DUMMY_Xfer,
   DUMMY_Close,
   DUMMY_Delete,
-  DUMMY_SetVersion,
+  DUMMY_getVersion,
   DUMMY_Fsync,
   DUMMY_GetFileSize,
   DUMMY_statfs,

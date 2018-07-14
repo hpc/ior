@@ -7,6 +7,45 @@
 #include <option.h>
 
 /*
+* Takes a string of the form 64, 8m, 128k, 4g, etc. and converts to bytes.
+*/
+int64_t string_to_bytes(char *size_str)
+{
+       int64_t size = 0;
+       char range;
+       int rc;
+
+       rc = sscanf(size_str, " %lld %c ", (long long*) & size, &range);
+       if (rc == 2) {
+               switch ((int)range) {
+               case 'k':
+               case 'K':
+                       size <<= 10;
+                       break;
+               case 'm':
+               case 'M':
+                       size <<= 20;
+                       break;
+               case 'g':
+               case 'G':
+                       size <<= 30;
+                       break;
+               case 't':
+               case 'T':
+                       size <<= 40;
+                       break;
+               case 'p':
+               case 'P':
+                       size <<= 50;
+                       break;
+               }
+       } else if (rc == 0) {
+               size = -1;
+       }
+       return (size);
+}
+
+/*
  * Initial revision by JK
  */
 
@@ -16,6 +55,10 @@ static int print_value(option_help * o){
     assert(o->variable != NULL);
 
     switch(o->type){
+      case('p'):{
+        pos += printf("=STRING");
+        break;
+      }
       case('F'):{
         pos += printf("=%.14f ", *(double*) o->variable);
         break;
@@ -59,12 +102,12 @@ static void print_help_section(option_help * args, option_value_type type, char 
   first = 1;
   option_help * o;
   for(o = args; o->shortVar != 0 || o->longVar != 0 || o->help != NULL ; o++){
-    if( o->shortVar == 0 && o->longVar == 0 && o->help != NULL){
-      printf("%-15s %s\n", "", o->help);
-      continue;
-    }
 
     if (o->arg == type){
+      if( o->shortVar == 0 && o->longVar == 0 && o->help != NULL){
+        printf("%s\n", o->help);
+        continue;
+      }
       if (first){
         printf("\n%s\n", name);
         first = 0;
@@ -235,13 +278,13 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
 
     // try to find matching option help
     for(option_help * o = args; o->shortVar != 0 || o->longVar != 0 || o->help != NULL ; o++ ){
-      if ( (strlen(txt) == 2 && txt[0] == '-' && o->shortVar == txt[1]) || (strlen(txt) > 2 && txt[0] == '-' && txt[1] == '-' && o->longVar != NULL && strcmp(txt + 2, o->longVar) == 0)){
-        foundOption = 1;
+      if( o->shortVar == 0 && o->longVar == 0 ){
+        // section
+        continue;
+      }
 
-        if( o->shortVar == 0 && o->longVar == 0 && o->help != NULL){
-          // section
-          continue;
-        }
+      if ( (txt[0] == '-' && o->shortVar == txt[1]) || (strlen(txt) > 2 && txt[0] == '-' && txt[1] == '-' && o->longVar != NULL && strcmp(txt + 2, o->longVar) == 0)){
+        foundOption = 1;
 
         // now process the option.
         switch(o->arg){
@@ -254,9 +297,13 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
           case (OPTION_REQUIRED_ARGUMENT):{
             // check if next is an argument
             if(arg == NULL){
-              // simply take the next value as argument
-              i++;
-              arg = argv[i];
+              if(o->shortVar == txt[1] && txt[2] != 0){
+                arg = & txt[2];
+              }else{
+                // simply take the next value as argument
+                i++;
+                arg = argv[i];
+              }
             }
 
             switch(o->type){
@@ -269,7 +316,7 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
                 break;
               }
               case('d'):{
-                *(int*) o->variable = atoi(arg);
+                *(int*) o->variable = string_to_bytes(arg);
                 break;
               }
               case('H'):
@@ -285,7 +332,7 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
                 break;
               }
               case('l'):{
-                *(long long*) o->variable = atoll(arg);
+                *(long long*) o->variable = string_to_bytes(arg);
                 break;
               }
             }

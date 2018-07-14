@@ -67,7 +67,7 @@ ior_aiori_t ncmpi_aiori = {
         .xfer = NCMPI_Xfer,
         .close = NCMPI_Close,
         .delete = NCMPI_Delete,
-        .set_version = NCMPI_SetVersion,
+        .get_version = NCMPI_GetVersion,
         .fsync = NCMPI_Fsync,
         .get_file_size = NCMPI_GetFileSize,
         .statfs = aiori_posix_statfs,
@@ -341,9 +341,9 @@ static void NCMPI_Delete(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-static void NCMPI_SetVersion(IOR_param_t * test)
+static char* NCMPI_GetVersion()
 {
-        sprintf(test->apiVersion, "%s (%s)", test->api, ncmpi_inq_libvers());
+  return ncmpi_inq_libvers();
 }
 
 /*

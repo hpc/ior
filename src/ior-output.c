@@ -78,7 +78,7 @@ static void PrintKeyValEnd(){
 }
 
 static void PrintKeyVal(char * key, char * value){
-  if(value[strlen(value) -1 ] == '\n'){
+  if(value[0] != 0 && value[strlen(value) -1 ] == '\n'){
     // remove \n
     value[strlen(value) -1 ] = 0;
   }
@@ -352,7 +352,6 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("useExistingTestFile", test->useExistingTestFile);
     PrintKeyValInt("showHints", test->showHints);
     PrintKeyValInt("uniqueDir", test->uniqueDir);
-    PrintKeyValInt("showHelp", test->showHelp);
     PrintKeyValInt("individualDataSets", test->individualDataSets);
     PrintKeyValInt("singleXferAttempt", test->singleXferAttempt);
     PrintKeyValInt("readFile", test->readFile);
@@ -407,7 +406,7 @@ void ShowTestEnd(IOR_test_t *tptr){
  */
 void ShowSetup(IOR_param_t *params)
 {
-  if (strcmp(params->debug, "") != 0) {
+  if (params->debug) {
       fprintf(out_logfile, "\n*** DEBUG MODE ***\n");
       fprintf(out_logfile, "*** %s ***\n\n", params->debug);
   }

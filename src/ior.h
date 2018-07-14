@@ -87,17 +87,18 @@ typedef struct IO_BUFFERS
 
 typedef struct
 {
-    char debug[MAX_STR];             /* debug info string */
+    const void * backend;
+    char * debug;             /* debug info string */
     unsigned int mode;               /* file permissions */
     unsigned int openFlags;          /* open flags (see also <open>) */
     int referenceNumber;             /* user supplied reference number */
-    char api[MAX_STR];               /* API for I/O */
-    char apiVersion[MAX_STR];        /* API version */
-    char platform[MAX_STR];          /* platform type */
-    char testFileName[MAXPATHLEN];   /* full name for test */
-    char testFileName_fppReadCheck[MAXPATHLEN];/* filename for fpp read check */
-    char hintsFileName[MAXPATHLEN];  /* full name for hints file */
-    char options[MAXPATHLEN];        /* options string */
+    char * api;               /* API for I/O */
+    char * apiVersion;        /* API version */
+    char * platform;          /* platform type */
+    char * testFileName;   /* full name for test */
+    char * testFileName_fppReadCheck;/* filename for fpp read check */
+    char * hintsFileName;  /* full name for hints file */
+    char * options;        /* options string */
     int numTasks;                    /* number of tasks for test */
     int nodes;                       /* number of nodes for test */
     int tasksPerNode;                /* number of tasks per node */
@@ -131,7 +132,6 @@ typedef struct
     int useStridedDatatype;          /* put strided access into datatype */
     int useO_DIRECT;                 /* use O_DIRECT, bypassing I/O buffers */
     int showHints;                   /* show hints */
-    int showHelp;                    /* show options and help */
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
     int useExistingTestFile;         /* do not delete test file before access */
@@ -139,7 +139,7 @@ typedef struct
     int deadlineForStonewalling;     /* max time in seconds to run any test phase */
     int stoneWallingWearOut;         /* wear out the stonewalling, once the timout is over, each process has to write the same amount */
     uint64_t stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
-    char stoneWallingStatusFile[MAXPATHLEN];
+    char * stoneWallingStatusFile;
 
     int maxTimeDuration;             /* max time in minutes to run each test */
     int outlierThreshold;            /* warn on outlier N seconds from mean */
@@ -173,7 +173,7 @@ typedef struct
     IOR_offset_t setAlignment;       /* alignment in bytes */
 
     /* HDFS variables */
-    char        hdfs_user[MAX_STR];  /* copied from ENV, for now */
+    char      * hdfs_user;  /* copied from ENV, for now */
     const char* hdfs_name_node;
     tPort       hdfs_name_node_port; /* (uint16_t) */
     hdfsFS      hdfs_fs;             /* file-system handle */
@@ -190,8 +190,7 @@ typedef struct
     IOBuf*      io_buf;              /* aws4c places parsed header values here */
     IOBuf*      etags;               /* accumulate ETags for N:1 parts */
     size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
-#   define      MAX_UPLOAD_ID_SIZE    256 /* seems to be 32, actually */
-    char        UploadId[MAX_UPLOAD_ID_SIZE +1]; /* key for multi-part-uploads */
+    char*       UploadId; /* key for multi-part-uploads */
 
     /* RADOS variables */
     rados_t rados_cluster;           /* RADOS cluster handle */
@@ -245,8 +244,7 @@ typedef struct IOR_test_t {
 
 
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
-void AllocResults(IOR_test_t *test);
-void GetPlatformName(char *);
+char * GetPlatformName();
 void init_IOR_Param_t(IOR_param_t *p);
 
 /*

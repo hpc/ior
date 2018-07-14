@@ -49,7 +49,6 @@ static IOR_offset_t RADOS_Xfer(int, void *, IOR_size_t *,
                            IOR_offset_t, IOR_param_t *);
 static void RADOS_Close(void *, IOR_param_t *);
 static void RADOS_Delete(char *, IOR_param_t *);
-static void RADOS_SetVersion(IOR_param_t *);
 static void RADOS_Fsync(void *, IOR_param_t *);
 static IOR_offset_t RADOS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static int RADOS_StatFS(const char *, ior_aiori_statfs_t *, IOR_param_t *);
@@ -67,7 +66,7 @@ ior_aiori_t rados_aiori = {
         .xfer = RADOS_Xfer,
         .close = RADOS_Close,
         .delete = RADOS_Delete,
-        .set_version = RADOS_SetVersion,
+        .get_version = aiori_get_version,
         .fsync = RADOS_Fsync,
         .get_file_size = RADOS_GetFileSize,
         .statfs = RADOS_StatFS,
@@ -254,12 +253,6 @@ static void RADOS_Delete(char *testFileName, IOR_param_t * param)
 
         RADOS_Cluster_Finalize(param);
 
-        return;
-}
-
-static void RADOS_SetVersion(IOR_param_t * test)
-{
-        strcpy(test->apiVersion, test->api);
         return;
 }
 
