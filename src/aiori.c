@@ -117,7 +117,12 @@ char* aiori_get_version()
   return "";
 }
 
+static int is_initialized = FALSE;
+
 void aiori_initialize(){
+	if (is_initialized) return;
+	is_initialized = TRUE;
+
   /* Sanity check, we were compiled with SOME backend, right? */
   if (0 == aiori_count ()) {
           ERR("No IO backends compiled into aiori.  "
@@ -132,6 +137,9 @@ void aiori_initialize(){
 }
 
 void aiori_finalize(){
+  if (! is_initialized) return;
+  is_initialized = FALSE;
+
   for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
     if((*tmp)->finalize){
       (*tmp)->finalize();

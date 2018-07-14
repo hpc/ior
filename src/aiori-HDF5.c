@@ -89,7 +89,7 @@ static IOR_offset_t HDF5_Xfer(int, void *, IOR_size_t *,
                            IOR_offset_t, IOR_param_t *);
 static void HDF5_Close(void *, IOR_param_t *);
 static void HDF5_Delete(char *, IOR_param_t *);
-static void HDF5_SetVersion(IOR_param_t *);
+static char* HDF5_GetVersion();
 static void HDF5_Fsync(void *, IOR_param_t *);
 static IOR_offset_t HDF5_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static int HDF5_Access(const char *, int, IOR_param_t *);
@@ -103,7 +103,7 @@ ior_aiori_t hdf5_aiori = {
         .xfer = HDF5_Xfer,
         .close = HDF5_Close,
         .delete = HDF5_Delete,
-        .set_version = HDF5_SetVersion,
+        .get_version = HDF5_GetVersion,
         .fsync = HDF5_Fsync,
         .get_file_size = HDF5_GetFileSize,
         .statfs = aiori_posix_statfs,
@@ -447,20 +447,23 @@ static void HDF5_Delete(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-static void HDF5_SetVersion(IOR_param_t * test)
+static char * HDF5_GetVersion()
 {
+  static char version[1024] = {0};
+  if(version[0]) return version;
+
         unsigned major, minor, release;
         if (H5get_libversion(&major, &minor, &release) < 0) {
                 WARN("cannot get HDF5 library version");
         } else {
-                sprintf(test->apiVersion, "%s-%u.%u.%u",
-                        test->api, major, minor, release);
+                sprintf(version, "%u.%u.%u", major, minor, release);
         }
 #ifndef H5_HAVE_PARALLEL
-        strcat(test->apiVersion, " (Serial)");
+        strcat(version, " (Serial)");
 #else                           /* H5_HAVE_PARALLEL */
-        strcat(test->apiVersion, " (Parallel)");
+        strcat(version, " (Parallel)");
 #endif                          /* not H5_HAVE_PARALLEL */
+  return version;
 }
 
 /*

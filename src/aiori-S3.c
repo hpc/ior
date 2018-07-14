@@ -213,11 +213,8 @@ ior_aiori_t s3_emc_aiori = {
 	.finalize = S3_finalize
 };
 
-static int is_initialized = FALSE;
 
 static void S3_init(){
-	if (is_initialized) return;
-	is_initialized = TRUE;
   /* This is supposed to be done before *any* threads are created.
    * Could MPI_Init() create threads (or call multi-threaded
    * libraries)?  We'll assume so. */
@@ -225,8 +222,6 @@ static void S3_init(){
 }
 
 static void S3_finalize(){
-	if (! is_initialized) return;
-	is_initialized = FALSE;
   /* done once per program, after exiting all threads.
  	* NOTE: This fn doesn't return a value that can be checked for success. */
   aws_cleanup();
