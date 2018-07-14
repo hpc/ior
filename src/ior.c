@@ -210,37 +210,13 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->hdfs_replicas = 0;   /* invokes the default */
         p->hdfs_block_size = 0;
 
-        // p->curl       = NULL;
         p->URI = NULL;
-        p->curl_flags = 0;
-        p->io_buf = NULL;
-        p->etags = NULL;
         p->part_number = 0;
 
         p->beegfs_numTargets = -1;
         p->beegfs_chunkSize = -1;
 
         p->mmap_ptr = NULL;
-}
-
-/**
- * Bind the global "backend" pointer to the requested backend AIORI's
- * function table.
- */
-static void AioriBind(char* api, IOR_param_t* param)
-{
-        backend = aiori_select (api);
-        if (NULL != backend) {
-                if (! strncmp(api, "S3", 2)) {
-                        if (! strcasecmp(api, "S3_EMC")) {
-                                param->curl_flags |= IOR_CURL_S3_EMC_EXT;
-                        } else {
-                                param->curl_flags &= ~(IOR_CURL_S3_EMC_EXT);
-                        }
-                }
-        } else {
-                ERR("unrecognized IO API");
-        }
 }
 
 static void
@@ -1235,7 +1211,7 @@ static void TestIoSys(IOR_test_t *test)
         }
 
         /* bind I/O calls to specific API */
-        AioriBind(params->api, params);
+        backend = aiori_select(params->api);
 
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)

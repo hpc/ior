@@ -267,9 +267,11 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
     char * txt = argv[i];
     int foundOption = 0;
     char * arg = strstr(txt, "=");
+    int replaced_equal = 0;
     if(arg != NULL){
       arg[0] = 0;
       arg++;
+      replaced_equal = 1;
     }
     if(strcmp(txt, "--") == 0){
       // we found plugin options
@@ -346,7 +348,7 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
             }
           }
         }
-        if(arg != NULL){
+        if(replaced_equal){
           arg[-1] = '=';
         }
 

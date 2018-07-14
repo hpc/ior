@@ -24,6 +24,8 @@ See also NOTES.txt
 
 # Testing
 
+  Run "make check" to invoke the unit test framework of Automake.
+
   * To run basic functionality tests that we use for continuous integration, see ./testing/
   * There are docker scripts provided to test various distributions at once.
   * See ./testing/docker/

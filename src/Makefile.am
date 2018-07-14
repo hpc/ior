@@ -1,9 +1,14 @@
+SUBDIRS = . test
+
 bin_PROGRAMS = ior mdtest
 if USE_CAPS
 bin_PROGRAMS += IOR MDTEST
 endif
 
 noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h
+
+lib_LIBRARIES = libaiori.a
+libaiori_a_SOURCES = ior.c mdtest.c utilities.c parse_options.c ior-output.c option.c
 
 extraSOURCES = aiori.c aiori-DUMMY.c
 extraLDADD =
@@ -88,3 +93,5 @@ IOT_CPPFLAGS = $(ior_CPPFLAGS)
 MDTEST_SOURCES  = $(mdtest_SOURCES)
 MDTEST_LDADD    = $(mdtest_LDADD)
 MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
+
+libaiori_a_SOURCES += $(extraSOURCES)

@@ -29,14 +29,6 @@
    typedef void*    hdfsFS;      /* unused, but needs a type */
 #endif
 
-#ifdef USE_S3_AIORI
-#  include <curl/curl.h>
-#  include "aws4c.h"
-#else
-   typedef void     CURL;       /* unused, but needs a type */
-   typedef void     IOBuf;      /* unused, but needs a type */
-#endif
-
 #ifdef USE_RADOS_AIORI
 #  include <rados/librados.h>
 #else
@@ -180,15 +172,7 @@ typedef struct
     int         hdfs_replicas;       /* n block replicas.  (0 gets default) */
     int         hdfs_block_size;     /* internal blk-size. (0 gets default) */
 
-    /* REST/S3 variables */
-    //    CURL*       curl;             /* for libcurl "easy" fns (now managed by aws4c) */
-#   define      IOR_CURL_INIT        0x01 /* curl top-level inits were perfomed once? */
-#   define      IOR_CURL_NOCONTINUE  0x02
-#   define      IOR_CURL_S3_EMC_EXT  0x04 /* allow EMC extensions to S3? */
-    char        curl_flags;
     char*       URI;                 /* "path" to target object */
-    IOBuf*      io_buf;              /* aws4c places parsed header values here */
-    IOBuf*      etags;               /* accumulate ETags for N:1 parts */
     size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
     char*       UploadId; /* key for multi-part-uploads */
 

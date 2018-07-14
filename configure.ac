@@ -26,6 +26,7 @@ AX_PROG_CC_MPI(,,[
     AC_MSG_FAILURE([MPI compiler requested, but couldn't use MPI.])
 ])
 
+AC_PROG_RANLIB
 # No reason not to require modern C at this point
 AC_PROG_CC_C99
 
@@ -244,5 +245,6 @@ AM_CONDITIONAL([USE_CAPS], [test x$enable_caps = xyes])
 AC_CONFIG_FILES([Makefile
                  src/Makefile
                  contrib/Makefile
+                 src/test/Makefile
                  doc/Makefile])
 AC_OUTPUT

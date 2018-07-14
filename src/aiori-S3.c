@@ -110,6 +110,39 @@
 #include "aws4c_extra.h"        // utilities, e.g. for parsing XML in responses
 
 
+
+
+/* buffer is used to generate URLs, err_msgs, etc */
+#define            BUFF_SIZE  1024
+static char        buff[BUFF_SIZE];
+
+const int          ETAG_SIZE = 32;
+
+CURLcode           rc;
+
+/* Any objects we create or delete will be under this bucket */
+const char* bucket_name = "ior";
+
+/* TODO: The following stuff goes into options! */
+/* REST/S3 variables */
+//    CURL*       curl;             /* for libcurl "easy" fns (now managed by aws4c) */
+#   define      IOR_CURL_INIT        0x01 /* curl top-level inits were perfomed once? */
+#   define      IOR_CURL_NOCONTINUE  0x02
+#   define      IOR_CURL_S3_EMC_EXT  0x04 /* allow EMC extensions to S3? */
+
+#ifdef USE_S3_AIORI
+#  include <curl/curl.h>
+#  include "aws4c.h"
+#else
+   typedef void     CURL;       /* unused, but needs a type */
+   typedef void     IOBuf;      /* unused, but needs a type */
+#endif
+
+    IOBuf*      io_buf;              /* aws4c places parsed header values here */
+    IOBuf*      etags;               /* accumulate ETags for N:1 parts */
+
+///////////////////////////////////////////////
+
 /**************************** P R O T O T Y P E S *****************************/
 static void*        S3_Create(char*, IOR_param_t*);
 static void*        S3_Open(char*, IOR_param_t*);
@@ -180,17 +213,23 @@ ior_aiori_t s3_emc_aiori = {
 	.finalize = S3_finalize
 };
 
+static int is_initialized = FALSE;
+
 static void S3_init(){
-    /* This is supposed to be done before *any* threads are created.
-     * Could MPI_Init() create threads (or call multi-threaded
-     * libraries)?  We'll assume so. */
-    AWS4C_CHECK( aws_init() );
+	if (is_initialized) return;
+	is_initialized = TRUE;
+  /* This is supposed to be done before *any* threads are created.
+   * Could MPI_Init() create threads (or call multi-threaded
+   * libraries)?  We'll assume so. */
+  AWS4C_CHECK( aws_init() );
 }
 
 static void S3_finalize(){
-    /* done once per program, after exiting all threads.
-     * NOTE: This fn doesn't return a value that can be checked for success. */
-    aws_cleanup();
+	if (! is_initialized) return;
+	is_initialized = FALSE;
+  /* done once per program, after exiting all threads.
+ 	* NOTE: This fn doesn't return a value that can be checked for success. */
+  aws_cleanup();
 }
 
 /* modelled on similar macros in iordef.h */
@@ -211,20 +250,6 @@ static void S3_finalize(){
 				  __FILE__, __LINE__);													\
 		fflush(stdout);																	\
 	} while (0)
-
-
-
-/* buffer is used to generate URLs, err_msgs, etc */
-#define            BUFF_SIZE  1024
-static char        buff[BUFF_SIZE];
-
-const int          ETAG_SIZE = 32;
-
-CURLcode           rc;
-
-/* Any objects we create or delete will be under this bucket */
-const char* bucket_name = "ior";
-//const char* bucket_name = "brettk";
 
 
 /***************************** F U N C T I O N S ******************************/
@@ -251,9 +276,8 @@ const char* bucket_name = "ior";
  * ---------------------------------------------------------------------------
  */
 
-static
-void
-s3_connect( IOR_param_t* param ) {
+
+static void s3_connect( IOR_param_t* param ) {
 	if (param->verbose >= VERBOSE_2) {
 		printf("-> s3_connect\n"); /* DEBUGGING */
 	}
