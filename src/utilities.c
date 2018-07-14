@@ -266,7 +266,7 @@ void SetHints(MPI_Info * mpiHints, char *hintsFileName)
         }
 
         /* get hints from hints file */
-        if (strcmp(hintsFileName, "") != 0) {
+        if (hintsFileName != NULL && strcmp(hintsFileName, "") != 0) {
 
                 /* open the hint file */
                 fd = fopen(hintsFileName, "r");
