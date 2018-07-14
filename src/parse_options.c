@@ -458,7 +458,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
            * so we'll toss the value in both for now, and sort it out in initialization
            * after all the arguments are in and we know which it keep.
            */
-          {'G', NULL,        "setTimeStampSignature -- set value for time stamp signature/random seed", OPTION_FLAG, 'd', & toggleG},
+          {'G', NULL,        "setTimeStampSignature -- set value for time stamp signature/random seed", OPTION_OPTIONAL_ARGUMENT, 'd', & toggleG},
           {'H', NULL,        "showHints -- show hints", OPTION_FLAG, 'd', & initialTestParams.showHints},
           {'i', NULL,        "repetitions -- number of repetitions of test", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.repetitions},
           {'I', NULL,        "individualDataSets -- datasets not shared by all procs [not working]", OPTION_FLAG, 'd', & initialTestParams.individualDataSets},
@@ -532,7 +532,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         if (memoryPerNode){
           initialTestParams.memoryPerNode = NodeMemoryStringToBytes(optarg);
         }
-        
+
         const ior_aiori_t * backend = aiori_select(initialTestParams.api);
         initialTestParams.backend = backend;
         initialTestParams.apiVersion = backend->get_version();
