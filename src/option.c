@@ -307,6 +307,12 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
             }
 
             switch(o->type){
+              case('p'):{
+                // call the function in the variable
+                void(*fp)() = o->variable;
+                fp(arg);
+                break;
+              }
               case('F'):{
                 *(double*) o->variable = atof(arg);
                 break;
@@ -335,6 +341,8 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
                 *(long long*) o->variable = string_to_bytes(arg);
                 break;
               }
+              default:
+                printf("ERROR: Unknown option type %c\n", o->type);
             }
           }
         }

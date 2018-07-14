@@ -120,7 +120,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
         }
         if (strcasecmp(option, "api") == 0) {
-                strcpy(params->api, value);
+          params->api = strdup(value);
         } else if (strcasecmp(option, "summaryFile") == 0) {
           if (rank == 0){
             out_resultfile = fopen(value, "w");
@@ -142,13 +142,13 @@ void DecodeDirective(char *line, IOR_param_t *params)
         } else if (strcasecmp(option, "refnum") == 0) {
                 params->referenceNumber = atoi(value);
         } else if (strcasecmp(option, "debug") == 0) {
-                strcpy(params->debug, value);
+                params->debug = strdup(value);
         } else if (strcasecmp(option, "platform") == 0) {
-                strcpy(params->platform, value);
+                params->platform  = strdup(value);
         } else if (strcasecmp(option, "testfile") == 0) {
-                strcpy(params->testFileName, value);
+                params->testFileName  = strdup(value);
         } else if (strcasecmp(option, "hintsfilename") == 0) {
-                strcpy(params->hintsFileName, value);
+                params->hintsFileName  = strdup(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
                 params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
@@ -156,7 +156,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
         } else if (strcasecmp(option, "stoneWallingWearOutIterations") == 0) {
                 params->stoneWallingWearOutIterations = atoll(value);
         } else if (strcasecmp(option, "stoneWallingStatusFile") == 0) {
-                strcpy(params->stoneWallingStatusFile, value);
+                params->stoneWallingStatusFile  = strdup(value);
         } else if (strcasecmp(option, "maxtimeduration") == 0) {
                 params->maxTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {
@@ -451,7 +451,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
           {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
           {'e', NULL,        "fsync -- perform fsync/msync upon POSIX/MMAP write close", OPTION_FLAG, 'd', & initialTestParams.fsync},
           {'E', NULL,        "useExistingTestFile -- do not remove test file before write access", OPTION_FLAG, 'd', & initialTestParams.useExistingTestFile},
-          {'f', NULL,        "scriptFile -- test script name", OPTION_FLAG, 'd', & testscripts},
+          {'f', NULL,        "scriptFile -- test script name", OPTION_OPTIONAL_ARGUMENT, 's', & testscripts},
           {'F', NULL,        "filePerProc -- file-per-process", OPTION_FLAG, 'd', & initialTestParams.filePerProc},
           {'g', NULL,        "intraTestBarriers -- use barriers between open, write/read, and close", OPTION_FLAG, 'd', & initialTestParams.intraTestBarriers},
           /* This option toggles between Incompressible Seed and Time stamp sig based on -l,
@@ -532,12 +532,14 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         if (memoryPerNode){
           initialTestParams.memoryPerNode = NodeMemoryStringToBytes(optarg);
         }
-
-        /* get the version of the tests */
-
+        
         const ior_aiori_t * backend = aiori_select(initialTestParams.api);
         initialTestParams.backend = backend;
         initialTestParams.apiVersion = backend->get_version();
+
+        if(backend->get_options != NULL){
+          option_parse(argc - parsed_options, argv + parsed_options, backend->get_options(), & printhelp);
+        }
 
         if(printhelp != 0){
           printf("Usage: %s ", argv[0]);

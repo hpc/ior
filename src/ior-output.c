@@ -78,7 +78,7 @@ static void PrintKeyValEnd(){
 }
 
 static void PrintKeyVal(char * key, char * value){
-  if(value[0] != 0 && value[strlen(value) -1 ] == '\n'){
+  if(value != NULL && value[0] != 0 && value[strlen(value) -1 ] == '\n'){
     // remove \n
     value[strlen(value) -1 ] = 0;
   }
