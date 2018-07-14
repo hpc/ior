@@ -16,6 +16,7 @@ AC_CANONICAL_HOST
 
 # Automake support
 AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define foreign subdir-objects])
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AM_MAINTAINER_MODE
 
 # Checks for programs
