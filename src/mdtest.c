@@ -123,6 +123,7 @@ static uint64_t num_dirs_in_tree;
  * of files in a directory. Make room for that possibility with
  * a larger variable.
  */
+static uint64_t items;
 static uint64_t items_per_dir;
 static int print_time;
 static int random_seed;
@@ -133,7 +134,6 @@ static int pre_delay;
 static int unique_dir_per_task;
 static int time_unique_dir_overhead;
 static int throttle;
-static uint64_t items;
 static int collective_creates;
 static size_t write_bytes;
 static int stone_wall_timer_seconds;
@@ -158,8 +158,8 @@ typedef struct{
 
   int stone_wall_timer_seconds;
 
-  long long unsigned items_start;
-  long long unsigned items_done;
+  uint64_t items_start;
+  uint64_t items_done;
 
   uint64_t items_per_dir;
 } rank_progress_t;
@@ -529,22 +529,14 @@ void mdtest_stat(const int random, const int dirs, const char *path, rank_progre
     struct stat buf;
     uint64_t parent_dir, item_num = 0;
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
-    uint64_t stop;
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
         fprintf( out_logfile, "V-1: Entering mdtest_stat...\n" );
         fflush( out_logfile );
     }
 
-    /* determine the number of items to stat*/
-    if (leaf_only) {
-        stop = items_per_dir * (uint64_t) pow( branch_factor, depth );
-    } else {
-        stop = items;
-    }
-
     /* iterate over all of the item IDs */
-    for (uint64_t i = 0 ; i < stop ; ++i) {
+    for (uint64_t i = 0 ; i < items ; ++i) {
         /*
          * It doesn't make sense to pass the address of the array because that would
          * be like passing char **. Tested it on a Cray and it seems to work either
@@ -565,7 +557,7 @@ void mdtest_stat(const int random, const int dirs, const char *path, rank_progre
         /* make adjustments if in leaf only mode*/
         if (leaf_only) {
             item_num += items_per_dir *
-                (num_dirs_in_tree - ( unsigned long long )pow( branch_factor, depth ));
+                (num_dirs_in_tree - (uint64_t) pow( branch_factor, depth ));
         }
 
         /* create name of file/dir to stat */
@@ -635,7 +627,7 @@ void mdtest_stat(const int random, const int dirs, const char *path, rank_progre
 
 /* reads all of the items created as specified by the input parameters */
 void mdtest_read(int random, int dirs, char *path) {
-    uint64_t stop, parent_dir, item_num = 0;
+    uint64_t parent_dir, item_num = 0;
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
     void *aiori_fh;
 
@@ -652,15 +644,8 @@ void mdtest_read(int random, int dirs, char *path) {
         }
     }
 
-    /* determine the number of items to read */
-    if (leaf_only) {
-        stop = items_per_dir * ( unsigned long long )pow( branch_factor, depth );
-    } else {
-        stop = items;
-    }
-
     /* iterate over all of the item IDs */
-    for (uint64_t i = 0 ; i < stop ; ++i) {
+    for (uint64_t i = 0 ; i < items ; ++i) {
         /*
          * It doesn't make sense to pass the address of the array because that would
          * be like passing char **. Tested it on a Cray and it seems to work either
@@ -1025,7 +1010,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 int updateStoneWallIterations(int iteration, rank_progress_t * progress, double tstart){
   int hit = 0;
   if (verbose >= 1 ) {
-    fprintf( out_logfile, "V-1: rank %d stonewall hit with %lld items\n", rank, progress->items_done );
+    fprintf( out_logfile, "V-1: rank %d stonewall hit with %lld items\n", rank, (long long) progress->items_done );
     fflush( out_logfile );
   }
   progress->items_start = progress->items_done;
@@ -1099,10 +1084,9 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
             // now reset the values
             progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
-            items = progress->items_per_dir;
           }
           if (stoneWallingStatusFile){
-            StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_per_dir);
+            StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_done);
           }
         }
     }else{
@@ -1112,6 +1096,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         expected_items = ReadStoneWallingIterations(stoneWallingStatusFile);
         if(expected_items >= 0){
           items = expected_items;
+          progress->items_per_dir = items;
         }
         if (rank == 0) {
           if(expected_items == -1){
@@ -2142,7 +2127,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & items},
       {'N', NULL,        "stride # between neighbor tasks for file/dir operation (local=0)", OPTION_OPTIONAL_ARGUMENT, 'd', & nstride},
       {'p', NULL,        "pre-iteration delay (in seconds)", OPTION_OPTIONAL_ARGUMENT, 'd', & pre_delay},
-      {'R', NULL,        "randomly stat files", OPTION_FLAG, 'd', & randomize},
+      {'R', NULL,        "random access to files (only for stat)", OPTION_FLAG, 'd', & randomize},
       {0, "random-seed", "random seed for -R", OPTION_OPTIONAL_ARGUMENT, 'd', & random_seed},
       {'s', NULL,        "stride between the number of tasks for each test", OPTION_OPTIONAL_ARGUMENT, 'd', & stride},
       {'S', NULL,        "shared file access (file only, no directories)", OPTION_FLAG, 'd', & shared_file},
@@ -2285,8 +2270,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
             if (branch_factor <= 1) {
                 items_per_dir = items;
             } else {
-                items_per_dir = items / pow(branch_factor, depth);
-                items = items_per_dir * pow(branch_factor, depth);
+                items_per_dir = (uint64_t) (items / pow(branch_factor, depth));
+                items = items_per_dir * (uint64_t) pow(branch_factor, depth);
             }
         } else {
             items_per_dir = items / num_dirs_in_tree;
@@ -2298,22 +2283,16 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (random_seed > 0) {
         srand(random_seed);
 
-        uint64_t stop = 0;
         uint64_t s;
 
-        if (leaf_only) {
-            stop = items_per_dir * (uint64_t) pow(branch_factor, depth);
-        } else {
-            stop = items;
-        }
-        rand_array = (uint64_t *) malloc( stop * sizeof(*rand_array));
+        rand_array = (uint64_t *) malloc( items * sizeof(*rand_array));
 
-        for (s=0; s<stop; s++) {
+        for (s=0; s < items; s++) {
             rand_array[s] = s;
         }
 
         /* shuffle list randomly */
-        uint64_t n = stop;
+        uint64_t n = items;
         while (n>1) {
             n--;
 
