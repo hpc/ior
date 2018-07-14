@@ -245,6 +245,5 @@ AM_CONDITIONAL([USE_CAPS], [test x$enable_caps = xyes])
 AC_CONFIG_FILES([Makefile
                  src/Makefile
                  contrib/Makefile
-                 src/test/Makefile
                  doc/Makefile])
 AC_OUTPUT

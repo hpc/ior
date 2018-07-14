@@ -14,8 +14,8 @@ function runTest(){
 	sudo -u testuser mkdir -p $BUILD/$FLAVOR
 
 	pushd $BUILD/$FLAVOR > /dev/null
-  sudo -u testuser /data/configure || exit 1
-  sudo -u testuser make || exit 1
+  sudo -u testuser /data/configure --with-hdf5 CFLAGS=-I/usr/lib/x86_64-linux-gnu/hdf5/openmpi/include LDFLAGS=-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/lib|| exit 1
+  sudo -u testuser make V=1 || exit 1
 
   #define the alias
   ln -sf $(which mpiexec.$FLAVOR) /usr/bin/mpiexec
