@@ -294,25 +294,25 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
 
-        MPI_CHECK(MPI_Allreduce(&dataMoved, &results->aggFileSizeFromXfer[rep],
+        MPI_CHECK(MPI_Allreduce(&dataMoved, & results[rep].aggFileSizeFromXfer,
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
                   "cannot total data moved");
 
         if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
                         if ((params->expectedAggFileSize
-                             != results->aggFileSizeFromXfer[rep])
-                            || (results->aggFileSizeFromStat[rep]
-                                != results->aggFileSizeFromXfer[rep])) {
+                             != results[rep].aggFileSizeFromXfer)
+                            || (results[rep].aggFileSizeFromStat
+                                != results[rep].aggFileSizeFromXfer)) {
                                 fprintf(out_logfile,
                                         "WARNING: Expected aggregate file size       = %lld.\n",
                                         (long long) params->expectedAggFileSize);
                                 fprintf(out_logfile,
                                         "WARNING: Stat() of aggregate file size      = %lld.\n",
-                                        (long long) results->aggFileSizeFromStat[rep]);
+                                        (long long) results[rep].aggFileSizeFromStat);
                                 fprintf(out_logfile,
                                         "WARNING: Using actual aggregate bytes moved = %lld.\n",
-                                        (long long) results->aggFileSizeFromXfer[rep]);
+                                        (long long) results[rep].aggFileSizeFromXfer);
                                 if(params->deadlineForStonewalling){
                                   fprintf(out_logfile,
                                         "WARNING: maybe caused by deadlineForStonewalling\n");
@@ -320,7 +320,7 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                         }
                 }
         }
-        results->aggFileSizeForBW[rep] = results->aggFileSizeFromXfer[rep];
+        results[rep].aggFileSizeForBW = results[rep].aggFileSizeFromXfer;
 }
 
 /*
@@ -491,54 +491,30 @@ static void aligned_buffer_free(void *buf)
         free(*(void **)((char *)buf - sizeof(char *)));
 }
 
+static void* safeMalloc(uint64_t size){
+  void * d = malloc(size);
+  if (d == NULL){
+    ERR("Could not malloc an array");
+  }
+  memset(d, 0, size);
+  return d;
+}
+
 static void AllocResults(IOR_test_t *test)
 {
-        int reps;
-        if (test->results != NULL)
-                return;
+  int reps;
+  if (test->results != NULL)
+          return;
 
-        reps = test->params.repetitions;
-        test->results = (IOR_results_t *)malloc(sizeof(IOR_results_t));
-        if (test->results == NULL)
-                ERR("malloc of IOR_results_t failed");
-
-        test->results->writeTime = (double *)malloc(reps * sizeof(double));
-        if (test->results->writeTime == NULL)
-                ERR("malloc of writeTime array failed");
-        memset(test->results->writeTime, 0, reps * sizeof(double));
-
-        test->results->readTime = (double *)malloc(reps * sizeof(double));
-        if (test->results->readTime == NULL)
-                ERR("malloc of readTime array failed");
-        memset(test->results->readTime, 0, reps * sizeof(double));
-
-        test->results->aggFileSizeFromStat =
-                (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
-        if (test->results->aggFileSizeFromStat == NULL)
-                ERR("malloc of aggFileSizeFromStat failed");
-
-        test->results->aggFileSizeFromXfer =
-                (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
-        if (test->results->aggFileSizeFromXfer == NULL)
-                ERR("malloc of aggFileSizeFromXfer failed");
-
-        test->results->aggFileSizeForBW =
-                (IOR_offset_t *)malloc(reps * sizeof(IOR_offset_t));
-        if (test->results->aggFileSizeForBW == NULL)
-                ERR("malloc of aggFileSizeForBW failed");
-
+  reps = test->params.repetitions;
+  test->results = (IOR_results_t *) safeMalloc(sizeof(IOR_results_t) * reps);
 }
 
 void FreeResults(IOR_test_t *test)
 {
-        if (test->results != NULL) {
-                free(test->results->aggFileSizeFromStat);
-                free(test->results->aggFileSizeFromXfer);
-                free(test->results->aggFileSizeForBW);
-                free(test->results->readTime);
-                free(test->results->writeTime);
-                free(test->results);
-        }
+  if (test->results != NULL) {
+      free(test->results);
+  }
 }
 
 
@@ -908,11 +884,11 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
   }
   if (access == WRITE) {
     totalTime = reduced[5] - reduced[0];
-    test->results->writeTime[rep] = totalTime;
+    test->results[rep].writeTime = totalTime;
     diff_subset = &diff[0];
   } else { /* READ */
     totalTime = reduced[11] - reduced[6];
-    test->results->readTime[rep] = totalTime;
+    test->results[rep].readTime = totalTime;
     diff_subset = &diff[3];
   }
 
@@ -920,7 +896,7 @@ static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
     return;
   }
 
-  bw = (double)test->results->aggFileSizeForBW[rep] / totalTime;
+  bw = (double)test->results[rep].aggFileSizeForBW / totalTime;
 
   PrintReducedResult(test, access, bw, diff_subset, totalTime, rep);
 }
@@ -1233,6 +1209,7 @@ static void TestIoSys(IOR_test_t *test)
         startTime = GetTimeStamp();
 
         /* loop over test iterations */
+        uint64_t params_saved_wearout = params->stoneWallingWearOutIterations;
         for (rep = 0; rep < params->repetitions; rep++) {
                 PrintRepeatStart();
                 /* Get iteration start time in seconds in task 0 and broadcast to
@@ -1280,6 +1257,8 @@ static void TestIoSys(IOR_test_t *test)
                                 RemoveFile(testFileName, params->filePerProc,
                                            params);
                         }
+
+                        params->stoneWallingWearOutIterations = params_saved_wearout;
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = WRITE;
                         timer[0][rep] = GetTimeStamp();
@@ -1294,7 +1273,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[2][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, results, fd, WRITE, &ioBuffers);
+                        dataMoved = WriteOrRead(params, & results[rep], fd, WRITE, &ioBuffers);
                         if (params->verbose >= VERBOSE_4) {
                           fprintf(out_logfile, "* data moved = %llu\n", dataMoved);
                           fflush(out_logfile);
@@ -1310,7 +1289,7 @@ static void TestIoSys(IOR_test_t *test)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
                         /* get the size of the file just written */
-                        results->aggFileSizeFromStat[rep] =
+                        results[rep].aggFileSizeFromStat =
                                 backend->get_file_size(params, testComm, testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
@@ -1322,6 +1301,11 @@ static void TestIoSys(IOR_test_t *test)
                         ReduceIterResults(test, timer, rep, WRITE);
                         if (params->outlierThreshold) {
                                 CheckForOutliers(params, timer, rep, WRITE);
+                        }
+
+                        /* check if in this round we run write with stonewalling */
+                        if(params->deadlineForStonewalling > 0){
+                          params->stoneWallingWearOutIterations = results[rep].pairs_accessed;
                         }
                 }
 
@@ -1349,7 +1333,7 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
                         fd = backend->open(testFileName, params);
-                        dataMoved = WriteOrRead(params, results, fd, WRITECHECK, &ioBuffers);
+                        dataMoved = WriteOrRead(params, & results[rep], fd, WRITECHECK, &ioBuffers);
                         backend->close(fd, params);
                         rankOffset = 0;
                 }
@@ -1357,6 +1341,14 @@ static void TestIoSys(IOR_test_t *test)
                  * read the file(s), getting timing between I/O calls
                  */
                 if ((params->readFile || params->checkRead ) && !test_time_elapsed(params, startTime)) {
+                        /* check for stonewall */
+                        if(params->stoneWallingStatusFile){
+                          params->stoneWallingWearOutIterations = ReadStoneWallingIterations(params->stoneWallingStatusFile);
+                          if(params->stoneWallingWearOutIterations == -1 && rank == 0){
+                            fprintf(out_logfile, "WARNING: Could not read back the stonewalling status from the file!");
+                            params->stoneWallingWearOutIterations = 0;
+                          }
+                        }
                         int operation_flag = READ;
                         if ( params->checkRead ){
                           // actually read and then compare the buffer
@@ -1420,7 +1412,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[8][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, results, fd, operation_flag, &ioBuffers);
+                        dataMoved = WriteOrRead(params, & results[rep], fd, operation_flag, &ioBuffers);
                         timer[9][rep] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1430,7 +1422,7 @@ static void TestIoSys(IOR_test_t *test)
                         timer[11][rep] = GetTimeStamp();
 
                         /* get the size of the file just read */
-                        results->aggFileSizeFromStat[rep] =
+                        results[rep].aggFileSizeFromStat =
                                 backend->get_file_size(params, testComm,
                                                        testFileName);
 
@@ -1863,19 +1855,8 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                 offsetArray = GetOffsetArraySequential(test, pretendRank);
         }
 
-        /* check for stonewall */
         startForStonewall = GetTimeStamp();
-        hitStonewall = ((test->deadlineForStonewalling != 0)
-                        && ((GetTimeStamp() - startForStonewall)
-                            > test->deadlineForStonewalling));
-
-        if(test->stoneWallingStatusFile && (access == READ || access == READCHECK)){
-          test->stoneWallingWearOutIterations = ReadStoneWallingIterations(test->stoneWallingStatusFile);
-          if(test->stoneWallingWearOutIterations == -1 && rank == 0){
-            fprintf(out_logfile, "WARNING: Could not read back the stonewalling status from the file!");
-            test->stoneWallingWearOutIterations = 0;
-          }
-        }
+        hitStonewall = 0;
 
         /* loop over offsets to access */
         while ((offsetArray[pairCnt] != -1) && !hitStonewall ) {

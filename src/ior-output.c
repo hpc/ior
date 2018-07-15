@@ -10,8 +10,8 @@
 
 extern char **environ;
 
-static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *vals);
-static struct results *ops_values(int reps, IOR_offset_t *agg_file_size, IOR_offset_t transfer_size, double *vals);
+static struct results *bw_values(int reps, IOR_results_t * measured, int offset, double *vals);
+static struct results *ops_values(int reps, IOR_results_t * measured, int offset, IOR_offset_t transfer_size, double *vals);
 static double mean_of_array_of_doubles(double *values, int len);
 static void PPDouble(int leftjustify, double number, char *append);
 static void PrintNextToken();
@@ -468,21 +468,26 @@ void ShowSetup(IOR_param_t *params)
  *
  * operation is typically "write" or "read"
  */
-void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *operation)
+static void PrintLongSummaryOneOperation(IOR_test_t *test, int times_offset, char *operation)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
         struct results *bw;
         struct results *ops;
+
         int reps;
         if (rank != 0 || verbose < VERBOSE_0)
                 return;
 
         reps = params->repetitions;
 
-        bw = bw_values(reps, results->aggFileSizeForBW, times);
-        ops = ops_values(reps, results->aggFileSizeForBW,
-                         params->transferSize, times);
+        double * times = malloc(sizeof(double)* reps);
+        for(int i=0; i < reps; i++){
+          times[i] = *(double*)((char*) & results[i] + times_offset);
+        }
+
+        bw = bw_values(reps, results, offsetof(IOR_results_t, aggFileSizeForBW), times);
+        ops = ops_values(reps, results, offsetof(IOR_results_t, aggFileSizeForBW), params->transferSize, times);
 
         if(outputFormat == OUTPUT_DEFAULT){
           fprintf(out_resultfile, "%-9s ", operation);
@@ -507,7 +512,7 @@ void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *operati
           fprintf(out_resultfile, "%6lld ", params->segmentCount);
           fprintf(out_resultfile, "%8lld ", params->blockSize);
           fprintf(out_resultfile, "%8lld ", params->transferSize);
-          fprintf(out_resultfile, "%9.1f ", (float)results->aggFileSizeForBW[0] / MEBIBYTE);
+          fprintf(out_resultfile, "%9.1f ", (float)results[0].aggFileSizeForBW / MEBIBYTE);
           fprintf(out_resultfile, "%3s ", params->api);
           fprintf(out_resultfile, "%6d", params->referenceNumber);
           fprintf(out_resultfile, "\n");
@@ -540,7 +545,7 @@ void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *operati
           PrintKeyValDouble("OPsMean", ops->mean);
           PrintKeyValDouble("OPsSD", ops->sd);
           PrintKeyValDouble("MeanTime", mean_of_array_of_doubles(times, reps));
-          PrintKeyValDouble("xsizeMiB", (double) results->aggFileSizeForBW[0] / MEBIBYTE);
+          PrintKeyValDouble("xsizeMiB", (double) results[0].aggFileSizeForBW / MEBIBYTE);
           PrintEndSection();
         }else if (outputFormat == OUTPUT_CSV){
 
@@ -550,17 +555,17 @@ void PrintLongSummaryOneOperation(IOR_test_t *test, double *times, char *operati
 
         free(bw);
         free(ops);
+        free(times);
 }
 
 void PrintLongSummaryOneTest(IOR_test_t *test)
 {
         IOR_param_t *params = &test->params;
-        IOR_results_t *results = test->results;
 
         if (params->writeFile)
-                PrintLongSummaryOneOperation(test, results->writeTime, "write");
+                PrintLongSummaryOneOperation(test, offsetof(IOR_results_t, writeTime), "write");
         if (params->readFile)
-                PrintLongSummaryOneOperation(test, results->readTime, "read");
+                PrintLongSummaryOneOperation(test, offsetof(IOR_results_t, readTime), "read");
 }
 
 void PrintLongSummaryHeader()
@@ -625,12 +630,12 @@ void PrintShortSummary(IOR_test_t * test)
 
         reps = params->repetitions;
 
-        max_write = results->writeTime[0];
-        max_read = results->readTime[0];
+        max_write = results[0].writeTime;
+        max_read = results[0].readTime;
         for (i = 0; i < reps; i++) {
-                bw = (double)results->aggFileSizeForBW[i]/results->writeTime[i];
+                bw = (double)results[i].aggFileSizeForBW / results[i].writeTime;
                 max_write = MAX(bw, max_write);
-                bw = (double)results->aggFileSizeForBW[i]/results->readTime[i];
+                bw = (double)results[i].aggFileSizeForBW / results[i].readTime;
                 max_read = MAX(bw, max_read);
         }
 
@@ -739,19 +744,19 @@ static void PPDouble(int leftjustify, double number, char *append)
 
 
 
-static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *vals)
+static struct results *bw_values(int reps, IOR_results_t * measured, int offset, double *vals)
 {
         struct results *r;
         int i;
 
-        r = (struct results *)malloc(sizeof(struct results)
-                                     + (reps * sizeof(double)));
+        r = (struct results *) malloc(sizeof(struct results) + (reps * sizeof(double)));
         if (r == NULL)
                 ERR("malloc failed");
         r->val = (double *)&r[1];
 
-        for (i = 0; i < reps; i++) {
-                r->val[i] = (double)agg_file_size[i] / vals[i];
+        for (i = 0; i < reps; i++, measured++) {
+
+                r->val[i] = (double) *((IOR_offset_t*) ((char*)measured + offset)) / vals[i];
                 if (i == 0) {
                         r->min = r->val[i];
                         r->max = r->val[i];
@@ -772,7 +777,7 @@ static struct results *bw_values(int reps, IOR_offset_t *agg_file_size, double *
         return r;
 }
 
-static struct results *ops_values(int reps, IOR_offset_t *agg_file_size,
+static struct results *ops_values(int reps, IOR_results_t * measured, int offset,
                                   IOR_offset_t transfer_size,
                                   double *vals)
 {
@@ -785,8 +790,9 @@ static struct results *ops_values(int reps, IOR_offset_t *agg_file_size,
                 ERR("malloc failed");
         r->val = (double *)&r[1];
 
-        for (i = 0; i < reps; i++) {
-                r->val[i] = (double)agg_file_size[i] / transfer_size / vals[i];
+        for (i = 0; i < reps; i++, measured++) {
+                r->val[i] = (double) *((IOR_offset_t*) ((char*)measured + offset))
+                    / transfer_size / vals[i];
                 if (i == 0) {
                         r->min = r->val[i];
                         r->max = r->val[i];

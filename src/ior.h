@@ -205,24 +205,24 @@ typedef struct
 /* each pointer is to an array, each of length equal to the number of
    repetitions in the test */
 typedef struct {
-   double *writeTime;
-   double *readTime;
-   int errors;
+   double writeTime;
+   double readTime;
+   int    errors;
    size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
 
-   double stonewall_time;
-   long long stonewall_min_data_accessed;
-   long long stonewall_avg_data_accessed;
+   double     stonewall_time;
+   long long  stonewall_min_data_accessed;
+   long long  stonewall_avg_data_accessed;
 
-   IOR_offset_t *aggFileSizeFromStat;
-   IOR_offset_t *aggFileSizeFromXfer;
-   IOR_offset_t *aggFileSizeForBW;
+   IOR_offset_t aggFileSizeFromStat;
+   IOR_offset_t aggFileSizeFromXfer;
+   IOR_offset_t aggFileSizeForBW;
 } IOR_results_t;
 
 /* define the queuing structure for the test parameters */
 typedef struct IOR_test_t {
    IOR_param_t        params;
-   IOR_results_t     *results;
+   IOR_results_t     *results; /* This is an array of reps times IOR_results_t */
    struct IOR_test_t *next;
 } IOR_test_t;
 
