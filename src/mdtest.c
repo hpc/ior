@@ -1013,9 +1013,9 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
     fprintf( out_logfile, "V-1: rank %d stonewall hit with %lld items\n", rank, (long long) progress->items_done );
     fflush( out_logfile );
   }
-  progress->items_start = progress->items_done;
+  uint64_t done = progress->items_done;
   long long unsigned max_iter = 0;
-  MPI_Allreduce(& progress->items_done, & max_iter, 1, MPI_INT, MPI_MAX, testComm);
+  MPI_Allreduce(& progress->items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
   summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = MPI_Wtime() - tstart;
 
   // continue to the maximum...
@@ -1024,13 +1024,16 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
   long long sum_accessed = 0;
   MPI_Reduce(& progress->items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
 
-  if (rank == 0 && items != (sum_accessed / size)) {
+  if(items != (sum_accessed / size) && rank == 0){
     summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
     summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
-    fprintf( out_logfile, "V-1: continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
+    fprintf( out_logfile, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
     fflush( out_logfile );
+  }
+  if( done != max_iter ){
     hit = 1;
   }
+  progress->items_start = done;
   progress->items_per_dir = max_iter;
 
   return hit;
@@ -1081,6 +1084,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
           if (hit){
             progress->stone_wall_timer_seconds = 0;
+            printf("stonewall rank %d: %lld of %lld \n", rank, (long long) progress->items_start, (long long) progress->items_per_dir);
             create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
             // now reset the values
             progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
