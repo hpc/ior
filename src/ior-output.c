@@ -3,6 +3,7 @@
 #endif
 
 #include <math.h>
+#include <stddef.h>             /* needed for offsetof on some compilers */
 
 #include "ior.h"
 #include "ior-internal.h"
