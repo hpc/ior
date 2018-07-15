@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <limits.h>
 
 #include <option.h>
 
@@ -324,7 +325,11 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
                 break;
               }
               case('d'):{
-                *(int*) o->variable = string_to_bytes(arg);
+                int64_t val = string_to_bytes(arg);
+                if (val > INT_MAX || val < INT_MIN){
+                  printf("WARNING: parsing the number %s to integer, this produced an overflow!\n", arg);
+                }
+                *(int*) o->variable = val;
                 break;
               }
               case('H'):
