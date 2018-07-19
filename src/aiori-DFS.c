@@ -152,57 +152,6 @@ ior_aiori_t dfs_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 
-/* MSC - Make a generic DAOS function instead */
-static d_rank_list_t *
-daos_rank_list_parse(const char *str, const char *sep)
-{
-    d_rank_t *buf;
-    int cap = 8;
-    d_rank_list_t *ranks = NULL;
-    char *s, *p;
-    int n = 0;
-
-    buf = malloc(sizeof(d_rank_t) * cap);
-    if (buf == NULL)
-        goto out;
-    s = strdup(str);
-    if (s == NULL)
-        goto out_buf;
-
-    while ((s = strtok_r(s, sep, &p)) != NULL) {
-        if (n == cap) {
-            d_rank_t    *buf_new;
-            int		cap_new;
-
-            /* Double the buffer. */
-            cap_new = cap * 2;
-            buf_new = malloc(sizeof(d_rank_t) * cap_new);
-            if (buf_new == NULL)
-                goto out_s;
-            memcpy(buf_new, buf, sizeof(d_rank_t) * n);
-            free(buf);
-            buf = buf_new;
-            cap = cap_new;
-        }
-        buf[n] = atoi(s);
-        n++;
-        s = NULL;
-    }
-
-    ranks = d_rank_list_alloc(n);
-    if (ranks == NULL)
-        goto out_s;
-    memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
-
-out_s:
-    if (s)
-        free(s);
-out_buf:
-    free(buf);
-out:
-    return ranks;
-}
-
 int
 dfs_init(void) {
         char			*pool_str, *svcl_str, *group_str;
