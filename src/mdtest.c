@@ -83,7 +83,6 @@ static int size;
 static uint64_t *rand_array;
 static char testdir[MAX_PATHLEN];
 static char testdirpath[MAX_PATHLEN];
-static char top_dir[MAX_PATHLEN];
 static char base_tree_name[MAX_PATHLEN];
 static char **filenames;
 static char hostname[MAX_PATHLEN];
@@ -125,6 +124,7 @@ static uint64_t num_dirs_in_tree;
  */
 static uint64_t items;
 static uint64_t items_per_dir;
+static int directory_loops;
 static int print_time;
 static int random_seed;
 static int shared_file;
@@ -219,6 +219,15 @@ void parse_dirpath(char *dirpath_arg) {
     }
 }
 
+static void prep_testdir(int j, int dir_iter){
+  int pos = sprintf(testdir, "%s", testdirpath);
+  if ( testdir[strlen( testdir ) - 1] != '/' ) {
+      pos += sprintf(& testdir[pos], "/");
+  }
+  pos += sprintf(& testdir[pos], "%s", TEST_DIR);
+  pos += sprintf(& testdir[pos], ".%d-%d", j, dir_iter);
+}
+
 /*
  * This function copies the unique directory name for a given option to
  * the "to" parameter. Some memory must be allocated to the "to" parameter.
@@ -232,15 +241,15 @@ void unique_dir_access(int opt, char *to) {
 
     if (opt == MK_UNI_DIR) {
         MPI_Barrier(testComm);
-        strcpy( to, unique_chdir_dir );
+        sprintf( to, "%s/%s", testdir, unique_chdir_dir );
     } else if (opt == STAT_SUB_DIR) {
-        strcpy( to, unique_stat_dir );
+        sprintf( to, "%s/%s", testdir, unique_stat_dir );
     } else if (opt == READ_SUB_DIR) {
-        strcpy( to, unique_read_dir );
+        sprintf( to, "%s/%s", testdir, unique_read_dir );
     } else if (opt == RM_SUB_DIR) {
-        strcpy( to, unique_rm_dir );
+        sprintf( to, "%s/%s", testdir, unique_rm_dir );
     } else if (opt == RM_UNI_DIR) {
-        strcpy( to, unique_rm_uni_dir );
+        sprintf( to, "%s/%s", testdir, unique_rm_uni_dir );
     }
 }
 
@@ -525,7 +534,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
 }
 
 /* stats all of the items created as specified by the input parameters */
-void mdtest_stat(const int random, const int dirs, const char *path, rank_progress_t * progress) {
+void mdtest_stat(const int random, const int dirs, const long dir_iter, const char *path, rank_progress_t * progress) {
     struct stat buf;
     uint64_t parent_dir, item_num = 0;
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
@@ -535,8 +544,14 @@ void mdtest_stat(const int random, const int dirs, const char *path, rank_progre
         fflush( out_logfile );
     }
 
+    uint64_t stop_items = items;
+
+    if( directory_loops != 1 ){
+      stop_items = items_per_dir;
+    }
+
     /* iterate over all of the item IDs */
-    for (uint64_t i = 0 ; i < items ; ++i) {
+    for (uint64_t i = 0 ; i < stop_items ; ++i) {
         /*
          * It doesn't make sense to pass the address of the array because that would
          * be like passing char **. Tested it on a Cray and it seems to work either
@@ -546,6 +561,7 @@ void mdtest_stat(const int random, const int dirs, const char *path, rank_progre
         */
         memset(item, 0, MAX_PATHLEN);
         memset(temp, 0, MAX_PATHLEN);
+
 
         /* determine the item number to stat */
         if (random) {
@@ -626,7 +642,7 @@ void mdtest_stat(const int random, const int dirs, const char *path, rank_progre
 
 
 /* reads all of the items created as specified by the input parameters */
-void mdtest_read(int random, int dirs, char *path) {
+void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     uint64_t parent_dir, item_num = 0;
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
     void *aiori_fh;
@@ -644,8 +660,14 @@ void mdtest_read(int random, int dirs, char *path) {
         }
     }
 
+    uint64_t stop_items = items;
+
+    if( directory_loops != 1 ){
+      stop_items = items_per_dir;
+    }
+
     /* iterate over all of the item IDs */
-    for (uint64_t i = 0 ; i < items ; ++i) {
+    for (uint64_t i = 0 ; i < stop_items ; ++i) {
         /*
          * It doesn't make sense to pass the address of the array because that would
          * be like passing char **. Tested it on a Cray and it seems to work either
@@ -830,13 +852,15 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* create phase */
     if(create_only) {
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
             unique_dir_access(MK_UNI_DIR, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 0);
             }
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -853,6 +877,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             /* create directories */
             create_remove_items(0, 1, 1, 0, temp_path, 0, progress);
         }
+      }
     }
 
     if (barriers) {
@@ -862,13 +887,15 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* stat phase */
     if (stat_only) {
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
             unique_dir_access(STAT_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 1);
             }
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -878,10 +905,11 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
         /* stat directories */
         if (random_seed > 0) {
-            mdtest_stat(1, 1, temp_path, progress);
+            mdtest_stat(1, 1, dir_iter, temp_path, progress);
         } else {
-            mdtest_stat(0, 1, temp_path, progress);
+            mdtest_stat(0, 1, dir_iter, temp_path, progress);
         }
+      }
     }
 
     if (barriers) {
@@ -891,13 +919,15 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* read phase */
     if (read_only) {
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
             unique_dir_access(READ_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 2);
             }
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -911,6 +941,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         } else {
             ;        /* N/A */
         }
+      }
     }
 
     if (barriers) {
@@ -919,13 +950,15 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     t[3] = MPI_Wtime();
 
     if (remove_only) {
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
             unique_dir_access(RM_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 3);
             }
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -941,6 +974,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         } else {
             create_remove_items(0, 1, 0, 0, temp_path, 0, progress);
         }
+      }
     }
 
     if (barriers) {
@@ -952,7 +986,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         if (unique_dir_per_task) {
             unique_dir_access(RM_UNI_DIR, temp_path);
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -1055,13 +1089,16 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
     /* create phase */
     if (create_only ) {
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
+
         if (unique_dir_per_task) {
             unique_dir_access(MK_UNI_DIR, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 0);
             }
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -1093,6 +1130,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_done);
           }
         }
+      }
     }else{
       if (stoneWallingStatusFile){
         int64_t expected_items;
@@ -1119,13 +1157,15 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
     /* stat phase */
     if (stat_only ) {
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
             unique_dir_access(STAT_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 1);
             }
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -1134,7 +1174,8 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         }
 
         /* stat files */
-        mdtest_stat((random_seed > 0 ? 1 : 0), 0, temp_path, progress);
+        mdtest_stat((random_seed > 0 ? 1 : 0), 0, dir_iter, temp_path, progress);
+      }
     }
 
     if (barriers) {
@@ -1144,13 +1185,15 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
     /* read phase */
     if (read_only ) {
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
             unique_dir_access(READ_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 2);
             }
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -1160,10 +1203,11 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
         /* read files */
         if (random_seed > 0) {
-                mdtest_read(1,0,temp_path);
+                mdtest_read(1,0, dir_iter, temp_path);
         } else {
-                mdtest_read(0,0,temp_path);
+                mdtest_read(0,0, dir_iter, temp_path);
         }
+      }
     }
 
     if (barriers) {
@@ -1172,13 +1216,15 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     t[3] = MPI_Wtime();
 
     if (remove_only) {
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
             unique_dir_access(RM_SUB_DIR, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 3);
             }
         } else {
-            strcpy( temp_path, path );
+            sprintf( temp_path, "%s/%s", testdir, path );
         }
 
         if (verbose >= 3 && rank == 0) {
@@ -1193,6 +1239,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         } else {
             create_remove_items(0, 0, 0, 0, temp_path, 0, progress);
         }
+      }
     }
 
     if (barriers) {
@@ -1599,7 +1646,13 @@ void valid_tests() {
     }
     /* check for valid number of items */
     if ((items > 0) && (items_per_dir > 0)) {
-            FAIL("only specify the number of items or the number of items per directory");
+       if(unique_dir_per_task){
+         FAIL("only specify the number of items or the number of items per directory");
+       }else if( items % items_per_dir != 0){
+         FAIL("items must be a multiple of items per directory");
+       }else if( stone_wall_timer_seconds != 0){
+         FAIL("items + items_per_dir can only be set without stonewalling");
+       }
     }
 
 }
@@ -1738,7 +1791,7 @@ void create_remove_directory_tree(int create,
             }
 
             if (-1 == backend->mkdir (dir, DIRMODE, &param)) {
-                //FAIL("Unable to create directory");
+                fprintf(out_logfile, "error could not create directory \"%s\"\n", dir);
             }
         }
 
@@ -1813,82 +1866,84 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
       fflush(out_logfile);
   }
 
-  int pos = sprintf(testdir, "%s", testdirpath);
-  if ( testdir[strlen( testdir ) - 1] != '/' ) {
-      pos += sprintf(& testdir[pos], "/");
-  }
-  pos += sprintf(& testdir[pos], "%s", TEST_DIR);
-  pos += sprintf(& testdir[pos], ".%d", j);
+  for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+    prep_testdir(j, dir_iter);
 
-  if (verbose >= 2 && rank == 0) {
-      fprintf(out_logfile,  "V-2: main (for j loop): making testdir, \"%s\"\n", testdir );
-      fflush( out_logfile );
-  }
-  if ((rank < path_count) && backend->access(testdir, F_OK, &param) != 0) {
-      if (backend->mkdir(testdir, DIRMODE, &param) != 0) {
-          FAIL("Unable to create test directory");
-      }
+    if (verbose >= 2 && rank == 0) {
+        fprintf(out_logfile,  "V-2: main (for j loop): making testdir, \"%s\"\n", testdir );
+        fflush( out_logfile );
+    }
+    if ((rank < path_count) && backend->access(testdir, F_OK, &param) != 0) {
+        if (backend->mkdir(testdir, DIRMODE, &param) != 0) {
+            FAIL("Unable to create test directory");
+        }
+    }
   }
 
-  /* create hierarchical directory structure */
-  MPI_Barrier(testComm);
   if (create_only) {
+      /* create hierarchical directory structure */
+      MPI_Barrier(testComm);
+
       startCreate = MPI_Wtime();
-      if (unique_dir_per_task) {
-          if (collective_creates && (rank == 0)) {
-              /*
-               * This is inside two loops, one of which already uses "i" and the other uses "j".
-               * I don't know how this ever worked. I'm changing this loop to use "k".
-               */
-              for (k=0; k<size; k++) {
-                  sprintf(base_tree_name, "mdtest_tree.%d", k);
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(j, dir_iter);
 
-                  if (verbose >= 3 && rank == 0) {
-                      fprintf(out_logfile,
-                          "V-3: main (create hierarchical directory loop-collective): Calling create_remove_directory_tree with \"%s\"\n",
-                          testdir );
-                      fflush( out_logfile );
-                  }
+        if (unique_dir_per_task) {
+            if (collective_creates && (rank == 0)) {
+                /*
+                 * This is inside two loops, one of which already uses "i" and the other uses "j".
+                 * I don't know how this ever worked. I'm changing this loop to use "k".
+                 */
+                for (k=0; k<size; k++) {
+                    sprintf(base_tree_name, "mdtest_tree.%d", k);
 
-                  /*
-                   * Let's pass in the path to the directory we most recently made so that we can use
-                   * full paths in the other calls.
-                   */
-                  create_remove_directory_tree(1, 0, testdir, 0, progress);
-                  if(CHECK_STONE_WALL(progress)){
-                    size = k;
-                    break;
-                  }
-              }
-          } else if (!collective_creates) {
-              if (verbose >= 3 && rank == 0) {
-                  fprintf(out_logfile,
-                      "V-3: main (create hierarchical directory loop-!collective_creates): Calling create_remove_directory_tree with \"%s\"\n",
-                      testdir );
-                  fflush( out_logfile );
-              }
+                    if (verbose >= 3 && rank == 0) {
+                        fprintf(out_logfile,
+                            "V-3: main (create hierarchical directory loop-collective): Calling create_remove_directory_tree with \"%s\"\n",
+                            testdir );
+                        fflush( out_logfile );
+                    }
 
-              /*
-               * Let's pass in the path to the directory we most recently made so that we can use
-               * full paths in the other calls.
-               */
-              create_remove_directory_tree(1, 0, testdir, 0, progress);
-          }
-      } else {
-          if (rank == 0) {
-              if (verbose >= 3 && rank == 0) {
-                  fprintf(out_logfile,
-                      "V-3: main (create hierarchical directory loop-!unque_dir_per_task): Calling create_remove_directory_tree with \"%s\"\n",
-                      testdir );
-                  fflush( out_logfile );
-              }
+                    /*
+                     * Let's pass in the path to the directory we most recently made so that we can use
+                     * full paths in the other calls.
+                     */
+                    create_remove_directory_tree(1, 0, testdir, 0, progress);
+                    if(CHECK_STONE_WALL(progress)){
+                      size = k;
+                      break;
+                    }
+                }
+            } else if (!collective_creates) {
+                if (verbose >= 3 && rank == 0) {
+                    fprintf(out_logfile,
+                        "V-3: main (create hierarchical directory loop-!collective_creates): Calling create_remove_directory_tree with \"%s\"\n",
+                        testdir );
+                    fflush( out_logfile );
+                }
 
-              /*
-               * Let's pass in the path to the directory we most recently made so that we can use
-               * full paths in the other calls.
-               */
-              create_remove_directory_tree(1, 0 , testdir, 0, progress);
-          }
+                /*
+                 * Let's pass in the path to the directory we most recently made so that we can use
+                 * full paths in the other calls.
+                 */
+                create_remove_directory_tree(1, 0, testdir, 0, progress);
+            }
+        } else {
+            if (rank == 0) {
+                if (verbose >= 3 && rank == 0) {
+                    fprintf(out_logfile,
+                        "V-3: main (create hierarchical directory loop-!unque_dir_per_task): Calling create_remove_directory_tree with \"%s\"\n",
+                        testdir );
+                    fflush( out_logfile );
+                }
+
+                /*
+                 * Let's pass in the path to the directory we most recently made so that we can use
+                 * full paths in the other calls.
+                 */
+                create_remove_directory_tree(1, 0 , testdir, 0, progress);
+            }
+        }
       }
       MPI_Barrier(testComm);
       endCreate = MPI_Wtime();
@@ -1903,12 +1958,12 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
           fflush(out_logfile);
       }
   }
-  sprintf(unique_mk_dir, "%s/%s.0", testdir, base_tree_name);
-  sprintf(unique_chdir_dir, "%s/%s.0", testdir, base_tree_name);
-  sprintf(unique_stat_dir, "%s/%s.0", testdir, base_tree_name);
-  sprintf(unique_read_dir, "%s/%s.0", testdir, base_tree_name);
-  sprintf(unique_rm_dir, "%s/%s.0", testdir, base_tree_name);
-  sprintf(unique_rm_uni_dir, "%s", testdir);
+  sprintf(unique_mk_dir, "%s.0", base_tree_name);
+  sprintf(unique_chdir_dir, "%s.0", base_tree_name);
+  sprintf(unique_stat_dir, "%s.0", base_tree_name);
+  sprintf(unique_read_dir, "%s.0", base_tree_name);
+  sprintf(unique_rm_dir, "%s.0", base_tree_name);
+  unique_rm_uni_dir[0] = 0;
 
   if (!unique_dir_per_task) {
       if (verbose >= 3 && rank == 0) {
@@ -1925,19 +1980,13 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
           sprintf(rm_name, "mdtest.%d.", (rank+(3*nstride))%i);
       }
       if (unique_dir_per_task) {
-          sprintf(unique_mk_dir, "%s/mdtest_tree.%d.0", testdir,
-                  (rank+(0*nstride))%i);
-          sprintf(unique_chdir_dir, "%s/mdtest_tree.%d.0", testdir,
-                  (rank+(1*nstride))%i);
-          sprintf(unique_stat_dir, "%s/mdtest_tree.%d.0", testdir,
-                  (rank+(2*nstride))%i);
-          sprintf(unique_read_dir, "%s/mdtest_tree.%d.0", testdir,
-                  (rank+(3*nstride))%i);
-          sprintf(unique_rm_dir, "%s/mdtest_tree.%d.0", testdir,
-                  (rank+(4*nstride))%i);
-          sprintf(unique_rm_uni_dir, "%s", testdir);
+          sprintf(unique_mk_dir, "mdtest_tree.%d.0",  (rank+(0*nstride))%i);
+          sprintf(unique_chdir_dir, "mdtest_tree.%d.0", (rank+(1*nstride))%i);
+          sprintf(unique_stat_dir, "mdtest_tree.%d.0", (rank+(2*nstride))%i);
+          sprintf(unique_read_dir, "mdtest_tree.%d.0", (rank+(3*nstride))%i);
+          sprintf(unique_rm_dir, "mdtest_tree.%d.0", (rank+(4*nstride))%i);
+          unique_rm_uni_dir[0] = 0;
       }
-      strcpy(top_dir, unique_mk_dir);
 
       if (verbose >= 3 && rank == 0) {
           fprintf(out_logfile,  "V-3: main: Copied unique_mk_dir, \"%s\", to topdir\n", unique_mk_dir );
@@ -1969,61 +2018,64 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
   MPI_Barrier(testComm);
   if (remove_only) {
       startCreate = MPI_Wtime();
-      if (unique_dir_per_task) {
-          if (collective_creates && (rank == 0)) {
-              /*
-               * This is inside two loops, one of which already uses "i" and the other uses "j".
-               * I don't know how this ever worked. I'm changing this loop to use "k".
-               */
-              for (k=0; k<size; k++) {
-                  sprintf(base_tree_name, "mdtest_tree.%d", k);
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(j, dir_iter);
+        if (unique_dir_per_task) {
+            if (collective_creates && (rank == 0)) {
+                /*
+                 * This is inside two loops, one of which already uses "i" and the other uses "j".
+                 * I don't know how this ever worked. I'm changing this loop to use "k".
+                 */
+                for (k=0; k<size; k++) {
+                    sprintf(base_tree_name, "mdtest_tree.%d", k);
 
-                  if (verbose >= 3 && rank == 0) {
-                      fprintf(out_logfile,
-                          "V-3: main (remove hierarchical directory loop-collective): Calling create_remove_directory_tree with \"%s\"\n",
-                          testdir );
-                      fflush( out_logfile );
-                  }
+                    if (verbose >= 3 && rank == 0) {
+                        fprintf(out_logfile,
+                            "V-3: main (remove hierarchical directory loop-collective): Calling create_remove_directory_tree with \"%s\"\n",
+                            testdir );
+                        fflush( out_logfile );
+                    }
 
-                  /*
-                   * Let's pass in the path to the directory we most recently made so that we can use
-                   * full paths in the other calls.
-                   */
-                  create_remove_directory_tree(0, 0, testdir, 0, progress);
-                  if(CHECK_STONE_WALL(progress)){
-                    size = k;
-                    break;
-                  }
-              }
-          } else if (!collective_creates) {
-              if (verbose >= 3 && rank == 0) {
-                  fprintf(out_logfile,
-                      "V-3: main (remove hierarchical directory loop-!collective): Calling create_remove_directory_tree with \"%s\"\n",
-                      testdir );
-                  fflush( out_logfile );
-              }
+                    /*
+                     * Let's pass in the path to the directory we most recently made so that we can use
+                     * full paths in the other calls.
+                     */
+                    create_remove_directory_tree(0, 0, testdir, 0, progress);
+                    if(CHECK_STONE_WALL(progress)){
+                      size = k;
+                      break;
+                    }
+                }
+            } else if (!collective_creates) {
+                if (verbose >= 3 && rank == 0) {
+                    fprintf(out_logfile,
+                        "V-3: main (remove hierarchical directory loop-!collective): Calling create_remove_directory_tree with \"%s\"\n",
+                        testdir );
+                    fflush( out_logfile );
+                }
 
-              /*
-               * Let's pass in the path to the directory we most recently made so that we can use
-               * full paths in the other calls.
-               */
-              create_remove_directory_tree(0, 0, testdir, 0, progress);
-          }
-      } else {
-          if (rank == 0) {
-              if (verbose >= 3 && rank == 0) {
-                  fprintf(out_logfile,
-                      "V-3: main (remove hierarchical directory loop-!unique_dir_per_task): Calling create_remove_directory_tree with \"%s\"\n",
-                      testdir );
-                  fflush( out_logfile );
-              }
+                /*
+                 * Let's pass in the path to the directory we most recently made so that we can use
+                 * full paths in the other calls.
+                 */
+                create_remove_directory_tree(0, 0, testdir, 0, progress);
+            }
+        } else {
+            if (rank == 0) {
+                if (verbose >= 3 && rank == 0) {
+                    fprintf(out_logfile,
+                        "V-3: main (remove hierarchical directory loop-!unique_dir_per_task): Calling create_remove_directory_tree with \"%s\"\n",
+                        testdir );
+                    fflush( out_logfile );
+                }
 
-              /*
-               * Let's pass in the path to the directory we most recently made so that we can use
-               * full paths in the other calls.
-               */
-              create_remove_directory_tree(0, 0 , testdir, 0, progress);
-          }
+                /*
+                 * Let's pass in the path to the directory we most recently made so that we can use
+                 * full paths in the other calls.
+                 */
+                create_remove_directory_tree(0, 0 , testdir, 0, progress);
+            }
+        }
       }
 
       MPI_Barrier(testComm);
@@ -2043,11 +2095,14 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
           fflush( out_logfile );
       }
 
-      if ((rank < path_count) && backend->access(testdir, F_OK, &param) == 0) {
-          //if (( rank == 0 ) && access(testdir, F_OK) == 0) {
-          if (backend->rmdir(testdir, &param) == -1) {
-              FAIL("unable to remove directory");
-          }
+      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+        prep_testdir(j, dir_iter);
+        if ((rank < path_count) && backend->access(testdir, F_OK, &param) == 0) {
+            //if (( rank == 0 ) && access(testdir, F_OK) == 0) {
+            if (backend->rmdir(testdir, &param) == -1) {
+                FAIL("unable to remove directory");
+            }
+        }
       }
   } else {
       summary_table->rate[9] = 0;
@@ -2215,7 +2270,11 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       }
       random_seed += rank;
     }
-
+    if ((items > 0) && (items_per_dir > 0) && (! unique_dir_per_task)) {
+      directory_loops = items / items_per_dir;
+    }else{
+      directory_loops = 1;
+    }
     valid_tests();
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
@@ -2268,7 +2327,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         }
     }
     if (items_per_dir > 0) {
-        items = items_per_dir * num_dirs_in_tree;
+        if(unique_dir_per_task){
+          items = items_per_dir * num_dirs_in_tree;
+        }
     } else {
         if (leaf_only) {
             if (branch_factor <= 1) {
