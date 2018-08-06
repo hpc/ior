@@ -78,6 +78,17 @@ AS_IF([test "x$with_lustre" != xno], [
         ])
 ])
 
+# IME (DDN's Infinite Memory Engine) support
+AC_ARG_WITH([ime],
+        [AS_HELP_STRING([--with-ime],
+           [support IO with IME backend @<:@default=no@:>@])],
+        [],
+        [with_ime=no])
+AM_CONDITIONAL([USE_IME_AIORI], [test x$with_ime = xyes])
+AM_COND_IF([USE_IME_AIORI],[
+        AC_DEFINE([USE_IME_AIORI], [], [Build IME backend AIORI])
+])
+
 # HDF5 support
 AC_ARG_WITH([hdf5],
         [AS_HELP_STRING([--with-hdf5],

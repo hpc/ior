@@ -52,7 +52,7 @@ Two ways to run IOR:
 * 3. OPTIONS *
 **************
 These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
-  -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]
+  -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|IME|S3|S3_EMC|NCMPI]
   -A N  refNum -- user reference number to include in long summary
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
   -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers
@@ -121,8 +121,8 @@ GENERAL:
   * refNum               - user supplied reference number, included in
                            long summary [0]
 
-  * api                  - must be set to one of POSIX, MPIIO, HDF5, HDFS, S3,
-                           S3_EMC, or NCMPI, depending on test [POSIX]
+  * api                  - must be set to one of POSIX, MPIIO, HDF5, HDFS, IME,
+                           S3, S3_EMC, or NCMPI, depending on test [POSIX]
 
   * testFile             - name of the output file [testFile]
                            NOTE: with filePerProc set, the tasks can round
@@ -396,7 +396,7 @@ various application codes.  Details are included in each script as necessary.
 An example of a script:
 ===============> start script <===============
 IOR START
-  api=[POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]
+  api=[POSIX|MPIIO|HDF5|HDFS|IME|S3|S3_EMC|NCMPI]
   testFile=testFile
   hintsFileName=hintsFile
   repetitions=8

@@ -87,6 +87,7 @@ typedef struct ior_aiori {
 extern ior_aiori_t dummy_aiori;
 extern ior_aiori_t hdf5_aiori;
 extern ior_aiori_t hdfs_aiori;
+extern ior_aiori_t ime_aiori;
 extern ior_aiori_t mpiio_aiori;
 extern ior_aiori_t ncmpi_aiori;
 extern ior_aiori_t posix_aiori;
