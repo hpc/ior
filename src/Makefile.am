@@ -36,6 +36,13 @@ extraSOURCES  += aiori-HDF5.c
 extraLDADD    += -lhdf5 -lz
 endif
 
+if USE_IME_AIORI
+extraSOURCES  += aiori-IME.c
+extraCPPFLAGS += -I/opt/ddn/ime/include
+extraLDFLAGS  += -L/opt/ddn/ime/lib
+extraLDADD    += -lim_client
+endif
+
 if USE_MPIIO_AIORI
 extraSOURCES += aiori-MPIIO.c
 endif
