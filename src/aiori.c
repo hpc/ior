@@ -35,6 +35,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_HDFS_AIORI
         &hdfs_aiori,
 #endif
+#ifdef USE_IME_AIORI
+        &ime_aiori,
+#endif
 #ifdef USE_MPIIO_AIORI
         &mpiio_aiori,
 #endif

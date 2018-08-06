@@ -733,7 +733,7 @@ static void DisplayUsage(char **argv)
 {
         char *opts[] = {
                 "OPTIONS:",
-                " -a S  api --  API for I/O [POSIX|MMAP|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]",
+                " -a S  api --  API for I/O [POSIX|MMAP|MPIIO|HDF5|HDFS|IME|S3|S3_EMC|NCMPI]",
                 " -A N  refNum -- user supplied reference number to include in the summary",
                 " -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)",
                 " -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers",
