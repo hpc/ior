@@ -309,6 +309,12 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
               }
             }
 
+            if(arg == NULL){
+              const char str[] = {o->shortVar, 0};
+              printf("Error, argument missing for option %s\n", (o->longVar != NULL) ? o->longVar : str);
+              exit(1);
+            }
+
             switch(o->type){
               case('p'):{
                 // call the function in the variable
