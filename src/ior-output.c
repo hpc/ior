@@ -416,9 +416,9 @@ void ShowSetup(IOR_param_t *params)
   PrintKeyVal("apiVersion", params->apiVersion);
   PrintKeyVal("test filename", params->testFileName);
   PrintKeyVal("access", params->filePerProc ? "file-per-process" : "single-shared-file");
-  PrintKeyVal("type", params->collective == FALSE ? "independent" : "collective");
+  PrintKeyVal("type", params->collective ? "collective" : "independent");
   PrintKeyValInt("segments", params->segmentCount);
-  PrintKeyVal("ordering in a file", params->randomOffset ? "sequential" : "random");
+  PrintKeyVal("ordering in a file", params->randomOffset ? "random" : "sequential");
   if (params->reorderTasks == FALSE && params->reorderTasksRandom == FALSE) {
     PrintKeyVal("ordering inter file", "no tasks offsets");
   }
