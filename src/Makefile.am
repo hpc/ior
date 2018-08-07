@@ -1,4 +1,4 @@
-SUBDIRS = . 
+SUBDIRS = .
 
 bin_PROGRAMS = ior mdtest
 if USE_CAPS
@@ -9,7 +9,6 @@ noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal
 
 lib_LIBRARIES = libaiori.a
 libaiori_a_SOURCES = ior.c mdtest.c utilities.c parse_options.c ior-output.c option.c
-libaiori_a_LIBADD =
 
 extraSOURCES = aiori.c aiori-DUMMY.c
 extraLDADD =
@@ -83,33 +82,33 @@ extraLDADD    += -laws4c
 extraLDADD    += -laws4c_extra
 endif
 
-ior_SOURCES += $(extraSOURCES)
-ior_LDFLAGS += $(extraLDFLAGS)
-ior_LDADD += $(extraLDADD)
+ior_SOURCES  += $(extraSOURCES)
+ior_LDFLAGS  += $(extraLDFLAGS)
+ior_LDADD    += $(extraLDADD)
 ior_CPPFLAGS += $(extraCPPFLAGS)
 
-mdtest_SOURCES += $(extraSOURCES)
-mdtest_LDFLAGS += $(extraLDFLAGS)
-mdtest_LDADD += $(extraLDADD)
+mdtest_SOURCES  += $(extraSOURCES)
+mdtest_LDFLAGS  += $(extraLDFLAGS)
+mdtest_LDADD    += $(extraLDADD)
 mdtest_CPPFLAGS += $(extraCPPFLAGS)
 
 IOR_SOURCES  = $(ior_SOURCES)
+IOR_LDFLAGS  = $(ior_LDFLAGS)
 IOR_LDADD    = $(ior_LDADD)
-IOT_CPPFLAGS = $(ior_CPPFLAGS)
+IOR_CPPFLAGS = $(ior_CPPFLAGS)
 
 MDTEST_SOURCES  = $(mdtest_SOURCES)
+MDTEST_LDFLAGS  = $(mdtest_LDFLAGS)
 MDTEST_LDADD    = $(mdtest_LDADD)
 MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
 
 libaiori_a_SOURCES += $(extraSOURCES)
-#libaiori_a_LIBADD += $(extraLDFLAGS) $(extraLDADD)
-
+libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
 
 
 TESTS = testlib
 bin_PROGRAMS += testlib
 
-testlib_SOURCES = ./test/lib.c
-testlib_LDFLAGS =
-testlib_LDADD = libaiori.a $(extraLDADD)
-testlib_CPPFLAGS =
+testlib_SOURCES  = ./test/lib.c
+testlib_LDFLAGS  = $(extraLDFLAGS)
+testlib_LDADD    = libaiori.a $(extraLDADD)
