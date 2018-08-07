@@ -40,12 +40,19 @@ static void        *IME_Create(char *, IOR_param_t *);
 static void        *IME_Open(char *, IOR_param_t *);
 static void         IME_Close(void *, IOR_param_t *);
 static void         IME_Delete(char *, IOR_param_t *);
-static void         IME_SetVersion(IOR_param_t *);
+static char        *IME_GetVersion();
 static void         IME_Fsync(void *, IOR_param_t *);
 static int          IME_Access(const char *, int, IOR_param_t *);
 static IOR_offset_t IME_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static IOR_offset_t IME_Xfer(int, void *, IOR_size_t *,
                              IOR_offset_t, IOR_param_t *);
+static int          IME_StatFS(const char *, ior_aiori_statfs_t *,
+                               IOR_param_t *);
+static int          IME_RmDir(const char *, IOR_param_t *);
+static int          IME_MkDir(const char *, mode_t, IOR_param_t *);
+static int          IME_Stat(const char *, struct stat *, IOR_param_t *);
+static void         IME_Initialize();
+static void         IME_Finalize();
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -55,19 +62,41 @@ extern int      verbose;
 extern MPI_Comm testComm;
 
 ior_aiori_t ime_aiori = {
-        .name = "IME",
-        .create = IME_Create,
-        .open = IME_Open,
-        .xfer = IME_Xfer,
-        .close = IME_Close,
-        .delete = IME_Delete,
-        .set_version = IME_SetVersion,
-        .fsync = IME_Fsync,
+        .name          = "IME",
+        .create        = IME_Create,
+        .open          = IME_Open,
+        .xfer          = IME_Xfer,
+        .close         = IME_Close,
+        .delete        = IME_Delete,
+        .get_version   = IME_GetVersion,
+        .fsync         = IME_Fsync,
         .get_file_size = IME_GetFileSize,
-        .access = IME_Access,
+        .access        = IME_Access,
+        .statfs        = IME_StatFS,
+        .rmdir         = IME_RmDir,
+        .mkdir         = IME_MkDir,
+        .stat          = IME_Stat,
+        .initialize    = IME_Initialize,
+        .finalize      = IME_Finalize,
 };
 
 /***************************** F U N C T I O N S ******************************/
+
+/*
+ * Initialize IME (before MPI is started).
+ */
+static void IME_Initialize()
+{
+        ime_native_init();
+}
+
+/*
+ * Finlize IME (after MPI is shutdown).
+ */
+static void IME_Finalize()
+{
+        (void)ime_native_finalize();
+}
 
 /*
  * Try to access a file through the IME interface.
@@ -228,9 +257,64 @@ static void IME_Delete(char *testFileName, IOR_param_t *param)
 /*
  * Determine API version.
  */
-static void IME_SetVersion(IOR_param_t *test)
+static char *IME_GetVersion()
 {
-        strcpy(test->apiVersion, test->api);
+        static char ver[1024] = {};
+#if (IME_NATIVE_API_VERSION >= 120)
+        strcpy(ver, ime_native_version());
+#else
+        strcpy(ver, "not supported");
+#endif
+        return ver;
+}
+
+/*
+ * XXX: statfs call is currently not exposed by IME native interface.
+ */
+static int IME_StatFS(const char *oid, ior_aiori_statfs_t *stat_buf,
+                      IOR_param_t *param)
+{
+        (void)oid;
+        (void)stat_buf;
+        (void)param;
+
+        WARN("statfs is currently not supported in IME backend!");
+        return -1;
+}
+
+/*
+ * XXX: mkdir call is currently not exposed by IME native interface.
+ */
+static int IME_MkDir(const char *oid, mode_t mode, IOR_param_t *param)
+{
+        (void)oid;
+        (void)mode;
+        (void)param;
+
+        WARN("mkdir is currently not supported in IME backend!");
+        return -1;
+}
+
+/*
+ * XXX: rmdir call is curretly not exposed by IME native interface.
+ */
+static int IME_RmDir(const char *oid, IOR_param_t *param)
+{
+        (void)oid;
+        (void)param;
+
+        WARN("rmdir is currently not supported in IME backend!");
+        return -1;
+}
+
+/*
+ * Perform stat() through the IME interface.
+ */
+static int IME_Stat(const char *path, struct stat *buf, IOR_param_t *param)
+{
+    (void)param;
+
+    return ime_native_stat(path, buf);
 }
 
 /*
