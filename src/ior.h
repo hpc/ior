@@ -140,7 +140,7 @@ typedef struct
     unsigned int timeStampSignatureValue; /* value for time stamp signature */
     void * fd_fppReadCheck;          /* additional fd for fpp read check */
     int randomSeed;                  /* random seed for write/read check */
-    int incompressibleSeed;           /* random seed for incompressible file creation */
+    unsigned int incompressibleSeed; /* random seed for incompressible file creation */
     int randomOffset;                /* access is to random offsets */
     size_t memoryPerTask;            /* additional memory used per task */
     size_t memoryPerNode;            /* additional memory used per node */

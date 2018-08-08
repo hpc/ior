@@ -52,12 +52,6 @@ static void PrintKeyValStart(char * key){
   }
 }
 
-static void PrintNewLine(){
-  if (outputFormat == OUTPUT_DEFAULT){
-    fprintf(out_resultfile, "\n");
-  }
-}
-
 static void PrintNextToken(){
   if(needNextToken){
     needNextToken = 0;

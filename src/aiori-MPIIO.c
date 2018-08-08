@@ -271,10 +271,14 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
 
         /* point functions to appropriate MPIIO calls */
         if (access == WRITE) {  /* WRITE */
-                Access = MPI_File_write;
-                Access_at = MPI_File_write_at;
-                Access_all = MPI_File_write_all;
-                Access_at_all = MPI_File_write_at_all;
+                Access = (int (MPIAPI *)(MPI_File, void *, int,
+                          MPI_Datatype, MPI_Status *)) MPI_File_write;
+                Access_at = (int (MPIAPI *)(MPI_File, MPI_Offset, void *, int,
+                             MPI_Datatype, MPI_Status *))  MPI_File_write_at;
+                Access_all = (int (MPIAPI *) (MPI_File, void *, int,
+                              MPI_Datatype, MPI_Status *)) MPI_File_write_all;
+                Access_at_all = (int (MPIAPI *) (MPI_File, MPI_Offset, void *, int,
+                                 MPI_Datatype, MPI_Status *)) MPI_File_write_at_all;
                 /*
                  * this needs to be properly implemented:
                  *
@@ -414,9 +418,6 @@ void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 static char* MPIIO_GetVersion()
 {
   static char ver[1024] = {};
-  if (ver){
-    return ver;
-  }
   int version, subversion;
   MPI_CHECK(MPI_Get_version(&version, &subversion), "cannot get MPI version");
   sprintf(ver, "(%d.%d)", version, subversion);

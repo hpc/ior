@@ -136,7 +136,7 @@ void DumpBuffer(void *buffer,
 int CountTasksPerNode(MPI_Comm comm) {
     /* modern MPI provides a simple way to get the local process count */
     MPI_Comm shared_comm;
-    int rc, count;
+    int count;
 
     MPI_Comm_split_type (comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm);
     MPI_Comm_size (shared_comm, &count);
