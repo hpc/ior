@@ -1242,6 +1242,10 @@ static void TestIoSys(IOR_test_t *test)
                 if (params->multiFile)
                         params->repCounter = rep;
 
+                /* Delay between repetitions */
+                if (rep > 0)
+                        DelaySecs(params->interTestDelay);
+
                 /*
                  * write the file(s), getting timing between I/O calls
                  */
@@ -1252,7 +1256,6 @@ static void TestIoSys(IOR_test_t *test)
                                 fprintf(out_logfile, "task %d writing %s\n", rank,
                                         testFileName);
                         }
-                        DelaySecs(params->interTestDelay);
                         if (params->useExistingTestFile == FALSE) {
                                 RemoveFile(testFileName, params->filePerProc,
                                            params);
@@ -1397,7 +1400,6 @@ static void TestIoSys(IOR_test_t *test)
                                 fprintf(out_logfile, "task %d reading %s\n", rank,
                                         testFileName);
                         }
-                        DelaySecs(params->interTestDelay);
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = READ;
                         timer[6][rep] = GetTimeStamp();
