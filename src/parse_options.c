@@ -499,7 +499,6 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
           LAST_OPTION,
         };
 
-        int i;
         IOR_test_t *tests = NULL;
 
         GetPlatformName(initialTestParams.platform);

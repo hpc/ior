@@ -86,7 +86,6 @@ static char testdirpath[MAX_PATHLEN];
 static char base_tree_name[MAX_PATHLEN];
 static char **filenames;
 static char hostname[MAX_PATHLEN];
-static char unique_dir[MAX_PATHLEN];
 static char mk_name[MAX_PATHLEN];
 static char stat_name[MAX_PATHLEN];
 static char read_name[MAX_PATHLEN];
@@ -384,8 +383,6 @@ static void create_file (const char *path, uint64_t itemNum) {
 /* helper for creating/removing items */
 void create_remove_items_helper(const int dirs, const int create, const char *path,
                                 uint64_t itemNum, rank_progress_t * progress) {
-
-    char curr_item[MAX_PATHLEN];
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
         fprintf( out_logfile, "V-1: Entering create_remove_items_helper...\n" );
@@ -1564,9 +1561,9 @@ void summarize_results(int iterations) {
 /* Checks to see if the test setup is valid.  If it isn't, fail. */
 void valid_tests() {
 
-    if(stone_wall_timer_seconds > 0 && branch_factor > 1 || ! barriers){
-      fprintf(out_logfile, "Error, stone wall timer does only work with a branch factor <= 1 and with barriers\n");
-      MPI_Abort(testComm, 1);
+    if (((stone_wall_timer_seconds > 0) && (branch_factor > 1)) || ! barriers) {
+        fprintf(out_logfile, "Error, stone wall timer does only work with a branch factor <= 1 and with barriers\n");
+        MPI_Abort(testComm, 1);
     }
 
     if (!create_only && !stat_only && !read_only && !remove_only) {
@@ -1859,7 +1856,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   /* start and end times of directory tree create/remove */
   double startCreate, endCreate;
-  int k, c;
+  int k;
 
   if (rank == 0 && verbose >= 1) {
       fprintf(out_logfile, "V-1: main: * iteration %d *\n", j+1);
@@ -2149,7 +2146,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     init_clock();
 
     mdtest_init_args();
-    int i, j, k;
+    int i, j;
     int nodeCount;
     MPI_Group worldgroup, testgroup;
     struct {
@@ -2393,7 +2390,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* setup directory path to work in */
     if (path_count == 0) { /* special case where no directory path provided with '-d' option */
-        char * dir = getcwd(testdirpath, MAX_PATHLEN);
+        char *ret = getcwd(testdirpath, MAX_PATHLEN);
+        if (ret == NULL) {
+            FAIL("Unable to get current working directory");
+        }
         path_count = 1;
     } else {
         strcpy(testdirpath, filenames[rank%path_count]);

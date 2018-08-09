@@ -92,7 +92,6 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
 int ior_main(int argc, char **argv)
 {
-    int i;
     IOR_test_t *tests_head;
     IOR_test_t *tptr;
 
@@ -616,7 +615,6 @@ FillIncompressibleBuffer(void* buffer, IOR_param_t * test)
                 lo = (unsigned long long) rand_r(&test->incompressibleSeed);
                 buf[i] = hi | lo;
         }
-
 }
 
 unsigned int reseed_incompressible_prng = TRUE;
@@ -935,7 +933,6 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
  */
 static void InitTests(IOR_test_t *tests, MPI_Comm com)
 {
-        IOR_test_t *testsHead = tests;
         int size;
 
         MPI_CHECK(MPI_Comm_size(com, & size), "MPI_Comm_size() error");
@@ -1837,7 +1834,6 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
 static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers)
 {
         int errors = 0;
-        IOR_offset_t amtXferred;
         IOR_offset_t transferCount = 0;
         uint64_t pairCnt = 0;
         IOR_offset_t *offsetArray;
