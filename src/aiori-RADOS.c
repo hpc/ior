@@ -29,15 +29,21 @@
 
 /************************** O P T I O N S *****************************/
 struct rados_options{
-  char * username;
+  char * user;
+  char * conf;
+  char * pool;
 };
 
 static struct rados_options o = {
-  .username = "admin",
+  .user = NULL,
+  .conf = NULL,
+  .pool = NULL,
 };
 
 static option_help options [] = {
-      {'u', "username",        "Username for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.username},
+      {'u', "user", "Username for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.user},
+      {'c', "conf", "Config file for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.conf},
+      {'p', "pool", "RADOS pool to use for I/O", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
       LAST_OPTION
 };
 
@@ -92,13 +98,12 @@ static void RADOS_Cluster_Init(IOR_param_t * param)
         int ret;
 
         /* create RADOS cluster handle */
-        ret = rados_create(&param->rados_cluster, o.username);
+        ret = rados_create(&param->rados_cluster, o.user);
         if (ret)
                 RADOS_ERR("unable to create RADOS cluster handle", ret);
 
         /* set the handle using the Ceph config */
-        /* XXX: HARDCODED RADOS CONF PATH */
-        ret = rados_conf_read_file(param->rados_cluster, "/etc/ceph/ceph.conf");
+        ret = rados_conf_read_file(param->rados_cluster, o.conf);
         if (ret)
                 RADOS_ERR("unable to read RADOS config file", ret);
 
@@ -108,9 +113,7 @@ static void RADOS_Cluster_Init(IOR_param_t * param)
                 RADOS_ERR("unable to connect to the RADOS cluster", ret);
 
         /* create an io context for the pool we are operating on */
-        /* XXX: HARDCODED RADOS POOL NAME */
-        ret = rados_ioctx_create(param->rados_cluster, "cephfs_data",
-                                 &param->rados_ioctx);
+        ret = rados_ioctx_create(param->rados_cluster, o.pool, &param->rados_ioctx);
         if (ret)
                 RADOS_ERR("unable to create an I/O context for the RADOS cluster", ret);
 
