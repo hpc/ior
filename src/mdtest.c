@@ -1308,7 +1308,7 @@ void print_help (void) {
         "              [-n number_of_items] [-N stride_length] [-p seconds] [-r]\n"
         "              [-R[seed]] [-s stride] [-S] [-t] [-T] [-u] [-v] [-a API]\n"
         "              [-V verbosity_value] [-w number_of_bytes_to_write] [-W seconds] [-y] [-z depth] -Z\n"
-        "\t-a: API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]\n"
+        "\t-a: API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]\n"
         "\t-b: branching factor of hierarchical directory structure\n"
         "\t-B: no barriers between phases\n"
         "\t-c: collective creates: task 0 does all creates\n"
@@ -2164,7 +2164,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     char * path = "./out";
     int randomize = 0;
     option_help options [] = {
-      {'a', NULL,        "API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]", OPTION_OPTIONAL_ARGUMENT, 's', & backend_name},
+      {'a', NULL,        "API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]", OPTION_OPTIONAL_ARGUMENT, 's', & backend_name},
       {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & branch_factor},
       {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},

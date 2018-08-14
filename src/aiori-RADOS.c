@@ -56,7 +56,7 @@ static int RADOS_MkDir(const char *, mode_t, IOR_param_t *);
 static int RADOS_RmDir(const char *, IOR_param_t *);
 static int RADOS_Access(const char *, int, IOR_param_t *);
 static int RADOS_Stat(const char *, struct stat *, IOR_param_t *);
-static option_help * RADIOS_options();
+static option_help * RADOS_options();
 
 /************************** D E C L A R A T I O N S ***************************/
 ior_aiori_t rados_aiori = {
@@ -74,7 +74,7 @@ ior_aiori_t rados_aiori = {
         .rmdir = RADOS_RmDir,
         .access = RADOS_Access,
         .stat = RADOS_Stat,
-        .get_options = RADIOS_options,
+        .get_options = RADOS_options,
 };
 
 #define RADOS_ERR(__err_str, __ret) do { \
@@ -83,7 +83,7 @@ ior_aiori_t rados_aiori = {
 } while(0)
 
 /***************************** F U N C T I O N S ******************************/
-static option_help * RADIOS_options(){
+static option_help * RADOS_options(){
   return options;
 }
 

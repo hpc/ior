@@ -438,7 +438,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
     parameters = & initialTestParams;
 
     option_help options [] = {
-          {'a', NULL,        "API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]", OPTION_OPTIONAL_ARGUMENT, 's', & initialTestParams.api},
+          {'a', NULL,        "API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]", OPTION_OPTIONAL_ARGUMENT, 's', & initialTestParams.api},
           {'A', NULL,        "refNum -- user supplied reference number to include in the summary", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.referenceNumber},
           {'b', NULL,        "blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'l', & initialTestParams.blockSize},
           {'B', NULL,        "useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers", OPTION_FLAG, 'd', & initialTestParams.useO_DIRECT},
