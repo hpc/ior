@@ -61,6 +61,17 @@ ior_aiori_t *available_aiori[] = {
         NULL
 };
 
+void aiori_supported_apis(char * APIs){
+  ior_aiori_t **tmp = available_aiori;
+  if(*tmp != NULL){
+    APIs += sprintf(APIs, "%s", (*tmp)->name);
+    tmp++;
+    for (; *tmp != NULL; ++tmp) {
+      APIs += sprintf(APIs, "|%s", (*tmp)->name);
+    }
+  }
+}
+
 /**
  * Default statfs implementation.
  *

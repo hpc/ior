@@ -101,6 +101,7 @@ void aiori_initialize();
 void aiori_finalize();
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
+void aiori_supported_apis(char * APIs);
 const char *aiori_default (void);
 
 /* some generic POSIX-based backend calls */
