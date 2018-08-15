@@ -47,12 +47,22 @@ Two ways to run IOR:
     E.g., to execute:  IOR -W -f script
     This defaults all tests in 'script' to use write data checking.
 
+  * The Command line supports to specify additional parameters for the choosen API.
+    For example, username and password for the storage.
+    Available options are listed in the help text after selecting the API when running with -h.
+    For example, 'IOR -a DUMMY -h' shows the supported options for the DUMMY backend.
+    The options for the backend must be specified at last and are separated with
+    two dashes '--'. Example: 'IOR -a DUMMY -- -c 1000' defines a delay for the
+    file creation for the plugin. Currently, it is not possible to set these
+    backend options using a command line script (-f option).
+
+
 
 **************
 * 3. OPTIONS *
 **************
 These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
-  -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|IME|S3|S3_EMC|NCMPI]
+  -a S  api --  API for I/O, e.g., POSIX
   -A N  refNum -- user reference number to include in long summary
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
   -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers
