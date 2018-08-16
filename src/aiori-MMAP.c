@@ -42,7 +42,7 @@ ior_aiori_t mmap_aiori = {
         .xfer = MMAP_Xfer,
         .close = MMAP_Close,
         .delete = POSIX_Delete,
-        .set_version = POSIX_SetVersion,
+        .get_version = aiori_get_version,
         .fsync = MMAP_Fsync,
         .get_file_size = POSIX_GetFileSize,
 };

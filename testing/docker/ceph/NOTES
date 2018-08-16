@@ -1,0 +1,35 @@
+Following are basic notes on how to deploy the 'ceph/demo' docker container. The 'ceph/demo' container bootstraps a complete Ceph cluster with all necessary daemons already running, providing a convenient environment for evaluating the correctness of the RADOS backend for IOR, in our case.
+
+##########################
+# Pull 'ceph/demo' image #
+##########################
+
+Run `docker pull ceph/demo` to download the image to your system.
+
+################################
+# Deploy 'ceph/demo' conatiner #
+################################
+
+To deploy the Ceph cluster, execute the following command:
+
+`docker run -it --net=host -v /etc/ceph:/etc/ceph -e MON_IP=10.0.0.1 -e CEPH_PUBLIC_NETWORK=10.0.0.0/24 ceph/demo`
+
+The only necessary modification to the above command is to provide the correct network IP address for MON_IP and to provide the corresponding CIDR notation of this IP for CEPH_PUBLIC_NETWORK, as illustrated.
+
+NOTE: The above command starts the docker container in interactive mode. Replace '-it' with '-d' to run in the background as a daemon.
+
+###############################
+# Run IOR against 'ceph/demo' #
+###############################
+
+With a Ceph cluster now deployed, running IOR against it is straightforward:
+
+`./ior -a RADOS -- -u admin -c /etc/ceph/cephconf -p cephfs_data`
+
+All command line arguments following the '--' are required. 
+
+-u is the Ceph username (e.g., admin)
+-c is the Ceph config file (typically found in /etc/ceph/ceph.conf)
+-p is the Ceph pool to perform I/O to (e.g., cephfs_data)
+
+NOTE: Permissions of the various config files, keyrings, etc. inside of /etc/ceph may need to be modified to be readable by the user running IOR (e.g., `sudo chmod 644 /etc/ceph/*`). These various files are created internally within the docker container and may not be readable by other users.

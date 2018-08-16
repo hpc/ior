@@ -78,9 +78,14 @@ ior_aiori_t posix_aiori = {
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
         .delete = POSIX_Delete,
-        .set_version = POSIX_SetVersion,
+        .get_version = aiori_get_version,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
+        .statfs = aiori_posix_statfs,
+        .mkdir = aiori_posix_mkdir,
+        .rmdir = aiori_posix_rmdir,
+        .access = aiori_posix_access,
+        .stat = aiori_posix_stat,
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -505,14 +510,6 @@ void POSIX_Delete(char *testFileName, IOR_param_t * param)
                 rank, testFileName);
         if (unlink(testFileName) != 0)
                 EWARN(errmsg);
-}
-
-/*
- * Determine api version.
- */
-void POSIX_SetVersion(IOR_param_t * test)
-{
-        strcpy(test->apiVersion, test->api);
 }
 
 /*

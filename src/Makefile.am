@@ -1,23 +1,28 @@
+SUBDIRS = .
+
 bin_PROGRAMS = ior mdtest
 if USE_CAPS
 bin_PROGRAMS += IOR MDTEST
 endif
 
-noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h
+noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h
 
-extraSOURCES = aiori.c
+lib_LIBRARIES = libaiori.a
+libaiori_a_SOURCES = ior.c mdtest.c utilities.c parse_options.c ior-output.c option.c
+
+extraSOURCES = aiori.c aiori-DUMMY.c
 extraLDADD =
 extraLDFLAGS =
 extraCPPFLAGS =
 
-ior_SOURCES = ior.c utilities.c parse_options.c
+ior_SOURCES = ior-main.c
 ior_LDFLAGS =
-ior_LDADD =
+ior_LDADD = libaiori.a
 ior_CPPFLAGS =
 
-mdtest_SOURCES = mdtest.c utilities.c
+mdtest_SOURCES = mdtest-main.c
 mdtest_LDFLAGS =
-mdtest_LDADD =
+mdtest_LDADD = libaiori.a
 mdtest_CPPFLAGS =
 
 if USE_HDFS_AIORI
@@ -34,6 +39,13 @@ endif
 if USE_HDF5_AIORI
 extraSOURCES  += aiori-HDF5.c
 extraLDADD    += -lhdf5 -lz
+endif
+
+if USE_IME_AIORI
+extraSOURCES  += aiori-IME.c
+extraCPPFLAGS += -I/opt/ddn/ime/include
+extraLDFLAGS  += -L/opt/ddn/ime/lib
+extraLDADD    += -lim_client
 endif
 
 if USE_MPIIO_AIORI
@@ -53,6 +65,10 @@ if USE_POSIX_AIORI
 extraSOURCES += aiori-POSIX.c
 endif
 
+if USE_RADOS_AIORI
+extraSOURCES += aiori-RADOS.c
+extraLDADD += -lrados
+endif
 
 if USE_S3_AIORI
 extraSOURCES  += aiori-S3.c
@@ -66,21 +82,33 @@ extraLDADD    += -laws4c
 extraLDADD    += -laws4c_extra
 endif
 
-
-ior_SOURCES += $(extraSOURCES)
-ior_LDFLAGS += $(extraLDFLAGS)
-ior_LDADD += $(extraLDADD)
+ior_SOURCES  += $(extraSOURCES)
+ior_LDFLAGS  += $(extraLDFLAGS)
+ior_LDADD    += $(extraLDADD)
 ior_CPPFLAGS += $(extraCPPFLAGS)
 
-mdtest_SOURCES += $(extraSOURCES)
-mdtest_LDFLAGS += $(extraLDFLAGS)
-mdtest_LDADD += $(extraLDADD)
+mdtest_SOURCES  += $(extraSOURCES)
+mdtest_LDFLAGS  += $(extraLDFLAGS)
+mdtest_LDADD    += $(extraLDADD)
 mdtest_CPPFLAGS += $(extraCPPFLAGS)
 
 IOR_SOURCES  = $(ior_SOURCES)
+IOR_LDFLAGS  = $(ior_LDFLAGS)
 IOR_LDADD    = $(ior_LDADD)
-IOT_CPPFLAGS = $(ior_CPPFLAGS)
+IOR_CPPFLAGS = $(ior_CPPFLAGS)
 
 MDTEST_SOURCES  = $(mdtest_SOURCES)
+MDTEST_LDFLAGS  = $(mdtest_LDFLAGS)
 MDTEST_LDADD    = $(mdtest_LDADD)
 MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
+
+libaiori_a_SOURCES += $(extraSOURCES)
+libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
+
+
+TESTS = testlib
+bin_PROGRAMS += testlib
+
+testlib_SOURCES  = ./test/lib.c
+testlib_LDFLAGS  = $(extraLDFLAGS)
+testlib_LDADD    = libaiori.a $(extraLDADD)

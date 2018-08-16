@@ -29,26 +29,14 @@
    typedef void*    hdfsFS;      /* unused, but needs a type */
 #endif
 
-#ifdef USE_S3_AIORI
-#  include <curl/curl.h>
-#  include "aws4c.h"
+#ifdef USE_RADOS_AIORI
+#  include <rados/librados.h>
 #else
-   typedef void     CURL;       /* unused, but needs a type */
-   typedef void     IOBuf;      /* unused, but needs a type */
+    typedef void *rados_t;
+    typedef void *rados_ioctx_t;
 #endif
 
-
-
 #include "iordef.h"
-
-extern int numTasksWorld;
-extern int rank;
-extern int rankOffset;
-extern int tasksPerNode;
-extern int verbose;
-extern MPI_Comm testComm;
-
-
 /******************** DATA Packet Type ***************************************/
 /* Holds the types of data packets: generic, offset, timestamp, incompressible */
 
@@ -91,17 +79,18 @@ typedef struct IO_BUFFERS
 
 typedef struct
 {
-    char debug[MAX_STR];             /* debug info string */
+    const void * backend;
+    char * debug;             /* debug info string */
     unsigned int mode;               /* file permissions */
     unsigned int openFlags;          /* open flags (see also <open>) */
     int referenceNumber;             /* user supplied reference number */
-    char api[MAX_STR];               /* API for I/O */
-    char apiVersion[MAX_STR];        /* API version */
-    char platform[MAX_STR];          /* platform type */
-    char testFileName[MAXPATHLEN];   /* full name for test */
-    char testFileName_fppReadCheck[MAXPATHLEN];/* filename for fpp read check */
-    char hintsFileName[MAXPATHLEN];  /* full name for hints file */
-    char options[MAXPATHLEN];        /* options string */
+    char * api;               /* API for I/O */
+    char * apiVersion;        /* API version */
+    char * platform;          /* platform type */
+    char * testFileName;   /* full name for test */
+    char * testFileName_fppReadCheck;/* filename for fpp read check */
+    char * hintsFileName;  /* full name for hints file */
+    char * options;        /* options string */
     int numTasks;                    /* number of tasks for test */
     int nodes;                       /* number of nodes for test */
     int tasksPerNode;                /* number of tasks per node */
@@ -135,14 +124,15 @@ typedef struct
     int useStridedDatatype;          /* put strided access into datatype */
     int useO_DIRECT;                 /* use O_DIRECT, bypassing I/O buffers */
     int showHints;                   /* show hints */
-    int showHelp;                    /* show options and help */
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
     int useExistingTestFile;         /* do not delete test file before access */
     int storeFileOffset;             /* use file offset as stored signature */
     int deadlineForStonewalling;     /* max time in seconds to run any test phase */
     int stoneWallingWearOut;         /* wear out the stonewalling, once the timout is over, each process has to write the same amount */
-    int stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
+    uint64_t stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
+    char * stoneWallingStatusFile;
+
     int maxTimeDuration;             /* max time in minutes to run each test */
     int outlierThreshold;            /* warn on outlier N seconds from mean */
     int verbose;                     /* verbosity */
@@ -150,7 +140,7 @@ typedef struct
     unsigned int timeStampSignatureValue; /* value for time stamp signature */
     void * fd_fppReadCheck;          /* additional fd for fpp read check */
     int randomSeed;                  /* random seed for write/read check */
-    int incompressibleSeed;           /* random seed for incompressible file creation */
+    unsigned int incompressibleSeed; /* random seed for incompressible file creation */
     int randomOffset;                /* access is to random offsets */
     size_t memoryPerTask;            /* additional memory used per task */
     size_t memoryPerNode;            /* additional memory used per node */
@@ -175,25 +165,20 @@ typedef struct
     IOR_offset_t setAlignment;       /* alignment in bytes */
 
     /* HDFS variables */
-    char        hdfs_user[MAX_STR];  /* copied from ENV, for now */
+    char      * hdfs_user;  /* copied from ENV, for now */
     const char* hdfs_name_node;
     tPort       hdfs_name_node_port; /* (uint16_t) */
     hdfsFS      hdfs_fs;             /* file-system handle */
     int         hdfs_replicas;       /* n block replicas.  (0 gets default) */
     int         hdfs_block_size;     /* internal blk-size. (0 gets default) */
 
-    /* REST/S3 variables */
-    //    CURL*       curl;             /* for libcurl "easy" fns (now managed by aws4c) */
-#   define      IOR_CURL_INIT        0x01 /* curl top-level inits were perfomed once? */
-#   define      IOR_CURL_NOCONTINUE  0x02
-#   define      IOR_CURL_S3_EMC_EXT  0x04 /* allow EMC extensions to S3? */
-    char        curl_flags;
     char*       URI;                 /* "path" to target object */
-    IOBuf*      io_buf;              /* aws4c places parsed header values here */
-    IOBuf*      etags;               /* accumulate ETags for N:1 parts */
     size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
-#   define      MAX_UPLOAD_ID_SIZE    256 /* seems to be 32, actually */
-    char        UploadId[MAX_UPLOAD_ID_SIZE +1]; /* key for multi-part-uploads */
+    char*       UploadId; /* key for multi-part-uploads */
+
+    /* RADOS variables */
+    rados_t rados_cluster;           /* RADOS cluster handle */
+    rados_ioctx_t rados_ioctx;       /* I/O context for our pool in the RADOS cluster */
 
     /* NCMPI variables */
     int var_id;                      /* variable id handle for data set */
@@ -220,25 +205,38 @@ typedef struct
 /* each pointer is to an array, each of length equal to the number of
    repetitions in the test */
 typedef struct {
-   double *writeTime;
-   double *readTime;
+   double writeTime;
+   double readTime;
+   int    errors;
    size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
-   IOR_offset_t *aggFileSizeFromStat;
-   IOR_offset_t *aggFileSizeFromXfer;
-   IOR_offset_t *aggFileSizeForBW;
+
+   double     stonewall_time;
+   long long  stonewall_min_data_accessed;
+   long long  stonewall_avg_data_accessed;
+
+   IOR_offset_t aggFileSizeFromStat;
+   IOR_offset_t aggFileSizeFromXfer;
+   IOR_offset_t aggFileSizeForBW;
 } IOR_results_t;
 
 /* define the queuing structure for the test parameters */
 typedef struct IOR_test_t {
    IOR_param_t        params;
-   IOR_results_t     *results;
+   IOR_results_t     *results; /* This is an array of reps times IOR_results_t */
    struct IOR_test_t *next;
 } IOR_test_t;
 
 
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
-void AllocResults(IOR_test_t *test);
-void GetPlatformName(char *);
+char * GetPlatformName();
 void init_IOR_Param_t(IOR_param_t *p);
+
+/*
+ * This function runs IOR given by command line, useful for testing
+ */
+IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * out_logfile);
+
+/* Actual IOR Main function, renamed to allow library usage */
+int ior_main(int argc, char **argv);
 
 #endif /* !_IOR_H */
