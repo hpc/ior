@@ -77,6 +77,8 @@ typedef struct ior_aiori {
         int (*rmdir) (const char *path, IOR_param_t * param);
         int (*access) (const char *path, int mode, IOR_param_t * param);
         int (*stat) (const char *path, struct stat *buf, IOR_param_t * param);
+        int (*init)(IOR_param_t *);
+        int (*finalize)(IOR_param_t *);
 } ior_aiori_t;
 
 extern ior_aiori_t hdf5_aiori;
@@ -93,9 +95,6 @@ extern ior_aiori_t dfs_aiori;
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
 const char *aiori_default (void);
-
-int dfs_init(void);
-int dfs_finalize(void);
 
 IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName);

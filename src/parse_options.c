@@ -327,7 +327,14 @@ void DecodeDirective(char *line, IOR_param_t *params)
 		RecalculateExpectedFileSize(params);
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
-        } else {
+        } else if (strcasecmp(option, "daospool") == 0) {
+                strcpy(params->daosPool, value);
+        } else if (strcasecmp(option, "daospoolsvc") == 0) {
+                strcpy(params->daosPoolSvc, value);
+        } else if (strcasecmp(option, "daosgroup") == 0) {
+                strcpy(params->daosGroup, value);
+        }
+        else {
                 if (rank == 0)
                         fprintf(stdout, "Unrecognized parameter \"%s\"\n",
                                 option);

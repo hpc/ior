@@ -213,6 +213,12 @@ typedef struct
     int beegfs_numTargets;           /* number storage targets to use */
     int beegfs_chunkSize;            /* srtipe pattern for new files */
 
+    /* daos variables */
+    char daosGroup[MAX_STR];         /* group name */
+    char daosPool[37];               /* pool UUID */
+    char daosPoolSvc[MAX_STR];       /* pool service ranks */
+    char daosCont[37];               /* Container UUID */
+
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
 } IOR_param_t;

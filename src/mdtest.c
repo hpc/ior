@@ -1801,6 +1801,59 @@ void create_remove_directory_tree(int create,
     }
 }
 
+/*
+ * Set flags from commandline string/value pairs.
+ */
+static void
+DecodeDirective(char *line, IOR_param_t *params)
+{
+        char option[MAX_STR];
+        char value[MAX_STR];
+        int rc;
+
+        rc = sscanf(line, " %[^=# \t\r\n] = %[^# \t\r\n] ", option, value);
+        if (rc != 2 && rank == 0) {
+                fprintf(stdout, "Syntax error in configuration options: %s\n",
+                        line);
+                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+        }
+
+	if (strcasecmp(option, "daospool") == 0) {
+                strcpy(params->daosPool, value);
+        } else if (strcasecmp(option, "daospoolsvc") == 0) {
+                strcpy(params->daosPoolSvc, value);
+        } else if (strcasecmp(option, "daosgroup") == 0) {
+                strcpy(params->daosGroup, value);
+        } else if (strcasecmp(option, "daoscont") == 0) {
+                strcpy(params->daosCont, value);
+        }
+        else {
+                if (rank == 0)
+                        fprintf(stdout, "Unrecognized parameter \"%s\"\n",
+                                option);
+                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+        }
+}
+
+/*
+ * Parse a single line, which may contain multiple comma-seperated directives
+ */
+static void
+ParseLine(char *line, IOR_param_t * test)
+{
+        char *start, *end;
+
+        start = line;
+        do {
+                end = strchr(start, ',');
+                if (end != NULL)
+                        *end = '\0';
+                DecodeDirective(start, test);
+                start = end + 1;
+        } while (end != NULL);
+
+}
+
 int main(int argc, char **argv) {
     int i, j, k, c;
     int nodeCount;
@@ -1853,7 +1906,7 @@ int main(int argc, char **argv) {
 
     /* Parse command line options */
     while (1) {
-        c = getopt(argc, argv, "a:b:BcCd:De:Ef:Fhi:I:l:Ln:N:p:rR::s:StTuvV:w:yz:");
+        c = getopt(argc, argv, "a:b:BcCd:De:Ef:Fhi:I:l:Ln:N:O:p:rR::s:StTuvV:w:yz:");
         if (c == -1) {
             break;
         }
@@ -1898,6 +1951,9 @@ int main(int argc, char **argv) {
             //items = atoi(optarg);         break;
         case 'N':
             nstride = atoi(optarg);       break;
+	case 'O':
+		ParseLine(optarg, &param);
+		break;
         case 'p':
             pre_delay = atoi(optarg);     break;
         case 'r':
@@ -1935,11 +1991,6 @@ int main(int argc, char **argv) {
             depth = atoi(optarg);                  break;
         }
     }
-
-#ifdef USE_DFS_AIORI
-    if (strcmp(backend_name, "DFS") == 0)
-	    dfs_init();
-#endif
 
     if (!create_only && !stat_only && !read_only && !remove_only) {
         create_only = stat_only = read_only = remove_only = 1;
@@ -2082,6 +2133,11 @@ int main(int argc, char **argv) {
         FAIL("Could not find suitable backend to use");
     }
 
+    /* initialize API session */
+    if (backend->init != NULL)
+	    if (backend->init(&param) != 0)
+		    FAIL("Could not init backend");
+
     /*   if directory does not exist, create it */
     if ((rank < path_count) && backend->access(testdirpath, F_OK, &param) != 0) {
         if (backend->mkdir(testdirpath, DIRMODE, &param) != 0) {
@@ -2090,16 +2146,20 @@ int main(int argc, char **argv) {
     }
 
     /* display disk usage */
-    if (verbose >= 3 && rank == 0) {
-        printf( "V-3: main (before display_freespace): testdirpath is \"%s\"\n", testdirpath );
-        fflush( stdout );
-    }
+    if (strcmp(backend->name, "DFS")) {
+	    if (verbose >= 3 && rank == 0) {
+		    printf( "V-3: main (before display_freespace): testdirpath is \"%s\"\n",
+			    testdirpath );
+		    fflush( stdout );
+	    }
 
-    if (rank == 0) display_freespace(testdirpath);
+	    if (rank == 0) display_freespace(testdirpath);
 
-    if (verbose >= 3 && rank == 0) {
-        printf( "V-3: main (after display_freespace): testdirpath is \"%s\"\n", testdirpath );
-        fflush( stdout );
+	    if (verbose >= 3 && rank == 0) {
+		    printf( "V-3: main (after display_freespace): testdirpath is \"%s\"\n",
+			    testdirpath );
+		    fflush( stdout );
+	    }
     }
 
     if (rank == 0) {
@@ -2416,10 +2476,9 @@ int main(int argc, char **argv) {
         free(rand_array);
     }
 
-#ifdef USE_DFS_AIORI
-    if (strcmp(backend_name, "DFS") == 0)
-	    dfs_finalize();
-#endif
+    /* finalize API session */
+    if (backend->finalize != NULL)
+	    backend->finalize(&param);
 
     MPI_Finalize();
     exit(0);

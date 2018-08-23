@@ -2037,10 +2037,10 @@ static void TestIoSys(IOR_test_t *test)
         /* bind I/O calls to specific API */
         AioriBind(params->api, params);
 
-#ifdef USE_DFS_AIORI
-        if (strcmp(params->api, "DFS") == 0)
-                dfs_init();
-#endif
+        /* initialize API session */
+        if (backend->init != NULL)
+	    if (backend->init(params) != 0)
+		    ERR("Could not init backend");
 
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
@@ -2312,13 +2312,12 @@ static void TestIoSys(IOR_test_t *test)
                 free(timer[i]);
         }
 
+        /* finalize API session */
+        if (backend->finalize != NULL)
+                backend->finalize(params);
+
         /* Sync with the tasks that did not participate in this test */
         MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
-
-#ifdef USE_DFS_AIORI
-    if (strcmp(params->api, "DFS") == 0)
-	    dfs_finalize();
-#endif
 }
 
 /*

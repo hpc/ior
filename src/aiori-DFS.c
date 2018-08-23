@@ -6,6 +6,14 @@
 *        Copyright (c) 2003, The Regents of the University of California       *
 *      See the file COPYRIGHT for a complete copyright notice and license.     *
 *                                                                              *
+* Copyright (C) 2018 Intel Corporation
+*
+* GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+* The Government's rights to use, modify, reproduce, release, perform, display,
+* or disclose this software are subject to the terms of the Apache License as
+* provided in Contract No. 8F-30005.
+* Any reproduction of computer software, computer software documentation, or
+* portions thereof marked with this legend must also reproduce the markings.
 ********************************************************************************
 *
 * Implement of abstract I/O interface for DFS.
@@ -70,10 +78,11 @@ parse_filename(const char *path, char **_obj_name, char **_cont_name)
 	cont_name = dirname(f2);
 
 	if (cont_name[0] == '.' || cont_name[0] != '/') {
-		char *cwd;
+		char cwd[1024];
 
-		//getcwd(cwd, 1024);
-                cwd = strdup("/");
+		if (getcwd(cwd, 1024) == NULL)
+			D_GOTO(out, rc = -ENOMEM);
+
 		if (strcmp(cont_name, ".") == 0) {
 			cont_name = strdup(cwd);
 			if (cont_name == NULL)
@@ -130,6 +139,8 @@ static int DFS_Stat (const char *, struct stat *, IOR_param_t *);
 static int DFS_Mkdir (const char *, mode_t, IOR_param_t *);
 static int DFS_Rmdir (const char *, IOR_param_t *);
 static int DFS_Access (const char *, int, IOR_param_t *);
+static int DFS_Init(IOR_param_t *param);
+static int DFS_Finalize(IOR_param_t *param);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -148,85 +159,122 @@ ior_aiori_t dfs_aiori = {
         .rmdir = DFS_Rmdir,
         .access = DFS_Access,
         .stat = DFS_Stat,
+        .init = DFS_Init,
+        .finalize = DFS_Finalize,
 };
 
 /***************************** F U N C T I O N S ******************************/
 
-int
-dfs_init(void) {
-        char			*pool_str, *svcl_str, *group_str;
+static int
+DFS_Init(IOR_param_t *param) {
 	uuid_t			pool_uuid, co_uuid;
 	daos_pool_info_t	pool_info;
 	daos_cont_info_t	co_info;
 	d_rank_list_t		*svcl = NULL;
+        bool			cont_created = false;
 	int			rc;
-        
+
+	if (uuid_parse(param->daosPool, pool_uuid) < 0) {
+		fprintf(stderr, "Invalid pool uuid\n");
+                return -1;
+	}
+
+	if (uuid_parse(param->daosCont, co_uuid) < 0) {
+		fprintf(stderr, "Invalid pool uuid\n");
+                return -1;
+	}
+
+	svcl = daos_rank_list_parse(param->daosPoolSvc, ":");
+	if (svcl == NULL) {
+		fprintf(stderr, "Invalid pool service rank list\n");
+                return -1;
+	}
+
+        printf("Pool uuid = %s, SVCL = %s\n", param->daosPool,
+               param->daosPoolSvc);
+
+        printf("DFS Container namespace uuid = %s\n", param->daosCont);
+
 	rc = daos_init();
 	if (rc) {
 		fprintf(stderr, "daos_init() failed with %d\n", rc);
 		return rc;
 	}
 
-        pool_str = getenv("DAOS_POOL");
-	if (!pool_str) {
-		fprintf(stderr, "missing pool uuid\n");
-                return -1;
-	}
-	if (uuid_parse(pool_str, pool_uuid) < 0) {
-		fprintf(stderr, "Invalid pool uuid\n");
-                return -1;
-	}
-
-        svcl_str = getenv("DAOS_SVCL");
-	if (!svcl_str) {
-		fprintf(stderr, "missing pool service rank list\n");
-                return -1;
-	}
-	svcl = daos_rank_list_parse(svcl_str, ":");
-	if (svcl == NULL) {
-		fprintf(stderr, "Invalid pool service rank list\n");
-                return -1;
-	}
-
-        group_str = getenv("DAOS_GROUP");
-
 	/** Connect to DAOS pool */
-	rc = daos_pool_connect(pool_uuid, group_str, svcl, DAOS_PC_RW,
-			       &poh, &pool_info, NULL);
+	rc = daos_pool_connect(pool_uuid,
+                               strlen(param->daosGroup) ? param->daosGroup : NULL,
+                               svcl, DAOS_PC_RW, &poh, &pool_info, NULL);
 	if (rc < 0) {
-		fprintf(stderr, "Failed to connect to pool %s %s (%d)\n",
-                        pool_str, svcl_str, rc);
-                return -1;
+		fprintf(stderr, "Failed to connect to pool (%d)\n", rc);
+                goto err_daos;
 	}
 
-        uuid_generate(co_uuid);
-        rc = daos_cont_create(poh, co_uuid, NULL);
+	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	/* If NOEXIST we create it */
+	if (rc == -DER_NONEXIST) {
+                printf("Creating DFS Container ...\n");
+		rc = daos_cont_create(poh, co_uuid, NULL);
+		if (rc == 0) {
+			cont_created = true;
+			rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh,
+					    &co_info, NULL);
+		}
+	}
 	if (rc) {
 		fprintf(stderr, "Failed to create container (%d)\n", rc);
-		return -1;
+                goto err_pool;
 	}
 
-        rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
-	if (rc) {
-		fprintf(stderr, "Failed to open container (%d)\n", rc);
-		return -1;
-	}
-
-	rc = dfs_mount(poh, coh, &dfs);
+	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 	if (rc) {
 		fprintf(stderr, "dfs_mount failed (%d)\n", rc);
-                return -1;
+                goto err_cont;
 	}
 
+out:
+        daos_rank_list_free(svcl);
 	return rc;
+err_cont:
+	daos_cont_close(coh, NULL);
+err_pool:
+	if (cont_created)
+		daos_cont_destroy(poh, co_uuid, 1, NULL);
+	daos_pool_disconnect(poh, NULL);
+err_daos:
+	daos_fini();
+        goto out;
 }
 
-int dfs_finalize(void)
+int
+DFS_Finalize(IOR_param_t *param)
 {
-	dfs_umount(dfs);
-	daos_cont_close(coh, NULL);
+        int rc;
+
+	rc = dfs_umount(dfs, true);
+	if (rc) {
+                fprintf(stderr, "dfs_umount() failed (%d)\n", rc);
+                return -1;
+        }
+
+	rc = daos_cont_close(coh, NULL);
+	if (rc) {
+                fprintf(stderr, "daos_cont_close() failed (%d)\n", rc);
+                return -1;
+        }
+
         daos_pool_disconnect(poh, NULL);
-	daos_fini();
+	if (rc) {
+                fprintf(stderr, "daos_pool_disconnect() failed (%d)\n", rc);
+                return -1;
+        }
+
+	rc = daos_fini();
+	if (rc) {
+                fprintf(stderr, "daos_fini() failed (%d)\n", rc);
+                return -1;
+        }
+
         return 0;
 }
 
@@ -238,11 +286,14 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *obj = NULL, *parent = NULL;
-	mode_t pmode;
+	mode_t pmode, mode;
         int fd_oflag = 0;
 	int rc;
 
+        assert(param);
+
         fd_oflag |= O_CREAT | O_RDWR;
+	mode = S_IFREG | param->mode;
 
 	rc = parse_filename(testFileName, &name, &dir_name);
 	if (rc)
@@ -255,8 +306,8 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
-	mode_t mode = S_IFREG | param->mode;
-	rc = dfs_open(dfs, parent, name, mode, fd_oflag, NULL, &obj);
+	rc = dfs_open(dfs, parent, name, mode, fd_oflag, DAOS_OC_LARGE_RW,
+                      NULL, &obj);
 	if (rc)
                 goto out;
 
@@ -274,7 +325,8 @@ out:
 /*
  * Open a file through the DFS interface.
  */
-static void *DFS_Open(char *testFileName, IOR_param_t *param)
+static void *
+DFS_Open(char *testFileName, IOR_param_t *param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *obj = NULL, *parent = NULL;
@@ -295,7 +347,7 @@ static void *DFS_Open(char *testFileName, IOR_param_t *param)
 	if (rc || !S_ISDIR(pmode))
                 goto out;
 
-	rc = dfs_open(dfs, parent, name, S_IFREG, fd_oflag, NULL, &obj);
+	rc = dfs_open(dfs, parent, name, S_IFREG, fd_oflag, 0, NULL, &obj);
 	if (rc)
                 goto out;
 
@@ -369,15 +421,18 @@ DFS_Xfer(int access, void *file, IOR_size_t *buffer, IOR_offset_t length,
 /*
  * Perform fsync().
  */
-static void DFS_Fsync(void *fd, IOR_param_t * param)
+static void
+DFS_Fsync(void *fd, IOR_param_t * param)
 {
+	dfs_sync(dfs);
         return;
 }
 
 /*
  * Close a file through the DFS interface.
  */
-static void DFS_Close(void *fd, IOR_param_t * param)
+static void
+DFS_Close(void *fd, IOR_param_t * param)
 {
         dfs_release((dfs_obj_t *)fd);
 }
@@ -385,7 +440,8 @@ static void DFS_Close(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the DFS interface.
  */
-static void DFS_Delete(char *testFileName, IOR_param_t * param)
+static void
+DFS_Delete(char *testFileName, IOR_param_t * param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *parent = NULL;
@@ -419,7 +475,8 @@ out:
 /*
  * Determine api version.
  */
-static void DFS_SetVersion(IOR_param_t * test)
+static void
+DFS_SetVersion(IOR_param_t * test)
 {
         strcpy(test->apiVersion, test->api);
 }
@@ -427,8 +484,8 @@ static void DFS_SetVersion(IOR_param_t * test)
 /*
  * Use DFS stat() to return aggregate file size.
  */
-static IOR_offset_t DFS_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
-                                    char *testFileName)
+static IOR_offset_t
+DFS_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
         dfs_obj_t *obj;
         daos_size_t fsize, tmpMin, tmpMax, tmpSum;
@@ -475,7 +532,7 @@ DFS_Statfs(const char *path, ior_aiori_statfs_t *sfs, IOR_param_t * param)
 }
 
 static int
-DFS_Mkdir (const char *path, mode_t mode, IOR_param_t * param)
+DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
 {
         dfs_obj_t *parent = NULL;
 	mode_t pmode;
@@ -504,11 +561,13 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
+        if (rc)
+                return -1;
 	return rc;
 }
 
 static int
-DFS_Rmdir (const char *path, IOR_param_t * param)
+DFS_Rmdir(const char *path, IOR_param_t * param)
 {
         dfs_obj_t *parent = NULL;
 	mode_t pmode;
@@ -537,11 +596,13 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
+        if (rc)
+                return -1;
 	return rc;
 }
 
 static int
-DFS_Access (const char *path, int mode, IOR_param_t * param)
+DFS_Access(const char *path, int mode, IOR_param_t * param)
 {
         dfs_obj_t *parent = NULL;
 	mode_t pmode;
@@ -578,11 +639,13 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
+        if (rc)
+                return -1;
 	return rc;
 }
 
 static int
-DFS_Stat (const char *path, struct stat *buf, IOR_param_t * param)
+DFS_Stat(const char *path, struct stat *buf, IOR_param_t * param)
 {
         dfs_obj_t *parent = NULL;
 	mode_t pmode;
@@ -611,5 +674,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
+        if (rc)
+                return -1;
 	return rc;
 }
