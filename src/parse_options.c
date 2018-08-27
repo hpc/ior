@@ -300,6 +300,34 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->numTasks = atoi(value);
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
+        } else if (strcasecmp(option, "daosgroup") == 0) {
+                strcpy(params->daosGroup, value);
+        } else if (strcasecmp(option, "daospool") == 0) {
+                strcpy(params->daosPool, value);
+        } else if (strcasecmp(option, "daospoolsvc") == 0) {
+                strcpy(params->daosPoolSvc, value);
+        } else if (strcasecmp(option, "daosrecordsize") == 0) {
+                params->daosRecordSize = string_to_bytes(value);
+        } else if (strcasecmp(option, "daosstripesize") == 0) {
+                printf("HERE %s\n", value);
+                params->daosStripeSize = string_to_bytes(value);
+                printf("HERE %d\n", params->daosStripeSize);
+        } else if (strcasecmp(option, "daosstripecount") == 0) {
+                params->daosStripeCount = atoi(value);
+        } else if (strcasecmp(option, "daosstripemax") == 0) {
+                params->daosStripeMax = string_to_bytes(value);
+        } else if (strcasecmp(option, "daosaios") == 0) {
+                params->daosAios = atoi(value);
+        } else if (strcasecmp(option, "daosepoch") == 0) {
+                params->daosEpoch = atoi(value);
+        } else if (strcasecmp(option, "daoswait") == 0) {
+                params->daosWait = atoi(value);
+        } else if (strcasecmp(option, "daoswriteonly") == 0) {
+                params->daosWriteOnly = atoi(value);
+        } else if (strcasecmp(option, "daoskill") == 0) {
+                params->daosKill = atoi(value);
+        } else if (strcasecmp(option, "daosobjectclass") == 0) {
+                strcpy(params->daosObjectClass, value);
         } else {
                 if (rank == 0)
                         fprintf(out_logfile, "Unrecognized parameter \"%s\"\n",
@@ -311,11 +339,13 @@ void DecodeDirective(char *line, IOR_param_t *params)
 /*
  * Parse a single line, which may contain multiple comma-seperated directives
  */
-void ParseLine(char *line, IOR_param_t * test)
+void ParseLine(const char *line, IOR_param_t * test)
 {
         char *start, *end;
 
-        start = line;
+        start = strdup(line);
+        if (start == NULL)
+                ERR("failed to duplicate line");
         do {
                 end = strchr(start, ',');
                 if (end != NULL)
@@ -422,7 +452,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 static IOR_param_t * parameters;
 
 static void decodeDirectiveWrapper(char *line){
-  DecodeDirective(line, parameters);
+        ParseLine(line, parameters);
 }
 
 /*

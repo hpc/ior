@@ -1,0 +1,48 @@
+Building with DAOS API
+----------------------
+
+At step 1 above, one must specify "--with-daos". If the DAOS
+headers and libraries are not installed at respective system
+default locations, then one may also needs to set CPPFLAGS and
+LDFLAGS accordingly.
+
+Running with DAOS API
+---------------------
+
+One must specify an existing pool using "-O
+daospool=<pool_uuid>". IOR must be launched in a way that
+attaches the IOR process group to the DAOS server process group.
+
+One must also specify a container UUID using "-o
+<container_uuid>". If the "-E" option is given, then this UUID
+shall denote an existing container created by a "matching" IOR
+run. Otherwise, IOR will create a new container with this UUID.
+In the latter case, one may use uuidgen(1) to generate the UUID
+of the new container.
+
+When benchmarking write performance, one likely do not want
+"-W", which causes the write phase to do one additional memory
+copy for every I/O. This is due to IOR's assumption that when a
+DAOS_Xfer() call returns the buffer may be released. Therefore,
+random data is written when "-W" is absent, while data is copied
+from IOR buffers when "-W" is present.
+
+See doc/USER_GUIDE for all options and directives. Note that not
+all combinations of options are supported.
+
+Examples that should work include:
+
+  - "ior -a DAOS -w -W -o <container_uuid> -O
+    daospool=<pool_uuid>,daospoolsvc=<svc_ranks>" writes into a new container
+    and verifies the data, using default daosRecordSize, transferSize,
+    daosStripeSize, blockSize, daosAios, etc.
+
+  - "ior -a DAOS -w -W -r -R -o <container_uuid> -b 1g -t 4m -C -O
+    daospool=<pool_uuid>,daospoolsvc=<svc_ranks>,daosrecordsize=1m,
+    daosstripesize=4m, daosstripecount=256,daosaios=8" does all IOR tests and
+    shifts ranks during checkWrite and checkRead.
+
+  - "ior -a DAOS -w -r -o <container_uuid> -b 8g -t 1m -C -O
+    daospool=<pool_uuid>,daospoolsvc=<svc_ranks>,daosrecordsize=1m,daosstripesize=4m,
+    daosstripecount=256,daosaios=8" may be a base to be tuned for performance
+    benchmarking.

@@ -98,8 +98,6 @@ int ior_main(int argc, char **argv)
     out_logfile = stdout;
     out_resultfile = stdout;
 
-    aiori_initialize();
-
     /*
      * check -h option from commandline without starting MPI;
      */
@@ -125,6 +123,8 @@ int ior_main(int argc, char **argv)
 
     PrintHeader(argc, argv);
 
+    aiori_initialize(tests_head);
+
     /* perform each test */
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
             verbose = tptr->params.verbose;
@@ -143,6 +143,8 @@ int ior_main(int argc, char **argv)
             ShowTestEnd(tptr);
     }
 
+    aiori_finalize(tests_head);
+
     if (verbose < 0)
             /* always print final summary */
             verbose = 0;
@@ -154,8 +156,6 @@ int ior_main(int argc, char **argv)
     DestroyTests(tests_head);
 
     MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
-
-    aiori_finalize();
 
     return totalErrorCount;
 }
@@ -198,6 +198,11 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->testComm = mpi_comm_world;
         p->setAlignment = 1;
         p->lustre_start_ost = -1;
+
+        p->daosRecordSize = 262144;
+        p->daosStripeSize = 524288;
+        p->daosStripeCount = -1;
+        p->daosAios = 1;
 
         hdfs_user = getenv("USER");
         if (!hdfs_user)
@@ -297,7 +302,8 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
                   "cannot total data moved");
 
-        if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0) {
+        if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0 &&
+            strcasecmp(params->api, "DAOS") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
                         if ((params->expectedAggFileSize
                              != results[rep].aggFileSizeFromXfer)
@@ -913,7 +919,8 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         rankOffset = 0;
                         GetTestFileName(testFileName, test);
                 }
-                if (backend->access(testFileName, F_OK, test) == 0) {
+                if (backend->access(testFileName, F_OK, test) == 0 ||
+                    strcasecmp(test->api, "DAOS") == 0) {
                         backend->delete(testFileName, test);
                 }
                 if (test->reorderTasksRandom == TRUE) {
@@ -921,7 +928,8 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         GetTestFileName(testFileName, test);
                 }
         } else {
-                if ((rank == 0) && (backend->access(testFileName, F_OK, test) == 0)) {
+                if ((rank == 0) && (backend->access(testFileName, F_OK, test) == 0 ||
+                                    strcasecmp(test->api, "DAOS"))) {
                         backend->delete(testFileName, test);
                 }
         }

@@ -58,6 +58,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_RADOS_AIORI
         &rados_aiori,
 #endif
+#ifdef USE_DAOS_AIORI
+        &daos_aiori,
+#endif
         NULL
 };
 
@@ -133,7 +136,7 @@ char* aiori_get_version()
 
 static int is_initialized = FALSE;
 
-void aiori_initialize(){
+void aiori_initialize(IOR_test_t *tests_head){
 	if (is_initialized) return;
 	is_initialized = TRUE;
 
@@ -145,18 +148,18 @@ void aiori_initialize(){
 
   for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
     if((*tmp)->initialize){
-      (*tmp)->initialize();
+            (*tmp)->initialize(tests_head ? &tests_head->params : NULL);
     }
   }
 }
 
-void aiori_finalize(){
+void aiori_finalize(IOR_test_t *tests_head){
   if (! is_initialized) return;
   is_initialized = FALSE;
 
   for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
     if((*tmp)->finalize){
-      (*tmp)->finalize();
+            (*tmp)->finalize(tests_head ? &tests_head->params : NULL);
     }
   }
 }

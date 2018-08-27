@@ -190,6 +190,21 @@ typedef struct
     int lustre_set_striping;         /* flag that we need to set lustre striping */
     int lustre_ignore_locks;
 
+    /* DAOS variables */
+    char daosGroup[MAX_STR];         /* group name */
+    char daosPool[37];               /* pool UUID */
+    char daosPoolSvc[MAX_STR];       /* pool service ranks */
+    int daosRecordSize;              /* size of akey record (i.e., rx_rsize) */
+    int daosStripeSize;
+    unsigned long daosStripeCount;
+    unsigned long daosStripeMax;     /* max length of a stripe */
+    int daosAios;                    /* max number of concurrent async I/Os */
+    int daosWriteOnly;               /* write only, no flush and commit */
+    unsigned long daosEpoch;         /* epoch to access */
+    unsigned long daosWait;          /* epoch to wait for before reading */
+    int daosKill;                    /* kill a target while running IOR */
+    char daosObjectClass[MAX_STR];   /* object class */
+
     /* gpfs variables */
     int gpfs_hint_access;          /* use gpfs "access range" hint */
     int gpfs_release_token;        /* immediately release GPFS tokens after
