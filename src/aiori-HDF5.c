@@ -260,6 +260,8 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
                                 HDF5_CHECK(H5Fget_vfd_handle
                                            (*fd, apl, (void **)&fd_mpiio),
                                            "cannot get MPIIO file handle");
+                                if (mpiHintsCheck != MPI_INFO_NULL)
+                                        MPI_Info_free(&mpiHintsCheck);
                                 MPI_CHECK(MPI_File_get_info
                                           (*fd_mpiio, &mpiHintsCheck),
                                           "cannot get info object through MPIIO");
@@ -267,6 +269,8 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
                                         "\nhints returned from opened file (MPIIO) {\n");
                                 ShowHints(&mpiHintsCheck);
                                 fprintf(stdout, "}\n");
+                                if (mpiHintsCheck != MPI_INFO_NULL)
+                                        MPI_Info_free(&mpiHintsCheck);
                         }
                 }
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
@@ -328,6 +332,8 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
            and shape of data set, and open it for access */
         dataSpace = H5Screate_simple(NUM_DIMS, dataSetDims, NULL);
         HDF5_CHECK(dataSpace, "cannot create simple data space");
+        if (mpiHints != MPI_INFO_NULL)
+                MPI_Info_free(&mpiHints);
 
         return (fd);
 }
