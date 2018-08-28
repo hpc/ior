@@ -309,9 +309,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
         } else if (strcasecmp(option, "daosrecordsize") == 0) {
                 params->daosRecordSize = string_to_bytes(value);
         } else if (strcasecmp(option, "daosstripesize") == 0) {
-                printf("HERE %s\n", value);
                 params->daosStripeSize = string_to_bytes(value);
-                printf("HERE %d\n", params->daosStripeSize);
         } else if (strcasecmp(option, "daosstripecount") == 0) {
                 params->daosStripeCount = atoi(value);
         } else if (strcasecmp(option, "daosstripemax") == 0) {
