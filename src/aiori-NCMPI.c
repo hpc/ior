@@ -53,7 +53,7 @@ static IOR_offset_t NCMPI_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void NCMPI_Close(void *, IOR_param_t *);
 static void NCMPI_Delete(char *, IOR_param_t *);
-static char *NCMPI_GetVersion(IOR_param_t *);
+static char *NCMPI_GetVersion();
 static void NCMPI_Fsync(void *, IOR_param_t *);
 static IOR_offset_t NCMPI_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static int NCMPI_Access(const char *, int, IOR_param_t *);
