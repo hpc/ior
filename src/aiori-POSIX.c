@@ -31,8 +31,12 @@
 #include <sys/stat.h>
 #include <assert.h>
 
+
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
 #  include <lustre/lustre_user.h>
+#endif
+#ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
+#  include <linux/lustre/lustre_user.h>
 #endif
 #ifdef HAVE_GPFS_H
 #  include <gpfs.h>

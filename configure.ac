@@ -71,7 +71,7 @@ AC_ARG_WITH([lustre],
                 [support configurable Lustre striping values @<:@default=check@:>@])],
         [], [with_lustre=check])
 AS_IF([test "x$with_lustre" != xno], [
-        AC_CHECK_HEADERS([lustre/lustre_user.h], [], [
+        AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], break, [
                 if test "x$with_lustre" != xcheck; then
                         AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
                 fi
