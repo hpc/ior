@@ -1187,7 +1187,7 @@ static void TestIoSys(IOR_test_t *test)
         backend = aiori_select(params->api);
 
         if (backend->initialize)
-                backend->initialize(NULL);
+                backend->initialize(params);
 
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)

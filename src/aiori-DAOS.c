@@ -98,21 +98,23 @@ static void DAOS_Delete(char *, IOR_param_t *);
 static char* DAOS_GetVersion();
 static void DAOS_Fsync(void *, IOR_param_t *);
 static IOR_offset_t DAOS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
+static option_help * DAOS_options();
 
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t daos_aiori = {
-        .name = "DAOS",
-        .create = DAOS_Create,
-        .open = DAOS_Open,
-        .xfer = DAOS_Xfer,
-        .close = DAOS_Close,
-        .delete = DAOS_Delete,
-        .get_version = DAOS_GetVersion,
-        .fsync = DAOS_Fsync,
-        .get_file_size = DAOS_GetFileSize,
-        .initialize = DAOS_Init,
-        .finalize = DAOS_Fini,
+        .name		= "DAOS",
+        .create		= DAOS_Create,
+        .open		= DAOS_Open,
+        .xfer		= DAOS_Xfer,
+        .close		= DAOS_Close,
+        .delete		= DAOS_Delete,
+        .get_version	= DAOS_GetVersion,
+        .fsync		= DAOS_Fsync,
+        .get_file_size	= DAOS_GetFileSize,
+        .initialize	= DAOS_Init,
+        .finalize	= DAOS_Fini,
+	.get_options	= DAOS_options,
 };
 
 enum handleType {
@@ -536,13 +538,6 @@ static void ObjectClassParse(const char *string)
                 GERR("Invalid 'daosObjectClass' argument: '%s'", string);
 }
 
-static const char *GetGroup(IOR_param_t *param)
-{
-        if (strlen(o.daosGroup) == 0)
-                return NULL;
-        return o.daosGroup;
-}
-
 static void ParseService(IOR_param_t *param, int max, d_rank_list_t *ranks)
 {
         char *s;
@@ -563,11 +558,15 @@ static void ParseService(IOR_param_t *param, int max, d_rank_list_t *ranks)
         free(s);
 }
 
+static option_help * DAOS_options(){
+  return options;
+}
+
 static void DAOS_Init(IOR_param_t *param)
 {
         int rc;
 
-        if (strlen(o.daosObjectClass) != 0)
+        if (o.daosObjectClass)
                 ObjectClassParse(o.daosObjectClass);
 
         if (param->filePerProc)
@@ -601,9 +600,9 @@ static void DAOS_Init(IOR_param_t *param)
                 d_rank_t         rank[13];
                 d_rank_list_t    ranks;
 
-                if (strlen(o.daosPool) == 0)
+                if (o.daosPool == NULL)
                         GERR("'daosPool' must be specified");
-                if (strlen(o.daosPoolSvc) == 0)
+                if (o.daosPoolSvc == NULL)
                         GERR("'daosPoolSvc' must be specified");
 
                 INFO(VERBOSE_2, param, "Connecting to pool %s %s",
@@ -614,7 +613,7 @@ static void DAOS_Init(IOR_param_t *param)
                 ranks.rl_ranks = rank;
                 ParseService(param, sizeof(rank) / sizeof(rank[0]), &ranks);
 
-                rc = daos_pool_connect(uuid, GetGroup(param), &ranks,
+                rc = daos_pool_connect(uuid, o.daosGroup, &ranks,
                                        DAOS_PC_RW, &pool, &poolInfo,
                                        NULL /* ev */);
                 DCHECK(rc, "Failed to connect to pool %s", o.daosPool);
@@ -729,7 +728,7 @@ kill_daos_server(IOR_param_t *param)
 	       rank,  info.pi_ndisabled, info.pi_ntargets);
 	fflush(stdout);
 
-	rc = daos_mgmt_svc_rip(GetGroup(param), rank, true, NULL);
+	rc = daos_mgmt_svc_rip(o.daosGroup, rank, true, NULL);
 	DCHECK(rc, "Error in killing server\n");
 
 	targets.rl_nr = 1;
