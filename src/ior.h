@@ -228,6 +228,8 @@ typedef struct IOR_test_t {
 
 
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
+void AllocResults(IOR_test_t *test);
+
 char * GetPlatformName();
 void init_IOR_Param_t(IOR_param_t *p);
 

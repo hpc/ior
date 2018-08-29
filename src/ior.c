@@ -499,7 +499,7 @@ static void* safeMalloc(uint64_t size){
   return d;
 }
 
-static void AllocResults(IOR_test_t *test)
+void AllocResults(IOR_test_t *test)
 {
   int reps;
   if (test->results != NULL)
@@ -533,7 +533,6 @@ IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num)
         newTest->next = NULL;
         newTest->results = NULL;
 
-        AllocResults(newTest);
         return newTest;
 }
 

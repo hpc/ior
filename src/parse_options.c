@@ -396,6 +396,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                                 /* previous line was a "run" as well
                                    create duplicate test */
                                 tail->next = CreateTest(&tail->params, test_num++);
+                                AllocResults(tail);
                                 tail = tail->next;
                         }
                         runflag = 1;
@@ -404,6 +405,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                            create and initialize a new test structure */
                         runflag = 0;
                         tail->next = CreateTest(&tail->params, test_num++);
+                        AllocResults(tail);
                         tail = tail->next;
                         ParseLine(linebuf, &tail->params);
                 } else {
@@ -414,6 +416,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         /* close the script */
         if (fclose(file) != 0)
                 ERR("fclose() of script file failed");
+        AllocResults(head);
 
         return head;
 }
@@ -565,6 +568,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
           tests = ReadConfigScript(testscripts);
         }else{
           tests = CreateTest(&initialTestParams, 0);
+          AllocResults(tests);
         }
 
         CheckRunSettings(tests);
