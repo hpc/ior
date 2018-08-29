@@ -123,8 +123,6 @@ int ior_main(int argc, char **argv)
 
     PrintHeader(argc, argv);
 
-    aiori_initialize(tests_head);
-
     /* perform each test */
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
             verbose = tptr->params.verbose;
@@ -139,11 +137,10 @@ int ior_main(int argc, char **argv)
                     sleep(5);
                     fprintf(out_logfile, "\trank %d: awake.\n", rank);
             }
+
             TestIoSys(tptr);
             ShowTestEnd(tptr);
     }
-
-    aiori_finalize(tests_head);
 
     if (verbose < 0)
             /* always print final summary */
@@ -198,11 +195,6 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->testComm = mpi_comm_world;
         p->setAlignment = 1;
         p->lustre_start_ost = -1;
-
-        p->daosRecordSize = 262144;
-        p->daosStripeSize = 524288;
-        p->daosStripeCount = -1;
-        p->daosAios = 1;
 
         hdfs_user = getenv("USER");
         if (!hdfs_user)
@@ -1194,6 +1186,9 @@ static void TestIoSys(IOR_test_t *test)
         /* bind I/O calls to specific API */
         backend = aiori_select(params->api);
 
+        if (backend->initialize)
+                backend->initialize(params);
+
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
@@ -1478,6 +1473,8 @@ static void TestIoSys(IOR_test_t *test)
                 free(timer[i]);
         }
 
+        if (backend->finalize)
+                backend->finalize(NULL);
         /* Sync with the tasks that did not participate in this test */
         MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
 

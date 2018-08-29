@@ -71,8 +71,7 @@ extraLDADD += -lrados
 endif
 
 if USE_DAOS_AIORI
-extraSOURCES += aiori-DAOS.c list.h
-extraLDADD += -ldaos -ldaos_common -luuid
+extraSOURCES += aiori-DAOS.c aiori-DFS.c list.h
 endif
 
 if USE_S3_AIORI

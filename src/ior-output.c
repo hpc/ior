@@ -315,7 +315,8 @@ void ShowTestStart(IOR_param_t *test)
   PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
   /* if pvfs2:, then skip */
-  if (Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
+  if (strcasecmp(test->api, "DFS") && 
+      Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
       DisplayFreespace(test);
   }
 

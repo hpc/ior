@@ -300,32 +300,6 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->numTasks = atoi(value);
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
-        } else if (strcasecmp(option, "daosgroup") == 0) {
-                strcpy(params->daosGroup, value);
-        } else if (strcasecmp(option, "daospool") == 0) {
-                strcpy(params->daosPool, value);
-        } else if (strcasecmp(option, "daospoolsvc") == 0) {
-                strcpy(params->daosPoolSvc, value);
-        } else if (strcasecmp(option, "daosrecordsize") == 0) {
-                params->daosRecordSize = string_to_bytes(value);
-        } else if (strcasecmp(option, "daosstripesize") == 0) {
-                params->daosStripeSize = string_to_bytes(value);
-        } else if (strcasecmp(option, "daosstripecount") == 0) {
-                params->daosStripeCount = atoi(value);
-        } else if (strcasecmp(option, "daosstripemax") == 0) {
-                params->daosStripeMax = string_to_bytes(value);
-        } else if (strcasecmp(option, "daosaios") == 0) {
-                params->daosAios = atoi(value);
-        } else if (strcasecmp(option, "daosepoch") == 0) {
-                params->daosEpoch = atoi(value);
-        } else if (strcasecmp(option, "daoswait") == 0) {
-                params->daosWait = atoi(value);
-        } else if (strcasecmp(option, "daoswriteonly") == 0) {
-                params->daosWriteOnly = atoi(value);
-        } else if (strcasecmp(option, "daoskill") == 0) {
-                params->daosKill = atoi(value);
-        } else if (strcasecmp(option, "daosobjectclass") == 0) {
-                strcpy(params->daosObjectClass, value);
         } else {
                 if (rank == 0)
                         fprintf(out_logfile, "Unrecognized parameter \"%s\"\n",

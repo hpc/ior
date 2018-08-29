@@ -35,6 +35,56 @@
 #include "iordef.h"
 #include "list.h"
 
+/************************** O P T I O N S *****************************/
+struct daos_options{
+        char		*daosPool;
+        char		*daosPoolSvc;
+        char		*daosGroup;
+	int		daosRecordSize;
+	int		daosStripeSize;
+	uint64_t	daosStripeCount;
+	uint64_t	daosStripeMax;	/* max length of a stripe */
+	int		daosAios;	/* max number of concurrent async I/Os */
+	int		daosWriteOnly;	/* write only, no flush and commit */
+	uint64_t	daosEpoch;	/* epoch to access */
+	uint64_t	daosWait;	/* epoch to wait for before reading */
+	int		daosKill;	/* kill a target while running IOR */
+	char		*daosObjectClass; /* object class */
+};
+
+static struct daos_options o = {
+        .daosPool		= NULL,
+        .daosPoolSvc		= NULL,
+        .daosGroup		= NULL,
+	.daosRecordSize		= 262144,
+	.daosStripeSize		= 524288,
+	.daosStripeCount	= -1,
+	.daosStripeMax		= 0,
+	.daosAios		= 1,
+	.daosWriteOnly		= 0,
+	.daosEpoch		= 0,
+	.daosWait		= 0,
+	.daosKill		= 0,
+	.daosObjectClass	= NULL,
+};
+
+static option_help options [] = {
+      {'p', "daosPool", "pool uuid", OPTION_REQUIRED_ARGUMENT, 's', &o.daosPool},
+      {'v', "daosPoolSvc", "pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', &o.daosPoolSvc},
+      {'g', "daosGroup", "server group", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosGroup},
+      {'r', "daosRecordSize", "Record Size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosRecordSize},
+      {'s', "daosStripeSize", "Stripe Size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosStripeSize},
+      {'c', "daosStripeCount", "Stripe Count", OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeCount},
+      {'m', "daosStripeMax", "Max Stripe",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeMax},
+      {'a', "daosAios", "Concurrent Async IOs",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosAios},
+      {'w', "daosWriteOnly", "Write Only, no commit",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosWriteOnly},
+      {'e', "daosEpoch", "Epoch Number to Access",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosEpoch},
+      {'t', "daosWait", "Epoch to wait for before read",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosWait},
+      {'k', "daosKill", "Kill target while running",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosKill},
+      {'o', "daosObjectClass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosObjectClass},
+      LAST_OPTION
+};
+
 /**************************** P R O T O T Y P E S *****************************/
 
 static void DAOS_Init(IOR_param_t *);
@@ -48,21 +98,23 @@ static void DAOS_Delete(char *, IOR_param_t *);
 static char* DAOS_GetVersion();
 static void DAOS_Fsync(void *, IOR_param_t *);
 static IOR_offset_t DAOS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
+static option_help * DAOS_options();
 
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t daos_aiori = {
-        .name = "DAOS",
-        .create = DAOS_Create,
-        .open = DAOS_Open,
-        .xfer = DAOS_Xfer,
-        .close = DAOS_Close,
-        .delete = DAOS_Delete,
-        .get_version = DAOS_GetVersion,
-        .fsync = DAOS_Fsync,
-        .get_file_size = DAOS_GetFileSize,
-        .initialize = DAOS_Init,
-        .finalize = DAOS_Fini,
+        .name		= "DAOS",
+        .create		= DAOS_Create,
+        .open		= DAOS_Open,
+        .xfer		= DAOS_Xfer,
+        .close		= DAOS_Close,
+        .delete		= DAOS_Delete,
+        .get_version	= DAOS_GetVersion,
+        .fsync		= DAOS_Fsync,
+        .get_file_size	= DAOS_GetFileSize,
+        .initialize	= DAOS_Init,
+        .finalize	= DAOS_Fini,
+	.get_options	= DAOS_options,
 };
 
 enum handleType {
@@ -234,10 +286,10 @@ static void ContainerOpen(char *testFileName, IOR_param_t *param,
                      info->ci_epoch_state.es_ghpce);
 
 #if 0
-                if (param->open != WRITE && param->daosWait != 0) {
+                if (param->open != WRITE && o.daosWait != 0) {
                         daos_epoch_t e;
 
-                        e = param->daosWait;
+                        e = o.daosWait;
 
                         INFO(VERBOSE_2, param, "Waiting for epoch %lu", e);
 
@@ -245,7 +297,7 @@ static void ContainerOpen(char *testFileName, IOR_param_t *param,
                                              NULL /* ignore HLE */,
                                              NULL /* synchronous */);
                         DCHECK(rc, "Failed to wait for epoch %lu",
-                               param->daosWait);
+                               o.daosWait);
                 }
 
                 if (param->open == WRITE &&
@@ -345,10 +397,10 @@ static void AIOInit(IOR_param_t *param)
         int         rc;
 
         rc = posix_memalign((void **) &buffers, sysconf(_SC_PAGESIZE),
-                            param->transferSize * param->daosAios);
+                            param->transferSize * o.daosAios);
         DCHECK(rc, "Failed to allocate buffer array");
 
-        for (i = 0; i < param->daosAios; i++) {
+        for (i = 0; i < o.daosAios; i++) {
                 aio = malloc(sizeof *aio);
                 if (aio == NULL)
                         ERR("Failed to allocate aio array");
@@ -394,9 +446,9 @@ static void AIOInit(IOR_param_t *param)
                      aio->a_iov.iov_buf);
         }
 
-        nAios = param->daosAios;
+        nAios = o.daosAios;
 
-        events = malloc((sizeof *events) * param->daosAios);
+        events = malloc((sizeof *events) * o.daosAios);
         if (events == NULL)
                 ERR("Failed to allocate events array");
 }
@@ -425,10 +477,10 @@ static void AIOWait(IOR_param_t *param)
         int         i;
         int         rc;
 
-        rc = daos_eq_poll(eventQueue, 0, DAOS_EQ_WAIT, param->daosAios,
+        rc = daos_eq_poll(eventQueue, 0, DAOS_EQ_WAIT, o.daosAios,
                           events);
         DCHECK(rc, "Failed to poll event queue");
-        assert(rc <= param->daosAios - nAios);
+        assert(rc <= o.daosAios - nAios);
 
         for (i = 0; i < rc; i++) {
                 int ret;
@@ -455,7 +507,7 @@ static void AIOWait(IOR_param_t *param)
         }
 
         INFO(VERBOSE_3, param, "Found %d completed AIOs (%d free %d busy)", rc,
-             nAios, param->daosAios - nAios);
+             nAios, o.daosAios - nAios);
 }
 
 static void ObjectClassParse(const char *string)
@@ -486,18 +538,11 @@ static void ObjectClassParse(const char *string)
                 GERR("Invalid 'daosObjectClass' argument: '%s'", string);
 }
 
-static const char *GetGroup(IOR_param_t *param)
-{
-        if (strlen(param->daosGroup) == 0)
-                return NULL;
-        return param->daosGroup;
-}
-
 static void ParseService(IOR_param_t *param, int max, d_rank_list_t *ranks)
 {
         char *s;
 
-        s = strdup(param->daosPoolSvc);
+        s = strdup(o.daosPoolSvc);
         if (s == NULL)
                 GERR("failed to duplicate argument");
         ranks->rl_nr = 0;
@@ -513,22 +558,26 @@ static void ParseService(IOR_param_t *param, int max, d_rank_list_t *ranks)
         free(s);
 }
 
+static option_help * DAOS_options(){
+  return options;
+}
+
 static void DAOS_Init(IOR_param_t *param)
 {
         int rc;
 
-        if (strlen(param->daosObjectClass) != 0)
-                ObjectClassParse(param->daosObjectClass);
+        if (o.daosObjectClass)
+                ObjectClassParse(o.daosObjectClass);
 
         if (param->filePerProc)
                 GERR("'filePerProc' not yet supported");
-        if (param->daosStripeMax % param->daosStripeSize != 0)
+        if (o.daosStripeMax % o.daosStripeSize != 0)
                 GERR("'daosStripeMax' must be a multiple of 'daosStripeSize'");
-        if (param->daosStripeSize % param->transferSize != 0)
+        if (o.daosStripeSize % param->transferSize != 0)
                 GERR("'daosStripeSize' must be a multiple of 'transferSize'");
-        if (param->transferSize % param->daosRecordSize != 0)
+        if (param->transferSize % o.daosRecordSize != 0)
                 GERR("'transferSize' must be a multiple of 'daosRecordSize'");
-        if (param->daosKill && ((objectClass != DAOS_OC_R2_RW) ||
+        if (o.daosKill && ((objectClass != DAOS_OC_R2_RW) ||
                                 (objectClass != DAOS_OC_R3_RW) ||
                                 (objectClass != DAOS_OC_R4_RW) ||
                                 (objectClass != DAOS_OC_R2S_RW) ||
@@ -551,23 +600,23 @@ static void DAOS_Init(IOR_param_t *param)
                 d_rank_t         rank[13];
                 d_rank_list_t    ranks;
 
-                if (strlen(param->daosPool) == 0)
+                if (o.daosPool == NULL)
                         GERR("'daosPool' must be specified");
-                if (strlen(param->daosPoolSvc) == 0)
+                if (o.daosPoolSvc == NULL)
                         GERR("'daosPoolSvc' must be specified");
 
                 INFO(VERBOSE_2, param, "Connecting to pool %s %s",
-                     param->daosPool, param->daosPoolSvc);
+                     o.daosPool, o.daosPoolSvc);
 
-                rc = uuid_parse(param->daosPool, uuid);
-                DCHECK(rc, "Failed to parse 'daosPool': %s", param->daosPool);
+                rc = uuid_parse(o.daosPool, uuid);
+                DCHECK(rc, "Failed to parse 'daosPool': %s", o.daosPool);
                 ranks.rl_ranks = rank;
                 ParseService(param, sizeof(rank) / sizeof(rank[0]), &ranks);
 
-                rc = daos_pool_connect(uuid, GetGroup(param), &ranks,
+                rc = daos_pool_connect(uuid, o.daosGroup, &ranks,
                                        DAOS_PC_RW, &pool, &poolInfo,
                                        NULL /* ev */);
-                DCHECK(rc, "Failed to connect to pool %s", param->daosPool);
+                DCHECK(rc, "Failed to connect to pool %s", o.daosPool);
         }
 
         HandleDistribute(&pool, POOL_HANDLE, param);
@@ -576,8 +625,8 @@ static void DAOS_Init(IOR_param_t *param)
                             param->testComm),
                   "Failed to bcast pool info");
 
-        if (param->daosStripeCount == -1)
-                param->daosStripeCount = poolInfo.pi_ntargets * 64UL;
+        if (o.daosStripeCount == -1)
+                o.daosStripeCount = poolInfo.pi_ntargets * 64UL;
 }
 
 static void DAOS_Fini(IOR_param_t *param)
@@ -585,7 +634,7 @@ static void DAOS_Fini(IOR_param_t *param)
         int rc;
 
 	rc = daos_pool_disconnect(pool, NULL /* ev */);
-	DCHECK(rc, "Failed to disconnect from pool %s", param->daosPool);
+	DCHECK(rc, "Failed to disconnect from pool %s", o.daosPool);
 
         rc = daos_eq_destroy(eventQueue, 0 /* flags */);
         DCHECK(rc, "Failed to destroy event queue");
@@ -612,22 +661,22 @@ static void *DAOS_Open(char *testFileName, IOR_param_t *param)
 
         ghce = fd->containerInfo.ci_epoch_state.es_ghce;
         if (param->open == WRITE) {
-                if (param->daosEpoch == 0)
+                if (o.daosEpoch == 0)
                         fd->epoch = ghce + 1;
-                else if (param->daosEpoch <= ghce)
+                else if (o.daosEpoch <= ghce)
                         GERR("Can't modify committed epoch\n");
                 else
-                        fd->epoch = param->daosEpoch;
+                        fd->epoch = o.daosEpoch;
         } else {
-                if (param->daosEpoch == 0) {
-                        if (param->daosWait == 0)
+                if (o.daosEpoch == 0) {
+                        if (o.daosWait == 0)
                                 fd->epoch = ghce;
                         else
-                                fd->epoch = param->daosWait;
-                } else if (param->daosEpoch > ghce) {
+                                fd->epoch = o.daosWait;
+                } else if (o.daosEpoch > ghce) {
                         GERR("Can't read uncommitted epoch\n");
                 } else {
-                        fd->epoch = param->daosEpoch;
+                        fd->epoch = o.daosEpoch;
                 }
         }
 
@@ -671,15 +720,15 @@ kill_daos_server(IOR_param_t *param)
 	/* choose the last alive one */
 	rank = info.pi_ntargets - 1 - info.pi_ndisabled;
 
-        rc = uuid_parse(param->daosPool, uuid);
-        DCHECK(rc, "Failed to parse 'daosPool': %s", param->daosPool);
+        rc = uuid_parse(o.daosPool, uuid);
+        DCHECK(rc, "Failed to parse 'daosPool': %s", o.daosPool);
 
         if (rc != 0)
 	printf("Killing tgt rank: %d (total of %d of %d already disabled)\n",
 	       rank,  info.pi_ndisabled, info.pi_ntargets);
 	fflush(stdout);
 
-	rc = daos_mgmt_svc_rip(GetGroup(param), rank, true, NULL);
+	rc = daos_mgmt_svc_rip(o.daosGroup, rank, true, NULL);
 	DCHECK(rc, "Error in killing server\n");
 
 	targets.rl_nr = 1;
@@ -738,13 +787,13 @@ static IOR_offset_t DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
          * written
          **/
         total_size += length;
-        if (param->daosKill && (access == WRITE) &&
+        if (o.daosKill && (access == WRITE) &&
             ((param->blockSize)/2) == total_size) {
                 /** More than half written lets kill */
                 if (rank == 0)
                         printf("Killing and Syncing\n", rank);
                 kill_and_sync(param);
-                param->daosKill = 0;
+                o.daosKill = 0;
         }
 
         /*
@@ -756,17 +805,17 @@ static IOR_offset_t DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
         cfs_list_move_tail(&aio->a_list, &aios);
         nAios--;
 
-        stripe = (param->offset / param->daosStripeSize) %
-                 param->daosStripeCount;
+        stripe = (param->offset / o.daosStripeSize) %
+                 o.daosStripeCount;
         rc = snprintf(aio->a_dkeyBuf, sizeof aio->a_dkeyBuf, "%lu", stripe);
         assert(rc < sizeof aio->a_dkeyBuf);
         aio->a_dkey.iov_len = strlen(aio->a_dkeyBuf) + 1;
-        round = param->offset / (param->daosStripeSize * param->daosStripeCount);
-        stripeOffset = param->daosStripeSize * round +
-                       param->offset % param->daosStripeSize;
-        if (param->daosStripeMax != 0)
-                stripeOffset %= param->daosStripeMax;
-        aio->a_recx.rx_idx = stripeOffset / param->daosRecordSize;
+        round = param->offset / (o.daosStripeSize * o.daosStripeCount);
+        stripeOffset = o.daosStripeSize * round +
+                       param->offset % o.daosStripeSize;
+        if (o.daosStripeMax != 0)
+                stripeOffset %= o.daosStripeMax;
+        aio->a_recx.rx_idx = stripeOffset / o.daosRecordSize;
         aio->a_epochRange.epr_lo = fd->epoch;
 
         /*
@@ -781,7 +830,7 @@ static IOR_offset_t DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
 
         INFO(VERBOSE_3, param, "Starting AIO %p (%d free %d busy): access %d "
              "dkey '%s' iod <%llu, %llu> sgl <%p, %lu>", aio, nAios,
-             param->daosAios - nAios, access, (char *) aio->a_dkey.iov_buf,
+             o.daosAios - nAios, access, (char *) aio->a_dkey.iov_buf,
              (unsigned long long) aio->a_iod.iod_recxs->rx_idx,
              (unsigned long long) aio->a_iod.iod_recxs->rx_nr,
              aio->a_sgl.sg_iovs->iov_buf,
@@ -805,7 +854,7 @@ static IOR_offset_t DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
          * don't have to return valid data as WriteOrRead() doesn't care.
          */
         if (access == WRITECHECK || access == READCHECK) {
-                while (param->daosAios - nAios > 0)
+                while (o.daosAios - nAios > 0)
                         AIOWait(param);
                 memcpy(buffer, aio->a_sgl.sg_iovs->iov_buf, length);
         }
@@ -818,13 +867,13 @@ static void DAOS_Close(void *file, IOR_param_t *param)
         struct fileDescriptor *fd = file;
         int                    rc;
 
-        while (param->daosAios - nAios > 0)
+        while (o.daosAios - nAios > 0)
                 AIOWait(param);
         AIOFini(param);
 
         ObjectClose(fd->object);
 
-        if (param->open == WRITE && !param->daosWriteOnly) {
+        if (param->open == WRITE && !o.daosWriteOnly) {
                 /* Wait for everybody for to complete the writes. */
                 MPI_CHECK(MPI_Barrier(param->testComm),
                           "Failed to synchronize processes");
@@ -875,7 +924,7 @@ static char* DAOS_GetVersion()
 
 static void DAOS_Fsync(void *file, IOR_param_t *param)
 {
-        while (param->daosAios - nAios > 0)
+        while (o.daosAios - nAios > 0)
                 AIOWait(param);
 }
 

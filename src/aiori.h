@@ -97,6 +97,7 @@ extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
 extern ior_aiori_t rados_aiori;
 extern ior_aiori_t daos_aiori;
+extern ior_aiori_t dfs_aiori;
 
 void aiori_initialize(IOR_test_t *th);
 void aiori_finalize(IOR_test_t *th);

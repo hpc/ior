@@ -1615,8 +1615,9 @@ void valid_tests() {
         FAIL("-c not compatible with -B");
     }
 
-    if ( strcasecmp(backend_name, "POSIX") != 0 && strcasecmp(backend_name, "DUMMY") != 0) {
-      FAIL("-a only supported interface is POSIX (and DUMMY) right now!");
+    if ( strcasecmp(backend_name, "POSIX") != 0 && strcasecmp(backend_name, "DUMMY") != 0 &&
+	 strcasecmp(backend_name, "DFS") != 0) {
+      FAIL("-a only supported interface is POSIX, DFS and DUMMY right now!");
     }
 
     /* check for shared file incompatibilities */
@@ -1756,6 +1757,9 @@ void display_freespace(char *testdirpath)
     if (directoryFound == 0) {
         strcpy(dirpath, ".");
     }
+
+    if (strcasecmp(backend_name, "DFS") == 0)
+	    return;
 
     if (verbose >= 3 && rank == 0) {
         fprintf(out_logfile,  "V-3: Before show_file_system_size, dirpath is \"%s\"\n", dirpath );
@@ -2223,6 +2227,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       option_parse(argc - parsed_options, argv + parsed_options, backend->get_options(), & printhelp);
     }
 
+    if (backend->initialize)
+            backend->initialize(NULL);
+
     if(printhelp != 0){
       printf("Usage: %s ", argv[0]);
 
@@ -2517,5 +2524,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (random_seed > 0) {
         free(rand_array);
     }
+
+    if (backend->finalize)
+            backend->finalize(NULL);
+
     return summary_table;
 }

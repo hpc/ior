@@ -166,17 +166,27 @@ AM_COND_IF([USE_RADOS_AIORI],[
         AC_DEFINE([USE_RADOS_AIORI], [], [Build RADOS backend AIORI])
 ])
 
-# DAOS support
+# DAOS Backends (DAOS and DFS) IO support
 AC_ARG_WITH([daos],
-        [AS_HELP_STRING([--with-daos],
-           [support IO with DAOS backend @<:@default=no@:>@])],
-        [],
-        [with_daos=no])
-AM_CONDITIONAL([USE_DAOS_AIORI], [test x$with_daos = xyes])
-AM_COND_IF([USE_DAOS_AIORI],[
-        AC_DEFINE([USE_DAOS_AIORI], [], [Build DAOS backend AIORI])
-])
+    [AS_HELP_STRING([--with-daos],
+	    [support IO with DAOS backends @<:@default=no@:>@])],
+	    [],
+    	    [with_daos=no])
 
+AS_IF([test "x$with_daos" != xno],
+    DAOS="yes"
+    LDFLAGS="$LDFLAGS -L$with_daos/lib"
+    CPPFLAGS="$CPPFLAGS -I$with_daos/include"
+    AC_CHECK_HEADERS(daos_types.h,, [unset DAOS])
+    AC_CHECK_LIB([uuid], [uuid_generate],, [unset DAOS])
+    AC_CHECK_LIB([daos_common], [daos_sgl_init],, [unset DAOS])
+    AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
+    AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS]))
+
+AM_CONDITIONAL([USE_DAOS_AIORI], [test x$DAOS = xyes])
+AM_COND_IF([USE_DAOS_AIORI],[
+        AC_DEFINE([USE_DAOS_AIORI], [], [Build DAOS backends AIORI])
+])
 
 # aws4c is needed for the S3 backend (see --with-S3, below).
 # Version 0.5.2 of aws4c is available at https://github.com/jti-lanl/aws4c.git
