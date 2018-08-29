@@ -21,44 +21,18 @@
 #include <ctype.h>
 #include <string.h>
 
+
+#include "utilities.h"
 #include "ior.h"
 #include "aiori.h"
 #include "parse_options.h"
+#include "option.h"
+#include "aiori.h"
 
 #define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
 
 IOR_param_t initialTestParams;
 
-/*
- * Takes a string of the form 64, 8m, 128k, 4g, etc. and converts to bytes.
- */
-static IOR_offset_t StringToBytes(char *size_str)
-{
-        IOR_offset_t size = 0;
-        char range;
-        int rc;
-
-        rc = sscanf(size_str, " %lld %c ", &size, &range);
-        if (rc == 2) {
-                switch ((int)range) {
-                case 'k':
-                case 'K':
-                        size <<= 10;
-                        break;
-                case 'm':
-                case 'M':
-                        size <<= 20;
-                        break;
-                case 'g':
-                case 'G':
-                        size <<= 30;
-                        break;
-                }
-        } else if (rc == 0) {
-                size = -1;
-        }
-        return (size);
-}
 
 static size_t NodeMemoryStringToBytes(char *size_str)
 {
@@ -70,7 +44,7 @@ static size_t NodeMemoryStringToBytes(char *size_str)
 
         rc = sscanf(size_str, " %d %% ", &percent);
         if (rc == 0)
-                return (size_t)StringToBytes(size_str);
+                return (size_t) string_to_bytes(size_str);
         if (percent > 100 || percent < 0)
                 ERR("percentage must be between 0 and 100");
 
@@ -87,11 +61,6 @@ static size_t NodeMemoryStringToBytes(char *size_str)
         return mem / 100 * percent;
 }
 
-static void RecalculateExpectedFileSize(IOR_param_t *params)
-{
-	params->expectedAggFileSize =
-		params->blockSize * params->segmentCount * params->numTasks;
-}
 
 /*
  * Check and correct all settings of each test in queue for correctness.
@@ -100,7 +69,6 @@ static void CheckRunSettings(IOR_test_t *tests)
 {
         IOR_test_t *ptr;
         IOR_param_t *params;
-        int needRead, needWrite;
 
         for (ptr = tests; ptr != NULL; ptr = ptr->next) {
                 params = &ptr->params;
@@ -119,16 +87,13 @@ static void CheckRunSettings(IOR_test_t *tests)
                  * of HDFS, which doesn't support opening RDWR.
                  * (We assume int-valued params are exclusively 0 or 1.)
                  */
-                needRead  = params->readFile  |
-                            params->checkRead |
-                            params->checkWrite; /* checkWrite reads the file */
-                needWrite = params->writeFile;
                 if ((params->openFlags & IOR_RDWR)
-                    && (needRead ^ needWrite))
-                {
-                        /* need to either read or write, but not both */
+                    && ((params->readFile | params->checkRead)
+                        ^ (params->writeFile | params->checkWrite))
+                    && (params->openFlags & IOR_RDWR)) {
+
                         params->openFlags &= ~(IOR_RDWR);
-                        if (needRead) {
+                        if (params->readFile | params->checkRead) {
                                 params->openFlags |= IOR_RDONLY;
                                 params->openFlags &= ~(IOR_CREAT|IOR_EXCL);
                         }
@@ -136,13 +101,6 @@ static void CheckRunSettings(IOR_test_t *tests)
                                 params->openFlags |= IOR_WRONLY;
                 }
 
-                /* If numTasks set to 0, use all tasks */
-                if (params->numTasks == 0) {
-                        MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD,
-                                                &params->numTasks),
-                                  "MPI_Comm_size() error");
-                        RecalculateExpectedFileSize(params);
-                }
         }
 }
 
@@ -157,28 +115,48 @@ void DecodeDirective(char *line, IOR_param_t *params)
 
         rc = sscanf(line, " %[^=# \t\r\n] = %[^# \t\r\n] ", option, value);
         if (rc != 2 && rank == 0) {
-                fprintf(stdout, "Syntax error in configuration options: %s\n",
+                fprintf(out_logfile, "Syntax error in configuration options: %s\n",
                         line);
                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
         }
         if (strcasecmp(option, "api") == 0) {
-                strcpy(params->api, value);
+          params->api = strdup(value);
+        } else if (strcasecmp(option, "summaryFile") == 0) {
+          if (rank == 0){
+            out_resultfile = fopen(value, "w");
+            if (out_resultfile == NULL){
+              FAIL("Cannot open output file for writes!");
+            }
+            printf("Writing output to %s\n", value);
+          }
+        } else if (strcasecmp(option, "summaryFormat") == 0) {
+                if(strcasecmp(value, "default") == 0){
+                  outputFormat = OUTPUT_DEFAULT;
+                }else if(strcasecmp(value, "JSON") == 0){
+                  outputFormat = OUTPUT_JSON;
+                }else if(strcasecmp(value, "CSV") == 0){
+                  outputFormat = OUTPUT_CSV;
+                }else{
+                  FAIL("Unknown summaryFormat");
+                }
         } else if (strcasecmp(option, "refnum") == 0) {
                 params->referenceNumber = atoi(value);
         } else if (strcasecmp(option, "debug") == 0) {
-                strcpy(params->debug, value);
+                params->debug = strdup(value);
         } else if (strcasecmp(option, "platform") == 0) {
-                strcpy(params->platform, value);
+                params->platform  = strdup(value);
         } else if (strcasecmp(option, "testfile") == 0) {
-                strcpy(params->testFileName, value);
+                params->testFileName  = strdup(value);
         } else if (strcasecmp(option, "hintsfilename") == 0) {
-                strcpy(params->hintsFileName, value);
+                params->hintsFileName  = strdup(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
                 params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
                 params->stoneWallingWearOut = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOutIterations") == 0) {
-                params->stoneWallingWearOutIterations = atoi(value);
+                params->stoneWallingWearOutIterations = atoll(value);
+        } else if (strcasecmp(option, "stoneWallingStatusFile") == 0) {
+                params->stoneWallingStatusFile  = strdup(value);
         } else if (strcasecmp(option, "maxtimeduration") == 0) {
                 params->maxTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {
@@ -220,15 +198,13 @@ void DecodeDirective(char *line, IOR_param_t *params)
         } else if (strcasecmp(option, "quitonerror") == 0) {
                 params->quitOnError = atoi(value);
         } else if (strcasecmp(option, "segmentcount") == 0) {
-                params->segmentCount = StringToBytes(value);
-		RecalculateExpectedFileSize(params);
+                params->segmentCount = string_to_bytes(value);
         } else if (strcasecmp(option, "blocksize") == 0) {
-                params->blockSize = StringToBytes(value);
-		RecalculateExpectedFileSize(params);
+                params->blockSize = string_to_bytes(value);
         } else if (strcasecmp(option, "transfersize") == 0) {
-                params->transferSize = StringToBytes(value);
+                params->transferSize = string_to_bytes(value);
         } else if (strcasecmp(option, "setalignment") == 0) {
-                params->setAlignment = StringToBytes(value);
+                params->setAlignment = string_to_bytes(value);
         } else if (strcasecmp(option, "singlexferattempt") == 0) {
                 params->singleXferAttempt = atoi(value);
         } else if (strcasecmp(option, "individualdatasets") == 0) {
@@ -257,8 +233,6 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->useStridedDatatype = atoi(value);
         } else if (strcasecmp(option, "showhints") == 0) {
                 params->showHints = atoi(value);
-        } else if (strcasecmp(option, "showhelp") == 0) {
-                params->showHelp = atoi(value);
         } else if (strcasecmp(option, "uniqueDir") == 0) {
                 params->uniqueDir = atoi(value);
         } else if (strcasecmp(option, "useexistingtestfile") == 0) {
@@ -270,7 +244,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
         } else if (strcasecmp(option, "randomoffset") == 0) {
                 params->randomOffset = atoi(value);
         } else if (strcasecmp(option, "memoryPerTask") == 0) {
-                params->memoryPerTask = StringToBytes(value);
+                params->memoryPerTask = string_to_bytes(value);
                 params->memoryPerNode = 0;
         } else if (strcasecmp(option, "memoryPerNode") == 0) {
                 params->memoryPerNode = NodeMemoryStringToBytes(value);
@@ -285,7 +259,7 @@ void DecodeDirective(char *line, IOR_param_t *params)
 #ifndef HAVE_LUSTRE_LUSTRE_USER_H
                 ERR("ior was not compiled with Lustre support");
 #endif
-                params->lustre_stripe_size = StringToBytes(value);
+                params->lustre_stripe_size = string_to_bytes(value);
                 params->lustre_set_striping = 1;
         } else if (strcasecmp(option, "lustrestartost") == 0) {
 #ifndef HAVE_LUSTRE_LUSTRE_USER_H
@@ -317,26 +291,18 @@ void DecodeDirective(char *line, IOR_param_t *params)
                         ERR("beegfsNumTargets must be >= 1");
         } else if (strcasecmp(option, "beegfsChunkSize") == 0) {
  #ifndef HAVE_BEEGFS_BEEGFS_H
-                 ERR("ior was not compiled with BeeGFS support"); 
+                 ERR("ior was not compiled with BeeGFS support");
  #endif
-                 params->beegfs_chunkSize = StringToBytes(value);
+                 params->beegfs_chunkSize = string_to_bytes(value);
                  if (!ISPOWEROFTWO(params->beegfs_chunkSize) || params->beegfs_chunkSize < (1<<16))
                          ERR("beegfsChunkSize must be a power of two and >64k");
         } else if (strcasecmp(option, "numtasks") == 0) {
                 params->numTasks = atoi(value);
-		RecalculateExpectedFileSize(params);
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
-        } else if (strcasecmp(option, "daospool") == 0) {
-                strcpy(params->daosPool, value);
-        } else if (strcasecmp(option, "daospoolsvc") == 0) {
-                strcpy(params->daosPoolSvc, value);
-        } else if (strcasecmp(option, "daosgroup") == 0) {
-                strcpy(params->daosGroup, value);
-        }
-        else {
+        } else {
                 if (rank == 0)
-                        fprintf(stdout, "Unrecognized parameter \"%s\"\n",
+                        fprintf(out_logfile, "Unrecognized parameter \"%s\"\n",
                                 option);
                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
         }
@@ -345,11 +311,13 @@ void DecodeDirective(char *line, IOR_param_t *params)
 /*
  * Parse a single line, which may contain multiple comma-seperated directives
  */
-void ParseLine(char *line, IOR_param_t * test)
+void ParseLine(const char *line, IOR_param_t * test)
 {
         char *start, *end;
 
-        start = line;
+        start = strdup(line);
+        if (start == NULL)
+                ERR("failed to duplicate line");
         do {
                 end = strchr(start, ',');
                 if (end != NULL)
@@ -357,7 +325,6 @@ void ParseLine(char *line, IOR_param_t * test)
                 DecodeDirective(start, test);
                 start = end + 1;
         } while (end != NULL);
-
 }
 
 /*
@@ -425,7 +392,6 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                 if (sscanf(linebuf, " #%s", empty) == 1)
                         continue;
                 if (contains_only(linebuf, "ior stop")) {
-                        AllocResults(tail);
                         break;
                 } else if (contains_only(linebuf, "run")) {
                         if (runflag) {
@@ -434,7 +400,6 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                                 tail->next = CreateTest(&tail->params, test_num++);
                                 tail = tail->next;
                         }
-                        AllocResults(tail);
                         runflag = 1;
                 } else if (runflag) {
                         /* If this directive was preceded by a "run" line, then
@@ -455,215 +420,153 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         return head;
 }
 
+
+static IOR_param_t * parameters;
+
+static void decodeDirectiveWrapper(char *line){
+        ParseLine(line, parameters);
+}
+
 /*
  * Parse Commandline.
  */
 IOR_test_t *ParseCommandLine(int argc, char **argv)
 {
-        static const char *opts =
-          "a:A:b:BcCd:D:eEf:FgG:hHi:Ij:J:kKl:mM:nN:o:O:pPqQ:rRs:St:T:uU:vVwWxX:YzZ";
-        int c, i;
-        static IOR_test_t *tests = NULL;
+    char * testscripts = NULL;
+    int toggleG = FALSE;
+    char * buffer_type = "";
+    char * memoryPerNode = NULL;
+    init_IOR_Param_t(& initialTestParams);
+    parameters = & initialTestParams;
 
-        /* suppress getopt() error message when a character is unrecognized */
-        opterr = 0;
+    char APIs[1024];
+    aiori_supported_apis(APIs);
+    char apiStr[1024];
+    sprintf(apiStr, "API for I/O [%s]", APIs);
 
-        init_IOR_Param_t(&initialTestParams);
+    option_help options [] = {
+          {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & initialTestParams.api},
+          {'A', NULL,        "refNum -- user supplied reference number to include in the summary", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.referenceNumber},
+          {'b', NULL,        "blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'l', & initialTestParams.blockSize},
+          {'B', NULL,        "useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers", OPTION_FLAG, 'd', & initialTestParams.useO_DIRECT},
+          {'c', NULL,        "collective -- collective I/O", OPTION_FLAG, 'd', & initialTestParams.collective},
+          {'C', NULL,        "reorderTasks -- changes task ordering to n+1 ordering for readback", OPTION_FLAG, 'd', & initialTestParams.reorderTasks},
+          {'d', NULL,        "interTestDelay -- delay between reps in seconds", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.interTestDelay},
+          {'D', NULL,        "deadlineForStonewalling -- seconds before stopping write or read phase", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.deadlineForStonewalling},
+          {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
+          {.help="  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut", .arg = OPTION_OPTIONAL_ARGUMENT},
+          {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
+          {'e', NULL,        "fsync -- perform sync operation after each block write", OPTION_FLAG, 'd', & initialTestParams.fsync},
+          {'E', NULL,        "useExistingTestFile -- do not remove test file before write access", OPTION_FLAG, 'd', & initialTestParams.useExistingTestFile},
+          {'f', NULL,        "scriptFile -- test script name", OPTION_OPTIONAL_ARGUMENT, 's', & testscripts},
+          {'F', NULL,        "filePerProc -- file-per-process", OPTION_FLAG, 'd', & initialTestParams.filePerProc},
+          {'g', NULL,        "intraTestBarriers -- use barriers between open, write/read, and close", OPTION_FLAG, 'd', & initialTestParams.intraTestBarriers},
+          /* This option toggles between Incompressible Seed and Time stamp sig based on -l,
+           * so we'll toss the value in both for now, and sort it out in initialization
+           * after all the arguments are in and we know which it keep.
+           */
+          {'G', NULL,        "setTimeStampSignature -- set value for time stamp signature/random seed", OPTION_OPTIONAL_ARGUMENT, 'd', & toggleG},
+          {'H', NULL,        "showHints -- show hints", OPTION_FLAG, 'd', & initialTestParams.showHints},
+          {'i', NULL,        "repetitions -- number of repetitions of test", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.repetitions},
+          {'I', NULL,        "individualDataSets -- datasets not shared by all procs [not working]", OPTION_FLAG, 'd', & initialTestParams.individualDataSets},
+          {'j', NULL,        "outlierThreshold -- warn on outlier N seconds from mean", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.outlierThreshold},
+          {'J', NULL,        "setAlignment -- HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.setAlignment},
+          {'k', NULL,        "keepFile -- don't remove the test file(s) on program exit", OPTION_FLAG, 'd', & initialTestParams.keepFile},
+          {'K', NULL,        "keepFileWithError  -- keep error-filled file(s) after data-checking", OPTION_FLAG, 'd', & initialTestParams.keepFileWithError},
+          {'l', NULL,        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', & buffer_type},
+          {'m', NULL,        "multiFile -- use number of reps (-i) for multiple file count", OPTION_FLAG, 'd', & initialTestParams.multiFile},
+          {'M', NULL,        "memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)", OPTION_OPTIONAL_ARGUMENT, 's', & memoryPerNode},
+          {'n', NULL,        "noFill -- no fill in HDF5 file creation", OPTION_FLAG, 'd', & initialTestParams.noFill},
+          {'N', NULL,        "numTasks -- number of tasks that should participate in the test", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.numTasks},
+          {'o', NULL,        "testFile -- full name for test", OPTION_OPTIONAL_ARGUMENT, 's', & initialTestParams.testFileName},
+          {'O', NULL,        "string of IOR directives (e.g. -O checkRead=1,lustreStripeCount=32)", OPTION_OPTIONAL_ARGUMENT, 'p', & decodeDirectiveWrapper},
+          {'p', NULL,        "preallocate -- preallocate file size", OPTION_FLAG, 'd', & initialTestParams.preallocate},
+          {'P', NULL,        "useSharedFilePointer -- use shared file pointer [not working]", OPTION_FLAG, 'd', & initialTestParams.useSharedFilePointer},
+          {'q', NULL,        "quitOnError -- during file error-checking, abort on error", OPTION_FLAG, 'd', & initialTestParams.quitOnError},
+          {'Q', NULL,        "taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.taskPerNodeOffset},
+          {'r', NULL,        "readFile -- read existing file", OPTION_FLAG, 'd', & initialTestParams.readFile},
+          {'R', NULL,        "checkRead -- verify that the output of read matches the expected signature (used with -G)", OPTION_FLAG, 'd', & initialTestParams.checkRead},
+          {'s', NULL,        "segmentCount -- number of segments", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.segmentCount},
+          {'S', NULL,        "useStridedDatatype -- put strided access into datatype [not working]", OPTION_FLAG, 'd', & initialTestParams.useStridedDatatype},
+          {'t', NULL,        "transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'l', & initialTestParams.transferSize},
+          {'T', NULL,        "maxTimeDuration -- max time in minutes executing repeated test; it aborts only between iterations and not within a test!", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.maxTimeDuration},
+          {'u', NULL,        "uniqueDir -- use unique directory name for each file-per-process", OPTION_FLAG, 'd', & initialTestParams.uniqueDir},
+          {'U', NULL,        "hintsFileName -- full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & initialTestParams.hintsFileName},
+          {'v', NULL,        "verbose -- output information (repeating flag increases level)", OPTION_FLAG, 'd', & initialTestParams.verbose},
+          {'V', NULL,        "useFileView -- use MPI_File_set_view", OPTION_FLAG, 'd', & initialTestParams.useFileView},
+          {'w', NULL,        "writeFile -- write file", OPTION_FLAG, 'd', & initialTestParams.writeFile},
+          {'W', NULL,        "checkWrite -- check read after write", OPTION_FLAG, 'd', & initialTestParams.checkWrite},
+          {'x', NULL,        "singleXferAttempt -- do not retry transfer if incomplete", OPTION_FLAG, 'd', & initialTestParams.singleXferAttempt},
+          {'X', NULL,        "reorderTasksRandomSeed -- random seed for -Z option", OPTION_OPTIONAL_ARGUMENT, 'd', & initialTestParams.reorderTasksRandomSeed},
+          {'Y', NULL,        "fsyncPerWrite -- perform sync operation after every write operation", OPTION_FLAG, 'd', & initialTestParams.fsyncPerWrite},
+          {'z', NULL,        "randomOffset -- access is to random, not sequential, offsets within a file", OPTION_FLAG, 'd', & initialTestParams.randomOffset},
+          {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random ordering for readback", OPTION_FLAG, 'd', & initialTestParams.reorderTasksRandom},
+          {.help="  -O summaryFile=FILE                 -- store result data into this file", .arg = OPTION_OPTIONAL_ARGUMENT},
+          {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputing the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
+          LAST_OPTION,
+        };
+
+        IOR_test_t *tests = NULL;
+
         GetPlatformName(initialTestParams.platform);
-        initialTestParams.writeFile = initialTestParams.readFile = FALSE;
-        initialTestParams.checkWrite = initialTestParams.checkRead = FALSE;
+        int printhelp = 0;
+        int parsed_options = option_parse(argc, argv, options, & printhelp);
 
-        while ((c = getopt(argc, argv, opts)) != -1) {
-                switch (c) {
-                case 'a':
-                        strcpy(initialTestParams.api, optarg);
-                        break;
-                case 'A':
-                        initialTestParams.referenceNumber = atoi(optarg);
-                        break;
-                case 'b':
-                        initialTestParams.blockSize = StringToBytes(optarg);
-                        RecalculateExpectedFileSize(&initialTestParams);
-                        break;
-                case 'B':
-                        initialTestParams.useO_DIRECT = TRUE;
-                        break;
-                case 'c':
-                        initialTestParams.collective = TRUE;
-                        break;
-                case 'C':
-                        initialTestParams.reorderTasks = TRUE;
-                        break;
-                case 'd':
-                        initialTestParams.interTestDelay = atoi(optarg);
-                        break;
-                case 'D':
-                        initialTestParams.deadlineForStonewalling =
-                            atoi(optarg);
-                        break;
-                case 'e':
-                        initialTestParams.fsync = TRUE;
-                        break;
-                case 'E':
-                        initialTestParams.useExistingTestFile = TRUE;
-                        break;
-                case 'f':
-                        tests = ReadConfigScript(optarg);
-                        break;
-                case 'F':
-                        initialTestParams.filePerProc = TRUE;
-                        break;
-                case 'g':
-                        initialTestParams.intraTestBarriers = TRUE;
-                        break;
-                case 'G':
-                        /* This option toggles between Incompressible Seed and Time stamp sig based on -l,
-                         * so we'll toss the value in both for now, and sort it out in initialization
-                         * after all the arguments are in and we know which it keep.
-                         */
-                        initialTestParams.setTimeStampSignature = atoi(optarg);
-                        initialTestParams.incompressibleSeed = atoi(optarg);
-                        break;
-                case 'h':
-                        initialTestParams.showHelp = TRUE;
-                        break;
-                case 'H':
-                        initialTestParams.showHints = TRUE;
-                        break;
-                case 'i':
-                        initialTestParams.repetitions = atoi(optarg);
-                        break;
-                case 'I':
-                        initialTestParams.individualDataSets = TRUE;
-                        break;
-                case 'j':
-                        initialTestParams.outlierThreshold = atoi(optarg);
-                        break;
-                case 'J':
-                        initialTestParams.setAlignment = StringToBytes(optarg);
-                        break;
-                case 'k':
-                        initialTestParams.keepFile = TRUE;
-                        break;
-                case 'K':
-                        initialTestParams.keepFileWithError = TRUE;
-                        break;
-                case 'l':
-                        switch(*optarg) {
-                        case 'i': /* Incompressible */
-                                initialTestParams.dataPacketType = incompressible;
-                                break;
-                        case 't': /* timestamp */
-                                initialTestParams.dataPacketType = timestamp;
-                                break;
-                        case 'o': /* offset packet */
-                                initialTestParams.storeFileOffset = TRUE;
-                                initialTestParams.dataPacketType = offset;
-                                break;
-                        default:
-                                fprintf(stdout,
-                                        "Unknown arguement for -l  %s generic assumed\n", optarg);
-                                break;
-                        }
-                        break;
-                case 'm':
-                        initialTestParams.multiFile = TRUE;
-                        break;
-                case 'M':
-                        initialTestParams.memoryPerNode =
-                                NodeMemoryStringToBytes(optarg);
-                        break;
-                case 'n':
-                        initialTestParams.noFill = TRUE;
-                        break;
-                case 'N':
-                        initialTestParams.numTasks = atoi(optarg);
-                        RecalculateExpectedFileSize(&initialTestParams);
-                        break;
-                case 'o':
-                        strcpy(initialTestParams.testFileName, optarg);
-                        break;
-                case 'O':
-                        ParseLine(optarg, &initialTestParams);
-                        break;
-                case 'p':
-                        initialTestParams.preallocate = TRUE;
-                        break;
-                case 'P':
-                        initialTestParams.useSharedFilePointer = TRUE;
-                        break;
-                case 'q':
-                        initialTestParams.quitOnError = TRUE;
-                        break;
-                case 'Q':
-                        initialTestParams.taskPerNodeOffset = atoi(optarg);
-                        break;
-                case 'r':
-                        initialTestParams.readFile = TRUE;
-                        break;
-                case 'R':
-                        initialTestParams.checkRead = TRUE;
-                        break;
-                case 's':
-                        initialTestParams.segmentCount = atoi(optarg);
-                        RecalculateExpectedFileSize(&initialTestParams);
-                        break;
-                case 'S':
-                        initialTestParams.useStridedDatatype = TRUE;
-                        break;
-                case 't':
-                        initialTestParams.transferSize = StringToBytes(optarg);
-                        break;
-                case 'T':
-                        initialTestParams.maxTimeDuration = atoi(optarg);
-                        break;
-                case 'u':
-                        initialTestParams.uniqueDir = TRUE;
-                        break;
-                case 'U':
-                        strcpy(initialTestParams.hintsFileName, optarg);
-                        break;
-                case 'v':
-                        initialTestParams.verbose++;
-                        break;
-                case 'V':
-                        initialTestParams.useFileView = TRUE;
-                        break;
-                case 'w':
-                        initialTestParams.writeFile = TRUE;
-                        break;
-                case 'W':
-                        initialTestParams.checkWrite = TRUE;
-                        break;
-                case 'x':
-                        initialTestParams.singleXferAttempt = TRUE;
-                        break;
-                case 'X':
-                        initialTestParams.reorderTasksRandomSeed = atoi(optarg);
-                        break;
-                case 'Y':
-                        initialTestParams.fsyncPerWrite = TRUE;
-                        break;
-                case 'z':
-                        initialTestParams.randomOffset = TRUE;
-                        break;
-                case 'Z':
-                        initialTestParams.reorderTasksRandom = TRUE;
-                        break;
-                default:
-                        fprintf(stdout,
-                                "ParseCommandLine: unknown option `-%c'.\n",
-                                optopt);
-                }
+        if (toggleG){
+          initialTestParams.setTimeStampSignature = toggleG;
+          initialTestParams.incompressibleSeed = toggleG;
         }
 
-        for (i = optind; i < argc; i++)
-                fprintf(stdout, "non-option argument: %s\n", argv[i]);
+        if (buffer_type[0] != 0){
+          switch(buffer_type[0]) {
+          case 'i': /* Incompressible */
+                  initialTestParams.dataPacketType = incompressible;
+                  break;
+          case 't': /* timestamp */
+                  initialTestParams.dataPacketType = timestamp;
+                  break;
+          case 'o': /* offset packet */
+                  initialTestParams.storeFileOffset = TRUE;
+                  initialTestParams.dataPacketType = offset;
+                  break;
+          default:
+                  fprintf(out_logfile,
+                          "Unknown arguement for -l %s; generic assumed\n", buffer_type);
+                  break;
+          }
+        }
+        if (memoryPerNode){
+          initialTestParams.memoryPerNode = NodeMemoryStringToBytes(optarg);
+        }
 
-        /* If an IOR script was not used, initialize test queue to the defaults */
-        if (tests == NULL) {
-                tests = CreateTest(&initialTestParams, 0);
-                AllocResults(tests);
+        const ior_aiori_t * backend = aiori_select(initialTestParams.api);
+        initialTestParams.backend = backend;
+        initialTestParams.apiVersion = backend->get_version();
+
+        if(backend->get_options != NULL){
+          option_parse(argc - parsed_options, argv + parsed_options, backend->get_options(), & printhelp);
+        }
+
+        if(printhelp != 0){
+          printf("Usage: %s ", argv[0]);
+
+          option_print_help(options, 0);
+
+          if(backend->get_options != NULL){
+            printf("\nPlugin options for backend %s (%s)\n", initialTestParams.api, backend->get_version());
+            option_print_help(backend->get_options(), 1);
+          }
+          if(printhelp == 1){
+            exit(0);
+          }else{
+            exit(1);
+          }
+        }
+
+        if (testscripts){
+          tests = ReadConfigScript(testscripts);
+        }else{
+          tests = CreateTest(&initialTestParams, 0);
         }
 
         CheckRunSettings(tests);

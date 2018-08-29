@@ -38,10 +38,9 @@ static void *MPIIO_Open(char *, IOR_param_t *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
                                    IOR_offset_t, IOR_param_t *);
 static void MPIIO_Close(void *, IOR_param_t *);
-static void MPIIO_Delete(char *, IOR_param_t *);
-static void MPIIO_SetVersion(IOR_param_t *);
+static char* MPIIO_GetVersion();
 static void MPIIO_Fsync(void *, IOR_param_t *);
-static int MPIIO_Access(const char *, int, IOR_param_t *);
+
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -52,10 +51,14 @@ ior_aiori_t mpiio_aiori = {
         .xfer = MPIIO_Xfer,
         .close = MPIIO_Close,
         .delete = MPIIO_Delete,
-        .set_version = MPIIO_SetVersion,
+        .get_version = MPIIO_GetVersion,
         .fsync = MPIIO_Fsync,
         .get_file_size = MPIIO_GetFileSize,
+        .statfs = aiori_posix_statfs,
+        .mkdir = aiori_posix_mkdir,
+        .rmdir = aiori_posix_rmdir,
         .access = MPIIO_Access,
+        .stat = aiori_posix_stat,
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -63,7 +66,7 @@ ior_aiori_t mpiio_aiori = {
 /*
  * Try to access a file through the MPIIO interface.
  */
-static int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
+int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
 {
     MPI_File fd;
     int mpi_mode = MPI_MODE_UNIQUE_OPEN;
@@ -268,10 +271,14 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
 
         /* point functions to appropriate MPIIO calls */
         if (access == WRITE) {  /* WRITE */
-                Access = MPI_File_write;
-                Access_at = MPI_File_write_at;
-                Access_all = MPI_File_write_all;
-                Access_at_all = MPI_File_write_at_all;
+                Access = (int (MPIAPI *)(MPI_File, void *, int,
+                          MPI_Datatype, MPI_Status *)) MPI_File_write;
+                Access_at = (int (MPIAPI *)(MPI_File, MPI_Offset, void *, int,
+                             MPI_Datatype, MPI_Status *))  MPI_File_write_at;
+                Access_all = (int (MPIAPI *) (MPI_File, void *, int,
+                              MPI_Datatype, MPI_Status *)) MPI_File_write_all;
+                Access_at_all = (int (MPIAPI *) (MPI_File, MPI_Offset, void *, int,
+                                 MPI_Datatype, MPI_Status *)) MPI_File_write_at_all;
                 /*
                  * this needs to be properly implemented:
                  *
@@ -364,15 +371,18 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
                         }
                 }
         }
+        if((access == WRITE) && (param->fsyncPerWrite == TRUE))
+               MPIIO_Fsync(fd, param);
         return (length);
 }
 
 /*
  * Perform fsync().
  */
-static void MPIIO_Fsync(void *fd, IOR_param_t * param)
+static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 {
-        ;
+        if (MPI_File_sync(*(MPI_File *)fdp) != MPI_SUCCESS)
+                EWARN("fsync() failed");
 }
 
 /*
@@ -396,7 +406,7 @@ static void MPIIO_Close(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the MPIIO interface.
  */
-static void MPIIO_Delete(char *testFileName, IOR_param_t * param)
+void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 {
         MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
                   "cannot delete file");
@@ -405,13 +415,13 @@ static void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 /*
  * Determine api version.
  */
-static void MPIIO_SetVersion(IOR_param_t * test)
+static char* MPIIO_GetVersion()
 {
-        int version, subversion;
-        MPI_CHECK(MPI_Get_version(&version, &subversion),
-                  "cannot get MPI version");
-        sprintf(test->apiVersion, "%s (version=%d, subversion=%d)",
-                test->api, version, subversion);
+  static char ver[1024] = {};
+  int version, subversion;
+  MPI_CHECK(MPI_Get_version(&version, &subversion), "cannot get MPI version");
+  sprintf(ver, "(%d.%d)", version, subversion);
+  return ver;
 }
 
 /*
@@ -438,7 +448,7 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
                 if (param->filePerProc) {
                         tempOffset = tempOffset / param->transferSize;
                 } else {
-                        /* 
+                        /*
                          * this formula finds a file view offset for a task
                          * from an absolute offset
                          */

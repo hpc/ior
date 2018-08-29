@@ -17,7 +17,7 @@ normal parameters override each other, so the last one executed.
 Command line options
 --------------------
 These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
-  -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]
+  -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]
   -A N  refNum -- user reference number to include in long summary
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
   -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers

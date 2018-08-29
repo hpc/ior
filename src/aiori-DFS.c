@@ -46,6 +46,99 @@
 dfs_t *dfs;
 daos_handle_t poh, coh;
 
+/************************** O P T I O N S *****************************/
+struct dfs_options{
+        char * pool;
+        char * svcl;
+        char * group;
+        char * cont;
+};
+
+static struct dfs_options o = {
+        .pool = NULL,
+        .svcl = NULL,
+        .group = NULL,
+        .cont = NULL,
+};
+
+static option_help options [] = {
+      {'p', "pool", "DAOS pool uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
+      {'s', "svcl", "DAOS pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
+      {'g', "group", "DAOS server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
+      {'c', "cont", "DFS container uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.cont},
+      LAST_OPTION
+};
+
+/**************************** P R O T O T Y P E S *****************************/
+static void *DFS_Create(char *, IOR_param_t *);
+static void *DFS_Open(char *, IOR_param_t *);
+static IOR_offset_t DFS_Xfer(int, void *, IOR_size_t *,
+                             IOR_offset_t, IOR_param_t *);
+static void DFS_Close(void *, IOR_param_t *);
+static void DFS_Delete(char *, IOR_param_t *);
+static char* DFS_GetVersion();
+static void DFS_Fsync(void *, IOR_param_t *);
+static IOR_offset_t DFS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
+static int DFS_Statfs (const char *, ior_aiori_statfs_t *, IOR_param_t *);
+static int DFS_Stat (const char *, struct stat *, IOR_param_t *);
+static int DFS_Mkdir (const char *, mode_t, IOR_param_t *);
+static int DFS_Rmdir (const char *, IOR_param_t *);
+static int DFS_Access (const char *, int, IOR_param_t *);
+static void DFS_Init(IOR_param_t *param);
+static void DFS_Finalize(IOR_param_t *param);
+static option_help * DFS_options();
+
+/************************** D E C L A R A T I O N S ***************************/
+
+ior_aiori_t dfs_aiori = {
+        .name		= "DFS",
+        .create		= DFS_Create,
+        .open		= DFS_Open,
+        .xfer		= DFS_Xfer,
+        .close		= DFS_Close,
+        .delete		= DFS_Delete,
+        .get_version	= DFS_GetVersion,
+        .fsync		= DFS_Fsync,
+        .get_file_size	= DFS_GetFileSize,
+        .statfs		= DFS_Statfs,
+        .mkdir		= DFS_Mkdir,
+        .rmdir		= DFS_Rmdir,
+        .access		= DFS_Access,
+        .stat		= DFS_Stat,
+        .initialize	= DFS_Init,
+        .finalize	= DFS_Finalize,
+        .get_options	= DFS_options,
+};
+
+/***************************** F U N C T I O N S ******************************/
+
+/* For DAOS methods. */
+#define DCHECK(rc, format, ...)                                         \
+do {                                                                    \
+        int _rc = (rc);                                                 \
+                                                                        \
+        if (_rc < 0) {                                                  \
+                fprintf(stderr, "ERROR (%s:%d): %d: %d: "               \
+                        format"\n", __FILE__, __LINE__, rank, _rc,      \
+                        ##__VA_ARGS__);                                 \
+                fflush(stderr);                                         \
+                MPI_Abort(MPI_COMM_WORLD, -1);                          \
+        }                                                               \
+} while (0)
+
+#define DERR(rc, format, ...)                                           \
+do {                                                                    \
+        int _rc = (rc);                                                 \
+                                                                        \
+        if (_rc < 0) {                                                  \
+                fprintf(stderr, "ERROR (%s:%d): %d: %d: "               \
+                        format"\n", __FILE__, __LINE__, rank, _rc,      \
+                        ##__VA_ARGS__);                                 \
+                fflush(stderr);                                         \
+                goto out;                                               \
+        }                                                               \
+} while (0)
+
 static int
 parse_filename(const char *path, char **_obj_name, char **_cont_name)
 {
@@ -124,48 +217,11 @@ out:
 	return rc;
 }
 
-/**************************** P R O T O T Y P E S *****************************/
-static void *DFS_Create(char *, IOR_param_t *);
-static void *DFS_Open(char *, IOR_param_t *);
-static IOR_offset_t DFS_Xfer(int, void *, IOR_size_t *,
-                             IOR_offset_t, IOR_param_t *);
-static void DFS_Close(void *, IOR_param_t *);
-static void DFS_Delete(char *, IOR_param_t *);
-static void DFS_SetVersion(IOR_param_t *);
-static void DFS_Fsync(void *, IOR_param_t *);
-static IOR_offset_t DFS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
-static int DFS_Statfs (const char *, ior_aiori_statfs_t *, IOR_param_t *);
-static int DFS_Stat (const char *, struct stat *, IOR_param_t *);
-static int DFS_Mkdir (const char *, mode_t, IOR_param_t *);
-static int DFS_Rmdir (const char *, IOR_param_t *);
-static int DFS_Access (const char *, int, IOR_param_t *);
-static int DFS_Init(IOR_param_t *param);
-static int DFS_Finalize(IOR_param_t *param);
+static option_help * DFS_options(){
+  return options;
+}
 
-/************************** D E C L A R A T I O N S ***************************/
-
-ior_aiori_t dfs_aiori = {
-        .name = "DFS",
-        .create = DFS_Create,
-        .open = DFS_Open,
-        .xfer = DFS_Xfer,
-        .close = DFS_Close,
-        .delete = DFS_Delete,
-        .set_version = DFS_SetVersion,
-        .fsync = DFS_Fsync,
-        .get_file_size = DFS_GetFileSize,
-        .statfs = DFS_Statfs,
-        .mkdir = DFS_Mkdir,
-        .rmdir = DFS_Rmdir,
-        .access = DFS_Access,
-        .stat = DFS_Stat,
-        .init = DFS_Init,
-        .finalize = DFS_Finalize,
-};
-
-/***************************** F U N C T I O N S ******************************/
-
-static int
+static void
 DFS_Init(IOR_param_t *param) {
 	uuid_t			pool_uuid, co_uuid;
 	daos_pool_info_t	pool_info;
@@ -174,46 +230,37 @@ DFS_Init(IOR_param_t *param) {
         bool			cont_created = false;
 	int			rc;
 
-	if (uuid_parse(param->daosPool, pool_uuid) < 0) {
-		fprintf(stderr, "Invalid pool uuid\n");
-                return -1;
-	}
+        if (o.pool == NULL || o.svcl == NULL || o.cont == NULL)
+                ERR("Invalid Arguments to DFS\n");
 
-	if (uuid_parse(param->daosCont, co_uuid) < 0) {
-		fprintf(stderr, "Invalid pool uuid\n");
-                return -1;
-	}
+	rc = uuid_parse(o.pool, pool_uuid);
+        DCHECK(rc, "Failed to parse 'Pool uuid': %s", o.pool);
 
-	svcl = daos_rank_list_parse(param->daosPoolSvc, ":");
-	if (svcl == NULL) {
-		fprintf(stderr, "Invalid pool service rank list\n");
-                return -1;
-	}
+	rc = uuid_parse(o.cont, co_uuid);
+        DCHECK(rc, "Failed to parse 'Cont uuid': %s", o.cont);
 
-        printf("Pool uuid = %s, SVCL = %s\n", param->daosPool,
-               param->daosPoolSvc);
+	svcl = daos_rank_list_parse(o.svcl, ":");
+	if (svcl == NULL)
+                ERR("Failed to allocate svcl");
 
-        printf("DFS Container namespace uuid = %s\n", param->daosCont);
+        if (verbose >= 3) {
+                printf("Pool uuid = %s, SVCL = %s\n", o.pool, o.svcl);
+                printf("DFS Container namespace uuid = %s\n", o.cont);
+        }
 
 	rc = daos_init();
-	if (rc) {
-		fprintf(stderr, "daos_init() failed with %d\n", rc);
-		return rc;
-	}
+        DCHECK(rc, "Failed to initialize daos");
 
 	/** Connect to DAOS pool */
-	rc = daos_pool_connect(pool_uuid,
-                               strlen(param->daosGroup) ? param->daosGroup : NULL,
-                               svcl, DAOS_PC_RW, &poh, &pool_info, NULL);
-	if (rc < 0) {
-		fprintf(stderr, "Failed to connect to pool (%d)\n", rc);
-                goto err_daos;
-	}
+	rc = daos_pool_connect(pool_uuid, o.group, svcl, DAOS_PC_RW, &poh,
+                               &pool_info, NULL);
+        DCHECK(rc, "Failed to connect to pool");
 
 	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	/* If NOEXIST we create it */
 	if (rc == -DER_NONEXIST) {
-                printf("Creating DFS Container ...\n");
+                if (verbose >= 3)
+                        printf("Creating DFS Container ...\n");
 		rc = daos_cont_create(poh, co_uuid, NULL);
 		if (rc == 0) {
 			cont_created = true;
@@ -221,61 +268,28 @@ DFS_Init(IOR_param_t *param) {
 					    &co_info, NULL);
 		}
 	}
-	if (rc) {
-		fprintf(stderr, "Failed to create container (%d)\n", rc);
-                goto err_pool;
-	}
+        DCHECK(rc, "Failed to create container");
 
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
-	if (rc) {
-		fprintf(stderr, "dfs_mount failed (%d)\n", rc);
-                goto err_cont;
-	}
-
-out:
-        daos_rank_list_free(svcl);
-	return rc;
-err_cont:
-	daos_cont_close(coh, NULL);
-err_pool:
-	if (cont_created)
-		daos_cont_destroy(poh, co_uuid, 1, NULL);
-	daos_pool_disconnect(poh, NULL);
-err_daos:
-	daos_fini();
-        goto out;
+        DCHECK(rc, "Failed to mount DFS namespace");
 }
 
-int
+static void
 DFS_Finalize(IOR_param_t *param)
 {
         int rc;
 
 	rc = dfs_umount(dfs, true);
-	if (rc) {
-                fprintf(stderr, "dfs_umount() failed (%d)\n", rc);
-                return -1;
-        }
+        DCHECK(rc, "Failed to umount DFS namespace");
 
 	rc = daos_cont_close(coh, NULL);
-	if (rc) {
-                fprintf(stderr, "daos_cont_close() failed (%d)\n", rc);
-                return -1;
-        }
+        DCHECK(rc, "Failed to close container");
 
         daos_pool_disconnect(poh, NULL);
-	if (rc) {
-                fprintf(stderr, "daos_pool_disconnect() failed (%d)\n", rc);
-                return -1;
-        }
+        DCHECK(rc, "Failed to disconnect from pool");
 
 	rc = daos_fini();
-	if (rc) {
-                fprintf(stderr, "daos_fini() failed (%d)\n", rc);
-                return -1;
-        }
-
-        return 0;
+        DCHECK(rc, "Failed to finalize DAOS");
 }
 
 /*
@@ -296,20 +310,17 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 	mode = S_IFREG | param->mode;
 
 	rc = parse_filename(testFileName, &name, &dir_name);
-	if (rc)
-                goto out;
+        DERR(rc, "Failed to parse path %s", testFileName);
 
 	assert(dir_name);
 	assert(name);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode))
-                goto out;
+        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
 	rc = dfs_open(dfs, parent, name, mode, fd_oflag, DAOS_OC_LARGE_RW,
                       NULL, &obj);
-	if (rc)
-                goto out;
+        DERR(rc, "dfs_open() of %s Failed", name);
 
 out:
 	if (name)
@@ -337,19 +348,16 @@ DFS_Open(char *testFileName, IOR_param_t *param)
         fd_oflag |= O_RDWR;
 
 	rc = parse_filename(testFileName, &name, &dir_name);
-	if (rc)
-                goto out;
+        DERR(rc, "Failed to parse path %s", testFileName);
 
 	assert(dir_name);
 	assert(name);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode))
-                goto out;
+        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
 	rc = dfs_open(dfs, parent, name, S_IFREG, fd_oflag, 0, NULL, &obj);
-	if (rc)
-                goto out;
+        DERR(rc, "dfs_open() of %s Failed", name);
 
 out:
 	if (name)
@@ -391,13 +399,15 @@ DFS_Xfer(int access, void *file, IOR_size_t *buffer, IOR_offset_t length,
                 /* write/read file */
                 if (access == WRITE) {
                         rc = dfs_write(dfs, obj, sgl, param->offset);
-                        if (rc)
-                                ERR("write() failed");
+                        if (rc) {
+                                fprintf(stderr, "dfs_write() failed (%d)", rc);
+                                return -1;
+                        }
                         ret = remaining;
                 } else {
                         rc = dfs_read(dfs, obj, sgl, param->offset, &ret);
                         if (rc || ret == 0)
-                                ERR("read() failed");
+                                fprintf(stderr, "dfs_read() failed(%d)", rc);
                 }
 
                 if (ret < remaining) {
@@ -449,19 +459,16 @@ DFS_Delete(char *testFileName, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(testFileName, &name, &dir_name);
-	if (rc)
-                goto out;
+        DERR(rc, "Failed to parse path %s", testFileName);
 
 	assert(dir_name);
 	assert(name);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode))
-                goto out;
+        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
 	rc = dfs_remove(dfs, parent, name, false);
-	if (rc)
-                goto out;
+        DERR(rc, "dfs_remove() of %s Failed", name);
 
 out:
 	if (name)
@@ -472,13 +479,12 @@ out:
 		dfs_release(parent);
 }
 
-/*
- * Determine api version.
- */
-static void
-DFS_SetVersion(IOR_param_t * test)
+static char* DFS_GetVersion()
 {
-        strcpy(test->apiVersion, test->api);
+	static char ver[1024] = {};
+
+	sprintf(ver, "%s", "DAOS");
+	return ver;
 }
 
 /*
@@ -492,8 +498,10 @@ DFS_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
         int rc;
 
 	rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL);
-	if (rc)
+        if (rc) {
+                fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
                 return -1;
+        }
 
         rc = dfs_get_size(dfs, obj, &fsize);
         if (rc)
@@ -540,19 +548,16 @@ DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(path, &name, &dir_name);
-	if (rc)
-		return rc;
+        DERR(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
         assert(name);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode))
-                goto out;
+        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
 	rc = dfs_mkdir(dfs, parent, name, mode);
-	if (rc)
-                goto out;
+        DERR(rc, "dfs_mkdir() of %s Failed", name);
 
 out:
 	if (name)
@@ -575,19 +580,16 @@ DFS_Rmdir(const char *path, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(path, &name, &dir_name);
-	if (rc)
-		return rc;
+        DERR(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
         assert(name);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode))
-                goto out;
+        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
 	rc = dfs_remove(dfs, parent, name, false);
-	if (rc)
-                goto out;
+        DERR(rc, "dfs_remove() of %s Failed", name);
 
 out:
 	if (name)
@@ -611,26 +613,19 @@ DFS_Access(const char *path, int mode, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(path, &name, &dir_name);
-	if (rc)
-		return rc;
+        DERR(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
-        assert(name);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode))
-                goto out;
+        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
-        if (strcmp(name, ".") == 0) {
+        if (name && strcmp(name, ".") == 0) {
                 free(name);
                 name = NULL;
         }
 	rc = dfs_stat(dfs, parent, name, &stbuf);
-	if (rc) {
-                rc = -1;
-                errno = -ENOENT;
-                goto out;
-        }
+        DERR(rc, "dfs_stat() of %s Failed", name);
 
 out:
 	if (name)
@@ -653,19 +648,16 @@ DFS_Stat(const char *path, struct stat *buf, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(path, &name, &dir_name);
-	if (rc)
-		return rc;
+        DERR(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
         assert(name);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode))
-                goto out;
+        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
 	rc = dfs_stat(dfs, parent, name, buf);
-	if (rc)
-                goto out;
+        DERR(rc, "dfs_stat() of %s Failed", name);
 
 out:
 	if (name)

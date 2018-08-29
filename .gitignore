@@ -1,3 +1,4 @@
+tags
 Makefile
 Makefile.in
 aclocal.m4
@@ -11,11 +12,13 @@ config/config.sub
 config/depcomp
 config/install-sh
 config/missing
+config/test-driver
 configure
 contrib/.deps/
 contrib/cbif
 contrib/Makefile
 contrib/Makefile.in
+contrib/cbif
 doc/Makefile
 doc/Makefile.in
 src/.deps/
@@ -32,7 +35,13 @@ contrib/cbif.o
 src/*.o
 src/*.i
 src/*.s
+src/*.a
 src/ior
+src/mdtest
+src/testlib
+src/test/.deps/
+src/test/.dirstamp
+src/test/lib.o
 
 doc/doxygen/build
 doc/sphinx/_*/

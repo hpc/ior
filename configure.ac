@@ -15,7 +15,8 @@ AC_CONFIG_HEADER([src/config.h])
 AC_CANONICAL_HOST
 
 # Automake support
-AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define])
+AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define foreign subdir-objects])
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AM_MAINTAINER_MODE
 
 # Checks for programs
@@ -25,6 +26,7 @@ AX_PROG_CC_MPI(,,[
     AC_MSG_FAILURE([MPI compiler requested, but couldn't use MPI.])
 ])
 
+AC_PROG_RANLIB
 # No reason not to require modern C at this point
 AC_PROG_CC_C99
 
@@ -74,6 +76,17 @@ AS_IF([test "x$with_lustre" != xno], [
                         AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
                 fi
         ])
+])
+
+# IME (DDN's Infinite Memory Engine) support
+AC_ARG_WITH([ime],
+        [AS_HELP_STRING([--with-ime],
+           [support IO with IME backend @<:@default=no@:>@])],
+        [],
+        [with_ime=no])
+AM_CONDITIONAL([USE_IME_AIORI], [test x$with_ime = xyes])
+AM_COND_IF([USE_IME_AIORI],[
+        AC_DEFINE([USE_IME_AIORI], [], [Build IME backend AIORI])
 ])
 
 # HDF5 support
@@ -142,22 +155,21 @@ AM_COND_IF([USE_POSIX_AIORI],[
         AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
 ])
 
-AC_ARG_WITH([cart],
-    [AS_HELP_STRING([--with-cart],
-            [Build DAOS ROMIO driver[default=no]])],,
-    [with_cart=no])
+# RADOS support
+AC_ARG_WITH([rados],
+        [AS_HELP_STRING([--with-rados],
+           [support IO with librados backend @<:@default=no@:>@])],
+        [],
+        [with_rados=no])
+AM_CONDITIONAL([USE_RADOS_AIORI], [test x$with_rados = xyes])
+AM_COND_IF([USE_RADOS_AIORI],[
+        AC_DEFINE([USE_RADOS_AIORI], [], [Build RADOS backend AIORI])
+])
 
-AS_IF([test "x$with_cart" != xno],
-    CART="yes"
-    LDFLAGS="$LDFLAGS -L$with_cart/lib"
-    CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
-    AC_CHECK_HEADERS(gurt/common.h,, [unset CART])
-    AC_CHECK_LIB([gurt], [d_rank_list_alloc],, [unset CART]))
-
-# DFS IO support
+# DAOS Backends (DAOS and DFS) IO support
 AC_ARG_WITH([daos],
     [AS_HELP_STRING([--with-daos],
-	    [support IO with DFS backend @<:@default=no@:>@])],
+	    [support IO with DAOS backends @<:@default=no@:>@])],
 	    [],
     	    [with_daos=no])
 
@@ -171,11 +183,9 @@ AS_IF([test "x$with_daos" != xno],
     AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
     AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS]))
 
-AS_IF([test "x$CART" != xyes], [unset DAOS])
-
-AM_CONDITIONAL([USE_DFS_AIORI], [test x$DAOS = xyes])
-AM_COND_IF([USE_DFS_AIORI],[
-        AC_DEFINE([USE_DFS_AIORI], [], [Build DFS backend AIORI])
+AM_CONDITIONAL([USE_DAOS_AIORI], [test x$DAOS = xyes])
+AM_COND_IF([USE_DAOS_AIORI],[
+        AC_DEFINE([USE_DAOS_AIORI], [], [Build DAOS backends AIORI])
 ])
 
 # aws4c is needed for the S3 backend (see --with-S3, below).

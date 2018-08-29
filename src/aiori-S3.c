@@ -110,6 +110,39 @@
 #include "aws4c_extra.h"        // utilities, e.g. for parsing XML in responses
 
 
+
+
+/* buffer is used to generate URLs, err_msgs, etc */
+#define            BUFF_SIZE  1024
+static char        buff[BUFF_SIZE];
+
+const int          ETAG_SIZE = 32;
+
+CURLcode           rc;
+
+/* Any objects we create or delete will be under this bucket */
+const char* bucket_name = "ior";
+
+/* TODO: The following stuff goes into options! */
+/* REST/S3 variables */
+//    CURL*       curl;             /* for libcurl "easy" fns (now managed by aws4c) */
+#   define      IOR_CURL_INIT        0x01 /* curl top-level inits were perfomed once? */
+#   define      IOR_CURL_NOCONTINUE  0x02
+#   define      IOR_CURL_S3_EMC_EXT  0x04 /* allow EMC extensions to S3? */
+
+#ifdef USE_S3_AIORI
+#  include <curl/curl.h>
+#  include "aws4c.h"
+#else
+   typedef void     CURL;       /* unused, but needs a type */
+   typedef void     IOBuf;      /* unused, but needs a type */
+#endif
+
+    IOBuf*      io_buf;              /* aws4c places parsed header values here */
+    IOBuf*      etags;               /* accumulate ETags for N:1 parts */
+
+///////////////////////////////////////////////
+
 /**************************** P R O T O T Y P E S *****************************/
 static void*        S3_Create(char*, IOR_param_t*);
 static void*        S3_Open(char*, IOR_param_t*);
@@ -122,9 +155,10 @@ static IOR_offset_t EMC_Xfer(int, void*, IOR_size_t*, IOR_offset_t, IOR_param_t*
 static void         EMC_Close(void*, IOR_param_t*);
 
 static void         S3_Delete(char*, IOR_param_t*);
-static void         S3_SetVersion(IOR_param_t*);
 static void         S3_Fsync(void*, IOR_param_t*);
 static IOR_offset_t S3_GetFileSize(IOR_param_t*, MPI_Comm, char*);
+static void S3_init();
+static void S3_finalize();
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -138,9 +172,11 @@ ior_aiori_t s3_aiori = {
 	.xfer = S3_Xfer,
 	.close = S3_Close,
 	.delete = S3_Delete,
-	.set_version = S3_SetVersion,
+	.get_version = aiori_get_version,
 	.fsync = S3_Fsync,
 	.get_file_size = S3_GetFileSize,
+	.initialize = S3_init,
+	.finalize = S3_finalize
 };
 
 // "S3", plus EMC-extensions enabled
@@ -156,6 +192,8 @@ ior_aiori_t s3_plus_aiori = {
 	.set_version = S3_SetVersion,
 	.fsync = S3_Fsync,
 	.get_file_size = S3_GetFileSize,
+	.initialize = S3_init,
+	.finalize = S3_finalize
 };
 
 // Use EMC-extensions for N:1 write, as well
@@ -171,8 +209,23 @@ ior_aiori_t s3_emc_aiori = {
 	.set_version = S3_SetVersion,
 	.fsync = S3_Fsync,
 	.get_file_size = S3_GetFileSize,
+	.initialize = S3_init,
+	.finalize = S3_finalize
 };
 
+
+static void S3_init(){
+  /* This is supposed to be done before *any* threads are created.
+   * Could MPI_Init() create threads (or call multi-threaded
+   * libraries)?  We'll assume so. */
+  AWS4C_CHECK( aws_init() );
+}
+
+static void S3_finalize(){
+  /* done once per program, after exiting all threads.
+ 	* NOTE: This fn doesn't return a value that can be checked for success. */
+  aws_cleanup();
+}
 
 /* modelled on similar macros in iordef.h */
 #define CURL_ERR(MSG, CURL_ERRNO, PARAM)										\
@@ -183,7 +236,7 @@ ior_aiori_t s3_emc_aiori = {
 		fflush(stdout);																\
 		MPI_Abort((PARAM)->testComm, -1);										\
 	} while (0)
-	
+
 
 #define CURL_WARN(MSG, CURL_ERRNO)													\
 	do {																						\
@@ -192,20 +245,6 @@ ior_aiori_t s3_emc_aiori = {
 				  __FILE__, __LINE__);													\
 		fflush(stdout);																	\
 	} while (0)
-	
-
-
-/* buffer is used to generate URLs, err_msgs, etc */
-#define            BUFF_SIZE  1024
-static char        buff[BUFF_SIZE];
-
-const int          ETAG_SIZE = 32;
-
-CURLcode           rc;
-
-/* Any objects we create or delete will be under this bucket */
-const char* bucket_name = "ior";
-//const char* bucket_name = "brettk";
 
 
 /***************************** F U N C T I O N S ******************************/
@@ -232,9 +271,8 @@ const char* bucket_name = "ior";
  * ---------------------------------------------------------------------------
  */
 
-static
-void
-s3_connect( IOR_param_t* param ) {
+
+static void s3_connect( IOR_param_t* param ) {
 	if (param->verbose >= VERBOSE_2) {
 		printf("-> s3_connect\n"); /* DEBUGGING */
 	}
@@ -446,7 +484,7 @@ S3_Create_Or_Open_internal(char*         testFileName,
 			if ( n_to_n || (rank == 0) ) {
 
 				// rank0 handles truncate
-				if ( needs_reset) { 
+				if ( needs_reset) {
 					aws_iobuf_reset(param->io_buf);
 					AWS4C_CHECK( s3_put(param->io_buf, testFileName) ); /* 0-length write */
 					AWS4C_CHECK_OK( param->io_buf );
@@ -510,7 +548,7 @@ S3_Create_Or_Open_internal(char*         testFileName,
                fprintf( stdout, "rank %d resetting\n",
                         rank);
             }
-            
+
 				aws_iobuf_reset(param->io_buf);
 				AWS4C_CHECK( s3_put(param->io_buf, testFileName) );
 				AWS4C_CHECK_OK( param->io_buf );
@@ -641,7 +679,7 @@ EMC_Open( char *testFileName, IOR_param_t * param ) {
 /* In the EMC case, instead of Multi-Part Upload we can use HTTP
  * "byte-range" headers to write parts of a single object.  This appears to
  * have several advantages over the S3 MPU spec:
- * 
+ *
  * (a) no need for a special "open" operation, to capture an "UploadID".
  *     Instead we simply write byte-ranges, and the server-side resolves
  *     any races, producing a single winner.  In the IOR case, there should
@@ -808,7 +846,7 @@ S3_Xfer_internal(int          access,
 				printf("rank %d: part %d = ETag %s\n", rank, part_number, param->io_buf->eTag);
 			}
 
-			// drop ptrs to <data_ptr>, in param->io_buf 
+			// drop ptrs to <data_ptr>, in param->io_buf
 			aws_iobuf_reset(param->io_buf);
 		}
 		else {	 // use EMC's byte-range write-support, instead of MPU
@@ -830,7 +868,7 @@ S3_Xfer_internal(int          access,
 			AWS4C_CHECK   ( s3_put(param->io_buf, file) );
 			AWS4C_CHECK_OK( param->io_buf );
 
-			// drop ptrs to <data_ptr>, in param->io_buf 
+			// drop ptrs to <data_ptr>, in param->io_buf
 			aws_iobuf_reset(param->io_buf);
 		}
 
@@ -867,7 +905,7 @@ S3_Xfer_internal(int          access,
 			ERR_SIMPLE(buff);
 		}
 
-		// drop refs to <data_ptr>, in param->io_buf 
+		// drop refs to <data_ptr>, in param->io_buf
 		aws_iobuf_reset(param->io_buf);
 	}
 
@@ -1126,7 +1164,7 @@ S3_Close_internal( void*         fd,
 						start_multiplier = ETAG_SIZE;				/* one ETag */
 						stride           = etag_data_size;		/* one rank's-worth of Etag data */
 					}
-						
+
 
 					xml = aws_iobuf_new();
 					aws_iobuf_growth_size(xml, 1024 * 8);
@@ -1305,7 +1343,7 @@ S3_Delete( char *testFileName, IOR_param_t * param ) {
 #if 0
 	// EMC BUG: If file was written with appends, and is deleted,
 	//      Then any future recreation will result in an object that can't be read.
-	//      this 
+	//      this
 	AWS4C_CHECK( s3_delete(param->io_buf, testFileName) );
 #else
 	// just replace with a zero-length object for now
@@ -1334,7 +1372,7 @@ EMC_Delete( char *testFileName, IOR_param_t * param ) {
 #if 0
 	// EMC BUG: If file was written with appends, and is deleted,
 	//      Then any future recreation will result in an object that can't be read.
-	//      this 
+	//      this
 	AWS4C_CHECK( s3_delete(param->io_buf, testFileName) );
 #else
 	// just replace with a zero-length object for now
@@ -1352,25 +1390,6 @@ EMC_Delete( char *testFileName, IOR_param_t * param ) {
 
 
 
-
-
-/*
- * Determine API version.
- */
-
-static
-void
-S3_SetVersion( IOR_param_t * param ) {
-	if (param->verbose >= VERBOSE_2) {
-		printf("-> S3_SetVersion\n");
-	}
-
-	strcpy( param->apiVersion, param->api );
-
-	if (param->verbose >= VERBOSE_2) {
-		printf("<- S3_SetVersion\n");
-	}
-}
 
 /*
  * HTTP HEAD returns meta-data for a "file".

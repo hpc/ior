@@ -25,7 +25,7 @@ Syntax:
 An example of a script: ::
 
   IOR START
-    api=[POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI]
+    api=[POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]
     testFile=testFile
     hintsFileName=hintsFile
     repetitions=8
