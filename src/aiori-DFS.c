@@ -63,7 +63,7 @@ static struct dfs_options o = {
 
 static option_help options [] = {
       {'p', "pool", "DAOS pool uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
-      {'s', "svcl", "DAOS pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
+      {'v', "svcl", "DAOS pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
       {'g', "group", "DAOS server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
       {'c', "cont", "DFS container uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.cont},
       LAST_OPTION

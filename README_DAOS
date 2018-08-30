@@ -1,24 +1,54 @@
-Building with DAOS API
+Building
 ----------------------
 
-At step 1 above, one must specify "--with-daos". If the DAOS
-headers and libraries are not installed at respective system
-default locations, then one may also needs to set CPPFLAGS and
-LDFLAGS accordingly.
+The DAOS library must be installed on the system.
+
+./bootsrap
+./configure --prefix=iorInstallDir --with-daos=DIR
+
+One must specify "--with-daos=/path/to/daos/install".  When that is specified
+the DAOS and DFS driver will be built.
+
+The DAOS driver uses the DAOS API to create a container (file) and update/fetch
+an object to the container using the daos object API. The DAOS driver works with
+IOR only (no mdtest support yet).
+
+The DFS (DAOS File System) driver creates an encapsulated namespace and emulates
+the POSIX driver using the DFS API directly on top of DAOS. The DFS driver works
+with both IOR and mdtest.
 
 Running with DAOS API
 ---------------------
 
-One must specify an existing pool using "-O
-daospool=<pool_uuid>". IOR must be launched in a way that
-attaches the IOR process group to the DAOS server process group.
+Driver specific options are specified at the end after "--". For example:
 
-One must also specify a container UUID using "-o
-<container_uuid>". If the "-E" option is given, then this UUID
+ior -a DAOS [ior_options] -- [daos_options]
+
+In the IOR options, the file name should be specified as a container uuid using
+"-o <container_uuid>". If the "-E" option is given, then this UUID
 shall denote an existing container created by a "matching" IOR
 run. Otherwise, IOR will create a new container with this UUID.
 In the latter case, one may use uuidgen(1) to generate the UUID
 of the new container.
+
+The DAOS options include:
+
+Required Options:
+-p <pool_uuid>: pool uuid to connect to (has to be created beforehand)
+-v <pool_svcl>: pool svcl list (: separated)
+
+Optional Options:
+-g <group_name>: group name of servers with the pool
+-r <record_size>: object record size for IO
+-s <stripe_size>
+-c <stripe_count>
+-m <max_stripe_size>
+-a <num>: number of concurrent async IOs
+-w : Flag to indicate no commit, just update
+-e <epoch_number>
+-t <epoch_number>: wait for specific epoch before read
+-k : flag to kill a rank during IO
+-o <object_class>: specific object class
 
 When benchmarking write performance, one likely do not want
 "-W", which causes the write phase to do one additional memory
@@ -32,17 +62,47 @@ all combinations of options are supported.
 
 Examples that should work include:
 
-  - "ior -a DAOS -w -W -o <container_uuid> -O
-    daospool=<pool_uuid>,daospoolsvc=<svc_ranks>" writes into a new container
-    and verifies the data, using default daosRecordSize, transferSize,
-    daosStripeSize, blockSize, daosAios, etc.
+  - "ior -a DAOS -w -W -o <container_uuid> -- -p <pool_uuid> -v <svc_ranks>"
+    writes into a new container and verifies the data, using default
+    daosRecordSize, transferSize, daosStripeSize, blockSize, daosAios, etc.
 
-  - "ior -a DAOS -w -W -r -R -o <container_uuid> -b 1g -t 4m -C -O
-    daospool=<pool_uuid>,daospoolsvc=<svc_ranks>,daosrecordsize=1m,
-    daosstripesize=4m, daosstripecount=256,daosaios=8" does all IOR tests and
-    shifts ranks during checkWrite and checkRead.
+  - "ior -a DAOS -w -W -r -R -o <container_uuid> -b 1g -t 4m -C --
+    -p <pool_uuid> -v <svc_ranks> -r 1m -s 4m -c 256 -a 8"
+    does all IOR tests and shifts ranks during checkWrite and checkRead.
 
-  - "ior -a DAOS -w -r -o <container_uuid> -b 8g -t 1m -C -O
-    daospool=<pool_uuid>,daospoolsvc=<svc_ranks>,daosrecordsize=1m,daosstripesize=4m,
-    daosstripecount=256,daosaios=8" may be a base to be tuned for performance
-    benchmarking.
+  - "ior -a DAOS -w -r -o <container_uuid> -b 8g -t 1m -C --
+    -p <pool_uuid> -v <svc_ranks> -r 1m -s 4m -c 256 -a 8"
+    may be a base to be tuned for performance benchmarking.
+
+
+Running with DFS API
+---------------------
+
+Driver specific options are specified at the end after "--". For example:
+
+ior -a DFS [ior_options] -- [dfs_options]
+mdtest -a DFS [mdtest_options] -- [dfs_options]
+
+Required Options:
+-p <pool_uuid>: pool uuid to connect to (has to be created beforehand)
+-v <pool_svcl>: pool svcl list (: separated)
+-c <co_uuid>: container uuid that will hold the encapsulated namespace
+
+Optional Options:
+-g <group_name>: group name of servers with the pool
+
+In the IOR options, the file name should be specified on the root dir directly
+since ior does not create directories and the DFS container representing the
+encapsulated namespace is not the same as the system namespace the user is
+executing from.
+
+Examples that should work include:
+  - "ior -a DFS -w -W -o /test1 -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
+  - "ior -a DFS -w -W -r -R -o /test2 -b 1g -t 4m -C -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
+  - "ior -a DFS -w -r -o /test3 -b 8g -t 1m -C -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
+
+Running mdtest, the user needs to specify a directory with -d where the test
+tree will be created. Some examples:
+  - "mdtest -a DFS -n 100 -F -D -d /bla -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
+  - "mdtest -a DFS -n 1000 -F -C -d /bla -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
+  - "mdtest -a DFS -I 10 -z 5 -b 2 -L -d /bla -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"

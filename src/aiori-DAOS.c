@@ -77,10 +77,10 @@ static option_help options [] = {
       {'c', "daosStripeCount", "Stripe Count", OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeCount},
       {'m', "daosStripeMax", "Max Stripe",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeMax},
       {'a', "daosAios", "Concurrent Async IOs",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosAios},
-      {'w', "daosWriteOnly", "Write Only, no commit",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosWriteOnly},
+      {'w', "daosWriteOnly", "Write Only, no commit",OPTION_FLAG, 'd', &o.daosWriteOnly},
       {'e', "daosEpoch", "Epoch Number to Access",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosEpoch},
       {'t', "daosWait", "Epoch to wait for before read",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosWait},
-      {'k', "daosKill", "Kill target while running",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosKill},
+      {'k', "daosKill", "Kill target while running",OPTION_FLAG, 'd', &o.daosKill},
       {'o', "daosObjectClass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosObjectClass},
       LAST_OPTION
 };
