@@ -416,7 +416,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         /* close the script */
         if (fclose(file) != 0)
                 ERR("fclose() of script file failed");
-        AllocResults(head);
+        AllocResults(tail);
 
         return head;
 }
