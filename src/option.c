@@ -354,6 +354,10 @@ int option_parse(int argc, char ** argv, option_help * args, int * printhelp){
                 *(long long*) o->variable = string_to_bytes(arg);
                 break;
               }
+	      case('i'):{
+                *(long long*) o->variable = string_to_bytes(arg);
+		break;
+              }
               default:
                 printf("ERROR: Unknown option type %c\n", o->type);
             }
