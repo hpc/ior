@@ -541,6 +541,9 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         }
 
         const ior_aiori_t * backend = aiori_select(initialTestParams.api);
+        if (backend == NULL)
+            ERR_SIMPLE("unrecognized I/O API");
+
         initialTestParams.backend = backend;
         initialTestParams.apiVersion = backend->get_version();
 
