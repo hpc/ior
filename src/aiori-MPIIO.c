@@ -46,6 +46,7 @@ static void MPIIO_Fsync(void *, IOR_param_t *);
 
 ior_aiori_t mpiio_aiori = {
         .name = "MPIIO",
+        .name_legacy = NULL,
         .create = MPIIO_Create,
         .open = MPIIO_Open,
         .xfer = MPIIO_Xfer,

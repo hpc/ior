@@ -67,6 +67,7 @@ static option_help * RADOS_options();
 /************************** D E C L A R A T I O N S ***************************/
 ior_aiori_t rados_aiori = {
         .name = "RADOS",
+        .name_legacy = NULL,
         .create = RADOS_Create,
         .open = RADOS_Open,
         .xfer = RADOS_Xfer,

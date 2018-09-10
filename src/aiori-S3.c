@@ -167,6 +167,7 @@ static void S3_finalize();
 //     N:N fails if "transfer-size" != "block-size" (because that requires "append")
 ior_aiori_t s3_aiori = {
 	.name = "S3",
+	.name_legacy = NULL,
 	.create = S3_Create,
 	.open = S3_Open,
 	.xfer = S3_Xfer,

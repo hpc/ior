@@ -136,6 +136,7 @@ static int DUMMY_stat (const char *path, struct stat *buf, IOR_param_t * param){
 
 ior_aiori_t dummy_aiori = {
   "DUMMY",
+  NULL,
   DUMMY_Create,
   DUMMY_Open,
   DUMMY_Xfer,

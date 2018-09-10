@@ -441,7 +441,8 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
     parameters = & initialTestParams;
 
     char APIs[1024];
-    aiori_supported_apis(APIs);
+    char APIs_legacy[1024];
+    aiori_supported_apis(APIs, APIs_legacy);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
 

@@ -62,6 +62,7 @@ static int NCMPI_Access(const char *, int, IOR_param_t *);
 
 ior_aiori_t ncmpi_aiori = {
         .name = "NCMPI",
+        .name_legacy = NULL,
         .create = NCMPI_Create,
         .open = NCMPI_Open,
         .xfer = NCMPI_Xfer,
