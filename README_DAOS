@@ -25,11 +25,10 @@ Driver specific options are specified at the end after "--". For example:
 ior -a DAOS [ior_options] -- [daos_options]
 
 In the IOR options, the file name should be specified as a container uuid using
-"-o <container_uuid>". If the "-E" option is given, then this UUID
-shall denote an existing container created by a "matching" IOR
-run. Otherwise, IOR will create a new container with this UUID.
-In the latter case, one may use uuidgen(1) to generate the UUID
-of the new container.
+"-o <container_uuid>". If the "-E" option is given, then this UUID shall denote
+an existing container created by a "matching" IOR run. Otherwise, IOR will
+create a new container with this UUID.  In the latter case, one may use
+uuidgen(1) to generate the UUID of the new container.
 
 The DAOS options include:
 
@@ -50,15 +49,18 @@ Optional Options:
 -k : flag to kill a rank during IO
 -o <object_class>: specific object class
 
-When benchmarking write performance, one likely do not want
-"-W", which causes the write phase to do one additional memory
-copy for every I/O. This is due to IOR's assumption that when a
-DAOS_Xfer() call returns the buffer may be released. Therefore,
-random data is written when "-W" is absent, while data is copied
-from IOR buffers when "-W" is present.
+When benchmarking write performance, one likely does not want "-W", which causes
+the write phase to do one additional memory copy for every I/O. This is due to
+IOR's assumption that when a DAOS_Xfer() call returns the buffer may be
+released. Therefore, random data is written when "-W" is absent, while data is
+copied from IOR buffers when "-W" is present.
 
-See doc/USER_GUIDE for all options and directives. Note that not
-all combinations of options are supported.
+See doc/USER_GUIDE for all options and directives. Note that not all
+combinations of options are supported. For example specifying an epoch to access
+and running ior with multiple iterations would cause all iterations other than
+first one to fail because the epoch will be committed in the first iteration. In
+that case, the epoch should not be specified and the DAOS driver would choose
+the epoch to access automatically on each iteration.
 
 Examples that should work include:
 
