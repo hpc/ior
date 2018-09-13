@@ -171,7 +171,7 @@ do {                                                                    \
 
 #define INFO(level, param, format, ...)                                 \
 do {                                                                    \
-        if (param->verbose >= level)                                    \
+        if (verbose >= level)                                    \
                 printf("[%d] "format"\n", rank, ##__VA_ARGS__);         \
 } while (0)
 
@@ -260,7 +260,7 @@ static void ContainerOpen(char *testFileName, IOR_param_t *param,
                                testFileName);
                 }
 
-                INFO(VERBOSE_2, param, "Openning container %s", testFileName);
+                INFO(VERBOSE_2, param, "Opening container %s", testFileName);
 
                 if (param->open == WRITE)
                         dFlags = DAOS_COO_RW;

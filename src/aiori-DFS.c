@@ -243,7 +243,7 @@ DFS_Init(IOR_param_t *param) {
 	if (svcl == NULL)
                 ERR("Failed to allocate svcl");
 
-        if (verbose >= 3) {
+        if (verbose >= VERBOSE_1) {
                 printf("Pool uuid = %s, SVCL = %s\n", o.pool, o.svcl);
                 printf("DFS Container namespace uuid = %s\n", o.cont);
         }
@@ -259,7 +259,7 @@ DFS_Init(IOR_param_t *param) {
 	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	/* If NOEXIST we create it */
 	if (rc == -DER_NONEXIST) {
-                if (verbose >= 3)
+                if (verbose >= VERBOSE_1)
                         printf("Creating DFS Container ...\n");
 		rc = daos_cont_create(poh, co_uuid, NULL);
 		if (rc == 0) {
