@@ -77,9 +77,11 @@ typedef struct IO_BUFFERS
  *         USER_GUIDE
  */
 
+struct ior_aiori;
+
 typedef struct
 {
-    const void * backend;
+    const struct ior_aiori * backend;
     char * debug;             /* debug info string */
     unsigned int mode;               /* file permissions */
     unsigned int openFlags;          /* open flags (see also <open>) */
