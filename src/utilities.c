@@ -16,6 +16,10 @@
 #  include "config.h"
 #endif
 
+#ifdef __linux__
+#  define _GNU_SOURCE            /* Needed for O_DIRECT in fcntl */
+#endif                           /* __linux__ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
