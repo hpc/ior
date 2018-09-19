@@ -98,8 +98,6 @@ int ior_main(int argc, char **argv)
     out_logfile = stdout;
     out_resultfile = stdout;
 
-    aiori_initialize();
-
     /*
      * check -h option from commandline without starting MPI;
      */
@@ -122,6 +120,8 @@ int ior_main(int argc, char **argv)
     /* setup tests, and validate parameters */
     InitTests(tests_head, mpi_comm_world);
     verbose = tests_head->params.verbose;
+
+    aiori_initialize(tests_head);
 
     PrintHeader(argc, argv);
 
@@ -151,11 +151,11 @@ int ior_main(int argc, char **argv)
     /* display finish time */
     PrintTestEnds();
 
-    DestroyTests(tests_head);
-
     MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
 
-    aiori_finalize();
+    aiori_finalize(tests_head);
+
+    DestroyTests(tests_head);
 
     return totalErrorCount;
 }

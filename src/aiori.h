@@ -97,8 +97,8 @@ extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
 extern ior_aiori_t rados_aiori;
 
-void aiori_initialize();
-void aiori_finalize();
+void aiori_initialize(IOR_test_t * tests);
+void aiori_finalize(IOR_test_t * tests);
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
 void aiori_supported_apis(char * APIs);

@@ -12,6 +12,8 @@
 *
 \******************************************************************************/
 
+#include <assert.h>
+#include <stdbool.h>
 #include "aiori.h"
 
 #if defined(HAVE_SYS_STATVFS_H)
@@ -131,34 +133,90 @@ char* aiori_get_version()
   return "";
 }
 
-static int is_initialized = FALSE;
+static bool is_initialized = false;
 
-void aiori_initialize(){
-	if (is_initialized) return;
-	is_initialized = TRUE;
-
-  /* Sanity check, we were compiled with SOME backend, right? */
-  if (0 == aiori_count ()) {
-          ERR("No IO backends compiled into aiori.  "
-              "Run 'configure --with-<backend>', and recompile.");
-  }
-
-  for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
-    if((*tmp)->initialize){
-      (*tmp)->initialize();
-    }
-  }
+static void init_or_fini_internal(const ior_aiori_t *test_backend,
+                                  const bool init)
+{
+        if (init)
+        {
+                if (test_backend->initialize)
+                        test_backend->initialize();
+        }
+        else
+        {
+                if (test_backend->finalize)
+                        test_backend->finalize();
+        }
 }
 
-void aiori_finalize(){
-  if (! is_initialized) return;
-  is_initialized = FALSE;
+static void init_or_fini(IOR_test_t *tests, const bool init)
+{
+        /* Sanity check, we were compiled with SOME backend, right? */
+        if (0 == aiori_count ()) {
+                ERR("No IO backends compiled into aiori.  "
+                    "Run 'configure --with-<backend>', and recompile.");
+        }
 
-  for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
-    if((*tmp)->finalize){
-      (*tmp)->finalize();
-    }
-  }
+        /* Pointer to the initialize of finalize function */
+
+
+        /* if tests is NULL, initialize or finalize all available backends */
+        if (tests == NULL)
+        {
+                for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp)
+                        init_or_fini_internal(*tmp, init);
+
+                return;
+        }
+
+        for (IOR_test_t *t = tests; t != NULL; t = t->next)
+        {
+                IOR_param_t *params = &t->params;
+                assert(params != NULL);
+
+                const ior_aiori_t *test_backend = params->backend;
+                assert(test_backend != NULL);
+
+                init_or_fini_internal(test_backend, init);
+        }
+}
+
+
+/**
+ * Initialize IO backends.
+ *
+ * @param[in]  tests      Pointers to the first test
+ *
+ * This function initializes all backends which will be used. If tests is NULL
+ * all available backends are initialized.
+ */
+void aiori_initialize(IOR_test_t *tests)
+{
+        if (is_initialized)
+            return;
+
+        init_or_fini(tests, true);
+
+        is_initialized = true;
+}
+
+/**
+ * Finalize IO backends.
+ *
+ * @param[in]  tests      Pointers to the first test
+ *
+ * This function finalizes all backends which were used. If tests is NULL
+ * all available backends are finialized.
+ */
+void aiori_finalize(IOR_test_t *tests)
+{
+        if (!is_initialized)
+            return;
+
+        is_initialized = false;
+
+        init_or_fini(tests, false);
 }
 
 const ior_aiori_t *aiori_select (const char *api)
