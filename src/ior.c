@@ -281,30 +281,33 @@ CheckForOutliers(IOR_param_t *test, const double *timer, const int access)
  * Check if actual file size equals expected size; if not use actual for
  * calculating performance rate.
  */
-static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
+static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep,
+                          const int access)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
+        IOR_point_t *point = (access == WRITE) ? &results[rep].write :
+                                                 &results[rep].read;
 
-        MPI_CHECK(MPI_Allreduce(&dataMoved, & results[rep].aggFileSizeFromXfer,
+        MPI_CHECK(MPI_Allreduce(&dataMoved, &point->aggFileSizeFromXfer,
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
                   "cannot total data moved");
 
         if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
                         if ((params->expectedAggFileSize
-                             != results[rep].aggFileSizeFromXfer)
-                            || (results[rep].aggFileSizeFromStat
-                                != results[rep].aggFileSizeFromXfer)) {
+                             != point->aggFileSizeFromXfer)
+                            || (point->aggFileSizeFromStat
+                                != point->aggFileSizeFromXfer)) {
                                 fprintf(out_logfile,
                                         "WARNING: Expected aggregate file size       = %lld.\n",
                                         (long long) params->expectedAggFileSize);
                                 fprintf(out_logfile,
                                         "WARNING: Stat() of aggregate file size      = %lld.\n",
-                                        (long long) results[rep].aggFileSizeFromStat);
+                                        (long long) point->aggFileSizeFromStat);
                                 fprintf(out_logfile,
                                         "WARNING: Using actual aggregate bytes moved = %lld.\n",
-                                        (long long) results[rep].aggFileSizeFromXfer);
+                                        (long long) point->aggFileSizeFromXfer);
                                 if(params->deadlineForStonewalling){
                                   fprintf(out_logfile,
                                         "WARNING: maybe caused by deadlineForStonewalling\n");
@@ -312,7 +315,8 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                         }
                 }
         }
-        results[rep].aggFileSizeForBW = results[rep].aggFileSizeFromXfer;
+
+        point->aggFileSizeForBW = point->aggFileSizeFromXfer;
 }
 
 /*
@@ -871,15 +875,15 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
 
         totalTime = reduced[5] - reduced[0];
 
-        double *time = (access == WRITE) ? &test->results[rep].writeTime :
-                                           &test->results[rep].readTime;
+        IOR_point_t *point = (access == WRITE) ? &test->results[rep].write :
+                                                 &test->results[rep].read;
 
-        *time = totalTime;
+        point->time = totalTime;
 
         if (verbose < VERBOSE_0)
                 return;
 
-        bw = (double)test->results[rep].aggFileSizeForBW / totalTime;
+        bw = (double)point->aggFileSizeForBW / totalTime;
         PrintReducedResult(test, access, bw, diff, totalTime, rep);
 }
 
@@ -1312,7 +1316,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[2] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, & results[rep], fd, WRITE, &ioBuffers);
+                        dataMoved = WriteOrRead(params, &results[rep], fd, WRITE, &ioBuffers);
                         if (params->verbose >= VERBOSE_4) {
                           fprintf(out_logfile, "* data moved = %llu\n", dataMoved);
                           fflush(out_logfile);
@@ -1328,12 +1332,12 @@ static void TestIoSys(IOR_test_t *test)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
                         /* get the size of the file just written */
-                        results[rep].aggFileSizeFromStat =
+                        results[rep].write.aggFileSizeFromStat =
                                 backend->get_file_size(params, testComm, testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
-                        CheckFileSize(test, dataMoved, rep);
+                        CheckFileSize(test, dataMoved, rep, WRITE);
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, WRITE);
@@ -1344,7 +1348,7 @@ static void TestIoSys(IOR_test_t *test)
 
                         /* check if in this round we run write with stonewalling */
                         if(params->deadlineForStonewalling > 0){
-                          params->stoneWallingWearOutIterations = results[rep].pairs_accessed;
+                          params->stoneWallingWearOutIterations = results[rep].write.pairs_accessed;
                         }
                 }
 
@@ -1372,7 +1376,7 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
                         fd = backend->open(testFileName, params);
-                        dataMoved = WriteOrRead(params, & results[rep], fd, WRITECHECK, &ioBuffers);
+                        dataMoved = WriteOrRead(params, &results[rep], fd, WRITECHECK, &ioBuffers);
                         backend->close(fd, params);
                         rankOffset = 0;
                 }
@@ -1451,7 +1455,7 @@ static void TestIoSys(IOR_test_t *test)
                                         CurrentTimeString());
                         }
                         timer[2] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, & results[rep], fd, operation_flag, &ioBuffers);
+                        dataMoved = WriteOrRead(params, &results[rep], fd, operation_flag, &ioBuffers);
                         timer[3] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1461,13 +1465,13 @@ static void TestIoSys(IOR_test_t *test)
                         timer[5] = GetTimeStamp();
 
                         /* get the size of the file just read */
-                        results[rep].aggFileSizeFromStat =
+                        results[rep].read.aggFileSizeFromStat =
                                 backend->get_file_size(params, testComm,
                                                        testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
-                        CheckFileSize(test, dataMoved, rep);
+                        CheckFileSize(test, dataMoved, rep, READ);
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, READ);
@@ -1882,6 +1886,8 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
         double startForStonewall;
         int hitStonewall;
+        IOR_point_t *point = ((access == WRITE) || (access == WRITECHECK)) ?
+                             &results->write : &results->read;
 
         /* initialize values */
         pretendRank = (rank + rankOffset) % test->numTasks;
@@ -1910,35 +1916,35 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
           }
           long long data_moved_ll = (long long) dataMoved;
           long long pairs_accessed_min = 0;
-          MPI_CHECK(MPI_Allreduce(& pairCnt, &results->pairs_accessed,
+          MPI_CHECK(MPI_Allreduce(& pairCnt, &point->pairs_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_MAX, testComm), "cannot reduce pairs moved");
           double stonewall_runtime = GetTimeStamp() - startForStonewall;
-          results->stonewall_time = stonewall_runtime;
+          point->stonewall_time = stonewall_runtime;
           MPI_CHECK(MPI_Reduce(& pairCnt, & pairs_accessed_min,
                                   1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "cannot reduce pairs moved");
-          MPI_CHECK(MPI_Reduce(& data_moved_ll, & results->stonewall_min_data_accessed,
+          MPI_CHECK(MPI_Reduce(& data_moved_ll, &point->stonewall_min_data_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "cannot reduce pairs moved");
-          MPI_CHECK(MPI_Reduce(& data_moved_ll, & results->stonewall_avg_data_accessed,
+          MPI_CHECK(MPI_Reduce(& data_moved_ll, &point->stonewall_avg_data_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm), "cannot reduce pairs moved");
 
           if(rank == 0){
             fprintf(out_logfile, "stonewalling pairs accessed min: %lld max: %zu -- min data: %.1f GiB mean data: %.1f GiB time: %.1fs\n",
-             pairs_accessed_min, results->pairs_accessed,
-             results->stonewall_min_data_accessed /1024.0 / 1024 / 1024,  results->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 / test->numTasks , results->stonewall_time);
-             results->stonewall_min_data_accessed *= test->numTasks;
+             pairs_accessed_min, point->pairs_accessed,
+             point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 / test->numTasks , point->stonewall_time);
+             point->stonewall_min_data_accessed *= test->numTasks;
           }
           if(pairs_accessed_min == pairCnt){
-            results->stonewall_min_data_accessed = 0;
-            results->stonewall_avg_data_accessed = 0;
+            point->stonewall_min_data_accessed = 0;
+            point->stonewall_avg_data_accessed = 0;
           }
-          if(pairCnt != results->pairs_accessed){
+          if(pairCnt != point->pairs_accessed){
             // some work needs still to be done !
-            for(; pairCnt < results->pairs_accessed; pairCnt++ ) {
+            for(; pairCnt < point->pairs_accessed; pairCnt++ ) {
                     dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
             }
           }
         }else{
-          results->pairs_accessed = pairCnt;
+          point->pairs_accessed = pairCnt;
         }
 
 

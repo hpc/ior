@@ -204,12 +204,9 @@ typedef struct
     int intraTestBarriers;           /* barriers between open/op and op/close */
 } IOR_param_t;
 
-/* each pointer is to an array, each of length equal to the number of
-   repetitions in the test */
+/* each pointer for a single test */
 typedef struct {
-   double writeTime;
-   double readTime;
-   int    errors;
+   double time;
    size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
 
    double     stonewall_time;
@@ -219,15 +216,20 @@ typedef struct {
    IOR_offset_t aggFileSizeFromStat;
    IOR_offset_t aggFileSizeFromXfer;
    IOR_offset_t aggFileSizeForBW;
+} IOR_point_t;
+
+typedef struct {
+   int          errors;
+   IOR_point_t  write;
+   IOR_point_t  read;
 } IOR_results_t;
 
 /* define the queuing structure for the test parameters */
 typedef struct IOR_test_t {
    IOR_param_t        params;
-   IOR_results_t     *results; /* This is an array of reps times IOR_results_t */
+   IOR_results_t     *results;
    struct IOR_test_t *next;
 } IOR_test_t;
-
 
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
 void AllocResults(IOR_test_t *test);
