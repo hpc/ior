@@ -96,7 +96,6 @@ enum OutputFormat_t{
 #define WRITECHECK         1
 #define READ               2
 #define READCHECK          3
-#define CHECK              4
 
 /* verbosity settings */
 #define VERBOSE_0          0

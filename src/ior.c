@@ -36,6 +36,7 @@
 #include "utilities.h"
 #include "parse_options.h"
 
+#define IOR_NB_TIMERS 6
 
 /* file scope globals */
 extern char **environ;
@@ -48,8 +49,9 @@ static char **ParseFileName(char *, int *);
 static void InitTests(IOR_test_t * , MPI_Comm);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t *);
-static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers);
-static void WriteTimes(IOR_param_t *, double **, int, int);
+static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
+                                void *fd, const int access,
+                                IOR_io_buffers *ioBuffers);
 
 IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out){
         IOR_test_t *tests_head;
@@ -256,32 +258,23 @@ DisplayOutliers(int numTasks,
 /*
  * Check for outliers in start/end times and elapsed create/xfer/close times.
  */
-static void CheckForOutliers(IOR_param_t * test, double **timer, int rep,
-                             int access)
+static void
+CheckForOutliers(IOR_param_t *test, const double *timer, const int access)
 {
-        int shift;
-
-        if (access == WRITE) {
-                shift = 0;
-        } else {                /* READ */
-                shift = 6;
-        }
-
-        DisplayOutliers(test->numTasks, timer[shift + 0][rep],
+        DisplayOutliers(test->numTasks, timer[0],
                         "start time", access, test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[shift + 1][rep] - timer[shift + 0][rep],
+                        timer[1] - timer[0],
                         "elapsed create time", access, test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[shift + 3][rep] - timer[shift + 2][rep],
+                        timer[3] - timer[2],
                         "elapsed transfer time", access,
                         test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[shift + 5][rep] - timer[shift + 4][rep],
+                        timer[5] - timer[4],
                         "elapsed close time", access, test->outlierThreshold);
-        DisplayOutliers(test->numTasks, timer[shift + 5][rep], "end time",
+        DisplayOutliers(test->numTasks, timer[5], "end time",
                         access, test->outlierThreshold);
-
 }
 
 /*
@@ -848,54 +841,46 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
 /*
  * Reduce test results, and show if verbose set.
  */
-
-static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
-                              int access)
+static void
+ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int access)
 {
-  double reduced[12] = { 0 };
-  double diff[6];
-  double *diff_subset;
-  double totalTime;
-  double bw;
-  int i;
-  MPI_Op op;
+        double reduced[IOR_NB_TIMERS] = { 0 };
+        double diff[IOR_NB_TIMERS / 2 + 1];
+        double totalTime;
+        double bw;
+        int i;
+        MPI_Op op;
 
-  assert(access == WRITE || access == READ);
+        assert(access == WRITE || access == READ);
 
         /* Find the minimum start time of the even numbered timers, and the
            maximum finish time for the odd numbered timers */
-        for (i = 0; i < 12; i++) {
+        for (i = 0; i < IOR_NB_TIMERS; i++) {
                 op = i % 2 ? MPI_MAX : MPI_MIN;
-                MPI_CHECK(MPI_Reduce(&timer[i][rep], &reduced[i], 1, MPI_DOUBLE,
+                MPI_CHECK(MPI_Reduce(&timer[i], &reduced[i], 1, MPI_DOUBLE,
                                      op, 0, testComm), "MPI_Reduce()");
         }
 
-        if (rank != 0) {
-    /* Only rank 0 tallies and prints the results. */
-    return;
-  }
+        /* Only rank 0 tallies and prints the results. */
+        if (rank != 0)
+                return;
 
-  /* Calculate elapsed times and throughput numbers */
-  for (i = 0; i < 6; i++) {
-    diff[i] = reduced[2 * i + 1] - reduced[2 * i];
-  }
-  if (access == WRITE) {
-    totalTime = reduced[5] - reduced[0];
-    test->results[rep].writeTime = totalTime;
-    diff_subset = &diff[0];
-  } else { /* READ */
-    totalTime = reduced[11] - reduced[6];
-    test->results[rep].readTime = totalTime;
-    diff_subset = &diff[3];
-  }
+        /* Calculate elapsed times and throughput numbers */
+        for (i = 0; i < IOR_NB_TIMERS / 2; i++)
+                diff[i] = reduced[2 * i + 1] - reduced[2 * i];
 
-        if (verbose < VERBOSE_0) {
-    return;
-  }
+        totalTime = reduced[5] - reduced[0];
 
-  bw = (double)test->results[rep].aggFileSizeForBW / totalTime;
+        double *time = (access == WRITE) ? &test->results[rep].writeTime :
+                                           &test->results[rep].readTime;
 
-  PrintReducedResult(test, access, bw, diff_subset, totalTime, rep);
+        *time = totalTime;
+
+        if (verbose < VERBOSE_0)
+                return;
+
+        bw = (double)test->results[rep].aggFileSizeForBW / totalTime;
+        PrintReducedResult(test, access, bw, diff, totalTime, rep);
 }
 
 /*
@@ -1116,7 +1101,72 @@ static void *HogMemory(IOR_param_t *params)
 
         return buf;
 }
+/*
+ * Write times taken during each iteration of the test.
+ */
+static void
+WriteTimes(IOR_param_t *test, const double *timer, const int iteration,
+           const int access)
+{
+        char timerName[MAX_STR];
 
+        for (int i = 0; i < IOR_NB_TIMERS; i++) {
+
+                if (access == WRITE) {
+                        switch (i) {
+                        case 0:
+                                strcpy(timerName, "write open start");
+                                break;
+                        case 1:
+                                strcpy(timerName, "write open stop");
+                                break;
+                        case 2:
+                                strcpy(timerName, "write start");
+                                break;
+                        case 3:
+                                strcpy(timerName, "write stop");
+                                break;
+                        case 4:
+                                strcpy(timerName, "write close start");
+                                break;
+                        case 5:
+                                strcpy(timerName, "write close stop");
+                                break;
+                        default:
+                                strcpy(timerName, "invalid timer");
+                                break;
+                        }
+                }
+                else {
+                        switch (i) {
+                        case 0:
+                                strcpy(timerName, "read open start");
+                                break;
+                        case 1:
+                                strcpy(timerName, "read open stop");
+                                break;
+                        case 2:
+                                strcpy(timerName, "read start");
+                                break;
+                        case 3:
+                                strcpy(timerName, "read stop");
+                                break;
+                        case 4:
+                                strcpy(timerName, "read close start");
+                                break;
+                        case 5:
+                                strcpy(timerName, "read close stop");
+                                break;
+                        default:
+                                strcpy(timerName, "invalid timer");
+                                break;
+                        }
+                }
+                fprintf(out_logfile, "Test %d: Iter=%d, Task=%d, Time=%f, %s\n",
+                        test->id, iteration, (int)rank, timer[i],
+                        timerName);
+        }
+}
 /*
  * Using the test parameters, run iteration(s) of single test.
  */
@@ -1125,10 +1175,10 @@ static void TestIoSys(IOR_test_t *test)
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
         char testFileName[MAX_STR];
-        double *timer[12];
+        double timer[IOR_NB_TIMERS];
         double startTime;
         int pretendRank;
-        int i, rep;
+        int rep;
         void *fd;
         MPI_Group orig_group, new_group;
         int range[3];
@@ -1174,13 +1224,6 @@ static void TestIoSys(IOR_test_t *test)
                 fflush(out_logfile);
         }
         params->tasksPerNode = CountTasksPerNode(testComm);
-
-        /* setup timers */
-        for (i = 0; i < 12; i++) {
-                timer[i] = (double *)malloc(params->repetitions * sizeof(double));
-                if (timer[i] == NULL)
-                        ERR("malloc failed");
-        }
 
         /* bind I/O calls to specific API */
         backend = aiori_select(params->api);
@@ -1257,9 +1300,9 @@ static void TestIoSys(IOR_test_t *test)
                         params->stoneWallingWearOutIterations = params_saved_wearout;
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = WRITE;
-                        timer[0][rep] = GetTimeStamp();
+                        timer[0] = GetTimeStamp();
                         fd = backend->create(testFileName, params);
-                        timer[1][rep] = GetTimeStamp();
+                        timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
@@ -1268,20 +1311,20 @@ static void TestIoSys(IOR_test_t *test)
                                         "Commencing write performance test: %s",
                                         CurrentTimeString());
                         }
-                        timer[2][rep] = GetTimeStamp();
+                        timer[2] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, & results[rep], fd, WRITE, &ioBuffers);
                         if (params->verbose >= VERBOSE_4) {
                           fprintf(out_logfile, "* data moved = %llu\n", dataMoved);
                           fflush(out_logfile);
                         }
-                        timer[3][rep] = GetTimeStamp();
+                        timer[3] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
-                        timer[4][rep] = GetTimeStamp();
+                        timer[4] = GetTimeStamp();
                         backend->close(fd, params);
 
-                        timer[5][rep] = GetTimeStamp();
+                        timer[5] = GetTimeStamp();
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
                         /* get the size of the file just written */
@@ -1296,7 +1339,7 @@ static void TestIoSys(IOR_test_t *test)
                                 WriteTimes(params, timer, rep, WRITE);
                         ReduceIterResults(test, timer, rep, WRITE);
                         if (params->outlierThreshold) {
-                                CheckForOutliers(params, timer, rep, WRITE);
+                                CheckForOutliers(params, timer, WRITE);
                         }
 
                         /* check if in this round we run write with stonewalling */
@@ -1396,9 +1439,9 @@ static void TestIoSys(IOR_test_t *test)
                         DelaySecs(params->interTestDelay);
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = READ;
-                        timer[6][rep] = GetTimeStamp();
+                        timer[0] = GetTimeStamp();
                         fd = backend->open(testFileName, params);
-                        timer[7][rep] = GetTimeStamp();
+                        timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
@@ -1407,15 +1450,15 @@ static void TestIoSys(IOR_test_t *test)
                                         "Commencing read performance test: %s",
                                         CurrentTimeString());
                         }
-                        timer[8][rep] = GetTimeStamp();
+                        timer[2] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, & results[rep], fd, operation_flag, &ioBuffers);
-                        timer[9][rep] = GetTimeStamp();
+                        timer[3] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
-                        timer[10][rep] = GetTimeStamp();
+                        timer[4] = GetTimeStamp();
                         backend->close(fd, params);
-                        timer[11][rep] = GetTimeStamp();
+                        timer[5] = GetTimeStamp();
 
                         /* get the size of the file just read */
                         results[rep].aggFileSizeFromStat =
@@ -1430,7 +1473,7 @@ static void TestIoSys(IOR_test_t *test)
                                 WriteTimes(params, timer, rep, READ);
                         ReduceIterResults(test, timer, rep, READ);
                         if (params->outlierThreshold) {
-                                CheckForOutliers(params, timer, rep, READ);
+                                CheckForOutliers(params, timer, READ);
                         }
                 }
 
@@ -1465,9 +1508,6 @@ static void TestIoSys(IOR_test_t *test)
 
         if (hog_buf != NULL)
                 free(hog_buf);
-        for (i = 0; i < 12; i++) {
-                free(timer[i]);
-        }
 
         /* Sync with the tasks that did not participate in this test */
         MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
@@ -1831,7 +1871,8 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
  * Write or Read data to file(s).  This loops through the strides, writing
  * out the data to each block in transfer sizes, until the remainder left is 0.
  */
-static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers)
+static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
+                                void *fd, const int access, IOR_io_buffers *ioBuffers)
 {
         int errors = 0;
         IOR_offset_t transferCount = 0;
@@ -1909,74 +1950,4 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                 backend->fsync(fd, test);       /*fsync after all accesses */
         }
         return (dataMoved);
-}
-
-/*
- * Write times taken during each iteration of the test.
- */
-static void
-WriteTimes(IOR_param_t * test, double **timer, int iteration, int writeOrRead)
-{
-        char accessType[MAX_STR];
-        char timerName[MAX_STR];
-        int i, start = 0, stop = 0;
-
-        if (writeOrRead == WRITE) {
-                start = 0;
-                stop = 6;
-                strcpy(accessType, "WRITE");
-        } else if (writeOrRead == READ) {
-                start = 6;
-                stop = 12;
-                strcpy(accessType, "READ");
-        } else {
-                ERR("incorrect WRITE/READ option");
-        }
-
-        for (i = start; i < stop; i++) {
-                switch (i) {
-                case 0:
-                        strcpy(timerName, "write open start");
-                        break;
-                case 1:
-                        strcpy(timerName, "write open stop");
-                        break;
-                case 2:
-                        strcpy(timerName, "write start");
-                        break;
-                case 3:
-                        strcpy(timerName, "write stop");
-                        break;
-                case 4:
-                        strcpy(timerName, "write close start");
-                        break;
-                case 5:
-                        strcpy(timerName, "write close stop");
-                        break;
-                case 6:
-                        strcpy(timerName, "read open start");
-                        break;
-                case 7:
-                        strcpy(timerName, "read open stop");
-                        break;
-                case 8:
-                        strcpy(timerName, "read start");
-                        break;
-                case 9:
-                        strcpy(timerName, "read stop");
-                        break;
-                case 10:
-                        strcpy(timerName, "read close start");
-                        break;
-                case 11:
-                        strcpy(timerName, "read close stop");
-                        break;
-                default:
-                        strcpy(timerName, "invalid timer");
-                        break;
-                }
-                fprintf(out_logfile, "Test %d: Iter=%d, Task=%d, Time=%f, %s\n",
-                        test->id, iteration, (int)rank, timer[i][iteration],
-                        timerName);
-        }
 }

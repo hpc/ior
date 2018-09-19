@@ -11,8 +11,6 @@
 
 extern char **environ;
 
-static struct results *bw_values(int reps, IOR_results_t * measured, int offset, double *vals);
-static struct results *ops_values(int reps, IOR_results_t * measured, int offset, IOR_offset_t transfer_size, double *vals);
 static double mean_of_array_of_doubles(double *values, int len);
 static void PPDouble(int leftjustify, double number, char *append);
 static void PrintNextToken();
@@ -456,7 +454,55 @@ void ShowSetup(IOR_param_t *params)
   fflush(out_resultfile);
 }
 
+static struct results *bw_ops_values(const int reps, IOR_results_t *measured,
+                                     const int offset, IOR_offset_t transfer_size,
+                                     const double *vals)
+{
+        struct results *r;
+        int i;
 
+        r = (struct results *)malloc(sizeof(struct results)
+                                     + (reps * sizeof(double)));
+        if (r == NULL)
+                ERR("malloc failed");
+        r->val = (double *)&r[1];
+
+        for (i = 0; i < reps; i++, measured++) {
+                r->val[i] = (double) *((IOR_offset_t*) ((char*)measured + offset))
+                            / transfer_size / vals[i];
+
+                if (i == 0) {
+                        r->min = r->val[i];
+                        r->max = r->val[i];
+                        r->sum = 0.0;
+                }
+                r->min = MIN(r->min, r->val[i]);
+                r->max = MAX(r->max, r->val[i]);
+                r->sum += r->val[i];
+        }
+        r->mean = r->sum / reps;
+        r->var = 0.0;
+        for (i = 0; i < reps; i++) {
+                r->var += pow((r->mean - r->val[i]), 2);
+        }
+        r->var = r->var / reps;
+        r->sd = sqrt(r->var);
+
+        return r;
+}
+
+static struct results *bw_values(const int reps, IOR_results_t *measured,
+                                 const int offset, const double *vals)
+{
+        return bw_ops_values(reps, measured, offset, 1, vals);
+}
+
+static struct results *ops_values(const int reps, IOR_results_t *measured,
+                                  const int offset, IOR_offset_t transfer_size,
+                                  const double *vals)
+{
+        return bw_ops_values(reps, measured, offset, transfer_size, vals);
+}
 
 /*
  * Summarize results
@@ -734,78 +780,6 @@ static void PPDouble(int leftjustify, double number, char *append)
 
         fprintf(out_resultfile, format, number, append);
 }
-
-
-
-static struct results *bw_values(int reps, IOR_results_t * measured, int offset, double *vals)
-{
-        struct results *r;
-        int i;
-
-        r = (struct results *) malloc(sizeof(struct results) + (reps * sizeof(double)));
-        if (r == NULL)
-                ERR("malloc failed");
-        r->val = (double *)&r[1];
-
-        for (i = 0; i < reps; i++, measured++) {
-
-                r->val[i] = (double) *((IOR_offset_t*) ((char*)measured + offset)) / vals[i];
-                if (i == 0) {
-                        r->min = r->val[i];
-                        r->max = r->val[i];
-                        r->sum = 0.0;
-                }
-                r->min = MIN(r->min, r->val[i]);
-                r->max = MAX(r->max, r->val[i]);
-                r->sum += r->val[i];
-        }
-        r->mean = r->sum / reps;
-        r->var = 0.0;
-        for (i = 0; i < reps; i++) {
-                r->var += pow((r->mean - r->val[i]), 2);
-        }
-        r->var = r->var / reps;
-        r->sd = sqrt(r->var);
-
-        return r;
-}
-
-static struct results *ops_values(int reps, IOR_results_t * measured, int offset,
-                                  IOR_offset_t transfer_size,
-                                  double *vals)
-{
-        struct results *r;
-        int i;
-
-        r = (struct results *)malloc(sizeof(struct results)
-                                     + (reps * sizeof(double)));
-        if (r == NULL)
-                ERR("malloc failed");
-        r->val = (double *)&r[1];
-
-        for (i = 0; i < reps; i++, measured++) {
-                r->val[i] = (double) *((IOR_offset_t*) ((char*)measured + offset))
-                    / transfer_size / vals[i];
-                if (i == 0) {
-                        r->min = r->val[i];
-                        r->max = r->val[i];
-                        r->sum = 0.0;
-                }
-                r->min = MIN(r->min, r->val[i]);
-                r->max = MAX(r->max, r->val[i]);
-                r->sum += r->val[i];
-        }
-        r->mean = r->sum / reps;
-        r->var = 0.0;
-        for (i = 0; i < reps; i++) {
-                r->var += pow((r->mean - r->val[i]), 2);
-        }
-        r->var = r->var / reps;
-        r->sd = sqrt(r->var);
-
-        return r;
-}
-
 
 static double mean_of_array_of_doubles(double *values, int len)
 {
