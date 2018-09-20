@@ -2187,7 +2187,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'e', NULL,        "bytes to read from each file", OPTION_OPTIONAL_ARGUMENT, 'l', & read_bytes},
       {'f', NULL,        "first number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & first},
       {'F', NULL,        "perform test on files only (no directories)", OPTION_FLAG, 'd', & files_only},
-      {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'i', & iterations},
+      {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & iterations},
       {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & items_per_dir},
       {'l', NULL,        "last number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & last},
       {'L', NULL,        "files only at leaf level of tree", OPTION_FLAG, 'd', & leaf_only},

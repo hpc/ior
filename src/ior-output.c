@@ -612,8 +612,8 @@ void PrintShortSummary(IOR_test_t * test)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
-        double max_write = 0.0;
-        double max_read = 0.0;
+        double max_write_bw = 0.0;
+        double max_read_bw = 0.0;
         double bw;
         int reps;
         int i;
@@ -625,33 +625,31 @@ void PrintShortSummary(IOR_test_t * test)
 
         reps = params->repetitions;
 
-        max_write = results[0].writeTime;
-        max_read = results[0].readTime;
         for (i = 0; i < reps; i++) {
                 bw = (double)results[i].aggFileSizeForBW / results[i].writeTime;
-                max_write = MAX(bw, max_write);
+                max_write_bw = MAX(bw, max_write_bw);
                 bw = (double)results[i].aggFileSizeForBW / results[i].readTime;
-                max_read = MAX(bw, max_read);
+                max_read_bw = MAX(bw, max_read_bw);
         }
 
         if(outputFormat == OUTPUT_DEFAULT){
           if (params->writeFile) {
                   fprintf(out_resultfile, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
-                          max_write/MEBIBYTE, max_write/MEGABYTE);
+                          max_write_bw/MEBIBYTE, max_write_bw/MEGABYTE);
           }
           if (params->readFile) {
                   fprintf(out_resultfile, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
-                          max_read/MEBIBYTE, max_read/MEGABYTE);
+                          max_read_bw/MEBIBYTE, max_read_bw/MEGABYTE);
           }
         }else if (outputFormat == OUTPUT_JSON){
           PrintNamedSectionStart("max");
           if (params->writeFile) {
-            PrintKeyValDouble("writeMiB", max_write/MEBIBYTE);
-            PrintKeyValDouble("writeMB", max_write/MEGABYTE);
+            PrintKeyValDouble("writeMiB", max_write_bw/MEBIBYTE);
+            PrintKeyValDouble("writeMB", max_write_bw/MEGABYTE);
           }
           if (params->readFile) {
-            PrintKeyValDouble("readMiB", max_read/MEBIBYTE);
-            PrintKeyValDouble("readMB", max_read/MEGABYTE);
+            PrintKeyValDouble("readMiB", max_read_bw/MEBIBYTE);
+            PrintKeyValDouble("readMB", max_read_bw/MEGABYTE);
           }
           PrintEndSection();
         }
