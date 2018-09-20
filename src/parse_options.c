@@ -88,9 +88,8 @@ static void CheckRunSettings(IOR_test_t *tests)
                  * (We assume int-valued params are exclusively 0 or 1.)
                  */
                 if ((params->openFlags & IOR_RDWR)
-                    && ((params->readFile | params->checkRead)
-                        ^ (params->writeFile | params->checkWrite))
-                    && (params->openFlags & IOR_RDWR)) {
+                    && ((params->readFile | params->checkRead | params->checkWrite)
+                        ^ params->writeFile)) {
 
                         params->openFlags &= ~(IOR_RDWR);
                         if (params->readFile | params->checkRead) {
@@ -100,7 +99,6 @@ static void CheckRunSettings(IOR_test_t *tests)
                         else
                                 params->openFlags |= IOR_WRONLY;
                 }
-
         }
 }
 
