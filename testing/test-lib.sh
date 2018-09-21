@@ -1,18 +1,21 @@
 # Test script for basic IOR functionality testing various patterns
-# It is kept as simple as possible and outputs the parameters used such that any test can be rerun easily.
+# It is kept as simple as possible and outputs the parameters used such that any
+# test can be rerun easily.
 
-# You can override the defaults by setting the variables before invoking the script, or simply set them here...
+# You can override the defaults by setting the variables before invoking the
+# script, or simply set them here...
 # Example: export IOR_EXTRA="-v -v -v"
 
 IOR_MPIRUN=${IOR_MPIRUN:-mpiexec -np}
-IOR_BIN_DIR=${IOR_BIN_DIR:-./build/src}
-IOR_OUT=${IOR_OUT:-./build/test}
+IOR_BIN_DIR=${IOR_BIN_DIR:-./src}
+IOR_OUT=${IOR_OUT:-./test_logs}
+IOR_TMP=${IOR_TMP:-/dev/shm}
 IOR_EXTRA=${IOR_EXTRA:-} # Add global options like verbosity
 MDTEST_EXTRA=${MDTEST_EXTRA:-}
 
 ################################################################################
 mkdir -p ${IOR_OUT}
-mkdir -p /dev/shm/mdest
+mkdir -p ${IOR_TMP}/mdest
 
 ## Sanity check
 
@@ -36,8 +39,8 @@ I=0
 function IOR(){
   RANKS=$1
   shift
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} ${IOR_EXTRA} -o /dev/shm/ior"
-  $WHAT 1>${IOR_OUT}/$I 2>&1
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} ${IOR_EXTRA} -o ${IOR_TMP}/ior"
+  $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
     ERRORS=$(($ERRORS + 1))
@@ -51,8 +54,8 @@ function IOR(){
 function MDTEST(){
   RANKS=$1
   shift
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} ${MDTEST_EXTRA} -d /dev/shm/mdest"
-  $WHAT 1>${IOR_OUT}/$I 2>&1
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} ${MDTEST_EXTRA} -d ${IOR_TMP}/mdest"
+  $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
     ERRORS=$(($ERRORS + 1))
