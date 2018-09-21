@@ -78,7 +78,7 @@ version = u'3.2'
 # The full version, including alpha/beta/rc tags.
 release = u'3.2.0'
 
-for line in open(os.path.join('..', '..', 'META', 'r')):
+for line in open(os.path.join('..', '..', 'META'), 'r'):
     key, value = line.split(None, 1)
     if key == "Package:":
         project = value
