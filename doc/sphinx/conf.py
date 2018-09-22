@@ -64,9 +64,9 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'IOR'
-copyright = u'2017, IOR'
-author = u'IOR'
+project = u'ior'
+copyright = u'2018, The Regents of the University of California'
+author = u'The IOR Developer Community'
        
 
 # The version info for the project you're documenting, acts as replacement for
@@ -197,7 +197,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'IOR', u'IOR Documentation',
-     author, 'IOR', 'One line description of project.',
+     author, 'IOR', 'IOR/mdtest Parallel I/O Benchmarks',
      'Miscellaneous'),
 ]
 
