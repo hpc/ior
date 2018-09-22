@@ -16,7 +16,9 @@ normal parameters override each other, so the last one executed.
 
 Command line options
 --------------------
-These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
+
+These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``).
+
   -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]
   -A N  refNum -- user reference number to include in long summary
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
@@ -69,283 +71,265 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -Z    reorderTasksRandom -- changes task ordering to random ordering for readback
 
 
-NOTES: * S is a string, N is an integer number.
-       * For transfer and block sizes, the case-insensitive K, M, and G
-         suffices are recognized.  I.e., '4k' or '4K' is accepted as 4096.
+* S is a string, N is an integer number.
+
+* For transfer and block sizes, the case-insensitive K, M, and G
+  suffices are recognized.  I.e., '4k' or '4K' is accepted as 4096.
 
 
 Directive Options
 ------------------
-For each of the general settings, note the default is shown in brackets.
-IMPORTANT NOTE: For all true/false options below [1]=true, [0]=false
-IMPORTANT NOTE: Contrary to appearance, the script options below are NOT case sensitive
 
+For all true/false options below, [1]=true, [0]=false.  All options are case-insensitive.
 
-GENERAL:
+GENERAL
 ^^^^^^^^^^^^^^
-  * refNum               - user supplied reference number, included in
-                           long summary [0]
 
-  * api                  - must be set to one of POSIX, MPIIO, HDF5, HDFS, S3,
-                           S3_EMC, or NCMPI, depending on test [POSIX]
+  * ``refNum`` - user supplied reference number, included in long summary
+    (default: 0)
 
-  * testFile             - name of the output file [testFile]
-                           NOTE: with filePerProc set, the tasks can round
-                                 robin across multiple file names '-o S@S@S'
+  * ``api`` - must be set to one of POSIX, MPIIO, HDF5, HDFS, S3, S3_EMC, NCMPI,
+    IME, MMAP, or RAODS depending on test (default: ``POSIX``)
 
-  * hintsFileName        - name of the hints file []
+  * ``testFile`` - name of the output file [testFile].  With ``filePerProc`` set,
+    the tasks can round robin across multiple file names via ``-o S@S@S``.
+    If only a single file name is specified in this case, IOR appends the MPI
+    rank to the end of each file generated (e.g., ``testFile.00000059``)
+    (default: ``testFile``)
 
-  * repetitions          - number of times to run each test [1]
+  * ``hintsFileName`` - name of the hints file (default: none)
 
-  * multiFile            - creates multiple files for single-shared-file or
-                           file-per-process modes; i.e. each iteration creates
-                           a new file [0=FALSE]
+  * ``repetitions`` - number of times to run each test (default: 1)
 
-  * reorderTasksConstant - reorders tasks by a constant node offset for writing/reading neighbor's
-                           data from different nodes [0=FALSE]
+  * ``multiFile`` - creates multiple files for single-shared-file or
+    file-per-process modes for each iteration (default: 0)
 
-  * taskPerNodeOffset    - for read tests. Use with -C & -Z options. [1]
-                           With reorderTasks, constant N. With reordertasksrandom, >= N
+  * ``reorderTasksConstant`` - reorders tasks by a constant node offset for
+    writing/reading neighbor's data from different nodes (default: 0)
 
-  * reorderTasksRandom   - reorders tasks to random ordering for readback [0=FALSE]
+  * ``taskPerNodeOffset`` - for read tests. Use with ``-C`` and ``-Z`` options.
+    With ``reorderTasks``, constant N. With ``reordertasksrandom``, >= N
+    (default: 1)
 
-  * reorderTasksRandomSeed - random seed for reordertasksrandom option. [0]
-                              >0, same seed for all iterations. <0, different seed for each iteration
+  * ``reorderTasksRandom`` - reorders tasks to random ordering for read tests
+    (default: 0)
 
-  * quitOnError          - upon error encountered on checkWrite or checkRead,
-                           display current error and then stop execution;
-                           if not set, count errors and continue [0=FALSE]
+  * ``reorderTasksRandomSeed`` - random seed for ``reordertasksrandom`` option. (default: 0)
+        * When > 0, use the same seed for all iterations
+        * When < 0, different seed for each iteration
 
-  * numTasks             - number of tasks that should participate in the test
-                           [0]
-                           NOTE: 0 denotes all tasks
+  * ``quitOnError`` - upon error encountered on ``checkWrite`` or ``checkRead``,
+    display current error and then stop execution.  Otherwise, count errors and
+    continue (default: 0)
 
-  * interTestDelay       - this is the time in seconds to delay before
-                           beginning a write or read in a series of tests [0]
-                           NOTE: it does not delay before a check write or
-                           check read
+  * ``numTasks`` - number of tasks that should participate in the test.  0
+    denotes all tasks.  (default: 0)
 
-  * outlierThreshold     - gives warning if any task is more than this number
-                           of seconds from the mean of all participating tasks.
-                           If so, the task is identified, its time (start,
-                           elapsed create, elapsed transfer, elapsed close, or
-                           end) is reported, as is the mean and standard
-                           deviation for all tasks.  The default for this is 0,
-                           which turns it off.  If set to a positive value, for
-                           example 3, any task not within 3 seconds of the mean
-                           displays its times. [0]
+  * ``interTestDelay`` - time (in seconds) to delay before beginning a write or
+    read phase in a series of tests This does not delay before check-write or
+    check-read phases.  (default: 0)
 
-  * intraTestBarriers    - use barrier between open, write/read, and close [0=FALSE]
+  * ``outlierThreshold`` - gives warning if any task is more than this number of
+    seconds from the mean of all participating tasks.  The warning includes the
+    offending task, its timers (start, elapsed create, elapsed transfer, elapsed
+    close, end), and the mean and standard deviation for all tasks.  When zero,
+    disable this feature. (default: 0)
 
-  * uniqueDir            - create and use unique directory for each
-                           file-per-process [0=FALSE]
+  * ``intraTestBarriers`` - use barrier between open, write/read, and close
+    phases (default: 0)
 
-  * writeFile            - writes file(s), first deleting any existing file [1=TRUE]
-                           NOTE: the defaults for writeFile and readFile are
-                                 set such that if there is not at least one of
-                                 the following -w, -r, -W, or -R, it is assumed
-                                 that -w and -r are expected and are
-                                 consequently used -- this is only true with
-                                 the command line, and may be overridden in
-                                 a script
+  * ``uniqueDir`` - create and use unique directory for each file-per-process
+    (default: 0)
 
-  * readFile             - reads existing file(s) (from current or previous
-                           run) [1=TRUE]
-                           NOTE: see writeFile notes
+  * ``writeFile`` - write file(s), first deleting any existing file.
+    The defaults for ``writeFile`` and ``readFile`` are set such that if there
+    is not at least one of ``-w``, ``-r``, ``-W``, or ``-R``, ``-w`` and ``-r``
+    are enabled.  If either ``writeFile`` or ``readFile`` are explicitly
+    enabled, though, its complement is *not* also implicitly enabled.
 
-  * filePerProc          - accesses a single file for each processor; default
-                           is a single file accessed by all processors [0=FALSE]
+  * ``readFile`` - reads existing file(s) as specified by the ``testFile``
+    option.  The defaults for ``writeFile`` and ``readFile`` are set such that
+    if there is not at least one of ``-w``, ``-r``, ``-W``, or ``-R``, ``-w``
+    and ``-r`` are enabled.  If either ``writeFile`` or ``readFile`` are
+    explicitly enabled, though, its complement is *not* also implicitly enabled.
 
-  * checkWrite           - read data back and check for errors against known
-                           pattern; can be used independently of writeFile [0=FALSE]
-                           NOTES: - data checking is not timed and does not
-                                    affect other performance timings
-                                  - all errors tallied and returned as program
-                                    exit code, unless quitOnError set
+  * ``filePerProc`` - have each MPI process perform I/O to a unique file
+    (default: 0)
 
-  * checkRead            - reread data and check for errors between reads; can
-                           be used independently of readFile [0=FALSE]
-                           NOTE: see checkWrite notes
+  * ``checkWrite`` - read data back and check for errors against known pattern.
+    Can be used independently of ``writeFile``.  Data checking is not timed and
+    does not affect other performance timings.  All errors detected are tallied
+    and returned as the program exit code unless ``quitOnError`` is set.
+    (default: 0)
 
-  * keepFile             - stops removal of test file(s) on program exit [0=FALSE]
+  * ``checkRead`` - re-read data and check for errors between reads.  Can be
+    used independently of ``readFile``.  Data checking is not timed and does not
+    affect other performance timings.  All errors detected are tallied and
+    returned as the program exit code unless ``quitOnError`` is set.
+    (default: 0)
 
-  * keepFileWithError    - ensures that with any error found in data-checking,
-                           the error-filled file(s) will not be deleted [0=FALSE]
+  * ``keepFile`` - do not remove test file(s) on program exit (default: 0)
 
-  * useExistingTestFile  - do not remove test file before write access [0=FALSE]
+  * ``keepFileWithError`` - do not delete any files containing errors if
+    detected during read-check or write-check phases. (default: 0)
 
-  * segmentCount         - number of segments in file [1]
-                           NOTES: - a segment is a contiguous chunk of data
-                                    accessed by multiple clients each writing/
-                                    reading their own contiguous data;
-                                    comprised of blocks accessed by multiple
-                                    clients
-                                  - with HDF5 this repeats the pattern of an
-                                    entire shared dataset
+  * ``useExistingTestFile`` - do not remove test file(s) before write phase
+    (default: 0)
 
-  * blockSize            - size (in bytes) of a contiguous chunk of data
-                           accessed by a single client; it is comprised of one
-                           or more transfers [1048576]
+  * ``segmentCount`` - number of segments in file, where a segment is a
+    contiguous chunk of data accessed by multiple clients each writing/reading
+    their own contiguous data (blocks).  The exact semantics of segments
+    depend on the API used; for example, HDF5 repeats the pattern of an entire
+    shared dataset. (default: 1)
 
-  * transferSize         - size (in bytes) of a single data buffer to be
-                           transferred in a single I/O call [262144]
+  * ``blockSize`` - size (in bytes) of a contiguous chunk of data accessed by a
+    single client.  It is comprised of one or more transfers (default: 1048576)
 
-  * verbose              - output information [0]
-                           NOTE: this can be set to levels 0-5 on the command
-                                 line; repeating the -v flag will increase
-                                 verbosity level
+  * ``transferSize`` - size (in bytes) of a single data buffer to be transferred
+    in a single I/O call (default: 262144)
 
-  * setTimeStampSignature - set value for time stamp signature [0]
-                            NOTE: used to rerun tests with the exact data
-                                  pattern by setting data signature to contain
-                                  positive integer value as timestamp to be
-                                  written in data file; if set to 0, is
-                                  disabled
+  * ``verbose`` - output more information about what IOR is doing.  Can be set
+    to levels 0-5; repeating the -v flag will increase verbosity level.
+    (default: 0)
 
-  * showHelp             - display options and help [0=FALSE]
+  * ``setTimeStampSignature`` - Value to use for the time stamp signature.  Used
+    to rerun tests with the exact data pattern by setting data signature to
+    contain positive integer value as timestamp to be written in data file; if
+    set to 0, is disabled (default: 0)
 
-  * storeFileOffset      - use file offset as stored signature when writing
-                           file [0=FALSE]
-                           NOTE: this will affect performance measurements
+  * ``showHelp`` - display options and help (default: 0)
 
-  * memoryPerNode        - Allocate memory on each node to simulate real
-                           application memory usage.  Accepts a percentage of
-                           node memory (e.g. "50%") on machines that support
-                           sysconf(_SC_PHYS_PAGES) or a size.  Allocation will
-                           be split between tasks that share the node.
+  * ``storeFileOffset`` - use file offset as stored signature when writing file.
+    This will affect performance measurements (default: 0)
 
-  * memoryPerTask        - Allocate secified amount of memory per task to
-                           simulate real application memory usage.
+  * ``memoryPerNode`` - allocate memory on each node to simulate real
+    application memory usage or restrict page cache size.  Accepts a percentage
+    of node memory (e.g. ``50%``) on systems that support
+    ``sysconf(_SC_PHYS_PAGES)`` or a size.  Allocation will be split between
+    tasks that share the node. (default: 0)
 
-  * maxTimeDuration      - max time in minutes to run tests [0]
-                           NOTES: * setting this to zero (0) unsets this option
-                                  * this option allows the current read/write
-                                    to complete without interruption
+  * ``memoryPerTask`` - allocate specified amount of memory (in bytes) per task
+    to simulate real application memory usage. (default: 0)
 
-  * deadlineForStonewalling - seconds before stopping write or read phase [0]
-                           NOTES: - used for measuring the amount of data moved
-                                    in a fixed time.  After the barrier, each
-                                    task starts its own timer, begins moving
-                                    data, and the stops moving data at a pre-
-                                    arranged time.  Instead of measuring the
-                                    amount of time to move a fixed amount of
-                                    data, this option measures the amount of
-                                    data moved in a fixed amount of time.  The
-                                    objective is to prevent tasks slow to
-                                    complete from skewing the performance.
-                                  - setting this to zero (0) unsets this option
-                                  - this option is incompatible w/data checking
+  * ``maxTimeDuration`` - max time (in minutes) to run all tests.  Any current
+    read/write phase is not interrupted; only future I/O phases are cancelled
+    once this time is exceeded.  Value of zero unsets disables. (default: 0)
 
-  * randomOffset         - access is to random, not sequential, offsets within a file [0=FALSE]
-                           NOTES: - this option is currently incompatible with:
-                                    -checkRead
-                                    -storeFileOffset
-                                    -MPIIO collective or useFileView
-                                    -HDF5 or NCMPI
-  * summaryAlways        - Always print the long summary for each test.
-                           Useful for long runs that may be interrupted, preventing
-                           the final long summary for ALL tests to be printed.
+  * ``deadlineForStonewalling`` - seconds before stopping write or read phase.
+    Used for measuring the amount of data moved in a fixed time.  After the
+    barrier, each task starts its own timer, begins moving data, and the stops
+    moving data at a pre-arranged time.  Instead of measuring the amount of time
+    to move a fixed amount of data, this option measures the amount of data
+    moved in a fixed amount of time.  The objective is to prevent straggling
+    tasks slow from skewing the performance.  This option is incompatible with
+    read-check and write-check modes.  Value of zero unsets this option.
+    (default: 0)
 
+  * ``randomOffset`` - randomize access offsets within test file(s).  Currently
+    incompatible with ``checkRead``, ``storeFileOffset``, MPIIO ``collective``
+    and ``useFileView``, and HDF5 and NCMPI APIs. (default: 0)
+
+  * ``summaryAlways`` - Always print the long summary for each test even if the job is interrupted. (default: 0)
 
 POSIX-ONLY
 ^^^^^^^^^^
-  * useO_DIRECT          - use O_DIRECT for POSIX, bypassing I/O buffers [0]
 
-  * singleXferAttempt    - will not continue to retry transfer entire buffer
-                           until it is transferred [0=FALSE]
-                           NOTE: when performing a write() or read() in POSIX,
-                                 there is no guarantee that the entire
-                                 requested size of the buffer will be
-                                 transferred; this flag keeps the retrying a
-                                 single transfer until it completes or returns
-                                 an error
+  * ``useO_DIRECT`` - use direct I/ for POSIX, bypassing I/O buffers (default: 0)
 
-  * fsyncPerWrite        - perform fsync after each POSIX write  [0=FALSE]
-  * fsync                - perform fsync after POSIX write close [0=FALSE]
+  * ``singleXferAttempt``    - do not continue to retry transfer entire buffer
+    until it is transferred.  When performing a write() or read() in POSIX,
+    there is no guarantee that the entire requested size of the buffer will be
+    transferred; this flag keeps the retrying a single transfer until it
+    completes or returns an error (default: 0)
+
+  * ``fsyncPerWrite`` - perform fsync after each POSIX write (default: 0)
+
+  * ``fsync`` - perform fsync after POSIX file close (default: 0)
 
 MPIIO-ONLY
 ^^^^^^^^^^
-  * preallocate          - preallocate the entire file before writing [0=FALSE]
 
-  * useFileView          - use an MPI datatype for setting the file view option
-                           to use individual file pointer [0=FALSE]
-                           NOTE: default IOR uses explicit file pointers
+  * ``preallocate`` - preallocate the entire file before writing (default: 0)
 
-  * useSharedFilePointer - use a shared file pointer [0=FALSE] (not working)
-                           NOTE: default IOR uses explicit file pointers
+  * ``useFileView`` - use an MPI datatype for setting the file view option to
+    use individual file pointer.  Default IOR uses explicit file pointers.
+    (default: 0)
 
-  * useStridedDatatype   - create a datatype (max=2GB) for strided access; akin
-                           to MULTIBLOCK_REGION_SIZE [0] (not working)
+  * ``useSharedFilePointer`` - use a shared file pointer.  Default IOR uses
+    explicit file pointers. (default: 0)
+
+  * ``useStridedDatatype`` - create a datatype (max=2GB) for strided access;
+    akin to ``MULTIBLOCK_REGION_SIZE`` (default: 0)
 
 HDF5-ONLY
 ^^^^^^^^^
-  * individualDataSets   - within a single file each task will access its own
-                           dataset [0=FALSE] (not working)
-                           NOTE: default IOR creates a dataset the size of
-                                 numTasks * blockSize to be accessed by all
-                                 tasks
 
-  * noFill               - no pre-filling of data in HDF5 file creation [0=FALSE]
+  * ``individualDataSets`` - within a single file, each task will access its own
+    dataset.  Default IOR creates a dataset the size of ``numTasks * blockSize``
+    to be accessed by all tasks (default: 0)
 
-  * setAlignment         - HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g) [1]
+  * ``noFill`` - do not pre-fill data in HDF5 file creation (default: 0)
+
+  * ``setAlignment`` - set the HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g) (default: 1)
 
   * collectiveMetadata   - enable HDF5 collective metadata (available since
                            HDF5-1.10.0)
 
 MPIIO-, HDF5-, AND NCMPI-ONLY
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  * collective           - uses collective operations for access [0=FALSE]
 
-  * showHints            - show hint/value pairs attached to open file [0=FALSE]
-                           NOTE: not available in NCMPI
+  * ``collective`` - uses collective operations for access (default: 0)
+
+  * ``showHints`` - show hint/value pairs attached to open file.  Not available
+    for NCMPI. (default: 0)
 
 LUSTRE-SPECIFIC
 ^^^^^^^^^^^^^^^^^
-  * lustreStripeCount    - set the lustre stripe count for the test file(s) [0]
 
-  * lustreStripeSize     - set the lustre stripe size for the test file(s) [0]
+  * ``lustreStripeCount`` - set the Lustre stripe count for the test file(s) (default: 0)
 
-  * lustreStartOST       - set the starting OST for the test file(s) [-1]
+  * ``lustreStripeSize`` - set the Lustre stripe size for the test file(s) (default: 0)
 
-  * lustreIgnoreLocks    - disable lustre range locking [0]
+  * ``lustreStartOST`` - set the starting OST for the test file(s) (default: -1)
+
+  * ``lustreIgnoreLocks`` - disable Lustre range locking (default: 0)
 
 GPFS-SPECIFIC
 ^^^^^^^^^^^^^^
-  * gpfsHintAccess       - use gpfs_fcntl hints to pre-declare accesses
 
-  * gpfsReleaseToken     - immediately after opening or creating file, release
-			   all locks.  Might help mitigate lock-revocation
-			   traffic when many proceses write/read to same file.
+  * ``gpfsHintAccess`` - use ``gpfs_fcntl`` hints to pre-declare accesses (default: 0)
 
-
+  * ``gpfsReleaseToken`` - release all locks immediately after opening or
+    creating file.  Might help mitigate lock-revocation traffic when many
+    proceses write/read to same file. (default: 0)
 
 Verbosity levels
----------------------
-The verbosity of output for IOR can be set with -v.  Increasing the number of
--v instances on a command line sets the verbosity higher.
+----------------
+
+The verbosity of output for IOR can be set with ``-v``.  Increasing the number
+of ``-v`` instances on a command line sets the verbosity higher.
 
 Here is an overview of the information shown for different verbosity levels:
 
-0)  default; only bare essentials shown
-1)  max clock deviation, participating tasks, free space, access pattern,
-    commence/verify access notification w/time
-2)  rank/hostname, machine name, timer used, individual repetition
-    performance results, timestamp used for data signature
-3)  full test details, transfer block/offset compared, individual data
-    checking errors, environment variables, task writing/reading file name,
-    all test operation times
-4)  task id and offset for each transfer
-5)  each 8-byte data signature comparison (WARNING: more data to STDOUT
-    than stored in file, use carefully)
+======  ===================================
+Level   Behavior
+======  ===================================
+  0     default; only bare essentials shown
+  1     max clock deviation, participating tasks, free space, access pattern, commence/verify access notification with time
+  2     rank/hostname, machine name, timer used, individual repetition performance results, timestamp used for data signature
+  3     full test details, transfer block/offset compared, individual data checking errors, environment variables, task writing/reading file name, all test operation times
+  4     task id and offset for each transfer
+  5     each 8-byte data signature comparison (WARNING: more data to STDOUT than stored in file, use carefully)
+======  ===================================
 
 
 Incompressible notes
--------------------------
+--------------------
 Please note that incompressibility is a factor of how large a block compression
-algorithm uses.  The incompressible buffer is filled only once before write times,
-so if the compression algorithm takes in blocks larger than the transfer size,
-there will be compression.  Below are some baselines that I established for
-zip, gzip, and bzip.
+algorithm uses.  The incompressible buffer is filled only once before write
+times, so if the compression algorithm takes in blocks larger than the transfer
+size, there will be compression.  Below are some baselines for zip, gzip, and
+bzip.
 
 1)  zip:  For zipped files, a transfer size of 1k is sufficient.
 
@@ -355,5 +339,5 @@ zip, gzip, and bzip.
     To avoid compression a transfer size of greater than the bzip block size is required
     (default = 900KB). I suggest a transfer size of greather than 1MB to avoid bzip2 compression.
 
-Be aware of the block size your compression algorithm will look at, and adjust the transfer size
-accordingly.
+Be aware of the block size your compression algorithm will look at, and adjust
+the transfer size accordingly.

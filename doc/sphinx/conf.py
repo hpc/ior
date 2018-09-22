@@ -74,7 +74,7 @@ author = u'IOR'
 # built documents.
 #
 # The short X.Y version.
-version = u'3.2'
+version = u'3.2.0'
 # The full version, including alpha/beta/rc tags.
 release = u'3.2.0'
 
@@ -83,7 +83,7 @@ for line in open(os.path.join('..', '..', 'META'), 'r'):
     if key == "Package:":
         project = value
     elif key == "Version:":
-        version = value.rsplit('.', 1)[0]
+        version = value
         release = value
 # We don't use the release field
 #   elif key == "Release:":
