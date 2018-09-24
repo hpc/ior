@@ -63,6 +63,7 @@ extern MPI_Comm testComm;
 
 ior_aiori_t ime_aiori = {
         .name          = "IME",
+        .name_legacy   = "IM",
         .create        = IME_Create,
         .open          = IME_Open,
         .xfer          = IME_Xfer,

@@ -98,6 +98,7 @@ static int HDF5_Access(const char *, int, IOR_param_t *);
 
 ior_aiori_t hdf5_aiori = {
         .name = "HDF5",
+        .name_legacy = NULL,
         .create = HDF5_Create,
         .open = HDF5_Open,
         .xfer = HDF5_Xfer,

@@ -77,6 +77,7 @@ static void POSIX_Fsync(void *, IOR_param_t *);
 
 ior_aiori_t posix_aiori = {
         .name = "POSIX",
+        .name_legacy = NULL,
         .create = POSIX_Create,
         .open = POSIX_Open,
         .xfer = POSIX_Xfer,

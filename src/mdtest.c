@@ -1303,7 +1303,8 @@ void print_help (void) {
     int j;
 
     char APIs[1024];
-    aiori_supported_apis(APIs);
+    char APIs_legacy[1024];
+    aiori_supported_apis(APIs, APIs_legacy);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
 
@@ -2170,7 +2171,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     char * path = "./out";
     int randomize = 0;
     char APIs[1024];
-    aiori_supported_apis(APIs);
+    char APIs_legacy[1024];
+    aiori_supported_apis(APIs, APIs_legacy);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
 
