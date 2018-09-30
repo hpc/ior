@@ -1839,11 +1839,17 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
                   backend->xfer(access, fd, buffer, transfer, test);
           if (amtXferred != transfer)
                   ERR("cannot write to file");
+          if (test->interIODelay > 0){
+            usleep(test->interIODelay);
+          }
   } else if (access == READ) {
           amtXferred =
                   backend->xfer(access, fd, buffer, transfer, test);
           if (amtXferred != transfer)
                   ERR("cannot read from file");
+          if (test->interIODelay > 0){
+            usleep(test->interIODelay);
+          }
   } else if (access == WRITECHECK) {
           memset(checkBuffer, 'a', transfer);
 

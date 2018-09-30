@@ -167,6 +167,8 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->repetitions = atoi(value);
         } else if (strcasecmp(option, "intertestdelay") == 0) {
                 params->interTestDelay = atoi(value);
+        } else if (strcasecmp(option, "interiodelay") == 0) {
+                params->interIODelay = atoi(value);
         } else if (strcasecmp(option, "readfile") == 0) {
                 params->readFile = atoi(value);
         } else if (strcasecmp(option, "writefile") == 0) {

@@ -100,6 +100,7 @@ typedef struct
     int repCounter;                  /* rep counter */
     int multiFile;                   /* multiple files */
     int interTestDelay;              /* delay between reps in seconds */
+    int interIODelay;                /* delay after each I/O in us */
     int open;                        /* flag for writing or reading */
     int readFile;                    /* read of existing file */
     int writeFile;                   /* write of file */

@@ -170,6 +170,8 @@ GENERAL:
                            NOTE: it does not delay before a check write or
                                  check read
 
+  * interIODelay         - this time in us (microseconds) after each I/O simulates computing time.
+
   * outlierThreshold     - gives warning if any task is more than this number
                            of seconds from the mean of all participating tasks.
                            If so, the task is identified, its time (start,
