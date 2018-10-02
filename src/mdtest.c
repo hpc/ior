@@ -2217,34 +2217,12 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
       LAST_OPTION
     };
-    int printhelp = 0;
-    int parsed_options = option_parse(argc, argv, options, & printhelp);
+    airoi_parse_options(argc, argv, options);
 
     backend = aiori_select(backend_name);
     if (NULL == backend) {
         FAIL("Could not find suitable backend to use");
     }
-
-    if(backend->get_options != NULL){
-      option_parse(argc - parsed_options, argv + parsed_options, backend->get_options(), & printhelp);
-    }
-
-    if(printhelp != 0){
-      printf("Usage: %s ", argv[0]);
-
-      option_print_help(options, 0);
-
-      if(backend->get_options != NULL){
-        printf("\nPlugin options for backend %s\n", backend_name);
-        option_print_help(backend->get_options(), 1);
-      }
-      if(printhelp == 1){
-        exit(0);
-      }else{
-        exit(1);
-      }
-    }
-
 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);

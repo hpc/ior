@@ -305,8 +305,6 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->numTasks = atoi(value);
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
-        } else if (strcasecmp(option, "collectiveMetadata") == 0) {
-                params->collective_md = atoi(value);
         } else {
                 if (rank == 0)
                         fprintf(out_logfile, "Unrecognized parameter \"%s\"\n",
@@ -521,8 +519,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         IOR_test_t *tests = NULL;
 
         GetPlatformName(initialTestParams.platform);
-        int printhelp = 0;
-        int parsed_options = option_parse(argc, argv, options, & printhelp);
+        airoi_parse_options(argc, argv, options);
 
         if (toggleG){
           initialTestParams.setTimeStampSignature = toggleG;
@@ -550,33 +547,12 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         if (memoryPerNode){
           initialTestParams.memoryPerNode = NodeMemoryStringToBytes(optarg);
         }
-
         const ior_aiori_t * backend = aiori_select(initialTestParams.api);
         if (backend == NULL)
             ERR_SIMPLE("unrecognized I/O API");
 
         initialTestParams.backend = backend;
         initialTestParams.apiVersion = backend->get_version();
-
-        if(backend->get_options != NULL){
-          option_parse(argc - parsed_options, argv + parsed_options, backend->get_options(), & printhelp);
-        }
-
-        if(printhelp != 0){
-          printf("Usage: %s ", argv[0]);
-
-          option_print_help(options, 0);
-
-          if(backend->get_options != NULL){
-            printf("\nPlugin options for backend %s (%s)\n", initialTestParams.api, backend->get_version());
-            option_print_help(backend->get_options(), 1);
-          }
-          if(printhelp == 1){
-            exit(0);
-          }else{
-            exit(1);
-          }
-        }
 
         if (testscripts){
           tests = ReadConfigScript(testscripts);

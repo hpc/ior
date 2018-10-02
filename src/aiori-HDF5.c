@@ -93,6 +93,7 @@ static char* HDF5_GetVersion();
 static void HDF5_Fsync(void *, IOR_param_t *);
 static IOR_offset_t HDF5_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static int HDF5_Access(const char *, int, IOR_param_t *);
+static option_help * HDF5_get_options();
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -111,6 +112,7 @@ ior_aiori_t hdf5_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = HDF5_Access,
         .stat = aiori_posix_stat,
+        .get_options = HDF5_get_options
 };
 
 static hid_t xferPropList;      /* xfer property list */
@@ -120,7 +122,26 @@ hid_t fileDataSpace;            /* file data space id */
 hid_t memDataSpace;             /* memory data space id */
 int newlyOpenedFile;            /* newly opened file */
 
+/************************** O P T I O N S *****************************/
+struct HDF5_options{
+  int collective_md;
+};
 /***************************** F U N C T I O N S ******************************/
+
+
+static struct HDF5_options o = {
+  .collective_md = 0
+};
+
+static option_help options [] = {
+      {0, "hdf5.collectiveMetadata",        "Use collectiveMetadata (available since HDF5-1.10.0)", OPTION_FLAG, 'd', & o.collective_md},
+      LAST_OPTION
+};
+
+static option_help * HDF5_get_options(){
+  return options;
+}
+
 
 /*
  * Create and open a file through the HDF5 interface.
@@ -229,7 +250,7 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
                    "cannot set alignment");
 
 #ifdef HAVE_H5PSET_ALL_COLL_METADATA_OPS
-        if (param->collective_md) {
+        if (o.collective_md) {
                 /* more scalable metadata */
 
                 HDF5_CHECK(H5Pset_all_coll_metadata_ops(accessPropList, 1),

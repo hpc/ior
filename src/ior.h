@@ -175,7 +175,6 @@ typedef struct
     char*       URI;                 /* "path" to target object */
     size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
     char*       UploadId; /* key for multi-part-uploads */
-    int         collective_md;       /* use collective metatata optimization */
 
     /* RADOS variables */
     rados_t rados_cluster;           /* RADOS cluster handle */
