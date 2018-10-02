@@ -63,6 +63,26 @@ ior_aiori_t *available_aiori[] = {
         NULL
 };
 
+void airoi_parse_options(int argc, char ** argv, option_help * global_options){
+    int airoi_c = aiori_count();
+    options_all opt;
+    opt.module_count = airoi_c + 1;
+    opt.modules = malloc(sizeof(option_module) * (airoi_c + 1));
+    opt.modules[0].prefix = NULL;
+    opt.modules[0].options = global_options;
+    ior_aiori_t **tmp = available_aiori;
+    for (int i=1; *tmp != NULL; ++tmp, i++) {
+      opt.modules[i].prefix = (*tmp)->name;
+      if((*tmp)->get_options != NULL){
+        opt.modules[i].options = (*tmp)->get_options();
+      }else{
+        opt.modules[i].options = NULL;
+      }
+    }
+    option_parse(argc, argv, &opt);
+    free(opt.modules);
+}
+
 void aiori_supported_apis(char * APIs, char * APIs_legacy){
   ior_aiori_t **tmp = available_aiori;
   if(*tmp != NULL){

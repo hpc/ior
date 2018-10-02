@@ -289,8 +289,9 @@ HDF5-ONLY
 
   * setAlignment         - HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g) [1]
 
-  * collectiveMetadata   - enable HDF5 collective metadata (available since
-                           HDF5-1.10.0)
+HDF5-backend options
+^^^^^^^^^^^^^^^^^^^^
+  * -c | --collectiveMetadata   - enable HDF5 collective metadata (available since HDF5-1.10.0)
 
 MPIIO-, HDF5-, AND NCMPI-ONLY
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
