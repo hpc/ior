@@ -6,7 +6,7 @@
 # You can override the defaults by setting the variables before invoking the script, or simply set them here...
 # Example: export IOR_EXTRA="-v -v -v"
 
-ROOT=${0%/*}
+ROOT="$(dirname ${BASH_SOURCE[0]})"
 
 source $ROOT/test-lib.sh
 
