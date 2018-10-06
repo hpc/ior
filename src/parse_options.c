@@ -112,12 +112,17 @@ void DecodeDirective(char *line, IOR_param_t *params)
         char option[MAX_STR];
         char value[MAX_STR];
         int rc;
+        int initialized;
 
         rc = sscanf(line, " %[^=# \t\r\n] = %[^# \t\r\n] ", option, value);
         if (rc != 2 && rank == 0) {
                 fprintf(out_logfile, "Syntax error in configuration options: %s\n",
                         line);
-                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+                MPI_CHECK(MPI_Initialized(&initialized), "MPI_Initialized() error");
+                if (initialized)
+                    MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+                else
+                    exit(-1);
         }
         if (strcasecmp(option, "api") == 0) {
           params->api = strdup(value);
@@ -304,7 +309,11 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 if (rank == 0)
                         fprintf(out_logfile, "Unrecognized parameter \"%s\"\n",
                                 option);
-                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+                MPI_CHECK(MPI_Initialized(&initialized), "MPI_Initialized() error");
+                if (initialized)
+                    MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+                else
+                    exit(-1);
         }
 }
 
