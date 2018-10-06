@@ -1,0 +1,17 @@
+# test to ensure that leading whitespace is ignored
+IOR START
+api=posix
+writeFile =1
+    randomOffset=1
+reorderTasks=1
+  filePerProc=1
+		keepFile=1
+fsync=1
+	repetitions=1
+multiFile=1
+		# tab-prefixed comment
+transferSize=100k
+blockSize=100k
+    # space-prefixed comment
+run
+    ior stop

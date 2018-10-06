@@ -23,4 +23,7 @@ IOR 2 -a POSIX -r    -z  -Z -Q 2        -F -k -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -r    -z  -Z -Q 3 -X  13 -F -k -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -w    -z  -Z -Q 1 -X -13 -F    -e -i1 -m -t 100k -b 100k
 
+
+IOR 2 -f "$ROOT/test_comments.ior"
+
 END
