@@ -1843,7 +1843,8 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
           if (amtXferred != transfer)
                   ERR("cannot write to file");
           if (test->interIODelay > 0){
-            usleep(test->interIODelay);
+            struct timespec wait = {test->interIODelay / 1000 / 1000, 1000l * (test->interIODelay % 1000000)};
+            nanosleep( & wait, NULL);
           }
   } else if (access == READ) {
           amtXferred =
@@ -1851,7 +1852,8 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
           if (amtXferred != transfer)
                   ERR("cannot read from file");
           if (test->interIODelay > 0){
-            usleep(test->interIODelay);
+            struct timespec wait = {test->interIODelay / 1000 / 1000, 1000l * (test->interIODelay % 1000000)};
+            nanosleep( & wait, NULL);
           }
   } else if (access == WRITECHECK) {
           memset(checkBuffer, 'a', transfer);

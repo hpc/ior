@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "ior.h"
 #include "aiori.h"
@@ -48,7 +49,8 @@ static void *DUMMY_Create(char *testFileName, IOR_param_t * param)
   }
   if (o.delay_creates){
     if (! o.delay_rank_0_only || (o.delay_rank_0_only && rank == 0)){
-      usleep(o.delay_creates);
+      struct timespec wait = { o.delay_creates / 1000 / 1000, 1000l * (o.delay_creates % 1000000)};
+      nanosleep( & wait, NULL);
     }
   }
   return current++;
@@ -102,7 +104,8 @@ static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_
   }
   if (o.delay_xfer){
     if (! o.delay_rank_0_only || (o.delay_rank_0_only && rank == 0)){
-      usleep(o.delay_xfer);
+      struct timespec wait = {o.delay_xfer / 1000 / 1000, 1000l * (o.delay_xfer % 1000000)};
+      nanosleep( & wait, NULL);
     }
   }
   return length;
