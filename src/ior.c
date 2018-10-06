@@ -1184,6 +1184,9 @@ static void TestIoSys(IOR_test_t *test)
 
         /* bind I/O calls to specific API */
         backend = aiori_select(params->api);
+        if (backend == NULL)
+                ERR_SIMPLE("unrecognized I/O API");
+
 
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
