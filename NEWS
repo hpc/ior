@@ -39,6 +39,14 @@ General developer improvements:
 - Added continuous integration support (Enno Zickler, U Hamburg)
 - Added better support for automated testing (Julian Kunkel, U Reading)
 
+Known issues:
+
+- `api=RADOS` cannot work correctly if specified in a config file (via `-f`)
+  because `-u`/`-c`/`-p` cannot be specified (issue #98)
+- `writeCheck` cannot be enabled for write-only tests using some AIORIs such as
+  MPI-IO (pull request #89)
+  
+
 Version 3.0.2
 --------------------------------------------------------------------------------
 - IOR and mdtest now share a common codebase. This will make it easier
