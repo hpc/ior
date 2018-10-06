@@ -305,8 +305,6 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->numTasks = atoi(value);
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
-        } else if (strcasecmp(option, "collectiveMetadata") == 0) {
-                params->collective_md = atoi(value);
         } else {
                 if (rank == 0)
                         fprintf(out_logfile, "Unrecognized parameter \"%s\"\n",
