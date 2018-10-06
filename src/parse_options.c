@@ -365,6 +365,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         int runflag = 0;
         char linebuf[MAX_STR];
         char empty[MAX_STR];
+        char *ptr;
         FILE *file;
         IOR_test_t *head = NULL;
         IOR_test_t *tail = NULL;
@@ -387,15 +388,22 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 
         /* Iterate over a block of IOR commands */
         while (fgets(linebuf, MAX_STR, file) != NULL) {
+                /* skip over leading whitespace */
+                ptr = linebuf;
+                while (isspace(*ptr))
+                    ptr++;
+
                 /* skip empty lines */
-                if (sscanf(linebuf, "%s", empty) == -1)
+                if (sscanf(ptr, "%s", empty) == -1)
                         continue;
+
                 /* skip lines containing only comments */
-                if (sscanf(linebuf, " #%s", empty) == 1)
+                if (sscanf(ptr, " #%s", empty) == 1)
                         continue;
-                if (contains_only(linebuf, "ior stop")) {
+
+                if (contains_only(ptr, "ior stop")) {
                         break;
-                } else if (contains_only(linebuf, "run")) {
+                } else if (contains_only(ptr, "run")) {
                         if (runflag) {
                                 /* previous line was a "run" as well
                                    create duplicate test */
@@ -411,9 +419,9 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                         tail->next = CreateTest(&tail->params, test_num++);
                         AllocResults(tail);
                         tail = tail->next;
-                        ParseLine(linebuf, &tail->params);
+                        ParseLine(ptr, &tail->params);
                 } else {
-                        ParseLine(linebuf, &tail->params);
+                        ParseLine(ptr, &tail->params);
                 }
         }
 
