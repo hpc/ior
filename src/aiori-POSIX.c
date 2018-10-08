@@ -107,6 +107,7 @@ ior_aiori_t posix_aiori = {
         .name = "POSIX",
         .name_legacy = NULL,
         .create = POSIX_Create,
+        .mknod = POSIX_Mknod,
         .open = POSIX_Open,
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
@@ -425,6 +426,24 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         }
 #endif
         return ((void *)fd);
+}
+
+/*
+ * Creat a file through mknod interface.
+ */
+void *POSIX_Mknod(char *testFileName)
+{
+	int *fd;
+
+	fd = (int *)malloc(sizeof(int));
+	if (fd == NULL)
+		ERR("Unable to malloc file descriptor");
+
+	*fd = mknod(testFileName, S_IFREG | S_IRUSR, 0);
+	if (*fd < 0)
+		ERR("mknod failed");
+
+	return ((void *)fd);
 }
 
 /*
