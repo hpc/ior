@@ -5,7 +5,7 @@
 #
 
 # These options will be passed directly to the autoconf configure script
-CONFIGURE_OPTS="${CONFIGURE_OPTS:-""}"
+CONFIGURE_OPTS="${CONFIGURE_OPTS:-"CFLAGS=-std=c99 --disable-silent-rules"}"
 
 BASE_DIR="$(cd "${0%/*}" && pwd)"
 if [ -z "$BASE_DIR" -o ! -d "$BASE_DIR" ]; then

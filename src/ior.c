@@ -12,6 +12,8 @@
 # include "config.h"
 #endif
 
+#define _XOPEN_SOURCE 700
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -20,6 +22,11 @@
 #include <math.h>
 #include <mpi.h>
 #include <string.h>
+
+#if defined(HAVE_STRINGS_H)
+#include <strings.h>
+#endif
+
 #include <sys/stat.h>           /* struct stat */
 #include <time.h>
 
@@ -458,12 +465,16 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
  */
 static void *aligned_buffer_alloc(size_t size)
 {
-        size_t pageSize;
         size_t pageMask;
         char *buf, *tmp;
         char *aligned;
 
-        pageSize = getpagesize();
+#ifdef HAVE_GETPAGESIZE
+        size_t pageSize = getpagesize();
+#else
+        long pageSize = sysconf(_SC_PAGESIZE);
+#endif
+
         pageMask = pageSize - 1;
         buf = malloc(size + pageSize + sizeof(void *));
         if (buf == NULL)
@@ -1410,7 +1421,7 @@ static void TestIoSys(IOR_test_t *test)
                         /* random process offset reading */
                         if (params->reorderTasksRandom) {
                                 /* this should not intefere with randomOffset within a file because GetOffsetArrayRandom */
-                                /* seeds every random() call  */
+                                /* seeds every rand() call  */
                                 int nodeoffset;
                                 unsigned int iseed0;
                                 nodeoffset = params->taskPerNodeOffset;
@@ -1762,11 +1773,11 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
 
         /* set up seed for random() */
         if (access == WRITE || access == READ) {
-                test->randomSeed = seed = random();
+                test->randomSeed = seed = rand();
         } else {
                 seed = test->randomSeed;
         }
-        srandom(seed);
+        srand(seed);
 
         fileSize = test->blockSize * test->segmentCount;
         if (test->filePerProc == FALSE) {
@@ -1778,7 +1789,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                 if (test->filePerProc == FALSE) {
                         // this counts which process get how many transferes in
                         // a shared file
-                        if ((random() % test->numTasks) == pretendRank) {
+                        if ((rand() % test->numTasks) == pretendRank) {
                                 offsets++;
                         }
                 } else {
@@ -1800,9 +1811,9 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                 }
         } else {
                 /* fill with offsets (pass 2) */
-                srandom(seed);  /* need same seed  to get same transfers as counted in the beginning*/
+                srand(seed);  /* need same seed  to get same transfers as counted in the beginning*/
                 for (i = 0; i < fileSize; i += test->transferSize) {
-                        if ((random() % test->numTasks) == pretendRank) {
+                        if ((rand() % test->numTasks) == pretendRank) {
                                 offsetArray[offsetCnt] = i;
                                 offsetCnt++;
                         }
@@ -1810,7 +1821,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
         }
         /* reorder array */
         for (i = 0; i < offsets; i++) {
-                value = random() % offsets;
+                value = rand() % offsets;
                 tmp = offsetArray[value];
                 offsetArray[value] = offsetArray[i];
                 offsetArray[i] = tmp;

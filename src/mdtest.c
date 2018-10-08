@@ -28,6 +28,7 @@
  *   $Date: 2013/11/27 17:05:31 $
  *   $Author: brettkettering $
  */
+#define _XOPEN_SOURCE 700
 
 #include <limits.h>
 #include <math.h>
@@ -59,6 +60,11 @@
 
 #include <fcntl.h>
 #include <string.h>
+
+#if HAVE_STRINGS_H
+#include <strings.h>
+#endif
+
 #include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
@@ -1616,7 +1622,7 @@ void valid_tests() {
         FAIL("-c not compatible with -B");
     }
 
-    if ( strcasecmp(backend_name, "POSIX") != 0 && strcasecmp(backend_name, "DUMMY") != 0) {
+    if (strcasecmp(backend_name, "POSIX") != 0 && strcasecmp(backend_name, "DUMMY") != 0) {
       FAIL("-a only supported interface is POSIX (and DUMMY) right now!");
     }
 
