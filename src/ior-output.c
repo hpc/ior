@@ -241,8 +241,12 @@ void PrintEarlyHeader()
         if (rank != 0)
                 return;
 
-        fprintf(out_resultfile, "IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
-        fflush(out_resultfile);
+        PrintStartSection();
+        if (outputFormat != OUTPUT_DEFAULT){
+          PrintKeyVal("Version", META_VERSION);
+        }else{
+          printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
+        }
 }
 
 void PrintHeader(int argc, char **argv)
@@ -252,7 +256,6 @@ void PrintHeader(int argc, char **argv)
 
         if (rank != 0)
                 return;
-        PrintStartSection();
 
         PrintKeyVal("Began", CurrentTimeString());
         PrintKeyValStart("Command line");
