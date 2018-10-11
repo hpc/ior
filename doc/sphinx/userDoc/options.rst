@@ -291,7 +291,7 @@ HDF5-ONLY
 
 HDF5-backend options
 ^^^^^^^^^^^^^^^^^^^^
-  * -c | --collectiveMetadata   - enable HDF5 collective metadata (available since HDF5-1.10.0)
+  * --hdf5.collectiveMetadata   - enable HDF5 collective metadata (available since HDF5-1.10.0)
 
 MPIIO-, HDF5-, AND NCMPI-ONLY
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
