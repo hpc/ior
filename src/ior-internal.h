@@ -6,7 +6,6 @@
 #define _IOR_INTERNAL_H
 
 /* Part of ior-output.c */
-void PrintEarlyHeader();
 void PrintHeader(int argc, char **argv);
 void ShowTestStart(IOR_param_t *params);
 void ShowTestEnd(IOR_test_t *tptr);

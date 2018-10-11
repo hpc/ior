@@ -62,7 +62,6 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
         MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld), "cannot get number of tasks");
         MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
-        PrintEarlyHeader();
 
         /* setup tests, and validate parameters */
         tests_head = ParseCommandLine(argc, argv);
@@ -112,8 +111,6 @@ int ior_main(int argc, char **argv)
     MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld),
               "cannot get number of tasks");
     MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
-
-    PrintEarlyHeader();
 
     /* set error-handling */
     /*MPI_CHECK(MPI_Errhandler_set(mpi_comm_world, MPI_ERRORS_RETURN),

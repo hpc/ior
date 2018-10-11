@@ -151,6 +151,9 @@ static void PrintNamedArrayStart(char * key){
 }
 
 static void PrintEndSection(){
+  if (rank != 0)
+    return;
+
   indent--;
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\n");
@@ -161,6 +164,8 @@ static void PrintEndSection(){
 }
 
 static void PrintArrayStart(){
+  if (rank != 0)
+    return;
   PrintNextToken();
   needNextToken = 0;
   if(outputFormat == OUTPUT_JSON){
@@ -169,6 +174,8 @@ static void PrintArrayStart(){
 }
 
 static void PrintArrayNamedStart(char * key){
+  if (rank != 0)
+    return;
   PrintNextToken();
   needNextToken = 0;
   if(outputFormat == OUTPUT_JSON){
@@ -177,6 +184,9 @@ static void PrintArrayNamedStart(char * key){
 }
 
 static void PrintArrayEnd(){
+  if (rank != 0)
+    return;
+
   indent--;
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "]\n");
@@ -185,10 +195,14 @@ static void PrintArrayEnd(){
 }
 
 void PrintRepeatEnd(){
+  if (rank != 0)
+          return;
   PrintArrayEnd();
 }
 
 void PrintRepeatStart(){
+  if (rank != 0)
+          return;
   if( outputFormat == OUTPUT_DEFAULT){
     return;
   }
@@ -231,13 +245,11 @@ void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_su
   fflush(out_resultfile);
 }
 
-
-/*
- * Message to print immediately after MPI_Init so we know that
- * ior has started.
- */
-void PrintEarlyHeader()
+void PrintHeader(int argc, char **argv)
 {
+        struct utsname unamebuf;
+        int i;
+
         if (rank != 0)
                 return;
 
@@ -247,16 +259,6 @@ void PrintEarlyHeader()
         }else{
           printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
         }
-}
-
-void PrintHeader(int argc, char **argv)
-{
-        struct utsname unamebuf;
-        int i;
-
-        if (rank != 0)
-                return;
-
         PrintKeyVal("Began", CurrentTimeString());
         PrintKeyValStart("Command line");
         fprintf(out_resultfile, "%s", argv[0]);
