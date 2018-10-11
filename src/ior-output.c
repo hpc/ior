@@ -338,6 +338,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("outlierThreshold", test->outlierThreshold);
 
     PrintKeyVal("options", test->options);
+    PrintKeyValInt("dryRun", test->dryRun);
     PrintKeyValInt("nodes", test->nodes);
     PrintKeyValInt("memoryPerTask", (unsigned long) test->memoryPerTask);
     PrintKeyValInt("memoryPerNode", (unsigned long) test->memoryPerNode);
@@ -442,6 +443,9 @@ void ShowSetup(IOR_param_t *params)
   PrintKeyVal("xfersize", HumanReadable(params->transferSize, BASE_TWO));
   PrintKeyVal("blocksize", HumanReadable(params->blockSize, BASE_TWO));
   PrintKeyVal("aggregate filesize", HumanReadable(params->expectedAggFileSize, BASE_TWO));
+  if(params->dryRun){
+    PrintKeyValInt("dryRun", params->dryRun);
+  }
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
   if (params->lustre_set_striping) {

@@ -93,6 +93,7 @@ typedef struct
     char * testFileName_fppReadCheck;/* filename for fpp read check */
     char * hintsFileName;  /* full name for hints file */
     char * options;        /* options string */
+    int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
     int numTasks;                    /* number of tasks for test */
     int nodes;                       /* number of nodes for test */
     int tasksPerNode;                /* number of tasks per node */
