@@ -820,14 +820,15 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
         sprintf(dir, "%s%d", dir, (rank + rankOffset) % test->numTasks);
 
         /* dir doesn't exist, so create */
-        if (access(dir, F_OK) != 0) {
-                if (mkdir(dir, S_IRWXU) < 0) {
+        if (backend->access(dir, F_OK, test) != 0) {
+                if (backend->mkdir(dir, S_IRWXU, test) < 0) {
                         ERR("cannot create directory");
                 }
 
                 /* check if correct permissions */
-        } else if (access(dir, R_OK) != 0 || access(dir, W_OK) != 0 ||
-                   access(dir, X_OK) != 0) {
+        } else if (backend->access(dir, R_OK, test) != 0 ||
+                   backend->access(dir, W_OK, test) != 0 ||
+                   backend->access(dir, X_OK, test) != 0) {
                 ERR("invalid directory permissions");
         }
 
