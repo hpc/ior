@@ -2134,6 +2134,7 @@ void mdtest_init_args(){
    unique_dir_per_task = 0;
    time_unique_dir_overhead = 0;
    items = 0;
+   num_dirs_in_tree_calc = 0;
    collective_creates = 0;
    write_bytes = 0;
    stone_wall_timer_seconds = 0;
