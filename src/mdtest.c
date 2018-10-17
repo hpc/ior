@@ -2332,12 +2332,11 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         } else if (branch_factor == 1) {
             num_dirs_in_tree = depth + 1;
         } else {
-            num_dirs_in_tree =
-                (1 - pow(branch_factor, depth+1)) / (1 - branch_factor);
+            num_dirs_in_tree = (pow(branch_factor, depth+1) - 1) / (branch_factor - 1);
         }
     }
     if (items_per_dir > 0) {
-        if(unique_dir_per_task){
+        if(items == 0){
           items = items_per_dir * num_dirs_in_tree;
         }
     } else {
