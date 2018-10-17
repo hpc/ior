@@ -123,6 +123,7 @@ static uint64_t num_dirs_in_tree;
  */
 static uint64_t items;
 static uint64_t items_per_dir;
+static uint64_t num_dirs_in_tree_calc; /* this is a workaround until the overal code is refactored */
 static int directory_loops;
 static int print_time;
 static int random_seed;
@@ -1260,6 +1261,10 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         offset_timers(t, 4);
     }
 
+    if(num_dirs_in_tree_calc){ /* this is temporary fix needed when using -n and -i together */
+      items *= num_dirs_in_tree_calc;
+    }
+
     /* calculate times */
     if (create_only) {
         summary_table[iteration].rate[4] = items*size/(t[1] - t[0]);
@@ -2338,6 +2343,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (items_per_dir > 0) {
         if(items == 0){
           items = items_per_dir * num_dirs_in_tree;
+        }else{
+          num_dirs_in_tree_calc = num_dirs_in_tree;
         }
     } else {
         if (leaf_only) {
@@ -2481,17 +2488,21 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
         MPI_Comm_create(testComm, testgroup, &testComm);
         if (rank == 0) {
+            uint64_t items_all = i * items;
+            if(num_dirs_in_tree_calc){
+              items_all *= num_dirs_in_tree_calc;
+            }
             if (files_only && dirs_only) {
-                fprintf(out_logfile, "\n%d tasks, "LLU" files/directories\n", i, i * items);
+                fprintf(out_logfile, "\n%d tasks, "LLU" files/directories\n", i, items_all);
             } else if (files_only) {
                 if (!shared_file) {
-                    fprintf(out_logfile, "\n%d tasks, "LLU" files\n", i, i * items);
+                    fprintf(out_logfile, "\n%d tasks, "LLU" files\n", i, items_all);
                 }
                 else {
                     fprintf(out_logfile, "\n%d tasks, 1 file\n", i);
                 }
             } else if (dirs_only) {
-                fprintf(out_logfile, "\n%d tasks, "LLU" directories\n", i, i * items);
+                fprintf(out_logfile, "\n%d tasks, "LLU" directories\n", i, items_all);
             }
         }
         if (rank == 0 && verbose >= 1) {
