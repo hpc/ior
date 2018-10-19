@@ -179,7 +179,7 @@ void offset_timers(double * t, int tcount) {
         fflush( out_logfile );
     }
 
-    toffset = MPI_Wtime() - t[tcount];
+    toffset = GetTimeStamp() - t[tcount];
     for (i = 0; i < tcount+1; i++) {
         t[i] += toffset;
     }
@@ -845,7 +845,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     }
 
     MPI_Barrier(testComm);
-    t[0] = MPI_Wtime();
+    t[0] = GetTimeStamp();
 
     /* create phase */
     if(create_only) {
@@ -880,7 +880,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[1] = MPI_Wtime();
+    t[1] = GetTimeStamp();
 
     /* stat phase */
     if (stat_only) {
@@ -912,7 +912,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[2] = MPI_Wtime();
+    t[2] = GetTimeStamp();
 
     /* read phase */
     if (read_only) {
@@ -944,7 +944,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[3] = MPI_Wtime();
+    t[3] = GetTimeStamp();
 
     if (remove_only) {
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
@@ -977,7 +977,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[4] = MPI_Wtime();
+    t[4] = GetTimeStamp();
 
     if (remove_only) {
         if (unique_dir_per_task) {
@@ -1047,7 +1047,7 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
   uint64_t done = progress->items_done;
   long long unsigned max_iter = 0;
   MPI_Allreduce(& progress->items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
-  summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = MPI_Wtime() - tstart;
+  summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = GetTimeStamp() - tstart;
 
   // continue to the maximum...
   long long min_accessed = 0;
@@ -1082,7 +1082,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     }
 
     MPI_Barrier(testComm);
-    t[0] = MPI_Wtime();
+    t[0] = GetTimeStamp();
 
     /* create phase */
     if (create_only ) {
@@ -1150,7 +1150,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (barriers) {
       MPI_Barrier(testComm);
     }
-    t[1] = MPI_Wtime();
+    t[1] = GetTimeStamp();
 
     /* stat phase */
     if (stat_only ) {
@@ -1178,7 +1178,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[2] = MPI_Wtime();
+    t[2] = GetTimeStamp();
 
     /* read phase */
     if (read_only ) {
@@ -1210,7 +1210,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[3] = MPI_Wtime();
+    t[3] = GetTimeStamp();
 
     if (remove_only) {
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
@@ -1242,7 +1242,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[4] = MPI_Wtime();
+    t[4] = GetTimeStamp();
     if (remove_only) {
         if (unique_dir_per_task) {
             unique_dir_access(RM_UNI_DIR, temp_path);
@@ -1888,7 +1888,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
       /* create hierarchical directory structure */
       MPI_Barrier(testComm);
 
-      startCreate = MPI_Wtime();
+      startCreate = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
 
@@ -1950,7 +1950,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
         }
       }
       MPI_Barrier(testComm);
-      endCreate = MPI_Wtime();
+      endCreate = GetTimeStamp();
       summary_table->rate[8] =
           num_dirs_in_tree / (endCreate - startCreate);
       summary_table->time[8] = (endCreate - startCreate);
@@ -2021,7 +2021,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   MPI_Barrier(testComm);
   if (remove_only) {
-      startCreate = MPI_Wtime();
+      startCreate = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
         if (unique_dir_per_task) {
@@ -2083,7 +2083,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
       }
 
       MPI_Barrier(testComm);
-      endCreate = MPI_Wtime();
+      endCreate = GetTimeStamp();
       summary_table->rate[9] = num_dirs_in_tree / (endCreate - startCreate);
       summary_table->time[9] = endCreate - startCreate;
       summary_table->items[9] = num_dirs_in_tree;
