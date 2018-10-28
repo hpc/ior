@@ -12,8 +12,19 @@
 *
 \******************************************************************************/
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#define _XOPEN_SOURCE 700
+
 #include <assert.h>
 #include <stdbool.h>
+
+#if defined(HAVE_STRINGS_H)
+#include <strings.h>
+#endif
+
 #include "aiori.h"
 
 #if defined(HAVE_SYS_STATVFS_H)

@@ -19,6 +19,17 @@ AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define foreign subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AM_MAINTAINER_MODE
 
+# Check for system-specific stuff
+case "${host_os}" in
+  *linux*)
+    ;;
+  *darwin*)
+    CPPFLAGS="${CPPFLAGS} -D_DARWIN_C_SOURCE"
+    ;;
+  *)
+    ;;
+esac
+
 # Checks for programs
 
 # We can't do anything without a working MPI

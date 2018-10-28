@@ -16,11 +16,16 @@
 #include "config.h"
 #endif
 
+#define _XOPEN_SOURCE 700
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
 
+#if defined(HAVE_STRINGS_H)
+#include <strings.h>
+#endif
 
 #include "utilities.h"
 #include "ior.h"
