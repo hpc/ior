@@ -16,8 +16,6 @@
 #include "config.h"
 #endif
 
-#define _XOPEN_SOURCE 700
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -53,7 +51,12 @@ static size_t NodeMemoryStringToBytes(char *size_str)
         if (percent > 100 || percent < 0)
                 ERR("percentage must be between 0 and 100");
 
+#ifdef HAVE_SYSCONF
         page_size = sysconf(_SC_PAGESIZE);
+#else
+        page_size = getpagesize();
+#endif
+
 #ifdef  _SC_PHYS_PAGES
         num_pages = sysconf(_SC_PHYS_PAGES);
         if (num_pages == -1)
