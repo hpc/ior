@@ -1420,68 +1420,7 @@ void summarize_results(int iterations) {
             start = stop = 0;
         }
 
-        /* calculate aggregates */
-        if (barriers) {
-            double maxes[iterations];
-
-
-            /* Because each proc times itself, in the case of barriers we
-             * have to backwards calculate the time to simulate the use
-             * of barriers.
-             */
-            for (i = start; i < stop; i++) {
-                for (j=0; j<iterations; j++) {
-                    maxes[j] = all[j*tableSize + i];
-                    for (k=0; k<size; k++) {
-                        curr = all[(k*tableSize*iterations) + (j*tableSize) + i];
-                        if (maxes[j] < curr) {
-                            maxes[j] = curr;
-                        }
-                    }
-                }
-
-                min = max = maxes[0];
-                for (j=0; j<iterations; j++) {
-                    if (min > maxes[j]) {
-                        min = maxes[j];
-                    }
-                    if (max < maxes[j]) {
-                        max = maxes[j];
-                    }
-                    sum += maxes[j];
-                }
-                mean = sum / iterations;
-                for (j=0; j<iterations; j++) {
-                    var += pow((mean - maxes[j]), 2);
-                }
-                var = var / iterations;
-                sd = sqrt(var);
-                switch (i) {
-                case 0: strcpy(access, "Directory creation:"); break;
-                case 1: strcpy(access, "Directory stat    :"); break;
-                    /* case 2: strcpy(access, "Directory read    :"); break; */
-                case 2: ;                                      break; /* N/A */
-                case 3: strcpy(access, "Directory removal :"); break;
-                case 4: strcpy(access, "File creation     :"); break;
-                case 5: strcpy(access, "File stat         :"); break;
-                case 6: strcpy(access, "File read         :"); break;
-                case 7: strcpy(access, "File removal      :"); break;
-                default: strcpy(access, "ERR");                 break;
-                }
-                if (i != 2) {
-                    fprintf(out_logfile, "   %s ", access);
-                    fprintf(out_logfile, "%14.3f ", max);
-                    fprintf(out_logfile, "%14.3f ", min);
-                    fprintf(out_logfile, "%14.3f ", mean);
-                    fprintf(out_logfile, "%14.3f\n", sd);
-                    fflush(out_logfile);
-                }
-                sum = var = 0;
-
-            }
-
-        } else {
-            for (i = start; i < stop; i++) {
+        for (i = start; i < stop; i++) {
                 min = max = all[i];
                 for (k=0; k < size; k++) {
                     for (j = 0; j < iterations; j++) {
@@ -1527,7 +1466,6 @@ void summarize_results(int iterations) {
                 }
                 sum = var = 0;
 
-            }
         }
 
         /* calculate tree create/remove rates */
