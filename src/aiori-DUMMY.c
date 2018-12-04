@@ -30,9 +30,9 @@ static struct dummy_options o = {
 };
 
 static option_help options [] = {
-      {'c', "delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_creates},
-      {'x', "delay-xfer",          "Delay per xfer in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_xfer},
-      {'z', "delay-only-rank0",    "Delay only Rank0", OPTION_FLAG, 'd', & o.delay_rank_0_only},
+      {0, "dummy.delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_creates},
+      {0, "dummy.delay-xfer",          "Delay per xfer in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_xfer},
+      {0, "dummy.delay-only-rank0",    "Delay only Rank0", OPTION_FLAG, 'd', & o.delay_rank_0_only},
       LAST_OPTION
 };
 
