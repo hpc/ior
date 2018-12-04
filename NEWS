@@ -19,7 +19,7 @@ New minor features:
 - Added support for JSON output (Enno Zickler, U Hamburg; Julian Kunkel, U
   Reading)
 - Added dummy AIORI (Julian Kunkel, U Reading)
-- 0870ad78b3b022bcd30392a8990ba4e5090d6e34
+- Added support for HDF5 collective metadata operations (Rob Latham, ANL)
 
 General user improvements:
 
@@ -38,6 +38,8 @@ General developer improvements:
 - Improvements to build process (Nathan Hjelm, LANL; Ian Kirker, UCL)
 - Added continuous integration support (Enno Zickler, U Hamburg)
 - Added better support for automated testing (Julian Kunkel, U Reading)
+- Rewritten option handling to improve support for backend-specific options
+  (Julian Kunkel, U Reading)
 
 Known issues:
 
