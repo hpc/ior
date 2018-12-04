@@ -12,8 +12,6 @@
 # include "config.h"
 #endif
 
-#define _XOPEN_SOURCE 700
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -466,10 +464,10 @@ static void *aligned_buffer_alloc(size_t size)
         char *buf, *tmp;
         char *aligned;
 
-#ifdef HAVE_GETPAGESIZE
-        size_t pageSize = getpagesize();
-#else
+#ifdef HAVE_SYSCONF
         long pageSize = sysconf(_SC_PAGESIZE);
+#else
+        size_t pageSize = getpagesize();
 #endif
 
         pageMask = pageSize - 1;

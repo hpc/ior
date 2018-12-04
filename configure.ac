@@ -50,7 +50,7 @@ AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/
 AC_TYPE_SIZE_T
 
 # Checks for library functions.
-AC_CHECK_FUNCS([getpagesize gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname statfs statvfs])
+AC_CHECK_FUNCS([sysconf gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname statfs statvfs])
 AC_SEARCH_LIBS([sqrt], [m], [],
         [AC_MSG_ERROR([Math library not found])])
 
@@ -75,6 +75,8 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
 
 # Check for system capabilities
 AC_SYS_LARGEFILE
+
+AC_DEFINE([_XOPEN_SOURCE], [700], [C99 compatibility])
 
 # Check for lustre availability
 AC_ARG_WITH([lustre],
@@ -252,12 +254,6 @@ Consider --with-aws4c=, CPPFLAGS, LDFLAGS, etc])
             CPPFLAGS=$ORIG_CPPFLAGS
             LDFLAGS=$ORIG_LDFLAGS
 ])
-
-
-
-
-
-
 
 
 # Enable building "IOR", in all capitals
