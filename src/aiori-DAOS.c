@@ -518,8 +518,14 @@ static void ObjectClassParse(const char *string)
                 objectClass = DAOS_OC_SMALL_RW;
         else if (strcasecmp(string, "large") == 0)
                 objectClass = DAOS_OC_LARGE_RW;
-        else if (strcasecmp(string, "echo") == 0)
-                objectClass = DAOS_OC_ECHO_RW;
+        else if (strcasecmp(string, "echo_tiny") == 0)
+                objectClass = DAOS_OC_ECHO_TINY_RW;
+        else if (strcasecmp(string, "echo_R2S") == 0)
+                objectClass = DAOS_OC_ECHO_R2S_RW;
+        else if (strcasecmp(string, "echo_R3S") == 0)
+                objectClass = DAOS_OC_ECHO_R3S_RW;
+        else if (strcasecmp(string, "echo_R4S") == 0)
+                objectClass = DAOS_OC_ECHO_R4S_RW;
         else if (strcasecmp(string, "R2") == 0)
                 objectClass = DAOS_OC_R2_RW;
         else if (strcasecmp(string, "R2S") == 0)
@@ -597,7 +603,7 @@ static void DAOS_Init(IOR_param_t *param)
 
         if (rank == 0) {
                 uuid_t           uuid;
-                d_rank_t         rank[13];
+                d_rank_t         d_rank[13];
                 d_rank_list_t    ranks;
 
                 if (o.daosPool == NULL)
@@ -610,8 +616,8 @@ static void DAOS_Init(IOR_param_t *param)
 
                 rc = uuid_parse(o.daosPool, uuid);
                 DCHECK(rc, "Failed to parse 'daosPool': %s", o.daosPool);
-                ranks.rl_ranks = rank;
-                ParseService(param, sizeof(rank) / sizeof(rank[0]), &ranks);
+                ranks.rl_ranks = d_rank;
+                ParseService(param, sizeof(d_rank) / sizeof(d_rank[0]), &ranks);
 
                 rc = daos_pool_connect(uuid, o.daosGroup, &ranks,
                                        DAOS_PC_RW, &pool, &poolInfo,
@@ -706,7 +712,7 @@ static void
 kill_daos_server(IOR_param_t *param)
 {
 	daos_pool_info_t        info;
-	d_rank_t                rank, svc_ranks[13];
+	d_rank_t                d_rank, svc_ranks[13];
 	d_rank_list_t           svc, targets;
         uuid_t                  uuid;
         char                    *s;
@@ -718,21 +724,21 @@ kill_daos_server(IOR_param_t *param)
 	if (info.pi_ntargets - info.pi_ndisabled <= 1)
 		return;
 	/* choose the last alive one */
-	rank = info.pi_ntargets - 1 - info.pi_ndisabled;
+	d_rank = info.pi_ntargets - 1 - info.pi_ndisabled;
 
         rc = uuid_parse(o.daosPool, uuid);
         DCHECK(rc, "Failed to parse 'daosPool': %s", o.daosPool);
 
         if (rc != 0)
 	printf("Killing tgt rank: %d (total of %d of %d already disabled)\n",
-	       rank,  info.pi_ndisabled, info.pi_ntargets);
+	       d_rank,  info.pi_ndisabled, info.pi_ntargets);
 	fflush(stdout);
 
-	rc = daos_mgmt_svc_rip(o.daosGroup, rank, true, NULL);
+	rc = daos_mgmt_svc_rip(o.daosGroup, d_rank, true, NULL);
 	DCHECK(rc, "Error in killing server\n");
 
 	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
+	targets.rl_ranks = &d_rank;
 
         svc.rl_ranks = svc_ranks;
         ParseService(param, sizeof(svc_ranks)/ sizeof(svc_ranks[0]), &svc);

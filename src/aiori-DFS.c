@@ -39,8 +39,8 @@
 #include <daos_fs.h>
 
 #include "ior.h"
-#include "aiori.h"
 #include "iordef.h"
+#include "aiori.h"
 #include "utilities.h"
 
 dfs_t *dfs;
@@ -491,7 +491,7 @@ static char* DFS_GetVersion()
  * Use DFS stat() to return aggregate file size.
  */
 static IOR_offset_t
-DFS_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
+DFS_GetFileSize(IOR_param_t * test, MPI_Comm comm, char *testFileName)
 {
         dfs_obj_t *obj;
         daos_size_t fsize, tmpMin, tmpMax, tmpSum;
@@ -511,15 +511,15 @@ DFS_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 
         if (test->filePerProc == TRUE) {
                 MPI_CHECK(MPI_Allreduce(&fsize, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, testComm),
+                                        MPI_LONG_LONG_INT, MPI_SUM, comm),
                           "cannot total data moved");
                 fsize = tmpSum;
         } else {
                 MPI_CHECK(MPI_Allreduce(&fsize, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, testComm),
+                                        MPI_LONG_LONG_INT, MPI_MIN, comm),
                           "cannot total data moved");
                 MPI_CHECK(MPI_Allreduce(&fsize, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, testComm),
+                                        MPI_LONG_LONG_INT, MPI_MAX, comm),
                           "cannot total data moved");
                 if (tmpMin != tmpMax) {
                         if (rank == 0) {
