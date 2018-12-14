@@ -32,11 +32,10 @@
 #include <assert.h>
 
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
-#  include <lustre/lustre_user.h>
-#endif
 #ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
 #  include <linux/lustre/lustre_user.h>
+#elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
+#  include <lustre/lustre_user.h>
 #endif
 #ifdef HAVE_GPFS_H
 #  include <gpfs.h>
@@ -278,6 +277,12 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                 set_o_direct_flag(&fd_oflag);
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
+/* Add a #define for FASYNC if not available, as it forms part of
+ * the Lustre O_LOV_DELAY_CREATE definition. */
+#ifndef FASYNC
+#define FASYNC          00020000   /* fcntl, for BSD compatibility */
+#endif
+
         if (param->lustre_set_striping) {
                 /* In the single-shared-file case, task 0 has to creat the
                    file with the Lustre striping options before any other processes
@@ -298,7 +303,8 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                         opts.lmm_stripe_count = param->lustre_stripe_count;
 
                         /* File needs to be opened O_EXCL because we cannot set
-                           Lustre striping information on a pre-existing file. */
+                         * Lustre striping information on a pre-existing file.*/
+
                         fd_oflag |=
                             O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
                         *fd = open64(testFileName, fd_oflag, 0664);

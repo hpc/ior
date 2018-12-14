@@ -23,7 +23,7 @@ AM_MAINTAINER_MODE
 
 # We can't do anything without a working MPI
 AX_PROG_CC_MPI(,,[
-    AC_MSG_FAILURE([MPI compiler requested, but couldn't use MPI.])
+    AC_MSG_FAILURE([MPI compiler requested, but could not use MPI.])
 ])
 
 AC_PROG_RANLIB
@@ -72,7 +72,9 @@ AC_ARG_WITH([lustre],
         [], [with_lustre=check])
 AS_IF([test "x$with_lustre" != xno], [
         AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], break, [
-                if test "x$with_lustre" != xcheck; then
+                if test "x$with_lustre" != xcheck -a \
+                        "x$ac_cv_header_linux_lustre_lustre_user_h" = "xno" -a \
+                        "x$ac_cv_header_lustre_lustre_user_h" = "xno" ; then
                         AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
                 fi
         ])
