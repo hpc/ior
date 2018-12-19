@@ -300,7 +300,6 @@ static void remove_file (const char *path, uint64_t itemNum) {
         fprintf(out_logfile, "V-3: create_remove_items_helper (non-dirs remove): curr_item is \"%s\"\n", curr_item);
         fflush(out_logfile);
     }
-
     if (!(shared_file && rank != 0)) {
         backend->delete (curr_item, &param);
     }
@@ -401,11 +400,9 @@ void create_remove_items_helper(const int dirs, const int create, const char *pa
             create_remove_dirs (path, create, itemNum + i);
         }
         if(CHECK_STONE_WALL(progress)){
-          if(progress->items_done != 0){
-            printf("Error, this is an invalid configuration with stonewall!\n");
-            exit(1);
+          if(progress->items_done == 0){
+            progress->items_done = i + 1;
           }
-          progress->items_done = i + 1;
           return;
         }
     }
@@ -1124,7 +1121,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
           if (hit){
             progress->stone_wall_timer_seconds = 0;
             if (verbose > 1){
-              printf("stonewall rank %d: %lld of %lld \n", rank, (long long) progress->items_start, (long long) progress->items_per_dir);              
+              printf("stonewall rank %d: %lld of %lld \n", rank, (long long) progress->items_start, (long long) progress->items_per_dir);
             }
             create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
             // now reset the values
@@ -1134,6 +1131,8 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
           if (stoneWallingStatusFile){
             StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_done);
           }
+          // reset stone wall timer to allow proper cleanup
+          progress->stone_wall_timer_seconds = 0;
         }
       }
     }else{
@@ -1221,6 +1220,8 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     t[3] = MPI_Wtime();
 
     if (remove_only) {
+      progress->items_start = 0;
+
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
@@ -2032,6 +2033,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   MPI_Barrier(testComm);
   if (remove_only) {
+      progress->items_start = 0;
       startCreate = MPI_Wtime();
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
