@@ -320,7 +320,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 
     //create files
     sprintf(curr_item, "%s/file.%s"LLU"", path, mk_name, itemNum);
-    if (rank == 0 && verbose >= 3) {
+    if ((rank == 0 && verbose >= 3) || verbose >= 5) {
         fprintf(out_logfile, "V-3: create_remove_items_helper (non-dirs create): curr_item is \"%s\"\n", curr_item);
         fflush(out_logfile);
     }
@@ -401,6 +401,10 @@ void create_remove_items_helper(const int dirs, const int create, const char *pa
             create_remove_dirs (path, create, itemNum + i);
         }
         if(CHECK_STONE_WALL(progress)){
+          if(progress->items_done != 0){
+            printf("Error, this is an invalid configuration with stonewall!\n");
+            exit(1);
+          }
           progress->items_done = i + 1;
           return;
         }
@@ -1056,13 +1060,13 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
   long long sum_accessed = 0;
   MPI_Reduce(& progress->items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
 
-  if(items != (sum_accessed / size) && rank == 0){
+  if(items != (sum_accessed / size)){
     summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
     summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
-    fprintf( out_logfile, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
-    fflush( out_logfile );
-  }
-  if( done != max_iter ){
+    if (rank == 0){
+      fprintf( out_logfile, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
+      fflush( out_logfile );
+    }
     hit = 1;
   }
   progress->items_start = done;
@@ -1119,10 +1123,13 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
           if (hit){
             progress->stone_wall_timer_seconds = 0;
-            printf("stonewall rank %d: %lld of %lld \n", rank, (long long) progress->items_start, (long long) progress->items_per_dir);
+            if (verbose > 1){
+              printf("stonewall rank %d: %lld of %lld \n", rank, (long long) progress->items_start, (long long) progress->items_per_dir);              
+            }
             create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
             // now reset the values
             progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
+            items = progress->items_done;
           }
           if (stoneWallingStatusFile){
             StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_done);
