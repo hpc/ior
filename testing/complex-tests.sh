@@ -5,6 +5,7 @@
 # Example: export IOR_EXTRA="-v -v -v"
 
 ROOT=${0%/*}
+TYPE="advanced"
 
 source $ROOT/test-lib.sh
 
