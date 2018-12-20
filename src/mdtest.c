@@ -130,6 +130,7 @@ static uint64_t items_per_dir;
 static uint64_t num_dirs_in_tree_calc; /* this is a workaround until the overal code is refactored */
 static int directory_loops;
 static int print_time;
+static int print_rate_and_time;
 static int random_seed;
 static int shared_file;
 static int files_only;
@@ -1375,7 +1376,7 @@ void print_help (void) {
     exit(0);
 }
 
-void summarize_results(int iterations) {
+void summarize_results(int iterations, int print_time) {
     char access[MAX_PATHLEN];
     int i, j, k;
     int start, stop, tableSize = MDTEST_LAST_NUM;
@@ -2084,6 +2085,7 @@ void mdtest_init_args(){
    items_per_dir = 0;
    random_seed = 0;
    print_time = 0;
+   print_rate_and_time = 0;
    shared_file = 0;
    files_only = 0;
    dirs_only = 0;
@@ -2153,6 +2155,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & items},
       {'N', NULL,        "stride # between neighbor tasks for file/dir operation (local=0)", OPTION_OPTIONAL_ARGUMENT, 'd', & nstride},
       {'p', NULL,        "pre-iteration delay (in seconds)", OPTION_OPTIONAL_ARGUMENT, 'd', & pre_delay},
+      {'P', NULL,        "print rate AND time", OPTION_FLAG, 'd', & print_rate_and_time},
       {'R', NULL,        "random access to files (only for stat)", OPTION_FLAG, 'd', & randomize},
       {0, "random-seed", "random seed for -R", OPTION_OPTIONAL_ARGUMENT, 'd', & random_seed},
       {'s', NULL,        "stride between the number of tasks for each test", OPTION_OPTIONAL_ARGUMENT, 'd', & stride},
@@ -2445,7 +2448,12 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
             // keep track of the current status for stonewalling
             mdtest_iteration(i, j, testgroup, & summary_table[j]);
         }
-        summarize_results(iterations);
+        if (print_rate_and_time){
+          summarize_results(iterations, 0);
+          summarize_results(iterations, 1);
+        }else{
+          summarize_results(iterations, print_time);
+        }
         if (i == 1 && stride > 1) {
             i = 0;
         }
