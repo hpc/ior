@@ -549,7 +549,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
     uint64_t stop_items = items;
 
-    if( directory_loops != 1 ){
+    if( directory_loops != 1 || leaf_only ){
       stop_items = items_per_dir;
     }
 
