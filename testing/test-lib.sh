@@ -13,6 +13,7 @@ IOR_TMP=${IOR_TMP:-/dev/shm}
 IOR_EXTRA=${IOR_EXTRA:-} # Add global options like verbosity
 MDTEST_EXTRA=${MDTEST_EXTRA:-}
 MDTEST_TEST_PATTERNS=${MDTEST_TEST_PATTERNS:-../testing/mdtest-patterns/$TYPE}
+VERBOSITY=${VERBOSITY:-"-V=4"}
 
 ################################################################################
 mkdir -p ${IOR_OUT}
@@ -40,8 +41,9 @@ I=0
 function IOR(){
   RANKS=$1
   shift
+  TESTFILE_OUT="${IOR_OUT}/test_out.$I"
   WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} ${IOR_EXTRA} -o ${IOR_TMP}/ior"
-  $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
+  $WHAT 1>${TESTFILE_OUT} 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
     ERRORS=$(($ERRORS + 1))
@@ -55,26 +57,27 @@ function IOR(){
 function MDTEST(){
   RANKS=$1
   shift
+  TESTFILE_OUT="${IOR_OUT}/test_out.$I"
   rm -rf ${IOR_TMP}/mdest
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} ${MDTEST_EXTRA} -d ${IOR_TMP}/mdest -V=4"
-  $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} ${MDTEST_EXTRA} -d ${IOR_TMP}/mdest $VERBOSITY"
+  $WHAT 1>${TESTFILE_OUT} 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
     ERRORS=$(($ERRORS + 1))
   else
     # compare basic pattern
     if [[ -r ${MDTEST_TEST_PATTERNS}/$I.txt ]] ; then
-      grep "V-3" "${IOR_OUT}/test_out.$I" > "${IOR_OUT}/tmp"
+      grep "V-3" ${TESTFILE_OUT} > "${IOR_OUT}/tmp"
       cmp -s "${IOR_OUT}/tmp" ${MDTEST_TEST_PATTERNS}/$I.txt
       if [[ $? != 0 ]]; then
         mv "${IOR_OUT}/tmp" ${IOR_OUT}/tmp.$I
         echo -n "Pattern differs! check: diff -u ${MDTEST_TEST_PATTERNS}/$I.txt ${IOR_OUT}/tmp.$I "
       fi
-    else
+    elif [[ "$CREATE_TEST_PATTERN" != "false" ]] ; then
       if [[ ! -e ${MDTEST_TEST_PATTERNS} ]] ; then
         mkdir -p ${MDTEST_TEST_PATTERNS}
       fi
-      grep "V-3" "${IOR_OUT}/test_out.$I" > ${MDTEST_TEST_PATTERNS}/$I.txt
+      grep "V-3" ${TESTFILE_OUT} > ${MDTEST_TEST_PATTERNS}/$I.txt
     fi
     echo -n "OK "
   fi
