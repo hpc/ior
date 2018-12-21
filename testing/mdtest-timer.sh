@@ -18,8 +18,9 @@ function MDTEST_CMP_VAL(){
   WHAT="$2"
   RATE=$(grep "$WHAT" "$TESTFILE_OUT" | tail -n 2 | head -n 1 | awk '{print $6}' )
   TIME=$(grep "$WHAT" "$TESTFILE_OUT" | tail -n 1 | awk '{print $6}' )
-  if [[ $EXPECTED == "0 0" ]] ; then
-    CMP=$(echo $EXPECTED $TIME $RATE | awk '{print (($3 == $1) && ($4 >= 10000))}')
+
+  if [[ "$EXPECTED" == "0 0" ]] ; then
+    CMP=$(echo $TIME $RATE | awk '{print ($1 == 0)}')
   else
     CMP=$(echo $EXPECTED $TIME $RATE | awk '{print (($3 <= $1 * 1.2) && ($3 >= $1 * 0.8) && ($4 <= $2 * 1.2) && ($4 >= $2 * 0.8))}')
   fi
@@ -56,12 +57,24 @@ function MDTEST_TIMING(){
 }
 
 # The actual tests
-MDTEST_TIMING 1 1000  0.01,1000  0,0 0,0 0,0 -n 10 -F -L
-MDTEST_TIMING 2 1000  0.01,2000  0,0 0,0 0,0 -n 10 -F -L
-MDTEST_TIMING 4 1000  0.01,4000  0,0 0,0 0,0 -n 10 -F -L
+#MDTEST_TIMING 1 1000  0.01,1000  0,0 0,0 0,0 -n 10 -F -L
+#MDTEST_TIMING 2 1000  0.01,2000  0,0 0,0 0,0 -n 10 -F -L
+#MDTEST_TIMING 4 1000  0.01,4000  0,0 0,0 0,0 -n 10 -F -L
 
-#MDTEST_TIMING 1 1000  1.0,10000000 0,0 0,0 0,0 -n 100000000 -W 1
-# --dummy.delay-only-rank0
-#MDTEST_TIMING 2 -W 2
-#MDTEST_TIMING 1 -C -T -r -F -I 1 -z 1 -b 1 -L -u
-#MDTEST_TIMING 1 -C -T -I 1 -z 1 -b 1 -u
+MDTEST_TIMING 1 1000  1.0,900   0,0 0,0 0,0  -n 10000000 -b 3 -z 3 -L -F -u -s=2
+MDTEST_TIMING 1 0  1.0,900   0,0 0,0 0,0 -n 10000  -C -T -b 2 -z 2 -I 2
+MDTEST_TIMING 1 1000  1.0,900   0,0 0,0 0,0  -C -n 1000 -w 1000
+MDTEST_TIMING 1    0  1.0,900   0,0 0,0 0,0  -C -n 1000 -w 1000
+
+# Tests with Stonewall
+
+MDTEST_TIMING 1 1000     1.0,900   0,0 0,0 0,0  -C -n 10000    -W 1 -F -L -u
+MDTEST_TIMING 1 1000000  1.0,1   0,0 0,0 0,0  -C -n 10000    -W 1 -F
+# one process races ahead, the other does 1 op/s
+MDTEST_TIMING 2 1000000  3.0,2   0,0 0,0 0,0  -C -n 3    -W 1 -F --dummy.delay-only-rank0
+
+MDTEST_TIMING 1 1000  1.0,900   0,0 0,0 0,0  -C -n 1000000000 -W 1 -w 1000
+MDTEST_TIMING 1 1000  1.0,900   0,0 0,0 0,0  -C -n 10000000 -W 1 -b 1 -z 1
+
+# -B is not valid with -W
+# -b > 1 is not valid with -W
