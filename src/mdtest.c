@@ -771,30 +771,24 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* create phase */
     if(run.create_only) {
-      for (int dir_iter = 0; dir_iter < run.directory_loops; dir_iter ++){
-        prep_testdir(iteration, dir_iter);
-        if (run.unique_dir_per_task) {
-            unique_dir_access(MK_UNI_DIR, temp_path);
-            if (!run.time_unique_dir_overhead) {
-                offset_timers(t, 0);
-            }
-        } else {
-            sprintf( temp_path, "%s/%s", run.testdir, path );
-        }
+      for (int d = 0; d < run.dir_count; d ++){
+        char * dir = run.dir_name[d];
+        // TODO This code looks like it was broken a long time
+        // if (run.unique_dir_per_task) {
+        //     unique_dir_access(MK_UNI_DIR, temp_path);
+        //     if (!run.time_unique_dir_overhead) {
+        //         offset_timers(t, 0);
+        //     }
+        // }
 
         if (verbose >= 3 && rank == 0) {
-            fprintf(out_logfile,  "V-3: directory_test: create path is \"%s\"\n", temp_path );
+            fprintf(out_logfile,  "V-3: directory_test: create path is \"%s\"\n", dir );
             fflush( out_logfile );
         }
-
-        /* "touch" the files */
-        if (run.collective_creates) {
-            if (rank == 0) {
-                collective_create_remove(1, 1, ntasks, temp_path, progress);
-            }
-        } else {
-            /* create directories */
-            create_remove_items(0, 1, 1, 0, temp_path, 0, progress);
+        int ret = 0;
+        ret = backend->mkdir (dir, DIRMODE, &param);
+        if (ret == -1) {
+            fprintf(out_logfile, "%d error could not create directory \"%s\"\n", rank, dir);
         }
       }
     }
@@ -838,29 +832,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* read phase */
     if (run.read_only) {
-      for (int dir_iter = 0; dir_iter < run.directory_loops; dir_iter ++){
-        prep_testdir(iteration, dir_iter);
-        if (run.unique_dir_per_task) {
-            unique_dir_access(READ_SUB_DIR, temp_path);
-            if (!run.time_unique_dir_overhead) {
-                offset_timers(t, 2);
-            }
-        } else {
-            sprintf( temp_path, "%s/%s", run.testdir, path );
-        }
-
-        if (verbose >= 3 && rank == 0) {
-            fprintf(out_logfile,  "V-3: directory_test: read path is \"%s\"\n", temp_path );
-            fflush( out_logfile );
-        }
-
-        /* read directories */
-        if (run.random_seed > 0) {
-            ;        /* N/A */
-        } else {
-            ;        /* N/A */
-        }
-      }
+      /* Not implemented; not useful */
     }
 
     if (run.barriers) {
@@ -869,29 +841,17 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     t[3] = GetTimeStamp();
 
     if (run.remove_only) {
-      for (int dir_iter = 0; dir_iter < run.directory_loops; dir_iter ++){
-        prep_testdir(iteration, dir_iter);
-        if (run.unique_dir_per_task) {
-            unique_dir_access(RM_SUB_DIR, temp_path);
-            if (!run.time_unique_dir_overhead) {
-                offset_timers(t, 3);
-            }
-        } else {
-            sprintf( temp_path, "%s/%s", run.testdir, path );
-        }
+      for (int d = 0; d < run.dir_count; d ++){
+        char * dir = run.dir_name[d];
+        int ret = 0;
 
         if (verbose >= 3 && rank == 0) {
-            fprintf(out_logfile,  "V-3: directory_test: remove directories path is \"%s\"\n", temp_path );
+            fprintf(out_logfile,  "V-3: directory_test: remove directories path is \"%s\"\n", dir );
             fflush( out_logfile );
         }
-
-        /* remove directories */
-        if (run.collective_creates) {
-            if (rank == 0) {
-                collective_create_remove(0, 1, ntasks, temp_path, progress);
-            }
-        } else {
-            create_remove_items(0, 1, 0, 0, temp_path, 0, progress);
+        ret = backend->rmdir(dir, &param);
+        if (ret == -1) {
+            fprintf(out_logfile, "%d error could not rm directory \"%s\"\n", rank, dir);
         }
       }
     }
@@ -900,23 +860,6 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         MPI_Barrier(testComm);
     }
     t[4] = GetTimeStamp();
-
-    if (run.remove_only) {
-        if (run.unique_dir_per_task) {
-            unique_dir_access(RM_UNI_DIR, temp_path);
-        } else {
-            sprintf( temp_path, "%s/%s", run.testdir, path );
-        }
-
-        if (verbose >= 3 && rank == 0) {
-            fprintf(out_logfile,  "V-3: directory_test: remove unique directories path is \"%s\"\n", temp_path );
-            fflush( out_logfile );
-        }
-    }
-
-    if (run.unique_dir_per_task && !run.time_unique_dir_overhead) {
-        offset_timers(t, 4);
-    }
 
     /* calculate times */
     if (run.create_only) {
@@ -949,10 +892,6 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
                t[1] - t[0], summary_table[iteration].rate[0]);
         fprintf(out_logfile, "V-1:   Directory stat    : %14.3f sec, %14.3f ops/sec\n",
                t[2] - t[1], summary_table[iteration].rate[1]);
-/* N/A
-   fprintf(out_logfile, "V-1:   Directory read    : %14.3f sec, %14.3f ops/sec\n",
-   t[3] - t[2], summary_table[iteration].rate[2]);
-*/
         fprintf(out_logfile, "V-1:   Directory removal : %14.3f sec, %14.3f ops/sec\n",
                t[4] - t[3], summary_table[iteration].rate[3]);
         fflush(out_logfile);
@@ -1011,7 +950,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
         if (run.unique_dir_per_task) {
             unique_dir_access(MK_UNI_DIR, temp_path);
-            if (!run.time_unique_dir_overhead) {
+            if (! run.time_unique_dir_overhead) {
                 offset_timers(t, 0);
             }
         } else {

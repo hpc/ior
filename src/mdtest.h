@@ -85,6 +85,9 @@ typedef struct{
   char  **    file_name;
   uint64_t    file_count;
 
+  char  **    treedir_name;
+  uint64_t    treedir_count;
+
   char  **    dir_name;
   uint64_t    dir_count;
 } mdtest_runtime_t;

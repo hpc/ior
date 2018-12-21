@@ -12,18 +12,26 @@
 static uint64_t posD;
 // position of the file index
 static uint64_t posF;
+static uint64_t posT;
 
 extern mdtest_runtime_t run;
 
-static void add_file(char * name){
+static void add_file(char name[]){
   assert(posF < run.file_count);
-  printf("%d file: %s\n", rank, name);
+  //printf("%d file: %s\n", rank, name);
   run.file_name[posF] = strdup(name);
   posF++;
 }
 
-static void add_dir(int collective, char * name){
-  printf("%d dir: %d %s\n", rank, collective, name);
+static void add_treedir(char name[]){
+  printf("%d tree: %s\n", rank, name);
+  assert(posT < run.treedir_count);
+  run.treedir_name[posT] = strdup(name);
+  posT++;
+}
+
+static void add_dir(char name[]){
+  printf("%d dir: %s\n", rank, name);
   assert(posD < run.dir_count);
   run.dir_name[posD] = strdup(name);
   posD++;
@@ -55,7 +63,7 @@ static void unique_dir_access(int opt, char *to) {
 static void create_remove_dirs (const char *path, bool create, uint64_t itemNum) {
     char curr_item[MAX_PATHLEN];
     sprintf(curr_item, "%s/dir.%s%" PRIu64, path, create ? run.mk_name : run.rm_name, itemNum);
-    add_dir(0, curr_item);
+    add_dir(curr_item);
 }
 
 static void create_file (const char *path, uint64_t itemNum) {
@@ -318,7 +326,7 @@ static void create_remove_directory_tree(int create, int currDepth, char* path, 
 
     if (currDepth == 0) {
         sprintf(dir, "%s/%s.%d/", path, run.base_tree_name, dirNum);
-        add_dir(1, dir);
+        add_treedir(dir);
 
         create_remove_directory_tree(create, ++currDepth, dir, ++dirNum);
     } else if (currDepth <= run.depth) {
@@ -329,7 +337,7 @@ static void create_remove_directory_tree(int create, int currDepth, char* path, 
         for (i=0; i<run.branch_factor; i++) {
             sprintf(dir, "%s.%d/", run.base_tree_name, currDir);
             strcat(temp_path, dir);
-            add_dir(1, temp_path);
+            add_treedir(temp_path);
             create_remove_directory_tree(create, ++currDepth,
                                          temp_path, (run.branch_factor*currDir)+1);
             currDepth--;
@@ -404,20 +412,19 @@ void mdtest_generate_filenames(int i, int j){
   static int initialized = 0;
   if (initialized){
     for(int i = 0; i < run.file_count; i++){
-      if(run.file_name[i] == NULL){
-        break;
-      }
       free(run.file_name[i]);
     }
     free(run.file_name);
 
     for(int i = 0; i < run.dir_count; i++){
-      if(run.file_name[i] == NULL){
-        break;
-      }
       free(run.dir_name[i]);
     }
     free(run.dir_name);
+
+    for(int i = 0; i < run.treedir_count; i++){
+      free(run.treedir_name[i]);
+    }
+    free(run.treedir_name);
   }
   initialized = 1;
 
@@ -426,7 +433,7 @@ void mdtest_generate_filenames(int i, int j){
     run.file_count *= run.num_dirs_in_tree_calc;
   }
 
-  run.dir_count = run.file_count + run.num_dirs_in_tree;
+  run.dir_count = run.file_count;
   if(run.directory_loops > 0){
     run.dir_count *= run.directory_loops;
     run.file_count *= run.directory_loops;
@@ -435,12 +442,20 @@ void mdtest_generate_filenames(int i, int j){
     printf("%d V=3: Allocating %d dirs %d files\n", rank, run.dir_count, run.file_count);
   }
 
+  run.treedir_count = run.num_dirs_in_tree;
+
   run.file_name = malloc(sizeof(char*)* run.file_count);
   memset(run.file_name, 0, sizeof(char*)* run.file_count);
   run.dir_name = malloc(sizeof(char*)* run.dir_count);
   memset(run.dir_name, 0, sizeof(char*)* run.dir_count);
+  run.treedir_name = malloc(sizeof(char*)* run.treedir_count);
+  memset(run.treedir_name, 0, sizeof(char*)* run.treedir_count);
 
   posF = 0;
   posD = 0;
+  posT = 0;
   mdtest_iteration(i, j);
+  run.dir_count = posD;
+  run.treedir_count = posT;
+  run.file_count = posF;
 }
