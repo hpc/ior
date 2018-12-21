@@ -72,11 +72,6 @@
 
 #define FILEMODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #define DIRMODE S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IXOTH
-#define RELEASE_VERS "1.9.3"
-#define TEST_DIR "#test-dir"
-#define ITEM_COUNT 25000
-
-#define LLU "%lu"
 
 /* just use the POSIX backend for now */
 static const char *backend_name;
@@ -99,9 +94,6 @@ typedef struct{
 mdtest_runtime_t run;
 
 #define CHECK_STONE_WALL(p) (((p)->stone_wall_timer_seconds != 0) && ((GetTimeStamp() - (p)->start_time) > (p)->stone_wall_timer_seconds))
-
-/* for making/removing unique directory && stating/deleting subdirectory */
-enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
 
 void offset_timers(double * t, int tcount) {
     double toffset;
@@ -191,7 +183,7 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
 
     if (( rank == 0 )                                         &&
         ( verbose >= 3 )                                      &&
-        (itemNum % ITEM_COUNT==0 && (itemNum != 0))) {
+        (itemNum % DEBUG_ITEM_COUNT==0 && (itemNum != 0))) {
 
         fprintf(out_logfile, "V-3: %s dir: "LLU"\n", operation, itemNum);
         fflush(out_logfile);
@@ -220,7 +212,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
 
     if (( rank == 0 )                                       &&
         ( verbose >= 3 )                                    &&
-        (itemNum % ITEM_COUNT==0 && (itemNum != 0))) {
+        (itemNum % DEBUG_ITEM_COUNT==0 && (itemNum != 0))) {
 
         fprintf(out_logfile, "V-3: remove file: "LLU"\n", itemNum);
         fflush(out_logfile);
@@ -243,7 +235,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 
     if (( rank == 0 )                                             &&
         ( verbose >= 3 )                                          &&
-        (itemNum % ITEM_COUNT==0 && (itemNum != 0))) {
+        (itemNum % DEBUG_ITEM_COUNT==0 && (itemNum != 0))) {
 
         fprintf(out_logfile, "V-3: create file: "LLU"\n", itemNum);
         fflush(out_logfile);
@@ -509,13 +501,13 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
         /* create name of file/dir to stat */
         if (dirs) {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if (rank == 0 && verbose >= 3 && (i%DEBUG_ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: stat dir: "LLU"\n", i);
                 fflush(out_logfile);
             }
             sprintf(item, "dir.%s"LLU"", run.stat_name, item_num);
         } else {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if (rank == 0 && verbose >= 3 && (i%DEBUG_ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: stat file: "LLU"\n", i);
                 fflush(out_logfile);
             }
@@ -625,7 +617,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* create name of file to read */
         if (!dirs) {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if (rank == 0 && verbose >= 3 && (i%DEBUG_ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: read file: "LLU"\n", i);
                 fflush(out_logfile);
             }
@@ -1738,6 +1730,9 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
   progress_o.items_per_dir = run.items_per_dir;
   rank_progress_t * progress = & progress_o;
 
+
+  mdtest_generate_filenames(i, j);
+
   /* start and end times of directory tree create/remove */
   double startCreate, endCreate;
   int k;
@@ -2364,8 +2359,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
             fprintf(out_logfile, "   Operation               Duration              Rate\n");
             fprintf(out_logfile, "   ---------               --------              ----\n");
         }
-
-        //mdtest_generate_filenames();
 
         for (j = 0; j < iterations; j++) {
             // keep track of the current status for stonewalling

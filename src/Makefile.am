@@ -8,7 +8,7 @@ endif
 noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h mdtest.h
 
 lib_LIBRARIES = libaiori.a
-libaiori_a_SOURCES = ior.c mdtest.c utilities.c parse_options.c ior-output.c option.c
+libaiori_a_SOURCES = ior.c mdtest.c mdtest-filename-creator.c utilities.c parse_options.c ior-output.c option.c
 
 extraSOURCES = aiori.c aiori-DUMMY.c
 extraLDADD =

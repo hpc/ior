@@ -4,8 +4,14 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #include "utilities.h"
+
+#define RELEASE_VERS "2.2.0"
+#define TEST_DIR "#test-dir"
+#define DEBUG_ITEM_COUNT 25000
+#define LLU "%"PRIu64
 
 /*
  * Struct contains all runtime options and used previously global variables
@@ -76,12 +82,15 @@ typedef struct{
   pid_t pid;
   uid_t uid;
 
-  //char  **    file_name;
-  //uint64_t    file_count;
+  char  **    file_name;
+  uint64_t    file_count;
 
-  //char  **    dir_name;
-  //uint64_t    dir_count;
+  char  **    dir_name;
+  uint64_t    dir_count;
 } mdtest_runtime_t;
+
+/* for making/removing unique directory && stating/deleting subdirectory */
+enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
 
 typedef enum {
   MDTEST_DIR_CREATE_NUM = 0,
@@ -110,7 +119,7 @@ typedef struct
     uint64_t stonewall_item_sum[MDTEST_LAST_NUM];  /* Total number of items accessed until stonewall */
 } mdtest_results_t;
 
-void mdtest_generate_filenames();
+void mdtest_generate_filenames(int i, int j);
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * out_logfile);
 
 #endif
