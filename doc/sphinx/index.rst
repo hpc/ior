@@ -24,6 +24,7 @@
 
     devDoc/doxygen
     devDoc/CI
+    devDoc/release
 
 .. toctree::
     :hidden:
