@@ -1,7 +1,7 @@
 Release Process
 ===============
 
-To build a new version of IOR,
+To build a new version of IOR::
 
     $ docker run -it ubuntu bash
     $ apt-get update
@@ -12,8 +12,9 @@ To build a new version of IOR,
 
 To create a new release candidate from RC,
 
-1. Disable the `check-news` option in `AM_INIT_AUTOMAKE` inside configure.ac
-2. Append "rcX" to the `Version:` field in META
+1. Disable the ``check-news`` option in ``AM_INIT_AUTOMAKE`` inside configure.ac
+2. Append "rcX" to the ``Version:`` field in META where X is the release
+   candidate number
 3. Build a release package as described above
 
 To create a new minor release of IOR,
@@ -24,14 +25,14 @@ To create a new minor release of IOR,
 
 To create a micro branch of IOR (e.g., if a release needs a hotfix),
 
-1. Check out the relevant release tagged in the rc branch (e.g., `3.2.0`)
-2. Create a branch with the major.minor name (e.g., `v3.2`) from that tag
-3. Update the `Version:` in META
+1. Check out the relevant release tagged in the rc branch (e.g., ``3.2.0``)
+2. Create a branch with the major.minor name (e.g., ``3.2``) from that tag
+3. Update the ``Version:`` in META
 4. Apply hotfix(es) to that major.minor branch
 5. Create the major.minor.micro release on GitHub
 
 To initiate a feature freeze,
 
-1. Merge the `master` branch into the `rc` branch
-2. Update the `Version:` field in META _of the master branch_ to be the _next_
+1. Merge the master branch into the rc branch
+2. Update the ``Version:`` field in META `of the master branch` to be the `next`
    release version, not the one whose features have just been frozen
