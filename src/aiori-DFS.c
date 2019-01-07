@@ -279,7 +279,7 @@ DFS_Finalize(IOR_param_t *param)
 {
         int rc;
 
-	rc = dfs_umount(dfs, true);
+	rc = dfs_umount(dfs);
         DCHECK(rc, "Failed to umount DFS namespace");
 
 	rc = daos_cont_close(coh, NULL);

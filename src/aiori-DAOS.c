@@ -46,8 +46,6 @@ struct daos_options{
 	uint64_t	daosStripeMax;	/* max length of a stripe */
 	int		daosAios;	/* max number of concurrent async I/Os */
 	int		daosWriteOnly;	/* write only, no flush and commit */
-	uint64_t	daosEpoch;	/* epoch to access */
-	uint64_t	daosWait;	/* epoch to wait for before reading */
 	int		daosKill;	/* kill a target while running IOR */
 	char		*daosObjectClass; /* object class */
 };
@@ -62,8 +60,6 @@ static struct daos_options o = {
 	.daosStripeMax		= 0,
 	.daosAios		= 1,
 	.daosWriteOnly		= 0,
-	.daosEpoch		= 0,
-	.daosWait		= 0,
 	.daosKill		= 0,
 	.daosObjectClass	= NULL,
 };
@@ -78,8 +74,6 @@ static option_help options [] = {
       {'m', "daosStripeMax", "Max Stripe",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeMax},
       {'a', "daosAios", "Concurrent Async IOs",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosAios},
       {'w', "daosWriteOnly", "Write Only, no commit",OPTION_FLAG, 'd', &o.daosWriteOnly},
-      {'e', "daosEpoch", "Epoch Number to Access",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosEpoch},
-      {'t', "daosWait", "Epoch to wait for before read",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosWait},
       {'k', "daosKill", "Kill target while running",OPTION_FLAG, 'd', &o.daosKill},
       {'o', "daosObjectClass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosObjectClass},
       LAST_OPTION
@@ -126,7 +120,6 @@ struct fileDescriptor {
         daos_handle_t    container;
         daos_cont_info_t containerInfo;
         daos_handle_t    object;
-        daos_epoch_t     epoch;
 };
 
 struct aio {
@@ -136,7 +129,6 @@ struct aio {
         daos_recx_t             a_recx;
         unsigned char           a_csumBuf[32];
         daos_csum_buf_t         a_csum;
-        daos_epoch_range_t      a_epochRange;
         daos_iod_t              a_iod;
         daos_iov_t              a_iov;
         daos_sg_list_t          a_sgl;
@@ -270,56 +262,6 @@ static void ContainerOpen(char *testFileName, IOR_param_t *param,
                 rc = daos_cont_open(pool, uuid, dFlags, container, info,
                                     NULL /* ev */);
                 DCHECK(rc, "Failed to open container %s", testFileName);
-
-                INFO(VERBOSE_2, param, "Container epoch state:");
-                INFO(VERBOSE_2, param, "   HCE: %lu",
-                     info->ci_epoch_state.es_hce);
-                INFO(VERBOSE_2, param, "   LRE: %lu",
-                     info->ci_epoch_state.es_lre);
-                INFO(VERBOSE_2, param, "   LHE: %lu (%lx)",
-                     info->ci_epoch_state.es_lhe, info->ci_epoch_state.es_lhe);
-                INFO(VERBOSE_2, param, "  GHCE: %lu",
-                     info->ci_epoch_state.es_ghce);
-                INFO(VERBOSE_2, param, "  GLRE: %lu",
-                     info->ci_epoch_state.es_glre);
-                INFO(VERBOSE_2, param, " GHPCE: %lu",
-                     info->ci_epoch_state.es_ghpce);
-
-#if 0
-                if (param->open != WRITE && o.daosWait != 0) {
-                        daos_epoch_t e;
-
-                        e = o.daosWait;
-
-                        INFO(VERBOSE_2, param, "Waiting for epoch %lu", e);
-
-                        rc = daos_epoch_wait(*container, &e,
-                                             NULL /* ignore HLE */,
-                                             NULL /* synchronous */);
-                        DCHECK(rc, "Failed to wait for epoch %lu",
-                               o.daosWait);
-                }
-
-                if (param->open == WRITE &&
-                    param->useExistingTestFile == FALSE) {
-                        daos_oclass_attr_t attr = {
-                                .ca_schema              = DAOS_OS_STRIPED,
-                                .ca_resil_degree        = 0,
-                                .ca_resil               = DAOS_RES_REPL,
-                                .ca_grp_nr              = 4,
-                                .u.repl                 = {
-                                        .r_method       = 0,
-                                        .r_num          = 2
-                                }
-                        };
-
-                        INFO(VERBOSE_2, param, "Registering object class");
-
-                        rc = daos_oclass_register(container, objectClass, &attr,
-                                                  NULL /* ev */);
-                        DCHECK(rc, "Failed to register object class");
-                }
-#endif
         }
 
         HandleDistribute(container, CONTAINER_HANDLE, param);
@@ -348,7 +290,7 @@ static void ContainerClose(daos_handle_t container, IOR_param_t *param)
 }
 
 static void ObjectOpen(daos_handle_t container, daos_handle_t *object,
-                       daos_epoch_t epoch, IOR_param_t *param)
+                       IOR_param_t *param)
 {
         daos_obj_id_t oid;
         unsigned int  flags;
@@ -356,29 +298,14 @@ static void ObjectOpen(daos_handle_t container, daos_handle_t *object,
 
         oid.hi = 0;
         oid.lo = 1;
-        daos_obj_id_generate(&oid, 0, objectClass);
-
-#if 0
-        /** declaring object not implemented commenting it */
-        if (rank == 0 && param->open == WRITE &&
-            param->useExistingTestFile == FALSE) {
-                INFO(VERBOSE_2, param, "Declaring object");
-
-                rc = daos_obj_declare(container, oid, epoch, NULL /* oa */,
-                                      NULL /* ev */);
-                DCHECK(rc, "Failed to declare object");
-        }
-#endif
-        /* An MPI_Bcast() call would probably be more efficient. */
-        MPI_CHECK(MPI_Barrier(param->testComm),
-                  "Failed to synchronize processes");
+        daos_obj_generate_id(&oid, 0, objectClass);
 
         if (param->open == WRITE)
                 flags = DAOS_OO_RW;
         else
                 flags = DAOS_OO_RO;
 
-        rc = daos_obj_open(container, oid, epoch, flags, object, NULL /* ev */);
+        rc = daos_obj_open(container, oid, flags, object, NULL /* ev */);
         DCHECK(rc, "Failed to open object");
 }
 
@@ -416,8 +343,6 @@ static void AIOInit(IOR_param_t *param)
                 aio->a_csum.cs_buf_len  = sizeof aio->a_csumBuf;
                 aio->a_csum.cs_len      = aio->a_csum.cs_buf_len;
 
-                aio->a_epochRange.epr_hi = DAOS_EPOCH_MAX;
-
                 aio->a_iod.iod_name.iov_buf = "data";
                 aio->a_iod.iod_name.iov_buf_len =
                         strlen(aio->a_iod.iod_name.iov_buf) + 1;
@@ -426,7 +351,7 @@ static void AIOInit(IOR_param_t *param)
                 aio->a_iod.iod_type  = DAOS_IOD_ARRAY;
                 aio->a_iod.iod_recxs = &aio->a_recx;
                 aio->a_iod.iod_csums = &aio->a_csum;
-                aio->a_iod.iod_eprs  = &aio->a_epochRange;
+                aio->a_iod.iod_eprs  = NULL;
                 aio->a_iod.iod_size  = param->transferSize;
 
                 aio->a_iov.iov_buf = buffers + param->transferSize * i;
@@ -657,52 +582,13 @@ static void *DAOS_Create(char *testFileName, IOR_param_t *param)
 static void *DAOS_Open(char *testFileName, IOR_param_t *param)
 {
         struct fileDescriptor *fd;
-        daos_epoch_t           ghce;
 
         fd = malloc(sizeof *fd);
         if (fd == NULL)
                 ERR("Failed to allocate fd");
 
         ContainerOpen(testFileName, param, &fd->container, &fd->containerInfo);
-
-        ghce = fd->containerInfo.ci_epoch_state.es_ghce;
-        if (param->open == WRITE) {
-                if (o.daosEpoch == 0)
-                        fd->epoch = ghce + 1;
-                else if (o.daosEpoch <= ghce)
-                        GERR("Can't modify committed epoch\n");
-                else
-                        fd->epoch = o.daosEpoch;
-        } else {
-                if (o.daosEpoch == 0) {
-                        if (o.daosWait == 0)
-                                fd->epoch = ghce;
-                        else
-                                fd->epoch = o.daosWait;
-                } else if (o.daosEpoch > ghce) {
-                        GERR("Can't read uncommitted epoch\n");
-                } else {
-                        fd->epoch = o.daosEpoch;
-                }
-        }
-
-        if (rank == 0)
-                INFO(VERBOSE_2, param, "Accessing epoch %lu", fd->epoch);
-
-        if (rank == 0 && param->open == WRITE) {
-                daos_epoch_t e = fd->epoch;
-                int          rc;
-
-                INFO(VERBOSE_2, param, "Holding epoch %lu", fd->epoch);
-
-                rc = daos_epoch_hold(fd->container, &fd->epoch,
-                                     NULL /* state */, NULL /* ev */);
-                DCHECK(rc, "Failed to hold epoch");
-                assert(fd->epoch == e);
-        }
-
-        ObjectOpen(fd->container, &fd->object, fd->epoch, param);
-
+        ObjectOpen(fd->container, &fd->object, param);
         AIOInit(param);
 
         return fd;
@@ -822,7 +708,6 @@ static IOR_offset_t DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
         if (o.daosStripeMax != 0)
                 stripeOffset %= o.daosStripeMax;
         aio->a_recx.rx_idx = stripeOffset / o.daosRecordSize;
-        aio->a_epochRange.epr_lo = fd->epoch;
 
         /*
          * If the data written will be checked later, we have to copy in valid
@@ -843,12 +728,12 @@ static IOR_offset_t DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
              (unsigned long long) aio->a_sgl.sg_iovs->iov_buf_len);
 
         if (access == WRITE) {
-                rc = daos_obj_update(fd->object, fd->epoch, &aio->a_dkey,
+                rc = daos_obj_update(fd->object, DAOS_TX_NONE, &aio->a_dkey,
                                      1 /* nr */, &aio->a_iod, &aio->a_sgl,
                                      &aio->a_event);
                 DCHECK(rc, "Failed to start update operation");
         } else {
-                rc = daos_obj_fetch(fd->object, fd->epoch, &aio->a_dkey,
+                rc = daos_obj_fetch(fd->object, DAOS_TX_NONE, &aio->a_dkey,
                                     1 /* nr */, &aio->a_iod, &aio->a_sgl,
                                     NULL /* maps */, &aio->a_event);
                 DCHECK(rc, "Failed to start fetch operation");
@@ -884,19 +769,16 @@ static void DAOS_Close(void *file, IOR_param_t *param)
                 MPI_CHECK(MPI_Barrier(param->testComm),
                           "Failed to synchronize processes");
 
+		/* MSC - temp hack to commit since close will rollback */
                 if (rank == 0) {
-                        INFO(VERBOSE_2, param, "Flushing epoch %lu", fd->epoch);
+			daos_handle_t th;
 
-                        rc = daos_epoch_flush(fd->container, fd->epoch,
-                                              NULL /* state */, NULL /* ev */);
-                        DCHECK(rc, "Failed to flush epoch");
-
-                        INFO(VERBOSE_2, param, "Committing epoch %lu",
-                             fd->epoch);
-
-                        rc = daos_epoch_commit(fd->container, fd->epoch,
-                                               NULL /* state */, NULL /* ev */);
-                        DCHECK(rc, "Failed to commit object write");
+			rc = daos_tx_open(fd->container, &th, NULL);
+                        DCHECK(rc, "Failed sync");
+			rc = daos_tx_commit(th, NULL);
+                        DCHECK(rc, "Failed sync");
+			rc = daos_tx_close(th, NULL);
+                        DCHECK(rc, "Failed sync");
                 }
         }
 
