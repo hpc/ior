@@ -45,7 +45,6 @@ struct daos_options{
 	uint64_t	daosStripeCount;
 	uint64_t	daosStripeMax;	/* max length of a stripe */
 	int		daosAios;	/* max number of concurrent async I/Os */
-	int		daosWriteOnly;	/* write only, no flush and commit */
 	int		daosKill;	/* kill a target while running IOR */
 	char		*daosObjectClass; /* object class */
 };
@@ -59,7 +58,6 @@ static struct daos_options o = {
 	.daosStripeCount	= -1,
 	.daosStripeMax		= 0,
 	.daosAios		= 1,
-	.daosWriteOnly		= 0,
 	.daosKill		= 0,
 	.daosObjectClass	= NULL,
 };
@@ -73,7 +71,6 @@ static option_help options [] = {
       {'c', "daosStripeCount", "Stripe Count", OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeCount},
       {'m', "daosStripeMax", "Max Stripe",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeMax},
       {'a', "daosAios", "Concurrent Async IOs",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosAios},
-      {'w', "daosWriteOnly", "Write Only, no commit",OPTION_FLAG, 'd', &o.daosWriteOnly},
       {'k', "daosKill", "Kill target while running",OPTION_FLAG, 'd', &o.daosKill},
       {'o', "daosObjectClass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosObjectClass},
       LAST_OPTION
@@ -521,7 +518,8 @@ static void DAOS_Init(IOR_param_t *param)
                 INFO(VERBOSE_0, param, "WARNING: USING daosStripeMax CAUSES READS TO RETURN INVALID DATA");
 
         rc = daos_init();
-        DCHECK(rc, "Failed to initialize daos");
+	if (rc != -DER_ALREADY)
+		DCHECK(rc, "Failed to initialize daos");
 
         rc = daos_eq_create(&eventQueue);
         DCHECK(rc, "Failed to create event queue");
@@ -763,24 +761,6 @@ static void DAOS_Close(void *file, IOR_param_t *param)
         AIOFini(param);
 
         ObjectClose(fd->object);
-
-        if (param->open == WRITE && !o.daosWriteOnly) {
-                /* Wait for everybody for to complete the writes. */
-                MPI_CHECK(MPI_Barrier(param->testComm),
-                          "Failed to synchronize processes");
-
-		/* MSC - temp hack to commit since close will rollback */
-                if (rank == 0) {
-			daos_handle_t th;
-
-			rc = daos_tx_open(fd->container, &th, NULL);
-                        DCHECK(rc, "Failed sync");
-			rc = daos_tx_commit(th, NULL);
-                        DCHECK(rc, "Failed sync");
-			rc = daos_tx_close(th, NULL);
-                        DCHECK(rc, "Failed sync");
-                }
-        }
 
         ContainerClose(fd->container, param);
 
