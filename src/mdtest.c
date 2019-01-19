@@ -215,6 +215,8 @@ void parse_dirpath(char *dirpath_arg) {
         FAIL("out of memory");
     }
 
+    // prevent changes to the original dirpath_arg
+    dirpath_arg = strdup(dirpath_arg);
     token = strtok(dirpath_arg, delimiter_string);
     while (token != NULL) {
         filenames[i] = token;
