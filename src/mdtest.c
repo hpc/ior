@@ -206,13 +206,13 @@ void parse_dirpath(char *dirpath_arg) {
         }
         tmp++;
     }
+    // prevent changes to the original dirpath_arg
+    dirpath_arg = strdup(dirpath_arg);
     filenames = (char **)malloc(path_count * sizeof(char **));
-    if (filenames == NULL) {
+    if (filenames == NULL || dirpath_arg == NULL) {
         FAIL("out of memory");
     }
 
-    // prevent changes to the original dirpath_arg
-    dirpath_arg = strdup(dirpath_arg);
     token = strtok(dirpath_arg, delimiter_string);
     while (token != NULL) {
         filenames[i] = token;
