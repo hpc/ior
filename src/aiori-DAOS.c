@@ -24,6 +24,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <unistd.h>
+#include <strings.h>
 #include <sys/types.h>
 #include <libgen.h>
 #include <stdbool.h>
@@ -63,23 +64,23 @@ static struct daos_options o = {
 };
 
 static option_help options [] = {
-      {'p', "daosPool", "pool uuid", OPTION_REQUIRED_ARGUMENT, 's', &o.daosPool},
-      {'v', "daosPoolSvc", "pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', &o.daosPoolSvc},
-      {'g', "daosGroup", "server group", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosGroup},
-      {'r', "daosRecordSize", "Record Size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosRecordSize},
-      {'s', "daosStripeSize", "Stripe Size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosStripeSize},
-      {'c', "daosStripeCount", "Stripe Count", OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeCount},
-      {'m', "daosStripeMax", "Max Stripe",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeMax},
-      {'a', "daosAios", "Concurrent Async IOs",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosAios},
-      {'k', "daosKill", "Kill target while running",OPTION_FLAG, 'd', &o.daosKill},
-      {'o', "daosObjectClass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosObjectClass},
+      {0, "daos.pool", "pool uuid", OPTION_REQUIRED_ARGUMENT, 's', &o.daosPool},
+      {0, "daos.svcl", "pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', &o.daosPoolSvc},
+      {0, "daos.group", "server group", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosGroup},
+      {0, "daos.recordSize", "Record Size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosRecordSize},
+      {0, "daos.stripeSize", "Stripe Size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosStripeSize},
+      {0, "daos.stripeCount", "Stripe Count", OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeCount},
+      {0, "daos.stripeMax", "Max Stripe",OPTION_OPTIONAL_ARGUMENT, 'u', &o.daosStripeMax},
+      {0, "daos.aios", "Concurrent Async IOs",OPTION_OPTIONAL_ARGUMENT, 'd', &o.daosAios},
+      {0, "daos.kill", "Kill target while running",OPTION_FLAG, 'd', &o.daosKill},
+      {0, "daos.objectClass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.daosObjectClass},
       LAST_OPTION
 };
 
 /**************************** P R O T O T Y P E S *****************************/
 
-static void DAOS_Init(IOR_param_t *);
-static void DAOS_Fini(IOR_param_t *);
+static void DAOS_Init();
+static void DAOS_Fini();
 static void *DAOS_Create(char *, IOR_param_t *);
 static void *DAOS_Open(char *, IOR_param_t *);
 static IOR_offset_t DAOS_Xfer(int, void *, IOR_size_t *,
@@ -141,6 +142,7 @@ static daos_pool_info_t    poolInfo;
 static daos_oclass_id_t    objectClass = DAOS_OC_LARGE_RW;
 static CFS_LIST_HEAD(aios);
 static IOR_offset_t        total_size;
+static bool		   daos_initialized = false;
 
 /***************************** F U N C T I O N S ******************************/
 
@@ -158,9 +160,9 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
-#define INFO(level, param, format, ...)                                 \
+#define INFO(level, format, ...)					\
 do {                                                                    \
-        if (verbose >= level)                                    \
+        if (verbose >= level)						\
                 printf("[%d] "format"\n", rank, ##__VA_ARGS__);         \
 } while (0)
 
@@ -172,8 +174,7 @@ do {                                                                    \
 } while (0)
 
 /* Distribute process 0's pool or container handle to others. */
-static void HandleDistribute(daos_handle_t *handle, enum handleType type,
-                             IOR_param_t *param)
+static void HandleDistribute(daos_handle_t *handle, enum handleType type)
 {
         daos_iov_t global;
         int        rc;
@@ -194,7 +195,7 @@ static void HandleDistribute(daos_handle_t *handle, enum handleType type,
         }
 
         MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0,
-                            param->testComm),
+                            MPI_COMM_WORLD),
                   "Failed to bcast global handle buffer size");
 
         global.iov_buf = malloc(global.iov_buf_len);
@@ -210,7 +211,7 @@ static void HandleDistribute(daos_handle_t *handle, enum handleType type,
         }
 
         MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0,
-                            param->testComm),
+                            MPI_COMM_WORLD),
                   "Failed to bcast global pool handle");
 
         if (rank != 0) {
@@ -241,15 +242,14 @@ static void ContainerOpen(char *testFileName, IOR_param_t *param,
 
                 if (param->open == WRITE &&
                     param->useExistingTestFile == FALSE) {
-                        INFO(VERBOSE_2, param, "Creating container %s",
-                             testFileName);
+                        INFO(VERBOSE_2, "Creating container %s", testFileName);
 
                         rc = daos_cont_create(pool, uuid, NULL /* ev */);
                         DCHECK(rc, "Failed to create container %s",
                                testFileName);
                 }
 
-                INFO(VERBOSE_2, param, "Opening container %s", testFileName);
+                INFO(VERBOSE_2, "Opening container %s", testFileName);
 
                 if (param->open == WRITE)
                         dFlags = DAOS_COO_RW;
@@ -261,7 +261,7 @@ static void ContainerOpen(char *testFileName, IOR_param_t *param,
                 DCHECK(rc, "Failed to open container %s", testFileName);
         }
 
-        HandleDistribute(container, CONTAINER_HANDLE, param);
+        HandleDistribute(container, CONTAINER_HANDLE);
 
         MPI_CHECK(MPI_Bcast(info, sizeof *info, MPI_BYTE, 0, param->testComm),
                   "Failed to broadcast container info");
@@ -364,8 +364,8 @@ static void AIOInit(IOR_param_t *param)
 
                 cfs_list_add(&aio->a_list, &aios);
 
-                INFO(VERBOSE_3, param, "Allocated AIO %p: buffer %p", aio,
-                     aio->a_iov.iov_buf);
+                INFO(VERBOSE_3, "Allocated AIO %p: buffer %p", aio,
+		     aio->a_iov.iov_buf);
         }
 
         nAios = o.daosAios;
@@ -383,7 +383,7 @@ static void AIOFini(IOR_param_t *param)
         free(events);
 
         cfs_list_for_each_entry_safe(aio, tmp, &aios, a_list) {
-                INFO(VERBOSE_3, param, "Freeing AIO %p: buffer %p", aio,
+                INFO(VERBOSE_3,  "Freeing AIO %p: buffer %p", aio,
                      aio->a_iov.iov_buf);
                 cfs_list_del_init(&aio->a_list);
                 daos_event_fini(&aio->a_event);
@@ -424,11 +424,11 @@ static void AIOWait(IOR_param_t *param)
                 nAios++;
 
                 if (param->verbose >= VERBOSE_3)
-                INFO(VERBOSE_3, param, "Completed AIO %p: buffer %p", aio,
+                INFO(VERBOSE_3, "Completed AIO %p: buffer %p", aio,
                      aio->a_iov.iov_buf);
         }
 
-        INFO(VERBOSE_3, param, "Found %d completed AIOs (%d free %d busy)", rc,
+        INFO(VERBOSE_3, "Found %d completed AIOs (%d free %d busy)", rc,
              nAios, o.daosAios - nAios);
 }
 
@@ -466,7 +466,7 @@ static void ObjectClassParse(const char *string)
                 GERR("Invalid 'daosObjectClass' argument: '%s'", string);
 }
 
-static void ParseService(IOR_param_t *param, int max, d_rank_list_t *ranks)
+static void ParseService(int max, d_rank_list_t *ranks)
 {
         char *s;
 
@@ -490,21 +490,18 @@ static option_help * DAOS_options(){
   return options;
 }
 
-static void DAOS_Init(IOR_param_t *param)
+static void DAOS_Init()
 {
         int rc;
 
+	if (daos_initialized)
+		return;
+	if (o.daosPool == NULL || o.daosPoolSvc == NULL)
+		return;
         if (o.daosObjectClass)
                 ObjectClassParse(o.daosObjectClass);
-
-        if (param->filePerProc)
-                GERR("'filePerProc' not yet supported");
         if (o.daosStripeMax % o.daosStripeSize != 0)
                 GERR("'daosStripeMax' must be a multiple of 'daosStripeSize'");
-        if (o.daosStripeSize % param->transferSize != 0)
-                GERR("'daosStripeSize' must be a multiple of 'transferSize'");
-        if (param->transferSize % o.daosRecordSize != 0)
-                GERR("'transferSize' must be a multiple of 'daosRecordSize'");
         if (o.daosKill && ((objectClass != DAOS_OC_R2_RW) ||
                                 (objectClass != DAOS_OC_R3_RW) ||
                                 (objectClass != DAOS_OC_R4_RW) ||
@@ -515,7 +512,7 @@ static void DAOS_Init(IOR_param_t *param)
                 GERR("'daosKill' only makes sense with 'daosObjectClass=repl'");
 
         if (rank == 0)
-                INFO(VERBOSE_0, param, "WARNING: USING daosStripeMax CAUSES READS TO RETURN INVALID DATA");
+                INFO(VERBOSE_0, "WARNING: USING daosStripeMax CAUSES READS TO RETURN INVALID DATA");
 
         rc = daos_init();
 	if (rc != -DER_ALREADY)
@@ -529,18 +526,12 @@ static void DAOS_Init(IOR_param_t *param)
                 d_rank_t         d_rank[13];
                 d_rank_list_t    ranks;
 
-                if (o.daosPool == NULL)
-                        GERR("'daosPool' must be specified");
-                if (o.daosPoolSvc == NULL)
-                        GERR("'daosPoolSvc' must be specified");
-
-                INFO(VERBOSE_2, param, "Connecting to pool %s %s",
-                     o.daosPool, o.daosPoolSvc);
+                INFO(VERBOSE_2, "Connecting to pool %s %s", o.daosPool, o.daosPoolSvc);
 
                 rc = uuid_parse(o.daosPool, uuid);
                 DCHECK(rc, "Failed to parse 'daosPool': %s", o.daosPool);
                 ranks.rl_ranks = d_rank;
-                ParseService(param, sizeof(d_rank) / sizeof(d_rank[0]), &ranks);
+                ParseService(sizeof(d_rank) / sizeof(d_rank[0]), &ranks);
 
                 rc = daos_pool_connect(uuid, o.daosGroup, &ranks,
                                        DAOS_PC_RW, &pool, &poolInfo,
@@ -548,19 +539,23 @@ static void DAOS_Init(IOR_param_t *param)
                 DCHECK(rc, "Failed to connect to pool %s", o.daosPool);
         }
 
-        HandleDistribute(&pool, POOL_HANDLE, param);
+        HandleDistribute(&pool, POOL_HANDLE);
 
-        MPI_CHECK(MPI_Bcast(&poolInfo, sizeof poolInfo, MPI_BYTE, 0,
-                            param->testComm),
+        MPI_CHECK(MPI_Bcast(&poolInfo, sizeof poolInfo, MPI_BYTE, 0, MPI_COMM_WORLD),
                   "Failed to bcast pool info");
 
         if (o.daosStripeCount == -1)
                 o.daosStripeCount = poolInfo.pi_ntargets * 64UL;
+
+	daos_initialized = true;
 }
 
-static void DAOS_Fini(IOR_param_t *param)
+static void DAOS_Fini()
 {
         int rc;
+
+	if (!daos_initialized)
+		return;
 
 	rc = daos_pool_disconnect(pool, NULL /* ev */);
 	DCHECK(rc, "Failed to disconnect from pool %s", o.daosPool);
@@ -570,6 +565,8 @@ static void DAOS_Fini(IOR_param_t *param)
 
         rc = daos_fini();
         DCHECK(rc, "Failed to finalize daos");
+
+	daos_initialized = false;
 }
 
 static void *DAOS_Create(char *testFileName, IOR_param_t *param)
@@ -625,7 +622,7 @@ kill_daos_server(IOR_param_t *param)
 	targets.rl_ranks = &d_rank;
 
         svc.rl_ranks = svc_ranks;
-        ParseService(param, sizeof(svc_ranks)/ sizeof(svc_ranks[0]), &svc);
+        ParseService(sizeof(svc_ranks)/ sizeof(svc_ranks[0]), &svc);
 
 	rc = daos_pool_exclude(uuid, NULL, &svc, &targets, NULL);
 	DCHECK(rc, "Error in excluding pool from poolmap\n");
@@ -667,6 +664,15 @@ static IOR_offset_t DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
         IOR_offset_t           stripeOffset;
         uint64_t               round;
         int                    rc;
+
+	if (!daos_initialized)
+		GERR("DAOS is not initialized!");
+        if (param->filePerProc)
+                GERR("'filePerProc' not yet supported");
+        if (o.daosStripeSize % param->transferSize != 0)
+                GERR("'daosStripeSize' must be a multiple of 'transferSize'");
+        if (param->transferSize % o.daosRecordSize != 0)
+                GERR("'transferSize' must be a multiple of 'daosRecordSize'");
 
         assert(length == param->transferSize);
         assert(param->offset % length == 0);
@@ -717,7 +723,7 @@ static IOR_offset_t DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
         else if (access == WRITECHECK || access == READCHECK)
                 memset(aio->a_iov.iov_buf, '#', length);
 
-        INFO(VERBOSE_3, param, "Starting AIO %p (%d free %d busy): access %d "
+        INFO(VERBOSE_3, "Starting AIO %p (%d free %d busy): access %d "
              "dkey '%s' iod <%llu, %llu> sgl <%p, %lu>", aio, nAios,
              o.daosAios - nAios, access, (char *) aio->a_dkey.iov_buf,
              (unsigned long long) aio->a_iod.iod_recxs->rx_idx,
@@ -756,6 +762,8 @@ static void DAOS_Close(void *file, IOR_param_t *param)
         struct fileDescriptor *fd = file;
         int                    rc;
 
+	if (!daos_initialized)
+		return;
         while (o.daosAios - nAios > 0)
                 AIOWait(param);
         AIOFini(param);
@@ -772,7 +780,10 @@ static void DAOS_Delete(char *testFileName, IOR_param_t *param)
         uuid_t uuid;
         int    rc;
 
-        INFO(VERBOSE_2, param, "Deleting container %s", testFileName);
+	if (!daos_initialized)
+		GERR("DAOS is not initialized!");
+
+        INFO(VERBOSE_2, "Deleting container %s", testFileName);
 
         rc = uuid_parse(testFileName, uuid);
         DCHECK(rc, "Failed to parse 'testFile': %s", testFileName);

@@ -12,6 +12,17 @@
 *
 \******************************************************************************/
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#include <assert.h>
+#include <stdbool.h>
+
+#if defined(HAVE_STRINGS_H)
+#include <strings.h>
+#endif
+
 #include "aiori.h"
 
 #if defined(HAVE_SYS_STATVFS_H)
@@ -65,13 +76,35 @@ ior_aiori_t *available_aiori[] = {
         NULL
 };
 
-void aiori_supported_apis(char * APIs){
+void airoi_parse_options(int argc, char ** argv, option_help * global_options){
+    int airoi_c = aiori_count();
+    options_all opt;
+    opt.module_count = airoi_c + 1;
+    opt.modules = malloc(sizeof(option_module) * (airoi_c + 1));
+    opt.modules[0].prefix = NULL;
+    opt.modules[0].options = global_options;
+    ior_aiori_t **tmp = available_aiori;
+    for (int i=1; *tmp != NULL; ++tmp, i++) {
+      opt.modules[i].prefix = (*tmp)->name;
+      if((*tmp)->get_options != NULL){
+        opt.modules[i].options = (*tmp)->get_options();
+      }else{
+        opt.modules[i].options = NULL;
+      }
+    }
+    option_parse(argc, argv, &opt);
+    free(opt.modules);
+}
+
+void aiori_supported_apis(char * APIs, char * APIs_legacy){
   ior_aiori_t **tmp = available_aiori;
   if(*tmp != NULL){
     APIs += sprintf(APIs, "%s", (*tmp)->name);
     tmp++;
     for (; *tmp != NULL; ++tmp) {
       APIs += sprintf(APIs, "|%s", (*tmp)->name);
+      if ((*tmp)->name_legacy != NULL)
+          APIs_legacy += sprintf(APIs_legacy, "|%s", (*tmp)->name_legacy);
     }
   }
 }
@@ -135,73 +168,141 @@ char* aiori_get_version()
   return "";
 }
 
-static int is_initialized = FALSE;
+static bool is_initialized = false;
 
-void aiori_initialize(IOR_test_t *tests_head){
-	if (is_initialized) return;
-	is_initialized = TRUE;
-
-  /* Sanity check, we were compiled with SOME backend, right? */
-  if (0 == aiori_count ()) {
-          ERR("No IO backends compiled into aiori.  "
-              "Run 'configure --with-<backend>', and recompile.");
-  }
-
-  for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
-    if((*tmp)->initialize){
-            (*tmp)->initialize(tests_head ? &tests_head->params : NULL);
-    }
-  }
+static void init_or_fini_internal(const ior_aiori_t *test_backend,
+                                  const bool init)
+{
+        if (init)
+        {
+                if (test_backend->initialize)
+                        test_backend->initialize();
+        }
+        else
+        {
+                if (test_backend->finalize)
+                        test_backend->finalize();
+        }
 }
 
-void aiori_finalize(IOR_test_t *tests_head){
-  if (! is_initialized) return;
-  is_initialized = FALSE;
+static void init_or_fini(IOR_test_t *tests, const bool init)
+{
+        /* Sanity check, we were compiled with SOME backend, right? */
+        if (0 == aiori_count ()) {
+                ERR("No IO backends compiled into aiori.  "
+                    "Run 'configure --with-<backend>', and recompile.");
+        }
 
-  for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
-    if((*tmp)->finalize){
-            (*tmp)->finalize(tests_head ? &tests_head->params : NULL);
-    }
-  }
+        /* Pointer to the initialize of finalize function */
+
+
+        /* if tests is NULL, initialize or finalize all available backends */
+        if (tests == NULL)
+        {
+                for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp)
+                        init_or_fini_internal(*tmp, init);
+
+                return;
+        }
+
+        for (IOR_test_t *t = tests; t != NULL; t = t->next)
+        {
+                IOR_param_t *params = &t->params;
+                assert(params != NULL);
+
+                const ior_aiori_t *test_backend = params->backend;
+                assert(test_backend != NULL);
+
+                init_or_fini_internal(test_backend, init);
+        }
+}
+
+
+/**
+ * Initialize IO backends.
+ *
+ * @param[in]  tests      Pointers to the first test
+ *
+ * This function initializes all backends which will be used. If tests is NULL
+ * all available backends are initialized.
+ */
+void aiori_initialize(IOR_test_t *tests)
+{
+        if (is_initialized)
+            return;
+
+        init_or_fini(tests, true);
+
+        is_initialized = true;
+}
+
+/**
+ * Finalize IO backends.
+ *
+ * @param[in]  tests      Pointers to the first test
+ *
+ * This function finalizes all backends which were used. If tests is NULL
+ * all available backends are finialized.
+ */
+void aiori_finalize(IOR_test_t *tests)
+{
+        if (!is_initialized)
+            return;
+
+        is_initialized = false;
+
+        init_or_fini(tests, false);
 }
 
 const ior_aiori_t *aiori_select (const char *api)
 {
         char warn_str[256] = {0};
         for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp) {
-                if (NULL == api || strcasecmp(api, (*tmp)->name) == 0) {
-                        if (NULL == (*tmp)->statfs) {
-                                (*tmp)->statfs = aiori_posix_statfs;
-                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
-                                         " %s statfs call", api);
-                                WARN(warn_str);
-                        }
-                        if (NULL == (*tmp)->mkdir) {
-                                (*tmp)->mkdir = aiori_posix_mkdir;
-                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
-                                         " %s mkdir call", api);
-                                WARN(warn_str);
-                        }
-                        if (NULL == (*tmp)->rmdir) {
-                                (*tmp)->rmdir = aiori_posix_rmdir;
-                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
-                                         " %s rmdir call", api);
-                                WARN(warn_str);
-                        }
-                        if (NULL == (*tmp)->access) {
-                                (*tmp)->access = aiori_posix_access;
-                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
-                                         " %s access call", api);
-                                WARN(warn_str);
-                        }
-                        if (NULL == (*tmp)->stat) {
-                                (*tmp)->stat = aiori_posix_stat;
-                                snprintf(warn_str, 256, "assuming POSIX-based backend for"
-                                         " %s stat call", api);
-                                WARN(warn_str);
-                        }
-                        return *tmp;
+                char *name_leg = (*tmp)->name_legacy;
+                if (NULL != api &&
+                    (strcasecmp(api, (*tmp)->name) != 0) &&
+                    (name_leg == NULL || strcasecmp(api, name_leg) != 0))
+                    continue;
+
+                if (name_leg != NULL && strcasecmp(api, name_leg) == 0)
+                {
+                        snprintf(warn_str, 256, "%s backend is deprecated use %s"
+                                 " instead", api, (*tmp)->name);
+                        WARN(warn_str);
                 }
+
+                if (NULL == (*tmp)->statfs) {
+                        (*tmp)->statfs = aiori_posix_statfs;
+                        snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                 " %s statfs call", api);
+                        WARN(warn_str);
+                }
+                if (NULL == (*tmp)->mkdir) {
+                        (*tmp)->mkdir = aiori_posix_mkdir;
+                        snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                 " %s mkdir call", api);
+                        WARN(warn_str);
+                }
+                if (NULL == (*tmp)->rmdir) {
+                        (*tmp)->rmdir = aiori_posix_rmdir;
+                        snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                 " %s rmdir call", api);
+                        WARN(warn_str);
+                }
+                if (NULL == (*tmp)->access) {
+                        (*tmp)->access = aiori_posix_access;
+                        snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                 " %s access call", api);
+                        WARN(warn_str);
+                }
+                if (NULL == (*tmp)->stat) {
+                        (*tmp)->stat = aiori_posix_stat;
+                        snprintf(warn_str, 256, "assuming POSIX-based backend for"
+                                 " %s stat call", api);
+                        WARN(warn_str);
+                }
+
+                return *tmp;
         }
 
         return NULL;

@@ -19,11 +19,22 @@ AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define foreign subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AM_MAINTAINER_MODE
 
+# Check for system-specific stuff
+case "${host_os}" in
+  *linux*)
+    ;;
+  *darwin*)
+    CPPFLAGS="${CPPFLAGS} -D_DARWIN_C_SOURCE"
+    ;;
+  *)
+    ;;
+esac
+
 # Checks for programs
 
 # We can't do anything without a working MPI
 AX_PROG_CC_MPI(,,[
-    AC_MSG_FAILURE([MPI compiler requested, but couldn't use MPI.])
+    AC_MSG_FAILURE([MPI compiler requested, but could not use MPI.])
 ])
 
 AC_PROG_RANLIB
@@ -39,7 +50,7 @@ AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/
 AC_TYPE_SIZE_T
 
 # Checks for library functions.
-AC_CHECK_FUNCS([getpagesize gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname statfs statvfs])
+AC_CHECK_FUNCS([sysconf gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname statfs statvfs])
 AC_SEARCH_LIBS([sqrt], [m], [],
         [AC_MSG_ERROR([Math library not found])])
 
@@ -65,14 +76,18 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
 # Check for system capabilities
 AC_SYS_LARGEFILE
 
+AC_DEFINE([_XOPEN_SOURCE], [700], [C99 compatibility])
+
 # Check for lustre availability
 AC_ARG_WITH([lustre],
         [AS_HELP_STRING([--with-lustre],
                 [support configurable Lustre striping values @<:@default=check@:>@])],
         [], [with_lustre=check])
 AS_IF([test "x$with_lustre" != xno], [
-        AC_CHECK_HEADERS([lustre/lustre_user.h], [], [
-                if test "x$with_lustre" != xcheck; then
+        AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], break, [
+                if test "x$with_lustre" != xcheck -a \
+                        "x$ac_cv_header_linux_lustre_lustre_user_h" = "xno" -a \
+                        "x$ac_cv_header_lustre_lustre_user_h" = "xno" ; then
                         AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
                 fi
         ])
@@ -98,7 +113,11 @@ AC_ARG_WITH([hdf5],
 AM_CONDITIONAL([USE_HDF5_AIORI], [test x$with_hdf5 = xyes])
 AM_COND_IF([USE_HDF5_AIORI],[
         AC_DEFINE([USE_HDF5_AIORI], [], [Build HDF5 backend AIORI])
+	AC_SEARCH_LIBS([H5Pset_all_coll_metadata_ops], [hdf5])
+	AC_CHECK_FUNCS([H5Pset_all_coll_metadata_ops])
 ])
+
+
 
 # HDFS support
 AC_ARG_WITH([hdfs],
@@ -257,12 +276,6 @@ Consider --with-aws4c=, CPPFLAGS, LDFLAGS, etc])
             CPPFLAGS=$ORIG_CPPFLAGS
             LDFLAGS=$ORIG_LDFLAGS
 ])
-
-
-
-
-
-
 
 
 # Enable building "IOR", in all capitals

@@ -21,6 +21,9 @@
 #include <ctype.h>
 #include <string.h>
 
+#if defined(HAVE_STRINGS_H)
+#include <strings.h>
+#endif
 
 #include "utilities.h"
 #include "ior.h"
@@ -48,7 +51,12 @@ static size_t NodeMemoryStringToBytes(char *size_str)
         if (percent > 100 || percent < 0)
                 ERR("percentage must be between 0 and 100");
 
+#ifdef HAVE_SYSCONF
         page_size = sysconf(_SC_PAGESIZE);
+#else
+        page_size = getpagesize();
+#endif
+
 #ifdef  _SC_PHYS_PAGES
         num_pages = sysconf(_SC_PHYS_PAGES);
         if (num_pages == -1)
@@ -88,9 +96,8 @@ static void CheckRunSettings(IOR_test_t *tests)
                  * (We assume int-valued params are exclusively 0 or 1.)
                  */
                 if ((params->openFlags & IOR_RDWR)
-                    && ((params->readFile | params->checkRead)
-                        ^ (params->writeFile | params->checkWrite))
-                    && (params->openFlags & IOR_RDWR)) {
+                    && ((params->readFile | params->checkRead | params->checkWrite)
+                        ^ params->writeFile)) {
 
                         params->openFlags &= ~(IOR_RDWR);
                         if (params->readFile | params->checkRead) {
@@ -100,7 +107,6 @@ static void CheckRunSettings(IOR_test_t *tests)
                         else
                                 params->openFlags |= IOR_WRONLY;
                 }
-
         }
 }
 
@@ -112,12 +118,17 @@ void DecodeDirective(char *line, IOR_param_t *params)
         char option[MAX_STR];
         char value[MAX_STR];
         int rc;
+        int initialized;
 
         rc = sscanf(line, " %[^=# \t\r\n] = %[^# \t\r\n] ", option, value);
         if (rc != 2 && rank == 0) {
                 fprintf(out_logfile, "Syntax error in configuration options: %s\n",
                         line);
-                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+                MPI_CHECK(MPI_Initialized(&initialized), "MPI_Initialized() error");
+                if (initialized)
+                    MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+                else
+                    exit(-1);
         }
         if (strcasecmp(option, "api") == 0) {
           params->api = strdup(value);
@@ -167,6 +178,8 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 params->repetitions = atoi(value);
         } else if (strcasecmp(option, "intertestdelay") == 0) {
                 params->interTestDelay = atoi(value);
+        } else if (strcasecmp(option, "interiodelay") == 0) {
+                params->interIODelay = atoi(value);
         } else if (strcasecmp(option, "readfile") == 0) {
                 params->readFile = atoi(value);
         } else if (strcasecmp(option, "writefile") == 0) {
@@ -304,7 +317,11 @@ void DecodeDirective(char *line, IOR_param_t *params)
                 if (rank == 0)
                         fprintf(out_logfile, "Unrecognized parameter \"%s\"\n",
                                 option);
-                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+                MPI_CHECK(MPI_Initialized(&initialized), "MPI_Initialized() error");
+                if (initialized)
+                    MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
+                else
+                    exit(-1);
         }
 }
 
@@ -363,6 +380,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         int runflag = 0;
         char linebuf[MAX_STR];
         char empty[MAX_STR];
+        char *ptr;
         FILE *file;
         IOR_test_t *head = NULL;
         IOR_test_t *tail = NULL;
@@ -385,19 +403,27 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 
         /* Iterate over a block of IOR commands */
         while (fgets(linebuf, MAX_STR, file) != NULL) {
+                /* skip over leading whitespace */
+                ptr = linebuf;
+                while (isspace(*ptr))
+                    ptr++;
+
                 /* skip empty lines */
-                if (sscanf(linebuf, "%s", empty) == -1)
+                if (sscanf(ptr, "%s", empty) == -1)
                         continue;
+
                 /* skip lines containing only comments */
-                if (sscanf(linebuf, " #%s", empty) == 1)
+                if (sscanf(ptr, " #%s", empty) == 1)
                         continue;
-                if (contains_only(linebuf, "ior stop")) {
+
+                if (contains_only(ptr, "ior stop")) {
                         break;
-                } else if (contains_only(linebuf, "run")) {
+                } else if (contains_only(ptr, "run")) {
                         if (runflag) {
                                 /* previous line was a "run" as well
                                    create duplicate test */
                                 tail->next = CreateTest(&tail->params, test_num++);
+                                AllocResults(tail);
                                 tail = tail->next;
                         }
                         runflag = 1;
@@ -406,16 +432,18 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                            create and initialize a new test structure */
                         runflag = 0;
                         tail->next = CreateTest(&tail->params, test_num++);
+                        AllocResults(tail);
                         tail = tail->next;
-                        ParseLine(linebuf, &tail->params);
+                        ParseLine(ptr, &tail->params);
                 } else {
-                        ParseLine(linebuf, &tail->params);
+                        ParseLine(ptr, &tail->params);
                 }
         }
 
         /* close the script */
         if (fclose(file) != 0)
                 ERR("fclose() of script file failed");
+        AllocResults(tail);
 
         return head;
 }
@@ -440,7 +468,8 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
     parameters = & initialTestParams;
 
     char APIs[1024];
-    aiori_supported_apis(APIs);
+    char APIs_legacy[1024];
+    aiori_supported_apis(APIs, APIs_legacy);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
 
@@ -503,14 +532,14 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
           {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random ordering for readback", OPTION_FLAG, 'd', & initialTestParams.reorderTasksRandom},
           {.help="  -O summaryFile=FILE                 -- store result data into this file", .arg = OPTION_OPTIONAL_ARGUMENT},
           {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputing the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
+          {0, "dryRun",      "do not perform any I/Os just run evtl. inputs print dummy output", OPTION_FLAG, 'd', & initialTestParams.dryRun},
           LAST_OPTION,
         };
 
         IOR_test_t *tests = NULL;
 
         GetPlatformName(initialTestParams.platform);
-        int printhelp = 0;
-        int parsed_options = option_parse(argc, argv, options, & printhelp);
+        airoi_parse_options(argc, argv, options);
 
         if (toggleG){
           initialTestParams.setTimeStampSignature = toggleG;
@@ -538,35 +567,18 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
         if (memoryPerNode){
           initialTestParams.memoryPerNode = NodeMemoryStringToBytes(optarg);
         }
-
         const ior_aiori_t * backend = aiori_select(initialTestParams.api);
+        if (backend == NULL)
+            ERR_SIMPLE("unrecognized I/O API");
+
         initialTestParams.backend = backend;
         initialTestParams.apiVersion = backend->get_version();
-
-        if(backend->get_options != NULL){
-          option_parse(argc - parsed_options, argv + parsed_options, backend->get_options(), & printhelp);
-        }
-
-        if(printhelp != 0){
-          printf("Usage: %s ", argv[0]);
-
-          option_print_help(options, 0);
-
-          if(backend->get_options != NULL){
-            printf("\nPlugin options for backend %s (%s)\n", initialTestParams.api, backend->get_version());
-            option_print_help(backend->get_options(), 1);
-          }
-          if(printhelp == 1){
-            exit(0);
-          }else{
-            exit(1);
-          }
-        }
 
         if (testscripts){
           tests = ReadConfigScript(testscripts);
         }else{
           tests = CreateTest(&initialTestParams, 0);
+          AllocResults(tests);
         }
 
         CheckRunSettings(tests);

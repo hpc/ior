@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "ior.h"
 #include "aiori.h"
@@ -29,9 +30,9 @@ static struct dummy_options o = {
 };
 
 static option_help options [] = {
-      {'c', "delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_creates},
-      {'x', "delay-xfer",          "Delay per xfer in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_xfer},
-      {'z', "delay-only-rank0",    "Delay only Rank0", OPTION_FLAG, 'd', & o.delay_rank_0_only},
+      {0, "dummy.delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_creates},
+      {0, "dummy.delay-xfer",          "Delay per xfer in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o.delay_xfer},
+      {0, "dummy.delay-only-rank0",    "Delay only Rank0", OPTION_FLAG, 'd', & o.delay_rank_0_only},
       LAST_OPTION
 };
 
@@ -48,7 +49,8 @@ static void *DUMMY_Create(char *testFileName, IOR_param_t * param)
   }
   if (o.delay_creates){
     if (! o.delay_rank_0_only || (o.delay_rank_0_only && rank == 0)){
-      usleep(o.delay_creates);
+      struct timespec wait = { o.delay_creates / 1000 / 1000, 1000l * (o.delay_creates % 1000000)};
+      nanosleep( & wait, NULL);
     }
   }
   return current++;
@@ -102,7 +104,8 @@ static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_
   }
   if (o.delay_xfer){
     if (! o.delay_rank_0_only || (o.delay_rank_0_only && rank == 0)){
-      usleep(o.delay_xfer);
+      struct timespec wait = {o.delay_xfer / 1000 / 1000, 1000l * (o.delay_xfer % 1000000)};
+      nanosleep( & wait, NULL);
     }
   }
   return length;
@@ -136,6 +139,7 @@ static int DUMMY_stat (const char *path, struct stat *buf, IOR_param_t * param){
 
 ior_aiori_t dummy_aiori = {
   "DUMMY",
+  NULL,
   DUMMY_Create,
   DUMMY_Open,
   DUMMY_Xfer,

@@ -98,6 +98,7 @@ static int HDF5_Access(const char *, int, IOR_param_t *);
 
 ior_aiori_t hdf5_aiori = {
         .name = "HDF5",
+        .name_legacy = NULL,
         .create = HDF5_Create,
         .open = HDF5_Open,
         .xfer = HDF5_Xfer,
@@ -228,14 +229,27 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
                                     param->setAlignment),
                    "cannot set alignment");
 
+#ifdef HAVE_H5PSET_ALL_COLL_METADATA_OPS
+        if (param->collective_md) {
+                /* more scalable metadata */
+
+                HDF5_CHECK(H5Pset_all_coll_metadata_ops(accessPropList, 1),
+                        "cannot set collective md read");
+                HDF5_CHECK(H5Pset_coll_metadata_write(accessPropList, 1),
+                        "cannot set collective md write");
+        }
+#endif
+
         /* open file */
-        if (param->open == WRITE) {     /* WRITE */
-                *fd = H5Fcreate(testFileName, fd_mode,
-                                createPropList, accessPropList);
-                HDF5_CHECK(*fd, "cannot create file");
-        } else {                /* READ or CHECK */
-                *fd = H5Fopen(testFileName, fd_mode, accessPropList);
-                HDF5_CHECK(*fd, "cannot open file");
+        if(! param->dryRun){
+          if (param->open == WRITE) {     /* WRITE */
+                  *fd = H5Fcreate(testFileName, fd_mode,
+                                  createPropList, accessPropList);
+                  HDF5_CHECK(*fd, "cannot create file");
+          } else {                /* READ or CHECK */
+                  *fd = H5Fopen(testFileName, fd_mode, accessPropList);
+                  HDF5_CHECK(*fd, "cannot open file");
+          }
         }
 
         /* show hints actually attached to file handle */
@@ -260,6 +274,8 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
                                 HDF5_CHECK(H5Fget_vfd_handle
                                            (*fd, apl, (void **)&fd_mpiio),
                                            "cannot get MPIIO file handle");
+                                if (mpiHintsCheck != MPI_INFO_NULL)
+                                        MPI_Info_free(&mpiHintsCheck);
                                 MPI_CHECK(MPI_File_get_info
                                           (*fd_mpiio, &mpiHintsCheck),
                                           "cannot get info object through MPIIO");
@@ -267,6 +283,8 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
                                         "\nhints returned from opened file (MPIIO) {\n");
                                 ShowHints(&mpiHintsCheck);
                                 fprintf(stdout, "}\n");
+                                if (mpiHintsCheck != MPI_INFO_NULL)
+                                        MPI_Info_free(&mpiHintsCheck);
                         }
                 }
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
@@ -328,6 +346,8 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
            and shape of data set, and open it for access */
         dataSpace = H5Screate_simple(NUM_DIMS, dataSetDims, NULL);
         HDF5_CHECK(dataSpace, "cannot create simple data space");
+        if (mpiHints != MPI_INFO_NULL)
+                MPI_Info_free(&mpiHints);
 
         return (fd);
 }
@@ -377,6 +397,9 @@ static IOR_offset_t HDF5_Xfer(int access, void *fd, IOR_size_t * buffer,
                 }
         }
 
+        if(param->dryRun)
+          return length;
+
         /* create new data set */
         if (startNewDataSet == TRUE) {
                 /* if just opened this file, no data set to close yet */
@@ -422,6 +445,8 @@ static void HDF5_Fsync(void *fd, IOR_param_t * param)
  */
 static void HDF5_Close(void *fd, IOR_param_t * param)
 {
+        if(param->dryRun)
+          return;
         if (param->fd_fppReadCheck == NULL) {
                 HDF5_CHECK(H5Dclose(dataSet), "cannot close data set");
                 HDF5_CHECK(H5Sclose(dataSpace), "cannot close data space");
@@ -441,7 +466,10 @@ static void HDF5_Close(void *fd, IOR_param_t * param)
  */
 static void HDF5_Delete(char *testFileName, IOR_param_t * param)
 {
-        return(MPIIO_Delete(testFileName, param));
+  if(param->dryRun)
+    return
+  MPIIO_Delete(testFileName, param);
+  return;
 }
 
 /*
@@ -573,7 +601,9 @@ static void SetupDataSet(void *fd, IOR_param_t * param)
 static IOR_offset_t
 HDF5_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
 {
-        return(MPIIO_GetFileSize(test, testComm, testFileName));
+  if(test->dryRun)
+    return 0;
+  return(MPIIO_GetFileSize(test, testComm, testFileName));
 }
 
 /*
@@ -581,5 +611,7 @@ HDF5_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
  */
 static int HDF5_Access(const char *path, int mode, IOR_param_t *param)
 {
-        return(MPIIO_Access(path, mode, param));
+  if(param->dryRun)
+    return 0;
+  return(MPIIO_Access(path, mode, param));
 }

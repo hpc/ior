@@ -11,8 +11,6 @@
 
 extern char **environ;
 
-static struct results *bw_values(int reps, IOR_results_t * measured, int offset, double *vals);
-static struct results *ops_values(int reps, IOR_results_t * measured, int offset, IOR_offset_t transfer_size, double *vals);
 static double mean_of_array_of_doubles(double *values, int len);
 static void PPDouble(int leftjustify, double number, char *append);
 static void PrintNextToken();
@@ -153,6 +151,9 @@ static void PrintNamedArrayStart(char * key){
 }
 
 static void PrintEndSection(){
+  if (rank != 0)
+    return;
+
   indent--;
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\n");
@@ -163,6 +164,8 @@ static void PrintEndSection(){
 }
 
 static void PrintArrayStart(){
+  if (rank != 0)
+    return;
   PrintNextToken();
   needNextToken = 0;
   if(outputFormat == OUTPUT_JSON){
@@ -171,6 +174,8 @@ static void PrintArrayStart(){
 }
 
 static void PrintArrayNamedStart(char * key){
+  if (rank != 0)
+    return;
   PrintNextToken();
   needNextToken = 0;
   if(outputFormat == OUTPUT_JSON){
@@ -179,6 +184,9 @@ static void PrintArrayNamedStart(char * key){
 }
 
 static void PrintArrayEnd(){
+  if (rank != 0)
+    return;
+
   indent--;
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "]\n");
@@ -187,10 +195,14 @@ static void PrintArrayEnd(){
 }
 
 void PrintRepeatEnd(){
+  if (rank != 0)
+          return;
   PrintArrayEnd();
 }
 
 void PrintRepeatStart(){
+  if (rank != 0)
+          return;
   if( outputFormat == OUTPUT_DEFAULT){
     return;
   }
@@ -233,20 +245,6 @@ void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_su
   fflush(out_resultfile);
 }
 
-
-/*
- * Message to print immediately after MPI_Init so we know that
- * ior has started.
- */
-void PrintEarlyHeader()
-{
-        if (rank != 0)
-                return;
-
-        fprintf(out_resultfile, "IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
-        fflush(out_resultfile);
-}
-
 void PrintHeader(int argc, char **argv)
 {
         struct utsname unamebuf;
@@ -254,8 +252,13 @@ void PrintHeader(int argc, char **argv)
 
         if (rank != 0)
                 return;
-        PrintStartSection();
 
+        PrintStartSection();
+        if (outputFormat != OUTPUT_DEFAULT){
+          PrintKeyVal("Version", META_VERSION);
+        }else{
+          printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
+        }
         PrintKeyVal("Began", CurrentTimeString());
         PrintKeyValStart("Command line");
         fprintf(out_resultfile, "%s", argv[0]);
@@ -336,6 +339,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("outlierThreshold", test->outlierThreshold);
 
     PrintKeyVal("options", test->options);
+    PrintKeyValInt("dryRun", test->dryRun);
     PrintKeyValInt("nodes", test->nodes);
     PrintKeyValInt("memoryPerTask", (unsigned long) test->memoryPerTask);
     PrintKeyValInt("memoryPerNode", (unsigned long) test->memoryPerNode);
@@ -388,10 +392,12 @@ void ShowTestStart(IOR_param_t *test)
 
 void ShowTestEnd(IOR_test_t *tptr){
   if(rank == 0 && tptr->params.stoneWallingWearOut){
+
+    size_t pairs_accessed = tptr->results->write.pairs_accessed;
     if (tptr->params.stoneWallingStatusFile){
-      StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, tptr->results->pairs_accessed);
+      StoreStoneWallingIterations(tptr->params.stoneWallingStatusFile, pairs_accessed);
     }else{
-      fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %lld\n", (long long) tptr->results->pairs_accessed);
+      fprintf(out_logfile, "Pairs deadlineForStonewallingaccessed: %ld\n", pairs_accessed);
     }
   }
   PrintEndSection();
@@ -438,6 +444,9 @@ void ShowSetup(IOR_param_t *params)
   PrintKeyVal("xfersize", HumanReadable(params->transferSize, BASE_TWO));
   PrintKeyVal("blocksize", HumanReadable(params->blockSize, BASE_TWO));
   PrintKeyVal("aggregate filesize", HumanReadable(params->expectedAggFileSize, BASE_TWO));
+  if(params->dryRun){
+    PrintKeyValInt("dryRun", params->dryRun);
+  }
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
   if (params->lustre_set_striping) {
@@ -457,14 +466,63 @@ void ShowSetup(IOR_param_t *params)
   fflush(out_resultfile);
 }
 
+static struct results *bw_ops_values(const int reps, IOR_results_t *measured,
+                                     IOR_offset_t transfer_size,
+                                     const double *vals, const int access)
+{
+        struct results *r;
+        int i;
 
+        r = (struct results *)malloc(sizeof(struct results)
+                                     + (reps * sizeof(double)));
+        if (r == NULL)
+                ERR("malloc failed");
+        r->val = (double *)&r[1];
+
+        for (i = 0; i < reps; i++, measured++) {
+                IOR_point_t *point = (access == WRITE) ? &measured->write :
+                                                         &measured->read;
+
+                r->val[i] = ((double) (point->aggFileSizeForBW))
+                            / transfer_size / vals[i];
+
+                if (i == 0) {
+                        r->min = r->val[i];
+                        r->max = r->val[i];
+                        r->sum = 0.0;
+                }
+                r->min = MIN(r->min, r->val[i]);
+                r->max = MAX(r->max, r->val[i]);
+                r->sum += r->val[i];
+        }
+        r->mean = r->sum / reps;
+        r->var = 0.0;
+        for (i = 0; i < reps; i++) {
+                r->var += pow((r->mean - r->val[i]), 2);
+        }
+        r->var = r->var / reps;
+        r->sd = sqrt(r->var);
+
+        return r;
+}
+
+static struct results *bw_values(const int reps, IOR_results_t *measured,
+                                 const double *vals, const int access)
+{
+        return bw_ops_values(reps, measured, 1, vals, access);
+}
+
+static struct results *ops_values(const int reps, IOR_results_t *measured,
+                                  IOR_offset_t transfer_size,
+                                  const double *vals, const int access)
+{
+        return bw_ops_values(reps, measured, transfer_size, vals, access);
+}
 
 /*
  * Summarize results
- *
- * operation is typically "write" or "read"
  */
-static void PrintLongSummaryOneOperation(IOR_test_t *test, int times_offset, char *operation)
+static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
@@ -479,14 +537,20 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, int times_offset, cha
 
         double * times = malloc(sizeof(double)* reps);
         for(int i=0; i < reps; i++){
-          times[i] = *(double*)((char*) & results[i] + times_offset);
+                IOR_point_t *point = (access == WRITE) ? &results[i].write :
+                                                         &results[i].read;
+                times[i] = point->time;
         }
 
-        bw = bw_values(reps, results, offsetof(IOR_results_t, aggFileSizeForBW), times);
-        ops = ops_values(reps, results, offsetof(IOR_results_t, aggFileSizeForBW), params->transferSize, times);
+        bw = bw_values(reps, results, times, access);
+        ops = ops_values(reps, results, params->transferSize, times, access);
+
+        IOR_point_t *point = (access == WRITE) ? &results[0].write :
+                                                 &results[0].read;
+
 
         if(outputFormat == OUTPUT_DEFAULT){
-          fprintf(out_resultfile, "%-9s ", operation);
+          fprintf(out_resultfile, "%-9s ", access == WRITE ? "write" : "read");
           fprintf(out_resultfile, "%10.2f ", bw->max / MEBIBYTE);
           fprintf(out_resultfile, "%10.2f ", bw->min / MEBIBYTE);
           fprintf(out_resultfile, "%10.2f ", bw->mean / MEBIBYTE);
@@ -508,13 +572,13 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, int times_offset, cha
           fprintf(out_resultfile, "%6lld ", params->segmentCount);
           fprintf(out_resultfile, "%8lld ", params->blockSize);
           fprintf(out_resultfile, "%8lld ", params->transferSize);
-          fprintf(out_resultfile, "%9.1f ", (float)results[0].aggFileSizeForBW / MEBIBYTE);
+          fprintf(out_resultfile, "%9.1f ", (float)point->aggFileSizeForBW / MEBIBYTE);
           fprintf(out_resultfile, "%3s ", params->api);
           fprintf(out_resultfile, "%6d", params->referenceNumber);
           fprintf(out_resultfile, "\n");
         }else if (outputFormat == OUTPUT_JSON){
           PrintStartSection();
-          PrintKeyVal("operation", operation);
+          PrintKeyVal("operation", access == WRITE ? "write" : "read");
           PrintKeyVal("API", params->api);
           PrintKeyValInt("TestID", params->id);
           PrintKeyValInt("ReferenceNumber", params->referenceNumber);
@@ -541,7 +605,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, int times_offset, cha
           PrintKeyValDouble("OPsMean", ops->mean);
           PrintKeyValDouble("OPsSD", ops->sd);
           PrintKeyValDouble("MeanTime", mean_of_array_of_doubles(times, reps));
-          PrintKeyValDouble("xsizeMiB", (double) results[0].aggFileSizeForBW / MEBIBYTE);
+          PrintKeyValDouble("xsizeMiB", (double) point->aggFileSizeForBW / MEBIBYTE);
           PrintEndSection();
         }else if (outputFormat == OUTPUT_CSV){
 
@@ -559,9 +623,9 @@ void PrintLongSummaryOneTest(IOR_test_t *test)
         IOR_param_t *params = &test->params;
 
         if (params->writeFile)
-                PrintLongSummaryOneOperation(test, offsetof(IOR_results_t, writeTime), "write");
+                PrintLongSummaryOneOperation(test, WRITE);
         if (params->readFile)
-                PrintLongSummaryOneOperation(test, offsetof(IOR_results_t, readTime), "read");
+                PrintLongSummaryOneOperation(test, READ);
 }
 
 void PrintLongSummaryHeader()
@@ -613,8 +677,8 @@ void PrintShortSummary(IOR_test_t * test)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
-        double max_write = 0.0;
-        double max_read = 0.0;
+        double max_write_bw = 0.0;
+        double max_read_bw = 0.0;
         double bw;
         int reps;
         int i;
@@ -626,33 +690,31 @@ void PrintShortSummary(IOR_test_t * test)
 
         reps = params->repetitions;
 
-        max_write = results[0].writeTime;
-        max_read = results[0].readTime;
         for (i = 0; i < reps; i++) {
-                bw = (double)results[i].aggFileSizeForBW / results[i].writeTime;
-                max_write = MAX(bw, max_write);
-                bw = (double)results[i].aggFileSizeForBW / results[i].readTime;
-                max_read = MAX(bw, max_read);
+                bw = (double)results[i].write.aggFileSizeForBW / results[i].write.time;
+                max_write_bw = MAX(bw, max_write_bw);
+                bw = (double)results[i].read.aggFileSizeForBW / results[i].read.time;
+                max_read_bw = MAX(bw, max_read_bw);
         }
 
         if(outputFormat == OUTPUT_DEFAULT){
           if (params->writeFile) {
                   fprintf(out_resultfile, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
-                          max_write/MEBIBYTE, max_write/MEGABYTE);
+                          max_write_bw/MEBIBYTE, max_write_bw/MEGABYTE);
           }
           if (params->readFile) {
                   fprintf(out_resultfile, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
-                          max_read/MEBIBYTE, max_read/MEGABYTE);
+                          max_read_bw/MEBIBYTE, max_read_bw/MEGABYTE);
           }
         }else if (outputFormat == OUTPUT_JSON){
           PrintNamedSectionStart("max");
           if (params->writeFile) {
-            PrintKeyValDouble("writeMiB", max_write/MEBIBYTE);
-            PrintKeyValDouble("writeMB", max_write/MEGABYTE);
+            PrintKeyValDouble("writeMiB", max_write_bw/MEBIBYTE);
+            PrintKeyValDouble("writeMB", max_write_bw/MEGABYTE);
           }
           if (params->readFile) {
-            PrintKeyValDouble("readMiB", max_read/MEBIBYTE);
-            PrintKeyValDouble("readMB", max_read/MEGABYTE);
+            PrintKeyValDouble("readMiB", max_read_bw/MEBIBYTE);
+            PrintKeyValDouble("readMB", max_read_bw/MEGABYTE);
           }
           PrintEndSection();
         }
@@ -737,78 +799,6 @@ static void PPDouble(int leftjustify, double number, char *append)
 
         fprintf(out_resultfile, format, number, append);
 }
-
-
-
-static struct results *bw_values(int reps, IOR_results_t * measured, int offset, double *vals)
-{
-        struct results *r;
-        int i;
-
-        r = (struct results *) malloc(sizeof(struct results) + (reps * sizeof(double)));
-        if (r == NULL)
-                ERR("malloc failed");
-        r->val = (double *)&r[1];
-
-        for (i = 0; i < reps; i++, measured++) {
-
-                r->val[i] = (double) *((IOR_offset_t*) ((char*)measured + offset)) / vals[i];
-                if (i == 0) {
-                        r->min = r->val[i];
-                        r->max = r->val[i];
-                        r->sum = 0.0;
-                }
-                r->min = MIN(r->min, r->val[i]);
-                r->max = MAX(r->max, r->val[i]);
-                r->sum += r->val[i];
-        }
-        r->mean = r->sum / reps;
-        r->var = 0.0;
-        for (i = 0; i < reps; i++) {
-                r->var += pow((r->mean - r->val[i]), 2);
-        }
-        r->var = r->var / reps;
-        r->sd = sqrt(r->var);
-
-        return r;
-}
-
-static struct results *ops_values(int reps, IOR_results_t * measured, int offset,
-                                  IOR_offset_t transfer_size,
-                                  double *vals)
-{
-        struct results *r;
-        int i;
-
-        r = (struct results *)malloc(sizeof(struct results)
-                                     + (reps * sizeof(double)));
-        if (r == NULL)
-                ERR("malloc failed");
-        r->val = (double *)&r[1];
-
-        for (i = 0; i < reps; i++, measured++) {
-                r->val[i] = (double) *((IOR_offset_t*) ((char*)measured + offset))
-                    / transfer_size / vals[i];
-                if (i == 0) {
-                        r->min = r->val[i];
-                        r->max = r->val[i];
-                        r->sum = 0.0;
-                }
-                r->min = MIN(r->min, r->val[i]);
-                r->max = MAX(r->max, r->val[i]);
-                r->sum += r->val[i];
-        }
-        r->mean = r->sum / reps;
-        r->var = 0.0;
-        for (i = 0; i < reps; i++) {
-                r->var += pow((r->mean - r->val[i]), 2);
-        }
-        r->var = r->var / reps;
-        r->sd = sqrt(r->var);
-
-        return r;
-}
-
 
 static double mean_of_array_of_doubles(double *values, int len)
 {

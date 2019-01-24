@@ -63,6 +63,7 @@ extern MPI_Comm testComm;
 
 ior_aiori_t ime_aiori = {
         .name          = "IME",
+        .name_legacy   = "IM",
         .create        = IME_Create,
         .open          = IME_Open,
         .xfer          = IME_Xfer,
@@ -271,10 +272,10 @@ static char *IME_GetVersion()
 /*
  * XXX: statfs call is currently not exposed by IME native interface.
  */
-static int IME_StatFS(const char *oid, ior_aiori_statfs_t *stat_buf,
+static int IME_StatFS(const char *path, ior_aiori_statfs_t *stat_buf,
                       IOR_param_t *param)
 {
-        (void)oid;
+        (void)path;
         (void)stat_buf;
         (void)param;
 
@@ -282,29 +283,33 @@ static int IME_StatFS(const char *oid, ior_aiori_statfs_t *stat_buf,
         return -1;
 }
 
-/*
- * XXX: mkdir call is currently not exposed by IME native interface.
- */
-static int IME_MkDir(const char *oid, mode_t mode, IOR_param_t *param)
+static int IME_MkDir(const char *path, mode_t mode, IOR_param_t *param)
 {
-        (void)oid;
-        (void)mode;
         (void)param;
 
-        WARN("mkdir is currently not supported in IME backend!");
+#if (IME_NATIVE_API_VERSION >= 130)
+        return ime_native_mkdir(path, mode);
+#else
+        (void)path;
+        (void)mode;
+
+        WARN("mkdir not supported in IME backend!");
         return -1;
+#endif
 }
 
-/*
- * XXX: rmdir call is curretly not exposed by IME native interface.
- */
-static int IME_RmDir(const char *oid, IOR_param_t *param)
+static int IME_RmDir(const char *path, IOR_param_t *param)
 {
-        (void)oid;
         (void)param;
 
-        WARN("rmdir is currently not supported in IME backend!");
+#if (IME_NATIVE_API_VERSION >= 130)
+        return ime_native_rmdir(path);
+#else
+        (void)path;
+
+        WARN("rmdir not supported in IME backend!");
         return -1;
+#endif
 }
 
 /*

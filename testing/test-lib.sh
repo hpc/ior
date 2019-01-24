@@ -1,18 +1,22 @@
 # Test script for basic IOR functionality testing various patterns
-# It is kept as simple as possible and outputs the parameters used such that any test can be rerun easily.
+# It is kept as simple as possible and outputs the parameters used such that any
+# test can be rerun easily.
 
-# You can override the defaults by setting the variables before invoking the script, or simply set them here...
+# You can override the defaults by setting the variables before invoking the
+# script, or simply set them here...
 # Example: export IOR_EXTRA="-v -v -v"
 
 IOR_MPIRUN=${IOR_MPIRUN:-mpiexec -np}
-IOR_BIN_DIR=${IOR_BIN_DIR:-./build/src}
-IOR_OUT=${IOR_OUT:-./build/test}
+IOR_BIN_DIR=${IOR_BIN_DIR:-./src}
+IOR_OUT=${IOR_OUT:-./test_logs}
+IOR_TMP=${IOR_TMP:-/dev/shm}
 IOR_EXTRA=${IOR_EXTRA:-} # Add global options like verbosity
 MDTEST_EXTRA=${MDTEST_EXTRA:-}
+MDTEST_TEST_PATTERNS=${MDTEST_TEST_PATTERNS:-../testing/mdtest-patterns/$TYPE}
 
 ################################################################################
 mkdir -p ${IOR_OUT}
-mkdir -p /dev/shm/mdest
+mkdir -p ${IOR_TMP}/mdest
 
 ## Sanity check
 
@@ -36,8 +40,8 @@ I=0
 function IOR(){
   RANKS=$1
   shift
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} ${IOR_EXTRA} -o /dev/shm/ior"
-  $WHAT 1>${IOR_OUT}/$I 2>&1
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} ${IOR_EXTRA} -o ${IOR_TMP}/ior"
+  $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
     ERRORS=$(($ERRORS + 1))
@@ -51,12 +55,27 @@ function IOR(){
 function MDTEST(){
   RANKS=$1
   shift
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} ${MDTEST_EXTRA} -d /dev/shm/mdest"
-  $WHAT 1>${IOR_OUT}/$I 2>&1
+  rm -rf ${IOR_TMP}/mdest
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} ${MDTEST_EXTRA} -d ${IOR_TMP}/mdest -V=4"
+  $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
     ERRORS=$(($ERRORS + 1))
   else
+    # compare basic pattern
+    if [[ -r ${MDTEST_TEST_PATTERNS}/$I.txt ]] ; then
+      grep "V-3" "${IOR_OUT}/test_out.$I" > "${IOR_OUT}/tmp"
+      cmp -s "${IOR_OUT}/tmp" ${MDTEST_TEST_PATTERNS}/$I.txt
+      if [[ $? != 0 ]]; then
+        mv "${IOR_OUT}/tmp" ${IOR_OUT}/tmp.$I
+        echo -n "Pattern differs! check: diff -u ${MDTEST_TEST_PATTERNS}/$I.txt ${IOR_OUT}/tmp.$I "
+      fi
+    else
+      if [[ ! -e ${MDTEST_TEST_PATTERNS} ]] ; then
+        mkdir -p ${MDTEST_TEST_PATTERNS}
+      fi
+      grep "V-3" "${IOR_OUT}/test_out.$I" > ${MDTEST_TEST_PATTERNS}/$I.txt
+    fi
     echo -n "OK "
   fi
   echo " $WHAT"

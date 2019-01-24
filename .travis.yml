@@ -28,11 +28,4 @@ install:
     # aiori-S3.c to achive this.
     # GPFS
     # NOTE: Think GPFS need a license and is therefore not testable with travis.
-before_script: ./bootstrap
-script: mkdir build && cd build && ../configure --with-hdf5 && make && cd .. && ./testing/basic-tests.sh
-
-
-# notifications:
-#   email:
-#     on_success: change # default: change
-#     on_failure: always # default: always
+script: ./travis-build.sh && CONFIGURE_OPTS="--with-hdf5" ./travis-test.sh

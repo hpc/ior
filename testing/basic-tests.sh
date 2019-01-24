@@ -6,12 +6,15 @@
 # You can override the defaults by setting the variables before invoking the script, or simply set them here...
 # Example: export IOR_EXTRA="-v -v -v"
 
-ROOT=${0%/*}
+ROOT="$(dirname ${BASH_SOURCE[0]})"
+TYPE="basic"
 
 source $ROOT/test-lib.sh
 
 MDTEST 1 -a POSIX
 MDTEST 2 -a POSIX -W 2
+MDTEST 1 -C -T -r -F -I 1 -z 1 -b 1 -L -u
+MDTEST 1 -C -T -I 1 -z 1 -b 1 -u
 
 IOR 1 -a POSIX -w    -z                  -F -Y -e -i1 -m -t 100k -b 1000k
 IOR 1 -a POSIX -w    -z                  -F -k -e -i2 -m -t 100k -b 100k
@@ -22,5 +25,8 @@ IOR 2 -a POSIX -w    -z  -C -Q 1        -F -k -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -r    -z  -Z -Q 2        -F -k -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -r    -z  -Z -Q 3 -X  13 -F -k -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -w    -z  -Z -Q 1 -X -13 -F    -e -i1 -m -t 100k -b 100k
+
+
+IOR 2 -f "$ROOT/test_comments.ior"
 
 END

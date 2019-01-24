@@ -53,7 +53,7 @@ static IOR_offset_t NCMPI_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void NCMPI_Close(void *, IOR_param_t *);
 static void NCMPI_Delete(char *, IOR_param_t *);
-static void NCMPI_SetVersion(IOR_param_t *);
+static char *NCMPI_GetVersion();
 static void NCMPI_Fsync(void *, IOR_param_t *);
 static IOR_offset_t NCMPI_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static int NCMPI_Access(const char *, int, IOR_param_t *);
@@ -62,6 +62,7 @@ static int NCMPI_Access(const char *, int, IOR_param_t *);
 
 ior_aiori_t ncmpi_aiori = {
         .name = "NCMPI",
+        .name_legacy = NULL,
         .create = NCMPI_Create,
         .open = NCMPI_Open,
         .xfer = NCMPI_Xfer,
@@ -175,7 +176,7 @@ static void *NCMPI_Open(char *testFileName, IOR_param_t * param)
 static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
                                IOR_offset_t length, IOR_param_t * param)
 {
-        char *bufferPtr = (char *)buffer;
+        signed char *bufferPtr = (signed char *)buffer;
         static int firstReadCheck = FALSE, startDataSet;
         int var_id, dim_id[NUM_DIMS];
         MPI_Offset bufSize[NUM_DIMS], offset[NUM_DIMS];
@@ -343,7 +344,7 @@ static void NCMPI_Delete(char *testFileName, IOR_param_t * param)
  */
 static char* NCMPI_GetVersion()
 {
-  return ncmpi_inq_libvers();
+  return (char *)ncmpi_inq_libvers();
 }
 
 /*

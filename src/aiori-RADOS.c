@@ -41,9 +41,9 @@ static struct rados_options o = {
 };
 
 static option_help options [] = {
-      {'u', "user", "Username for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.user},
-      {'c', "conf", "Config file for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.conf},
-      {'p', "pool", "RADOS pool to use for I/O", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
+      {0, "rados.user", "Username for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.user},
+      {0, "rados.conf", "Config file for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.conf},
+      {0, "rados.pool", "RADOS pool to use for I/O", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
       LAST_OPTION
 };
 
@@ -67,6 +67,7 @@ static option_help * RADOS_options();
 /************************** D E C L A R A T I O N S ***************************/
 ior_aiori_t rados_aiori = {
         .name = "RADOS",
+        .name_legacy = NULL,
         .create = RADOS_Create,
         .open = RADOS_Open,
         .xfer = RADOS_Xfer,

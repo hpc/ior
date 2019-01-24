@@ -20,6 +20,11 @@
 #include <math.h>
 #include <mpi.h>
 #include <string.h>
+
+#if defined(HAVE_STRINGS_H)
+#include <strings.h>
+#endif
+
 #include <sys/stat.h>           /* struct stat */
 #include <time.h>
 
@@ -36,6 +41,7 @@
 #include "utilities.h"
 #include "parse_options.h"
 
+#define IOR_NB_TIMERS 6
 
 /* file scope globals */
 extern char **environ;
@@ -48,8 +54,9 @@ static char **ParseFileName(char *, int *);
 static void InitTests(IOR_test_t * , MPI_Comm);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t *);
-static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers);
-static void WriteTimes(IOR_param_t *, double **, int, int);
+static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
+                                void *fd, const int access,
+                                IOR_io_buffers *ioBuffers);
 
 IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out){
         IOR_test_t *tests_head;
@@ -60,7 +67,6 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
         MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld), "cannot get number of tasks");
         MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
-        PrintEarlyHeader();
 
         /* setup tests, and validate parameters */
         tests_head = ParseCommandLine(argc, argv);
@@ -111,8 +117,6 @@ int ior_main(int argc, char **argv)
               "cannot get number of tasks");
     MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
 
-    PrintEarlyHeader();
-
     /* set error-handling */
     /*MPI_CHECK(MPI_Errhandler_set(mpi_comm_world, MPI_ERRORS_RETURN),
        "cannot set errhandler"); */
@@ -120,6 +124,8 @@ int ior_main(int argc, char **argv)
     /* setup tests, and validate parameters */
     InitTests(tests_head, mpi_comm_world);
     verbose = tests_head->params.verbose;
+
+    aiori_initialize(tests_head);
 
     PrintHeader(argc, argv);
 
@@ -150,9 +156,11 @@ int ior_main(int argc, char **argv)
     /* display finish time */
     PrintTestEnds();
 
-    DestroyTests(tests_head);
+    aiori_finalize(tests_head);
 
     MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
+
+    DestroyTests(tests_head);
 
     return totalErrorCount;
 }
@@ -253,44 +261,38 @@ DisplayOutliers(int numTasks,
 /*
  * Check for outliers in start/end times and elapsed create/xfer/close times.
  */
-static void CheckForOutliers(IOR_param_t * test, double **timer, int rep,
-                             int access)
+static void
+CheckForOutliers(IOR_param_t *test, const double *timer, const int access)
 {
-        int shift;
-
-        if (access == WRITE) {
-                shift = 0;
-        } else {                /* READ */
-                shift = 6;
-        }
-
-        DisplayOutliers(test->numTasks, timer[shift + 0][rep],
+        DisplayOutliers(test->numTasks, timer[0],
                         "start time", access, test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[shift + 1][rep] - timer[shift + 0][rep],
+                        timer[1] - timer[0],
                         "elapsed create time", access, test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[shift + 3][rep] - timer[shift + 2][rep],
+                        timer[3] - timer[2],
                         "elapsed transfer time", access,
                         test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[shift + 5][rep] - timer[shift + 4][rep],
+                        timer[5] - timer[4],
                         "elapsed close time", access, test->outlierThreshold);
-        DisplayOutliers(test->numTasks, timer[shift + 5][rep], "end time",
+        DisplayOutliers(test->numTasks, timer[5], "end time",
                         access, test->outlierThreshold);
-
 }
 
 /*
  * Check if actual file size equals expected size; if not use actual for
  * calculating performance rate.
  */
-static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
+static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep,
+                          const int access)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
+        IOR_point_t *point = (access == WRITE) ? &results[rep].write :
+                                                 &results[rep].read;
 
-        MPI_CHECK(MPI_Allreduce(&dataMoved, & results[rep].aggFileSizeFromXfer,
+        MPI_CHECK(MPI_Allreduce(&dataMoved, &point->aggFileSizeFromXfer,
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
                   "cannot total data moved");
 
@@ -298,18 +300,18 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
             strcasecmp(params->api, "DAOS") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
                         if ((params->expectedAggFileSize
-                             != results[rep].aggFileSizeFromXfer)
-                            || (results[rep].aggFileSizeFromStat
-                                != results[rep].aggFileSizeFromXfer)) {
+                             != point->aggFileSizeFromXfer)
+                            || (point->aggFileSizeFromStat
+                                != point->aggFileSizeFromXfer)) {
                                 fprintf(out_logfile,
                                         "WARNING: Expected aggregate file size       = %lld.\n",
                                         (long long) params->expectedAggFileSize);
                                 fprintf(out_logfile,
                                         "WARNING: Stat() of aggregate file size      = %lld.\n",
-                                        (long long) results[rep].aggFileSizeFromStat);
+                                        (long long) point->aggFileSizeFromStat);
                                 fprintf(out_logfile,
                                         "WARNING: Using actual aggregate bytes moved = %lld.\n",
-                                        (long long) results[rep].aggFileSizeFromXfer);
+                                        (long long) point->aggFileSizeFromXfer);
                                 if(params->deadlineForStonewalling){
                                   fprintf(out_logfile,
                                         "WARNING: maybe caused by deadlineForStonewalling\n");
@@ -317,7 +319,8 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep)
                         }
                 }
         }
-        results[rep].aggFileSizeForBW = results[rep].aggFileSizeFromXfer;
+
+        point->aggFileSizeForBW = point->aggFileSizeFromXfer;
 }
 
 /*
@@ -459,12 +462,16 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
  */
 static void *aligned_buffer_alloc(size_t size)
 {
-        size_t pageSize;
         size_t pageMask;
         char *buf, *tmp;
         char *aligned;
 
-        pageSize = getpagesize();
+#ifdef HAVE_SYSCONF
+        long pageSize = sysconf(_SC_PAGESIZE);
+#else
+        size_t pageSize = getpagesize();
+#endif
+
         pageMask = pageSize - 1;
         buf = malloc(size + pageSize + sizeof(void *));
         if (buf == NULL)
@@ -497,7 +504,7 @@ static void* safeMalloc(uint64_t size){
   return d;
 }
 
-static void AllocResults(IOR_test_t *test)
+void AllocResults(IOR_test_t *test)
 {
   int reps;
   if (test->results != NULL)
@@ -531,7 +538,6 @@ IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num)
         newTest->next = NULL;
         newTest->results = NULL;
 
-        AllocResults(newTest);
         return newTest;
 }
 
@@ -825,14 +831,15 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
         sprintf(dir, "%s%d", dir, (rank + rankOffset) % test->numTasks);
 
         /* dir doesn't exist, so create */
-        if (access(dir, F_OK) != 0) {
-                if (mkdir(dir, S_IRWXU) < 0) {
+        if (backend->access(dir, F_OK, test) != 0) {
+                if (backend->mkdir(dir, S_IRWXU, test) < 0) {
                         ERR("cannot create directory");
                 }
 
                 /* check if correct permissions */
-        } else if (access(dir, R_OK) != 0 || access(dir, W_OK) != 0 ||
-                   access(dir, X_OK) != 0) {
+        } else if (backend->access(dir, R_OK, test) != 0 ||
+                   backend->access(dir, W_OK, test) != 0 ||
+                   backend->access(dir, X_OK, test) != 0) {
                 ERR("invalid directory permissions");
         }
 
@@ -847,54 +854,46 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
 /*
  * Reduce test results, and show if verbose set.
  */
-
-static void ReduceIterResults(IOR_test_t *test, double **timer, int rep,
-                              int access)
+static void
+ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int access)
 {
-  double reduced[12] = { 0 };
-  double diff[6];
-  double *diff_subset;
-  double totalTime;
-  double bw;
-  int i;
-  MPI_Op op;
+        double reduced[IOR_NB_TIMERS] = { 0 };
+        double diff[IOR_NB_TIMERS / 2 + 1];
+        double totalTime;
+        double bw;
+        int i;
+        MPI_Op op;
 
-  assert(access == WRITE || access == READ);
+        assert(access == WRITE || access == READ);
 
         /* Find the minimum start time of the even numbered timers, and the
            maximum finish time for the odd numbered timers */
-        for (i = 0; i < 12; i++) {
+        for (i = 0; i < IOR_NB_TIMERS; i++) {
                 op = i % 2 ? MPI_MAX : MPI_MIN;
-                MPI_CHECK(MPI_Reduce(&timer[i][rep], &reduced[i], 1, MPI_DOUBLE,
+                MPI_CHECK(MPI_Reduce(&timer[i], &reduced[i], 1, MPI_DOUBLE,
                                      op, 0, testComm), "MPI_Reduce()");
         }
 
-        if (rank != 0) {
-    /* Only rank 0 tallies and prints the results. */
-    return;
-  }
+        /* Only rank 0 tallies and prints the results. */
+        if (rank != 0)
+                return;
 
-  /* Calculate elapsed times and throughput numbers */
-  for (i = 0; i < 6; i++) {
-    diff[i] = reduced[2 * i + 1] - reduced[2 * i];
-  }
-  if (access == WRITE) {
-    totalTime = reduced[5] - reduced[0];
-    test->results[rep].writeTime = totalTime;
-    diff_subset = &diff[0];
-  } else { /* READ */
-    totalTime = reduced[11] - reduced[6];
-    test->results[rep].readTime = totalTime;
-    diff_subset = &diff[3];
-  }
+        /* Calculate elapsed times and throughput numbers */
+        for (i = 0; i < IOR_NB_TIMERS / 2; i++)
+                diff[i] = reduced[2 * i + 1] - reduced[2 * i];
 
-        if (verbose < VERBOSE_0) {
-    return;
-  }
+        totalTime = reduced[5] - reduced[0];
 
-  bw = (double)test->results[rep].aggFileSizeForBW / totalTime;
+        IOR_point_t *point = (access == WRITE) ? &test->results[rep].write :
+                                                 &test->results[rep].read;
 
-  PrintReducedResult(test, access, bw, diff_subset, totalTime, rep);
+        point->time = totalTime;
+
+        if (verbose < VERBOSE_0)
+                return;
+
+        bw = (double)point->aggFileSizeForBW / totalTime;
+        PrintReducedResult(test, access, bw, diff, totalTime, rep);
 }
 
 /*
@@ -1117,7 +1116,72 @@ static void *HogMemory(IOR_param_t *params)
 
         return buf;
 }
+/*
+ * Write times taken during each iteration of the test.
+ */
+static void
+WriteTimes(IOR_param_t *test, const double *timer, const int iteration,
+           const int access)
+{
+        char timerName[MAX_STR];
 
+        for (int i = 0; i < IOR_NB_TIMERS; i++) {
+
+                if (access == WRITE) {
+                        switch (i) {
+                        case 0:
+                                strcpy(timerName, "write open start");
+                                break;
+                        case 1:
+                                strcpy(timerName, "write open stop");
+                                break;
+                        case 2:
+                                strcpy(timerName, "write start");
+                                break;
+                        case 3:
+                                strcpy(timerName, "write stop");
+                                break;
+                        case 4:
+                                strcpy(timerName, "write close start");
+                                break;
+                        case 5:
+                                strcpy(timerName, "write close stop");
+                                break;
+                        default:
+                                strcpy(timerName, "invalid timer");
+                                break;
+                        }
+                }
+                else {
+                        switch (i) {
+                        case 0:
+                                strcpy(timerName, "read open start");
+                                break;
+                        case 1:
+                                strcpy(timerName, "read open stop");
+                                break;
+                        case 2:
+                                strcpy(timerName, "read start");
+                                break;
+                        case 3:
+                                strcpy(timerName, "read stop");
+                                break;
+                        case 4:
+                                strcpy(timerName, "read close start");
+                                break;
+                        case 5:
+                                strcpy(timerName, "read close stop");
+                                break;
+                        default:
+                                strcpy(timerName, "invalid timer");
+                                break;
+                        }
+                }
+                fprintf(out_logfile, "Test %d: Iter=%d, Task=%d, Time=%f, %s\n",
+                        test->id, iteration, (int)rank, timer[i],
+                        timerName);
+        }
+}
 /*
  * Using the test parameters, run iteration(s) of single test.
  */
@@ -1126,10 +1190,10 @@ static void TestIoSys(IOR_test_t *test)
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
         char testFileName[MAX_STR];
-        double *timer[12];
+        double timer[IOR_NB_TIMERS];
         double startTime;
         int pretendRank;
-        int i, rep;
+        int rep;
         void *fd;
         MPI_Group orig_group, new_group;
         int range[3];
@@ -1176,18 +1240,10 @@ static void TestIoSys(IOR_test_t *test)
         }
         params->tasksPerNode = CountTasksPerNode(testComm);
 
-        /* setup timers */
-        for (i = 0; i < 12; i++) {
-                timer[i] = (double *)malloc(params->repetitions * sizeof(double));
-                if (timer[i] == NULL)
-                        ERR("malloc failed");
-        }
-
         /* bind I/O calls to specific API */
         backend = aiori_select(params->api);
-
-        if (backend->initialize)
-                backend->initialize(params);
+        if (backend == NULL)
+                ERR_SIMPLE("unrecognized I/O API");
 
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
@@ -1261,9 +1317,9 @@ static void TestIoSys(IOR_test_t *test)
                         params->stoneWallingWearOutIterations = params_saved_wearout;
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = WRITE;
-                        timer[0][rep] = GetTimeStamp();
+                        timer[0] = GetTimeStamp();
                         fd = backend->create(testFileName, params);
-                        timer[1][rep] = GetTimeStamp();
+                        timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
@@ -1272,40 +1328,40 @@ static void TestIoSys(IOR_test_t *test)
                                         "Commencing write performance test: %s",
                                         CurrentTimeString());
                         }
-                        timer[2][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, & results[rep], fd, WRITE, &ioBuffers);
+                        timer[2] = GetTimeStamp();
+                        dataMoved = WriteOrRead(params, &results[rep], fd, WRITE, &ioBuffers);
                         if (params->verbose >= VERBOSE_4) {
                           fprintf(out_logfile, "* data moved = %llu\n", dataMoved);
                           fflush(out_logfile);
                         }
-                        timer[3][rep] = GetTimeStamp();
+                        timer[3] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
-                        timer[4][rep] = GetTimeStamp();
+                        timer[4] = GetTimeStamp();
                         backend->close(fd, params);
 
-                        timer[5][rep] = GetTimeStamp();
+                        timer[5] = GetTimeStamp();
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
                         /* get the size of the file just written */
-                        results[rep].aggFileSizeFromStat =
+                        results[rep].write.aggFileSizeFromStat =
                                 backend->get_file_size(params, testComm, testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
-                        CheckFileSize(test, dataMoved, rep);
+                        CheckFileSize(test, dataMoved, rep, WRITE);
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, WRITE);
                         ReduceIterResults(test, timer, rep, WRITE);
                         if (params->outlierThreshold) {
-                                CheckForOutliers(params, timer, rep, WRITE);
+                                CheckForOutliers(params, timer, WRITE);
                         }
 
                         /* check if in this round we run write with stonewalling */
                         if(params->deadlineForStonewalling > 0){
-                          params->stoneWallingWearOutIterations = results[rep].pairs_accessed;
+                          params->stoneWallingWearOutIterations = results[rep].write.pairs_accessed;
                         }
                 }
 
@@ -1333,7 +1389,7 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
                         fd = backend->open(testFileName, params);
-                        dataMoved = WriteOrRead(params, & results[rep], fd, WRITECHECK, &ioBuffers);
+                        dataMoved = WriteOrRead(params, &results[rep], fd, WRITECHECK, &ioBuffers);
                         backend->close(fd, params);
                         rankOffset = 0;
                 }
@@ -1364,7 +1420,7 @@ static void TestIoSys(IOR_test_t *test)
                         /* random process offset reading */
                         if (params->reorderTasksRandom) {
                                 /* this should not intefere with randomOffset within a file because GetOffsetArrayRandom */
-                                /* seeds every random() call  */
+                                /* seeds every rand() call  */
                                 int nodeoffset;
                                 unsigned int iseed0;
                                 nodeoffset = params->taskPerNodeOffset;
@@ -1400,9 +1456,9 @@ static void TestIoSys(IOR_test_t *test)
                         DelaySecs(params->interTestDelay);
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = READ;
-                        timer[6][rep] = GetTimeStamp();
+                        timer[0] = GetTimeStamp();
                         fd = backend->open(testFileName, params);
-                        timer[7][rep] = GetTimeStamp();
+                        timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
@@ -1411,30 +1467,30 @@ static void TestIoSys(IOR_test_t *test)
                                         "Commencing read performance test: %s",
                                         CurrentTimeString());
                         }
-                        timer[8][rep] = GetTimeStamp();
-                        dataMoved = WriteOrRead(params, & results[rep], fd, operation_flag, &ioBuffers);
-                        timer[9][rep] = GetTimeStamp();
+                        timer[2] = GetTimeStamp();
+                        dataMoved = WriteOrRead(params, &results[rep], fd, operation_flag, &ioBuffers);
+                        timer[3] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
-                        timer[10][rep] = GetTimeStamp();
+                        timer[4] = GetTimeStamp();
                         backend->close(fd, params);
-                        timer[11][rep] = GetTimeStamp();
+                        timer[5] = GetTimeStamp();
 
                         /* get the size of the file just read */
-                        results[rep].aggFileSizeFromStat =
+                        results[rep].read.aggFileSizeFromStat =
                                 backend->get_file_size(params, testComm,
                                                        testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
-                        CheckFileSize(test, dataMoved, rep);
+                        CheckFileSize(test, dataMoved, rep, READ);
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, READ);
                         ReduceIterResults(test, timer, rep, READ);
                         if (params->outlierThreshold) {
-                                CheckForOutliers(params, timer, rep, READ);
+                                CheckForOutliers(params, timer, READ);
                         }
                 }
 
@@ -1469,12 +1525,7 @@ static void TestIoSys(IOR_test_t *test)
 
         if (hog_buf != NULL)
                 free(hog_buf);
-        for (i = 0; i < 12; i++) {
-                free(timer[i]);
-        }
 
-        if (backend->finalize)
-                backend->finalize(NULL);
         /* Sync with the tasks that did not participate in this test */
         MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
 
@@ -1721,11 +1772,11 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
 
         /* set up seed for random() */
         if (access == WRITE || access == READ) {
-                test->randomSeed = seed = random();
+                test->randomSeed = seed = rand();
         } else {
                 seed = test->randomSeed;
         }
-        srandom(seed);
+        srand(seed);
 
         fileSize = test->blockSize * test->segmentCount;
         if (test->filePerProc == FALSE) {
@@ -1737,7 +1788,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                 if (test->filePerProc == FALSE) {
                         // this counts which process get how many transferes in
                         // a shared file
-                        if ((random() % test->numTasks) == pretendRank) {
+                        if ((rand() % test->numTasks) == pretendRank) {
                                 offsets++;
                         }
                 } else {
@@ -1759,9 +1810,9 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                 }
         } else {
                 /* fill with offsets (pass 2) */
-                srandom(seed);  /* need same seed  to get same transfers as counted in the beginning*/
+                srand(seed);  /* need same seed  to get same transfers as counted in the beginning*/
                 for (i = 0; i < fileSize; i += test->transferSize) {
-                        if ((random() % test->numTasks) == pretendRank) {
+                        if ((rand() % test->numTasks) == pretendRank) {
                                 offsetArray[offsetCnt] = i;
                                 offsetCnt++;
                         }
@@ -1769,7 +1820,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
         }
         /* reorder array */
         for (i = 0; i < offsets; i++) {
-                value = random() % offsets;
+                value = rand() % offsets;
                 tmp = offsetArray[value];
                 offsetArray[value] = offsetArray[i];
                 offsetArray[i] = tmp;
@@ -1801,11 +1852,19 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
                   backend->xfer(access, fd, buffer, transfer, test);
           if (amtXferred != transfer)
                   ERR("cannot write to file");
+          if (test->interIODelay > 0){
+            struct timespec wait = {test->interIODelay / 1000 / 1000, 1000l * (test->interIODelay % 1000000)};
+            nanosleep( & wait, NULL);
+          }
   } else if (access == READ) {
           amtXferred =
                   backend->xfer(access, fd, buffer, transfer, test);
           if (amtXferred != transfer)
                   ERR("cannot read from file");
+          if (test->interIODelay > 0){
+            struct timespec wait = {test->interIODelay / 1000 / 1000, 1000l * (test->interIODelay % 1000000)};
+            nanosleep( & wait, NULL);
+          }
   } else if (access == WRITECHECK) {
           memset(checkBuffer, 'a', transfer);
 
@@ -1837,7 +1896,8 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
  * Write or Read data to file(s).  This loops through the strides, writing
  * out the data to each block in transfer sizes, until the remainder left is 0.
  */
-static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, void *fd, int access, IOR_io_buffers* ioBuffers)
+static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
+                                void *fd, const int access, IOR_io_buffers *ioBuffers)
 {
         int errors = 0;
         IOR_offset_t transferCount = 0;
@@ -1847,6 +1907,8 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
         double startForStonewall;
         int hitStonewall;
+        IOR_point_t *point = ((access == WRITE) || (access == WRITECHECK)) ?
+                             &results->write : &results->read;
 
         /* initialize values */
         pretendRank = (rank + rankOffset) % test->numTasks;
@@ -1875,35 +1937,35 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
           }
           long long data_moved_ll = (long long) dataMoved;
           long long pairs_accessed_min = 0;
-          MPI_CHECK(MPI_Allreduce(& pairCnt, &results->pairs_accessed,
+          MPI_CHECK(MPI_Allreduce(& pairCnt, &point->pairs_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_MAX, testComm), "cannot reduce pairs moved");
           double stonewall_runtime = GetTimeStamp() - startForStonewall;
-          results->stonewall_time = stonewall_runtime;
+          point->stonewall_time = stonewall_runtime;
           MPI_CHECK(MPI_Reduce(& pairCnt, & pairs_accessed_min,
                                   1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "cannot reduce pairs moved");
-          MPI_CHECK(MPI_Reduce(& data_moved_ll, & results->stonewall_min_data_accessed,
+          MPI_CHECK(MPI_Reduce(& data_moved_ll, &point->stonewall_min_data_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "cannot reduce pairs moved");
-          MPI_CHECK(MPI_Reduce(& data_moved_ll, & results->stonewall_avg_data_accessed,
+          MPI_CHECK(MPI_Reduce(& data_moved_ll, &point->stonewall_avg_data_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm), "cannot reduce pairs moved");
 
           if(rank == 0){
             fprintf(out_logfile, "stonewalling pairs accessed min: %lld max: %zu -- min data: %.1f GiB mean data: %.1f GiB time: %.1fs\n",
-             pairs_accessed_min, results->pairs_accessed,
-             results->stonewall_min_data_accessed /1024.0 / 1024 / 1024,  results->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 / test->numTasks , results->stonewall_time);
-             results->stonewall_min_data_accessed *= test->numTasks;
+             pairs_accessed_min, point->pairs_accessed,
+             point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 / test->numTasks , point->stonewall_time);
+             point->stonewall_min_data_accessed *= test->numTasks;
           }
           if(pairs_accessed_min == pairCnt){
-            results->stonewall_min_data_accessed = 0;
-            results->stonewall_avg_data_accessed = 0;
+            point->stonewall_min_data_accessed = 0;
+            point->stonewall_avg_data_accessed = 0;
           }
-          if(pairCnt != results->pairs_accessed){
+          if(pairCnt != point->pairs_accessed){
             // some work needs still to be done !
-            for(; pairCnt < results->pairs_accessed; pairCnt++ ) {
+            for(; pairCnt < point->pairs_accessed; pairCnt++ ) {
                     dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
             }
           }
         }else{
-          results->pairs_accessed = pairCnt;
+          point->pairs_accessed = pairCnt;
         }
 
 
@@ -1915,74 +1977,4 @@ static IOR_offset_t WriteOrRead(IOR_param_t * test, IOR_results_t * results, voi
                 backend->fsync(fd, test);       /*fsync after all accesses */
         }
         return (dataMoved);
-}
-
-/*
- * Write times taken during each iteration of the test.
- */
-static void
-WriteTimes(IOR_param_t * test, double **timer, int iteration, int writeOrRead)
-{
-        char accessType[MAX_STR];
-        char timerName[MAX_STR];
-        int i, start = 0, stop = 0;
-
-        if (writeOrRead == WRITE) {
-                start = 0;
-                stop = 6;
-                strcpy(accessType, "WRITE");
-        } else if (writeOrRead == READ) {
-                start = 6;
-                stop = 12;
-                strcpy(accessType, "READ");
-        } else {
-                ERR("incorrect WRITE/READ option");
-        }
-
-        for (i = start; i < stop; i++) {
-                switch (i) {
-                case 0:
-                        strcpy(timerName, "write open start");
-                        break;
-                case 1:
-                        strcpy(timerName, "write open stop");
-                        break;
-                case 2:
-                        strcpy(timerName, "write start");
-                        break;
-                case 3:
-                        strcpy(timerName, "write stop");
-                        break;
-                case 4:
-                        strcpy(timerName, "write close start");
-                        break;
-                case 5:
-                        strcpy(timerName, "write close stop");
-                        break;
-                case 6:
-                        strcpy(timerName, "read open start");
-                        break;
-                case 7:
-                        strcpy(timerName, "read open stop");
-                        break;
-                case 8:
-                        strcpy(timerName, "read start");
-                        break;
-                case 9:
-                        strcpy(timerName, "read stop");
-                        break;
-                case 10:
-                        strcpy(timerName, "read close start");
-                        break;
-                case 11:
-                        strcpy(timerName, "read close stop");
-                        break;
-                default:
-                        strcpy(timerName, "invalid timer");
-                        break;
-                }
-                fprintf(out_logfile, "Test %d: Iter=%d, Task=%d, Time=%f, %s\n",
-                        test->id, iteration, (int)rank, timer[i][iteration],
-                        timerName);
-        }
 }

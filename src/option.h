@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 /*
- * Initial revision by JK
+ * Initial version by JK
  */
 
 typedef enum{
@@ -23,13 +23,22 @@ typedef struct{
   void * variable;
 } option_help;
 
+typedef struct{
+  char * prefix; // may be NULL to include it in the standard name
+  option_help * options;
+} option_module;
+
+typedef struct{
+  int module_count;
+  option_module * modules;
+} options_all;
+
 #define LAST_OPTION {0, 0, 0, (option_value_type) 0, 0, NULL}
 
 int64_t string_to_bytes(char *size_str);
-void option_print_help(option_help * args, int is_plugin);
 void option_print_current(option_help * args);
 
 //@return the number of parsed arguments
-int option_parse(int argc, char ** argv, option_help * args, int * print_help);
+int option_parse(int argc, char ** argv, options_all * args);
 
 #endif

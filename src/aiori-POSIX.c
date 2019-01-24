@@ -31,7 +31,10 @@
 #include <sys/stat.h>
 #include <assert.h>
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+
+#ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
+#  include <linux/lustre/lustre_user.h>
+#elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
 #  include <lustre/lustre_user.h>
 #endif
 #ifdef HAVE_GPFS_H
@@ -73,6 +76,7 @@ static void POSIX_Fsync(void *, IOR_param_t *);
 
 ior_aiori_t posix_aiori = {
         .name = "POSIX",
+        .name_legacy = NULL,
         .create = POSIX_Create,
         .open = POSIX_Open,
         .xfer = POSIX_Xfer,
@@ -273,7 +277,16 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         if (param->useO_DIRECT == TRUE)
                 set_o_direct_flag(&fd_oflag);
 
+        if(param->dryRun)
+          return 0;
+
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
+/* Add a #define for FASYNC if not available, as it forms part of
+ * the Lustre O_LOV_DELAY_CREATE definition. */
+#ifndef FASYNC
+#define FASYNC          00020000   /* fcntl, for BSD compatibility */
+#endif
+
         if (param->lustre_set_striping) {
                 /* In the single-shared-file case, task 0 has to creat the
                    file with the Lustre striping options before any other processes
@@ -294,7 +307,8 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                         opts.lmm_stripe_count = param->lustre_stripe_count;
 
                         /* File needs to be opened O_EXCL because we cannot set
-                           Lustre striping information on a pre-existing file. */
+                         * Lustre striping information on a pre-existing file.*/
+
                         fd_oflag |=
                             O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
                         *fd = open64(testFileName, fd_oflag, 0664);
@@ -378,6 +392,10 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
                 set_o_direct_flag(&fd_oflag);
 
         fd_oflag |= O_RDWR;
+
+        if(param->dryRun)
+          return 0;
+
         *fd = open64(testFileName, fd_oflag);
         if (*fd < 0)
                 ERR("open64 failed");
@@ -413,6 +431,9 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
         char *ptr = (char *)buffer;
         long long rc;
         int fd;
+
+        if(param->dryRun)
+          return length;
 
         fd = *(int *)file;
 
@@ -495,6 +516,8 @@ static void POSIX_Fsync(void *fd, IOR_param_t * param)
  */
 void POSIX_Close(void *fd, IOR_param_t * param)
 {
+        if(param->dryRun)
+          return;
         if (close(*(int *)fd) != 0)
                 ERR("close() failed");
         free(fd);
@@ -505,11 +528,14 @@ void POSIX_Close(void *fd, IOR_param_t * param)
  */
 void POSIX_Delete(char *testFileName, IOR_param_t * param)
 {
-        char errmsg[256];
-        sprintf(errmsg, "[RANK %03d]: unlink() of file \"%s\" failed\n",
-                rank, testFileName);
-        if (unlink(testFileName) != 0)
+        if(param->dryRun)
+          return;
+        if (unlink(testFileName) != 0){
+                char errmsg[256];
+                sprintf(errmsg, "[RANK %03d]: unlink() of file \"%s\" failed\n",
+                        rank, testFileName);
                 EWARN(errmsg);
+        }
 }
 
 /*
@@ -518,6 +544,8 @@ void POSIX_Delete(char *testFileName, IOR_param_t * param)
 IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                       char *testFileName)
 {
+        if(test->dryRun)
+          return 0;
         struct stat stat_buf;
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
 

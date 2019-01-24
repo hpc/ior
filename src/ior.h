@@ -77,9 +77,11 @@ typedef struct IO_BUFFERS
  *         USER_GUIDE
  */
 
+struct ior_aiori;
+
 typedef struct
 {
-    const void * backend;
+    const struct ior_aiori * backend;
     char * debug;             /* debug info string */
     unsigned int mode;               /* file permissions */
     unsigned int openFlags;          /* open flags (see also <open>) */
@@ -91,6 +93,7 @@ typedef struct
     char * testFileName_fppReadCheck;/* filename for fpp read check */
     char * hintsFileName;  /* full name for hints file */
     char * options;        /* options string */
+    int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
     int numTasks;                    /* number of tasks for test */
     int nodes;                       /* number of nodes for test */
     int tasksPerNode;                /* number of tasks per node */
@@ -98,6 +101,7 @@ typedef struct
     int repCounter;                  /* rep counter */
     int multiFile;                   /* multiple files */
     int interTestDelay;              /* delay between reps in seconds */
+    int interIODelay;                /* delay after each I/O in us */
     int open;                        /* flag for writing or reading */
     int readFile;                    /* read of existing file */
     int writeFile;                   /* write of file */
@@ -175,6 +179,8 @@ typedef struct
     char*       URI;                 /* "path" to target object */
     size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
     char*       UploadId; /* key for multi-part-uploads */
+    int         collective_md;       /* use collective metatata optimization */
+ 
 
     /* RADOS variables */
     rados_t rados_cluster;           /* RADOS cluster handle */
@@ -202,12 +208,9 @@ typedef struct
     int intraTestBarriers;           /* barriers between open/op and op/close */
 } IOR_param_t;
 
-/* each pointer is to an array, each of length equal to the number of
-   repetitions in the test */
+/* each pointer for a single test */
 typedef struct {
-   double writeTime;
-   double readTime;
-   int    errors;
+   double time;
    size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
 
    double     stonewall_time;
@@ -217,17 +220,24 @@ typedef struct {
    IOR_offset_t aggFileSizeFromStat;
    IOR_offset_t aggFileSizeFromXfer;
    IOR_offset_t aggFileSizeForBW;
+} IOR_point_t;
+
+typedef struct {
+   int          errors;
+   IOR_point_t  write;
+   IOR_point_t  read;
 } IOR_results_t;
 
 /* define the queuing structure for the test parameters */
 typedef struct IOR_test_t {
    IOR_param_t        params;
-   IOR_results_t     *results; /* This is an array of reps times IOR_results_t */
+   IOR_results_t     *results;
    struct IOR_test_t *next;
 } IOR_test_t;
 
-
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
+void AllocResults(IOR_test_t *test);
+
 char * GetPlatformName();
 void init_IOR_Param_t(IOR_param_t *p);
 

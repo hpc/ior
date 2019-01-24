@@ -28,7 +28,6 @@
  *   $Date: 2013/11/27 17:05:31 $
  *   $Author: brettkettering $
  */
-
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -59,6 +58,11 @@
 
 #include <fcntl.h>
 #include <string.h>
+
+#if HAVE_STRINGS_H
+#include <strings.h>
+#endif
+
 #include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
@@ -123,6 +127,7 @@ static uint64_t num_dirs_in_tree;
  */
 static uint64_t items;
 static uint64_t items_per_dir;
+static uint64_t num_dirs_in_tree_calc; /* this is a workaround until the overal code is refactored */
 static int directory_loops;
 static int print_time;
 static int random_seed;
@@ -179,7 +184,7 @@ void offset_timers(double * t, int tcount) {
         fflush( out_logfile );
     }
 
-    toffset = MPI_Wtime() - t[tcount];
+    toffset = GetTimeStamp() - t[tcount];
     for (i = 0; i < tcount+1; i++) {
         t[i] += toffset;
     }
@@ -299,7 +304,6 @@ static void remove_file (const char *path, uint64_t itemNum) {
         fprintf(out_logfile, "V-3: create_remove_items_helper (non-dirs remove): curr_item is \"%s\"\n", curr_item);
         fflush(out_logfile);
     }
-
     if (!(shared_file && rank != 0)) {
         backend->delete (curr_item, &param);
     }
@@ -319,7 +323,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 
     //create files
     sprintf(curr_item, "%s/file.%s"LLU"", path, mk_name, itemNum);
-    if (rank == 0 && verbose >= 3) {
+    if ((rank == 0 && verbose >= 3) || verbose >= 5) {
         fprintf(out_logfile, "V-3: create_remove_items_helper (non-dirs create): curr_item is \"%s\"\n", curr_item);
         fflush(out_logfile);
     }
@@ -343,6 +347,7 @@ static void create_file (const char *path, uint64_t itemNum) {
     } else {
         param.openFlags = IOR_CREAT | IOR_WRONLY;
         param.filePerProc = !shared_file;
+	param.mode = FILEMODE;
 
         if (rank == 0 && verbose >= 3) {
             fprintf(out_logfile,  "V-3: create_remove_items_helper (non-collective, shared): open...\n" );
@@ -400,7 +405,9 @@ void create_remove_items_helper(const int dirs, const int create, const char *pa
             create_remove_dirs (path, create, itemNum + i);
         }
         if(CHECK_STONE_WALL(progress)){
-          progress->items_done = i + 1;
+          if(progress->items_done == 0){
+            progress->items_done = i + 1;
+          }
           return;
         }
     }
@@ -432,6 +439,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
 
             //create files
             param.openFlags = IOR_WRONLY | IOR_CREAT;
+	    param.mode = FILEMODE;
             aiori_fh = backend->create (curr_item, &param);
             if (NULL == aiori_fh) {
                 FAIL("unable to create file");
@@ -543,7 +551,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
     uint64_t stop_items = items;
 
-    if( directory_loops != 1 ){
+    if( directory_loops != 1 || leaf_only ){
       stop_items = items_per_dir;
     }
 
@@ -845,7 +853,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     }
 
     MPI_Barrier(testComm);
-    t[0] = MPI_Wtime();
+    t[0] = GetTimeStamp();
 
     /* create phase */
     if(create_only) {
@@ -880,7 +888,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[1] = MPI_Wtime();
+    t[1] = GetTimeStamp();
 
     /* stat phase */
     if (stat_only) {
@@ -912,7 +920,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[2] = MPI_Wtime();
+    t[2] = GetTimeStamp();
 
     /* read phase */
     if (read_only) {
@@ -944,7 +952,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[3] = MPI_Wtime();
+    t[3] = GetTimeStamp();
 
     if (remove_only) {
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
@@ -977,7 +985,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[4] = MPI_Wtime();
+    t[4] = GetTimeStamp();
 
     if (remove_only) {
         if (unique_dir_per_task) {
@@ -1047,7 +1055,7 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
   uint64_t done = progress->items_done;
   long long unsigned max_iter = 0;
   MPI_Allreduce(& progress->items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
-  summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = MPI_Wtime() - tstart;
+  summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = GetTimeStamp() - tstart;
 
   // continue to the maximum...
   long long min_accessed = 0;
@@ -1055,13 +1063,13 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
   long long sum_accessed = 0;
   MPI_Reduce(& progress->items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
 
-  if(items != (sum_accessed / size) && rank == 0){
+  if(items != (sum_accessed / size)){
     summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
     summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
-    fprintf( out_logfile, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
-    fflush( out_logfile );
-  }
-  if( done != max_iter ){
+    if (rank == 0){
+      fprintf( out_logfile, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
+      fflush( out_logfile );
+    }
     hit = 1;
   }
   progress->items_start = done;
@@ -1082,7 +1090,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     }
 
     MPI_Barrier(testComm);
-    t[0] = MPI_Wtime();
+    t[0] = GetTimeStamp();
 
     /* create phase */
     if (create_only ) {
@@ -1118,14 +1126,19 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
           if (hit){
             progress->stone_wall_timer_seconds = 0;
-            printf("stonewall rank %d: %lld of %lld \n", rank, (long long) progress->items_start, (long long) progress->items_per_dir);
+            if (verbose > 1){
+              printf("stonewall rank %d: %lld of %lld \n", rank, (long long) progress->items_start, (long long) progress->items_per_dir);
+            }
             create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
             // now reset the values
             progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
+            items = progress->items_done;
           }
           if (stoneWallingStatusFile){
             StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_done);
           }
+          // reset stone wall timer to allow proper cleanup
+          progress->stone_wall_timer_seconds = 0;
         }
       }
     }else{
@@ -1150,7 +1163,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (barriers) {
       MPI_Barrier(testComm);
     }
-    t[1] = MPI_Wtime();
+    t[1] = GetTimeStamp();
 
     /* stat phase */
     if (stat_only ) {
@@ -1178,7 +1191,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[2] = MPI_Wtime();
+    t[2] = GetTimeStamp();
 
     /* read phase */
     if (read_only ) {
@@ -1210,9 +1223,11 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[3] = MPI_Wtime();
+    t[3] = GetTimeStamp();
 
     if (remove_only) {
+      progress->items_start = 0;
+
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (unique_dir_per_task) {
@@ -1242,7 +1257,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (barriers) {
         MPI_Barrier(testComm);
     }
-    t[4] = MPI_Wtime();
+    t[4] = GetTimeStamp();
     if (remove_only) {
         if (unique_dir_per_task) {
             unique_dir_access(RM_UNI_DIR, temp_path);
@@ -1258,6 +1273,10 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
     if (unique_dir_per_task && !time_unique_dir_overhead) {
         offset_timers(t, 4);
+    }
+
+    if(num_dirs_in_tree_calc){ /* this is temporary fix needed when using -n and -i together */
+      items *= num_dirs_in_tree_calc;
     }
 
     /* calculate times */
@@ -1303,7 +1322,8 @@ void print_help (void) {
     int j;
 
     char APIs[1024];
-    aiori_supported_apis(APIs);
+    char APIs_legacy[1024];
+    aiori_supported_apis(APIs, APIs_legacy);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
 
@@ -1408,68 +1428,7 @@ void summarize_results(int iterations) {
             start = stop = 0;
         }
 
-        /* calculate aggregates */
-        if (barriers) {
-            double maxes[iterations];
-
-
-            /* Because each proc times itself, in the case of barriers we
-             * have to backwards calculate the time to simulate the use
-             * of barriers.
-             */
-            for (i = start; i < stop; i++) {
-                for (j=0; j<iterations; j++) {
-                    maxes[j] = all[j*tableSize + i];
-                    for (k=0; k<size; k++) {
-                        curr = all[(k*tableSize*iterations) + (j*tableSize) + i];
-                        if (maxes[j] < curr) {
-                            maxes[j] = curr;
-                        }
-                    }
-                }
-
-                min = max = maxes[0];
-                for (j=0; j<iterations; j++) {
-                    if (min > maxes[j]) {
-                        min = maxes[j];
-                    }
-                    if (max < maxes[j]) {
-                        max = maxes[j];
-                    }
-                    sum += maxes[j];
-                }
-                mean = sum / iterations;
-                for (j=0; j<iterations; j++) {
-                    var += pow((mean - maxes[j]), 2);
-                }
-                var = var / iterations;
-                sd = sqrt(var);
-                switch (i) {
-                case 0: strcpy(access, "Directory creation:"); break;
-                case 1: strcpy(access, "Directory stat    :"); break;
-                    /* case 2: strcpy(access, "Directory read    :"); break; */
-                case 2: ;                                      break; /* N/A */
-                case 3: strcpy(access, "Directory removal :"); break;
-                case 4: strcpy(access, "File creation     :"); break;
-                case 5: strcpy(access, "File stat         :"); break;
-                case 6: strcpy(access, "File read         :"); break;
-                case 7: strcpy(access, "File removal      :"); break;
-                default: strcpy(access, "ERR");                 break;
-                }
-                if (i != 2) {
-                    fprintf(out_logfile, "   %s ", access);
-                    fprintf(out_logfile, "%14.3f ", max);
-                    fprintf(out_logfile, "%14.3f ", min);
-                    fprintf(out_logfile, "%14.3f ", mean);
-                    fprintf(out_logfile, "%14.3f\n", sd);
-                    fflush(out_logfile);
-                }
-                sum = var = 0;
-
-            }
-
-        } else {
-            for (i = start; i < stop; i++) {
+        for (i = start; i < stop; i++) {
                 min = max = all[i];
                 for (k=0; k < size; k++) {
                     for (j = 0; j < iterations; j++) {
@@ -1515,7 +1474,6 @@ void summarize_results(int iterations) {
                 }
                 sum = var = 0;
 
-            }
         }
 
         /* calculate tree create/remove rates */
@@ -1615,9 +1573,9 @@ void valid_tests() {
         FAIL("-c not compatible with -B");
     }
 
-    if ( strcasecmp(backend_name, "POSIX") != 0 && strcasecmp(backend_name, "DUMMY") != 0 &&
-	 strcasecmp(backend_name, "DFS") != 0) {
-      FAIL("-a only supported interface is POSIX, DFS and DUMMY right now!");
+    if (strcasecmp(backend_name, "POSIX") != 0 && strcasecmp(backend_name, "DUMMY") != 0 &&
+        strcasecmp(backend_name, "DFS") != 0) {
+        FAIL("-a only supported interface is POSIX, DFS (and DUMMY) right now!");
     }
 
     /* check for shared file incompatibilities */
@@ -1891,7 +1849,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
       /* create hierarchical directory structure */
       MPI_Barrier(testComm);
 
-      startCreate = MPI_Wtime();
+      startCreate = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
 
@@ -1953,7 +1911,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
         }
       }
       MPI_Barrier(testComm);
-      endCreate = MPI_Wtime();
+      endCreate = GetTimeStamp();
       summary_table->rate[8] =
           num_dirs_in_tree / (endCreate - startCreate);
       summary_table->time[8] = (endCreate - startCreate);
@@ -2024,7 +1982,8 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   MPI_Barrier(testComm);
   if (remove_only) {
-      startCreate = MPI_Wtime();
+      progress->items_start = 0;
+      startCreate = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
         if (unique_dir_per_task) {
@@ -2086,7 +2045,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
       }
 
       MPI_Barrier(testComm);
-      endCreate = MPI_Wtime();
+      endCreate = GetTimeStamp();
       summary_table->rate[9] = num_dirs_in_tree / (endCreate - startCreate);
       summary_table->time[9] = endCreate - startCreate;
       summary_table->items[9] = num_dirs_in_tree;
@@ -2138,6 +2097,7 @@ void mdtest_init_args(){
    unique_dir_per_task = 0;
    time_unique_dir_overhead = 0;
    items = 0;
+   num_dirs_in_tree_calc = 0;
    collective_creates = 0;
    write_bytes = 0;
    stone_wall_timer_seconds = 0;
@@ -2174,7 +2134,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     char * path = "./out";
     int randomize = 0;
     char APIs[1024];
-    aiori_supported_apis(APIs);
+    char APIs_legacy[1024];
+    aiori_supported_apis(APIs, APIs_legacy);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
 
@@ -2191,7 +2152,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'e', NULL,        "bytes to read from each file", OPTION_OPTIONAL_ARGUMENT, 'l', & read_bytes},
       {'f', NULL,        "first number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & first},
       {'F', NULL,        "perform test on files only (no directories)", OPTION_FLAG, 'd', & files_only},
-      {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'i', & iterations},
+      {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & iterations},
       {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & items_per_dir},
       {'l', NULL,        "last number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & last},
       {'L', NULL,        "files only at leaf level of tree", OPTION_FLAG, 'd', & leaf_only},
@@ -2215,40 +2176,18 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
       LAST_OPTION
     };
-    int printhelp = 0;
-    int parsed_options = option_parse(argc, argv, options, & printhelp);
+    airoi_parse_options(argc, argv, options);
 
     backend = aiori_select(backend_name);
     if (NULL == backend) {
         FAIL("Could not find suitable backend to use");
     }
 
-    if(backend->get_options != NULL){
-      option_parse(argc - parsed_options, argv + parsed_options, backend->get_options(), & printhelp);
-    }
-
-    if (backend->initialize)
-            backend->initialize(NULL);
-
-    if(printhelp != 0){
-      printf("Usage: %s ", argv[0]);
-
-      option_print_help(options, 0);
-
-      if(backend->get_options != NULL){
-        printf("\nPlugin options for backend %s\n", backend_name);
-        option_print_help(backend->get_options(), 1);
-      }
-      if(printhelp == 1){
-        exit(0);
-      }else{
-        exit(1);
-      }
-    }
-
-
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
+
+    if (backend->initialize)
+	    backend->initialize();
 
     pid = getpid();
     uid = getuid();
@@ -2337,13 +2276,14 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         } else if (branch_factor == 1) {
             num_dirs_in_tree = depth + 1;
         } else {
-            num_dirs_in_tree =
-                (1 - pow(branch_factor, depth+1)) / (1 - branch_factor);
+            num_dirs_in_tree = (pow(branch_factor, depth+1) - 1) / (branch_factor - 1);
         }
     }
     if (items_per_dir > 0) {
-        if(unique_dir_per_task){
+        if(items == 0){
           items = items_per_dir * num_dirs_in_tree;
+        }else{
+          num_dirs_in_tree_calc = num_dirs_in_tree;
         }
     } else {
         if (leaf_only) {
@@ -2487,17 +2427,21 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
         MPI_Comm_create(testComm, testgroup, &testComm);
         if (rank == 0) {
+            uint64_t items_all = i * items;
+            if(num_dirs_in_tree_calc){
+              items_all *= num_dirs_in_tree_calc;
+            }
             if (files_only && dirs_only) {
-                fprintf(out_logfile, "\n%d tasks, "LLU" files/directories\n", i, i * items);
+                fprintf(out_logfile, "\n%d tasks, "LLU" files/directories\n", i, items_all);
             } else if (files_only) {
                 if (!shared_file) {
-                    fprintf(out_logfile, "\n%d tasks, "LLU" files\n", i, i * items);
+                    fprintf(out_logfile, "\n%d tasks, "LLU" files\n", i, items_all);
                 }
                 else {
                     fprintf(out_logfile, "\n%d tasks, 1 file\n", i);
                 }
             } else if (dirs_only) {
-                fprintf(out_logfile, "\n%d tasks, "LLU" directories\n", i, i * items);
+                fprintf(out_logfile, "\n%d tasks, "LLU" directories\n", i, items_all);
             }
         }
         if (rank == 0 && verbose >= 1) {

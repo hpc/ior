@@ -62,10 +62,10 @@ static struct dfs_options o = {
 };
 
 static option_help options [] = {
-      {'p', "pool", "DAOS pool uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
-      {'v', "svcl", "DAOS pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
-      {'g', "group", "DAOS server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
-      {'c', "cont", "DFS container uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.cont},
+      {0, "dfs.pool", "DAOS pool uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
+      {0, "dfs.svcl", "DAOS pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
+      {0, "dfs.group", "DAOS server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
+      {0, "dfs.cont", "DFS container uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.cont},
       LAST_OPTION
 };
 
@@ -84,8 +84,8 @@ static int DFS_Stat (const char *, struct stat *, IOR_param_t *);
 static int DFS_Mkdir (const char *, mode_t, IOR_param_t *);
 static int DFS_Rmdir (const char *, IOR_param_t *);
 static int DFS_Access (const char *, int, IOR_param_t *);
-static void DFS_Init(IOR_param_t *param);
-static void DFS_Finalize(IOR_param_t *param);
+static void DFS_Init();
+static void DFS_Finalize();
 static option_help * DFS_options();
 
 /************************** D E C L A R A T I O N S ***************************/
@@ -122,7 +122,7 @@ do {                                                                    \
                         format"\n", __FILE__, __LINE__, rank, _rc,      \
                         ##__VA_ARGS__);                                 \
                 fflush(stderr);                                         \
-                MPI_Abort(MPI_COMM_WORLD, -1);                          \
+                exit(-1);                                       	\
         }                                                               \
 } while (0)
 
@@ -222,7 +222,7 @@ static option_help * DFS_options(){
 }
 
 static void
-DFS_Init(IOR_param_t *param) {
+DFS_Init() {
 	uuid_t			pool_uuid, co_uuid;
 	daos_pool_info_t	pool_info;
 	daos_cont_info_t	co_info;
@@ -231,7 +231,7 @@ DFS_Init(IOR_param_t *param) {
 	int			rc;
 
         if (o.pool == NULL || o.svcl == NULL || o.cont == NULL)
-                ERR("Invalid Arguments to DFS\n");
+                ERR("Invalid pool or container options\n");
 
 	rc = uuid_parse(o.pool, pool_uuid);
         DCHECK(rc, "Failed to parse 'Pool uuid': %s", o.pool);
@@ -275,7 +275,7 @@ DFS_Init(IOR_param_t *param) {
 }
 
 static void
-DFS_Finalize(IOR_param_t *param)
+DFS_Finalize()
 {
         int rc;
 
@@ -341,11 +341,12 @@ DFS_Open(char *testFileName, IOR_param_t *param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *obj = NULL, *parent = NULL;
-	mode_t pmode;
+	mode_t pmode, mode;
 	int rc;
         int fd_oflag = 0;
 
         fd_oflag |= O_RDWR;
+	mode = S_IFREG | param->mode;
 
 	rc = parse_filename(testFileName, &name, &dir_name);
         DERR(rc, "Failed to parse path %s", testFileName);
@@ -356,7 +357,7 @@ DFS_Open(char *testFileName, IOR_param_t *param)
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
         DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
-	rc = dfs_open(dfs, parent, name, S_IFREG, fd_oflag, 0, NULL, &obj);
+	rc = dfs_open(dfs, parent, name, mode, fd_oflag, 0, NULL, &obj);
         DERR(rc, "dfs_open() of %s Failed", name);
 
 out:
@@ -412,8 +413,7 @@ DFS_Xfer(int access, void *file, IOR_size_t *buffer, IOR_offset_t length,
 
                 if (ret < remaining) {
                         if (param->singleXferAttempt == TRUE)
-                                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
-                                          "barrier error");
+                                exit(-1);
                         if (xferRetries > MAX_RETRY)
                                 ERR("too many retries -- aborting");
                 }
@@ -625,7 +625,6 @@ DFS_Access(const char *path, int mode, IOR_param_t * param)
                 name = NULL;
         }
 	rc = dfs_stat(dfs, parent, name, &stbuf);
-        DERR(rc, "dfs_stat() of %s Failed", name);
 
 out:
 	if (name)

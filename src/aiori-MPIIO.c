@@ -46,6 +46,7 @@ static void MPIIO_Fsync(void *, IOR_param_t *);
 
 ior_aiori_t mpiio_aiori = {
         .name = "MPIIO",
+        .name_legacy = NULL,
         .create = MPIIO_Create,
         .open = MPIIO_Open,
         .xfer = MPIIO_Xfer,
@@ -68,6 +69,9 @@ ior_aiori_t mpiio_aiori = {
  */
 int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
 {
+    if(param->dryRun){
+      return MPI_SUCCESS;
+    }
     MPI_File fd;
     int mpi_mode = MPI_MODE_UNIQUE_OPEN;
 
@@ -92,7 +96,10 @@ int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
  */
 static void *MPIIO_Create(char *testFileName, IOR_param_t * param)
 {
-        return MPIIO_Open(testFileName, param);
+  if(param->dryRun){
+    return 0;
+  }
+  return MPIIO_Open(testFileName, param);
 }
 
 /*
@@ -170,11 +177,13 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
                 ShowHints(&mpiHints);
                 fprintf(stdout, "}\n");
         }
-        MPI_CHECK(MPI_File_open(comm, testFileName, fd_mode, mpiHints, fd),
+        if(! param->dryRun){
+            MPI_CHECK(MPI_File_open(comm, testFileName, fd_mode, mpiHints, fd),
                   "cannot open file");
+        }
 
         /* show hints actually attached to file handle */
-        if (rank == 0 && param->showHints) {
+        if (rank == 0 && param->showHints && ! param->dryRun) {
                 if (mpiHints != MPI_INFO_NULL)
                         MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
                 MPI_CHECK(MPI_File_get_info(*fd, &mpiHints),
@@ -185,7 +194,7 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
         }
 
         /* preallocate space for file */
-        if (param->preallocate && param->open == WRITE) {
+        if (param->preallocate && param->open == WRITE && ! param->dryRun) {
                 MPI_CHECK(MPI_File_preallocate(*fd,
                                                (MPI_Offset) (param->segmentCount
                                                              *
@@ -231,11 +240,13 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
                 MPI_CHECK(MPI_Type_commit(&param->fileType),
                           "cannot commit datatype");
 
-                MPI_CHECK(MPI_File_set_view(*fd, (MPI_Offset) 0,
+                if(! param->dryRun){
+                    MPI_CHECK(MPI_File_set_view(*fd, (MPI_Offset) 0,
                                             param->transferType,
                                             param->fileType, "native",
                                             (MPI_Info) MPI_INFO_NULL),
                           "cannot set file view");
+                }
         }
         if (mpiHints != MPI_INFO_NULL)
                 MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
@@ -252,6 +263,9 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
            for writes.  Therefore, one of the two sets of assignments below
            will get "assignment from incompatible pointer-type" warnings,
            if we only use this one set of signatures. */
+
+        if(param->dryRun)
+          return length;
 
         int (MPIAPI * Access) (MPI_File, void *, int,
                                MPI_Datatype, MPI_Status *);
@@ -381,8 +395,10 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
  */
 static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 {
-        if (MPI_File_sync(*(MPI_File *)fdp) != MPI_SUCCESS)
-                EWARN("fsync() failed");
+  if(param->dryRun)
+    return;
+  if (MPI_File_sync(*(MPI_File *)fdp) != MPI_SUCCESS)
+      EWARN("fsync() failed");
 }
 
 /*
@@ -390,7 +406,9 @@ static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
  */
 static void MPIIO_Close(void *fd, IOR_param_t * param)
 {
-        MPI_CHECK(MPI_File_close((MPI_File *) fd), "cannot close file");
+        if(! param->dryRun){
+              MPI_CHECK(MPI_File_close((MPI_File *) fd), "cannot close file");
+        }
         if ((param->useFileView == TRUE) && (param->fd_fppReadCheck == NULL)) {
                 /*
                  * need to free the datatype, so done in the close process
@@ -408,8 +426,10 @@ static void MPIIO_Close(void *fd, IOR_param_t * param)
  */
 void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 {
-        MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
-                  "cannot delete file");
+  if(param->dryRun)
+    return;
+  MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
+            "cannot delete file");
 }
 
 /*
@@ -472,6 +492,8 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
 IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                                char *testFileName)
 {
+        if(test->dryRun)
+          return 0;
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
         MPI_File fd;
         MPI_Comm comm;

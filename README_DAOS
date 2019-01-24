@@ -20,9 +20,7 @@ with both IOR and mdtest.
 Running with DAOS API
 ---------------------
 
-Driver specific options are specified at the end after "--". For example:
-
-ior -a DAOS [ior_options] -- [daos_options]
+ior -a DAOS [ior_options] [daos_options]
 
 In the IOR options, the file name should be specified as a container uuid using
 "-o <container_uuid>". If the "-E" option is given, then this UUID shall denote
@@ -33,21 +31,18 @@ uuidgen(1) to generate the UUID of the new container.
 The DAOS options include:
 
 Required Options:
--p <pool_uuid>: pool uuid to connect to (has to be created beforehand)
--v <pool_svcl>: pool svcl list (: separated)
+--daos.pool <pool_uuid>: pool uuid to connect to (has to be created beforehand)
+--daos.svcl <pool_svcl>: pool svcl list (: separated)
 
 Optional Options:
--g <group_name>: group name of servers with the pool
--r <record_size>: object record size for IO
--s <stripe_size>
--c <stripe_count>
--m <max_stripe_size>
--a <num>: number of concurrent async IOs
--w : Flag to indicate no commit, just update
--e <epoch_number>
--t <epoch_number>: wait for specific epoch before read
--k : flag to kill a rank during IO
--o <object_class>: specific object class
+--daos.group <group_name>: group name of servers with the pool
+--daos.recordSize	<record_size>: object record size for IO
+--daos.stripeSize	<stripe_size>
+--daos.stripeCount	<stripe_count>
+--daos.stripeMax	<max_stripe_size>
+--daos.aios		<num>: number of concurrent async IOs
+--daos.kill		flag to kill a rank during IO
+--daos.objectClass	<object_class>: specific object class
 
 When benchmarking write performance, one likely does not want "-W", which causes
 the write phase to do one additional memory copy for every I/O. This is due to
@@ -64,34 +59,28 @@ the epoch to access automatically on each iteration.
 
 Examples that should work include:
 
-  - "ior -a DAOS -w -W -o <container_uuid> -- -p <pool_uuid> -v <svc_ranks>"
+  - "ior -a DAOS -w -W -o <container_uuid> --daos.pool <pool_uuid> --daos.svcl <svc_ranks>"
     writes into a new container and verifies the data, using default
     daosRecordSize, transferSize, daosStripeSize, blockSize, daosAios, etc.
 
-  - "ior -a DAOS -w -W -r -R -o <container_uuid> -b 1g -t 4m -C --
-    -p <pool_uuid> -v <svc_ranks> -r 1m -s 4m -c 256 -a 8"
+  - "ior -a DAOS -w -W -r -R -o <container_uuid> -b 1g -t 4m -C \
+    --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.recordSize 1m --daos.stripeSize 4m\
+    --daos.stripeCount 256 --daos.aios 8
     does all IOR tests and shifts ranks during checkWrite and checkRead.
-
-  - "ior -a DAOS -w -r -o <container_uuid> -b 8g -t 1m -C --
-    -p <pool_uuid> -v <svc_ranks> -r 1m -s 4m -c 256 -a 8"
-    may be a base to be tuned for performance benchmarking.
-
 
 Running with DFS API
 ---------------------
 
-Driver specific options are specified at the end after "--". For example:
-
-ior -a DFS [ior_options] -- [dfs_options]
-mdtest -a DFS [mdtest_options] -- [dfs_options]
+ior -a DFS [ior_options] [dfs_options]
+mdtest -a DFS [mdtest_options] [dfs_options]
 
 Required Options:
--p <pool_uuid>: pool uuid to connect to (has to be created beforehand)
--v <pool_svcl>: pool svcl list (: separated)
--c <co_uuid>: container uuid that will hold the encapsulated namespace
+--daos.pool <pool_uuid>: pool uuid to connect to (has to be created beforehand)
+--daos.svcl <pool_svcl>: pool svcl list (: separated)
+--daos.cont <co_uuid>: container uuid that will hold the encapsulated namespace
 
 Optional Options:
--g <group_name>: group name of servers with the pool
+--daos.group <group_name>: group name of servers with the pool
 
 In the IOR options, the file name should be specified on the root dir directly
 since ior does not create directories and the DFS container representing the
@@ -99,12 +88,12 @@ encapsulated namespace is not the same as the system namespace the user is
 executing from.
 
 Examples that should work include:
-  - "ior -a DFS -w -W -o /test1 -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
-  - "ior -a DFS -w -W -r -R -o /test2 -b 1g -t 4m -C -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
-  - "ior -a DFS -w -r -o /test3 -b 8g -t 1m -C -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
+  - "ior -a DFS -w -W -o /test1 --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
+  - "ior -a DFS -w -W -r -R -o /test2 -b 1g -t 4m -C --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
+  - "ior -a DFS -w -r -o /test3 -b 8g -t 1m -C --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
 
 Running mdtest, the user needs to specify a directory with -d where the test
 tree will be created. Some examples:
-  - "mdtest -a DFS -n 100 -F -D -d /bla -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
-  - "mdtest -a DFS -n 1000 -F -C -d /bla -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
-  - "mdtest -a DFS -I 10 -z 5 -b 2 -L -d /bla -- -p <pool_uuid> -v <svc_ranks> -c <co_uuid>"
+  - "mdtest -a DFS -n 100 -F -D -d /bla --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
+  - "mdtest -a DFS -n 1000 -F -C -d /bla --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
+  - "mdtest -a DFS -I 10 -z 5 -b 2 -L -d /bla --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"

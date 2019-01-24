@@ -45,7 +45,7 @@
 #   define srandom srand
 #   define random() (rand() * (RAND_MAX+1) + rand())    /* Note: only 30 bits */
 #   define sleep(X) Sleep((X)*1000)
-#   define getpagesize() 4096
+#   define sysconf(X) 4096
 #else
 #   include <sys/param.h>                               /* MAXPATHLEN */
 #   include <unistd.h>
@@ -96,7 +96,6 @@ enum OutputFormat_t{
 #define WRITECHECK         1
 #define READ               2
 #define READCHECK          3
-#define CHECK              4
 
 /* verbosity settings */
 #define VERBOSE_0          0
