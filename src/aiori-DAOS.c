@@ -244,7 +244,7 @@ static void ContainerOpen(char *testFileName, IOR_param_t *param,
                     param->useExistingTestFile == FALSE) {
                         INFO(VERBOSE_2, "Creating container %s", testFileName);
 
-                        rc = daos_cont_create(pool, uuid, NULL /* ev */);
+                        rc = daos_cont_create(pool, uuid, NULL, NULL);
                         DCHECK(rc, "Failed to create container %s",
                                testFileName);
                 }
@@ -594,12 +594,14 @@ kill_daos_server(IOR_param_t *param)
 {
 	daos_pool_info_t        info;
 	d_rank_t                d_rank, svc_ranks[13];
-	d_rank_list_t           svc, targets;
+	d_rank_list_t           svc;
+	struct d_tgt_list       targets;
+	int			tgt_idx = -1;
         uuid_t                  uuid;
         char                    *s;
         int                     rc;
 
-	rc = daos_pool_query(pool, NULL, &info, NULL);
+	rc = daos_pool_query(pool, NULL, &info, NULL, NULL);
 	DCHECK(rc, "Error in querying pool\n");
 
 	if (info.pi_ntargets - info.pi_ndisabled <= 1)
@@ -618,16 +620,16 @@ kill_daos_server(IOR_param_t *param)
 	rc = daos_mgmt_svc_rip(o.daosGroup, d_rank, true, NULL);
 	DCHECK(rc, "Error in killing server\n");
 
-	targets.rl_nr = 1;
-	targets.rl_ranks = &d_rank;
-
+	targets.tl_nr = 1;
+	targets.tl_ranks = &d_rank;
+	targets.tl_tgts = &tgt_idx;
         svc.rl_ranks = svc_ranks;
         ParseService(sizeof(svc_ranks)/ sizeof(svc_ranks[0]), &svc);
 
-	rc = daos_pool_exclude(uuid, NULL, &svc, &targets, NULL);
+	rc = daos_pool_tgt_exclude(uuid, NULL, &svc, &targets, NULL);
 	DCHECK(rc, "Error in excluding pool from poolmap\n");
 
-        rc = daos_pool_query(pool, NULL, &info, NULL);
+        rc = daos_pool_query(pool, NULL, &info, NULL, NULL);
 	DCHECK(rc, "Error in querying pool\n");
 
         printf("%d targets succesfully disabled\n",

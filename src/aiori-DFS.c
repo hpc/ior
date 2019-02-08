@@ -261,7 +261,7 @@ DFS_Init() {
 	if (rc == -DER_NONEXIST) {
                 if (verbose >= VERBOSE_1)
                         printf("Creating DFS Container ...\n");
-		rc = daos_cont_create(poh, co_uuid, NULL);
+		rc = daos_cont_create(poh, co_uuid, NULL, NULL);
 		if (rc == 0) {
 			cont_created = true;
 			rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh,
