@@ -92,17 +92,32 @@ void airoi_parse_options(int argc, char ** argv, option_help * global_options){
     free(opt.modules);
 }
 
-void aiori_supported_apis(char * APIs, char * APIs_legacy){
-  ior_aiori_t **tmp = available_aiori;
-  if(*tmp != NULL){
-    APIs += sprintf(APIs, "%s", (*tmp)->name);
-    tmp++;
-    for (; *tmp != NULL; ++tmp) {
-      APIs += sprintf(APIs, "|%s", (*tmp)->name);
-      if ((*tmp)->name_legacy != NULL)
-          APIs_legacy += sprintf(APIs_legacy, "|%s", (*tmp)->name_legacy);
-    }
-  }
+void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
+{
+        ior_aiori_t **tmp = available_aiori;
+        char delimiter = ' ';
+
+        while (*tmp != NULL)
+        {
+                if ((type == MDTEST) && !(*tmp)->enable_mdtest)
+                {
+                    tmp++;
+                    continue;
+                }
+
+                if (delimiter == ' ')
+                {
+                        APIs += sprintf(APIs, "%s", (*tmp)->name);
+                        delimiter = '|';
+                }
+                else
+                        APIs += sprintf(APIs, "%c%s", delimiter, (*tmp)->name);
+
+                if ((*tmp)->name_legacy != NULL)
+                        APIs_legacy += sprintf(APIs_legacy, "%c%s",
+                                               delimiter, (*tmp)->name_legacy);
+                tmp++;
+        }
 }
 
 /**

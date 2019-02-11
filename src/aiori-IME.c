@@ -79,6 +79,7 @@ ior_aiori_t ime_aiori = {
         .stat          = IME_Stat,
         .initialize    = IME_Initialize,
         .finalize      = IME_Finalize,
+        .enable_mdtest = true,
 };
 
 /***************************** F U N C T I O N S ******************************/

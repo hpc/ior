@@ -22,6 +22,7 @@
 #endif /* not MPI_FILE_NULL */
 
 #include <sys/stat.h>
+#include <stdbool.h>
 
 #include "ior.h"
 #include "iordef.h"                                     /* IOR Definitions */
@@ -83,7 +84,13 @@ typedef struct ior_aiori {
         void (*initialize)(); /* called once per program before MPI is started */
         void (*finalize)(); /* called once per program after MPI is shutdown */
         option_help * (*get_options)();
+        bool enable_mdtest;
 } ior_aiori_t;
+
+enum bench_type {
+    IOR,
+    MDTEST
+};
 
 extern ior_aiori_t dummy_aiori;
 extern ior_aiori_t hdf5_aiori;
@@ -102,7 +109,7 @@ void aiori_initialize(IOR_test_t * tests);
 void aiori_finalize(IOR_test_t * tests);
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
-void aiori_supported_apis(char * APIs, char * APIs_legacy);
+void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type);
 void airoi_parse_options(int argc, char ** argv, option_help * global_options);
 const char *aiori_default (void);
 
