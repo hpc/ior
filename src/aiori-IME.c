@@ -269,19 +269,34 @@ static char *IME_GetVersion()
         return ver;
 }
 
-/*
- * XXX: statfs call is currently not exposed by IME native interface.
- */
 static int IME_StatFS(const char *path, ior_aiori_statfs_t *stat_buf,
                       IOR_param_t *param)
 {
+        (void)param;
+
+#if (IME_NATIVE_API_VERSION >= 130)
+        struct statvfs statfs_buf;
+
+        int ret = ime_native_statvfs(path, &statfs_buf);
+        if (ret)
+            return ret;
+
+        stat_buf->f_bsize = statfs_buf.f_bsize;
+        stat_buf->f_blocks = statfs_buf.f_blocks;
+        stat_buf->f_bfree = statfs_buf.f_bfree;
+        stat_buf->f_files = statfs_buf.f_files;
+        stat_buf->f_ffree = statfs_buf.f_ffree;
+
+        return 0;
+#else
         (void)path;
         (void)stat_buf;
-        (void)param;
 
         WARN("statfs is currently not supported in IME backend!");
         return -1;
+#endif
 }
+
 
 static int IME_MkDir(const char *path, mode_t mode, IOR_param_t *param)
 {
