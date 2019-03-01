@@ -25,6 +25,7 @@
 #endif
 
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <dirent.h>
@@ -160,12 +161,16 @@ parse_filename(const char *path, char **_obj_name, char **_cont_name)
 	}
 
 	f1 = strdup(path);
-	if (f1 == NULL)
-		D_GOTO(out, rc = -ENOMEM);
+	if (f1 == NULL) {
+                rc = -ENOMEM;
+                goto out;
+        }
 
 	f2 = strdup(path);
-	if (f2 == NULL)
-		D_GOTO(out, rc = -ENOMEM);
+	if (f2 == NULL) {
+                rc = -ENOMEM;
+                goto out;
+        }
 
 	fname = basename(f1);
 	cont_name = dirname(f2);
@@ -173,18 +178,24 @@ parse_filename(const char *path, char **_obj_name, char **_cont_name)
 	if (cont_name[0] == '.' || cont_name[0] != '/') {
 		char cwd[1024];
 
-		if (getcwd(cwd, 1024) == NULL)
-			D_GOTO(out, rc = -ENOMEM);
+		if (getcwd(cwd, 1024) == NULL) {
+                        rc = -ENOMEM;
+                        goto out;
+                }
 
 		if (strcmp(cont_name, ".") == 0) {
 			cont_name = strdup(cwd);
-			if (cont_name == NULL)
-				D_GOTO(out, rc = -ENOMEM);
+			if (cont_name == NULL) {
+                                rc = -ENOMEM;
+                                goto out;
+                        }
 		} else {
 			char *new_dir = calloc(strlen(cwd) + strlen(cont_name)
 					       + 1, sizeof(char));
-			if (new_dir == NULL)
-				D_GOTO(out, rc = -ENOMEM);
+			if (new_dir == NULL) {
+                                rc = -ENOMEM;
+                                goto out;
+                        }
 
 			strcpy(new_dir, cwd);
 			if (cont_name[0] == '.') {
@@ -198,15 +209,18 @@ parse_filename(const char *path, char **_obj_name, char **_cont_name)
 		*_cont_name = cont_name;
 	} else {
 		*_cont_name = strdup(cont_name);
-		if (*_cont_name == NULL)
-			D_GOTO(out, rc = -ENOMEM);
+		if (*_cont_name == NULL) {
+                        rc = -ENOMEM;
+                        goto out;
+                }
 	}
 
 	*_obj_name = strdup(fname);
 	if (*_obj_name == NULL) {
 		free(*_cont_name);
 		*_cont_name = NULL;
-		D_GOTO(out, rc = -ENOMEM);
+                rc = -ENOMEM;
+                goto out;
 	}
 
 out:
