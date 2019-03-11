@@ -90,6 +90,7 @@ ior_aiori_t posix_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = aiori_posix_access,
         .stat = aiori_posix_stat,
+        .enable_mdtest = true,
 };
 
 /***************************** F U N C T I O N S ******************************/
