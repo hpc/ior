@@ -336,18 +336,12 @@ static void AIOInit(IOR_param_t *param)
 
                 aio->a_recx.rx_nr       = 1;
 
-                aio->a_csum.cs_csum     = &aio->a_csumBuf;
-                aio->a_csum.cs_buf_len  = sizeof aio->a_csumBuf;
-                aio->a_csum.cs_len      = aio->a_csum.cs_buf_len;
-
-                aio->a_iod.iod_name.iov_buf = "data";
-                aio->a_iod.iod_name.iov_buf_len =
-                        strlen(aio->a_iod.iod_name.iov_buf) + 1;
-                aio->a_iod.iod_name.iov_len = aio->a_iod.iod_name.iov_buf_len;
+		daos_iov_set(&aio->a_iod.iod_name, "data", strlen("data"));
+		daos_csum_set(&aio->a_iod.iod_kcsum, NULL, 0);
                 aio->a_iod.iod_nr = 1;
                 aio->a_iod.iod_type  = DAOS_IOD_ARRAY;
                 aio->a_iod.iod_recxs = &aio->a_recx;
-                aio->a_iod.iod_csums = &aio->a_csum;
+                aio->a_iod.iod_csums = NULL;
                 aio->a_iod.iod_eprs  = NULL;
                 aio->a_iod.iod_size  = param->transferSize;
 
