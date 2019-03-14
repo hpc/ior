@@ -910,8 +910,7 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         rankOffset = 0;
                         GetTestFileName(testFileName, test);
                 }
-                if (backend->access(testFileName, F_OK, test) == 0 ||
-                    strcasecmp(test->api, "DAOS") == 0) {
+                if (backend->access(testFileName, F_OK, test) == 0) {
                         backend->delete(testFileName, test);
                 }
                 if (test->reorderTasksRandom == TRUE) {
@@ -919,8 +918,7 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         GetTestFileName(testFileName, test);
                 }
         } else {
-                if ((rank == 0) && (backend->access(testFileName, F_OK, test) == 0 ||
-                                    strcasecmp(test->api, "DAOS") == 0)) {
+                if (rank == 0 && backend->access(testFileName, F_OK, test) == 0) {
                         backend->delete(testFileName, test);
                 }
         }

@@ -83,6 +83,7 @@ static void DAOS_Init();
 static void DAOS_Fini();
 static void *DAOS_Create(char *, IOR_param_t *);
 static void *DAOS_Open(char *, IOR_param_t *);
+static int DAOS_Access(const char *, int, IOR_param_t *);
 static IOR_offset_t DAOS_Xfer(int, void *, IOR_size_t *,
                               IOR_offset_t, IOR_param_t *);
 static void DAOS_Close(void *, IOR_param_t *);
@@ -98,6 +99,7 @@ ior_aiori_t daos_aiori = {
         .name		= "DAOS",
         .create		= DAOS_Create,
         .open		= DAOS_Open,
+        .access		= DAOS_Access,
         .xfer		= DAOS_Xfer,
         .close		= DAOS_Close,
         .delete		= DAOS_Delete,
@@ -568,6 +570,26 @@ static void *DAOS_Create(char *testFileName, IOR_param_t *param)
         return DAOS_Open(testFileName, param);
 }
 
+static int
+DAOS_Access(const char *testFileName, int mode, IOR_param_t * param)
+{
+	uuid_t		uuid;
+	unsigned int	dFlags;
+	daos_handle_t	coh;
+	daos_cont_info_t info;
+	int		rc;
+
+	rc = uuid_parse(testFileName, uuid);
+	DCHECK(rc, "Failed to parse 'testFile': %s", testFileName);
+
+	rc = daos_cont_open(pool, uuid, DAOS_COO_RO, &coh, &info, NULL);
+	if (rc)
+		return rc;
+
+	rc = daos_cont_close(coh, NULL);
+	return rc;
+}
+
 static void *DAOS_Open(char *testFileName, IOR_param_t *param)
 {
         struct fileDescriptor *fd;
@@ -785,8 +807,8 @@ static void DAOS_Delete(char *testFileName, IOR_param_t *param)
         DCHECK(rc, "Failed to parse 'testFile': %s", testFileName);
 
         rc = daos_cont_destroy(pool, uuid, 1 /* force */, NULL /* ev */);
-        if (rc != -DER_NONEXIST)
-                DCHECK(rc, "Failed to destroy container %s", testFileName);
+        if (rc)
+                DCHECK(rc, "Failed to destroy container %s (%d)", testFileName, rc);
 }
 
 static char* DAOS_GetVersion()
