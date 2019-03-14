@@ -563,7 +563,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
           }
         }
         if (memoryPerNode){
-          initialTestParams.memoryPerNode = NodeMemoryStringToBytes(optarg);
+          initialTestParams.memoryPerNode = NodeMemoryStringToBytes(memoryPerNode);
         }
         const ior_aiori_t * backend = aiori_select(initialTestParams.api);
         if (backend == NULL)
