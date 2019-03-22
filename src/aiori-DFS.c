@@ -333,7 +333,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
         DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
 	rc = dfs_open(dfs, parent, name, mode, fd_oflag, DAOS_OC_LARGE_RW,
-                      NULL, &obj);
+                      0, NULL, &obj);
         DERR(rc, "dfs_open() of %s Failed", name);
 
 out:
@@ -371,7 +371,7 @@ DFS_Open(char *testFileName, IOR_param_t *param)
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
         DERR(rc, "dfs_lookup() of %s Failed", dir_name);
 
-	rc = dfs_open(dfs, parent, name, mode, fd_oflag, 0, NULL, &obj);
+	rc = dfs_open(dfs, parent, name, mode, fd_oflag, 0, 0, NULL, &obj);
         DERR(rc, "dfs_open() of %s Failed", name);
 
 out:
