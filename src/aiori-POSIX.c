@@ -74,11 +74,12 @@ static void POSIX_Fsync(void *, IOR_param_t *);
 
 /************************** O P T I O N S *****************************/
 typedef struct{
+  /* in case of a change, please update depending MMAP module too */
   int direct_io;
 } posix_options_t;
 
 
-static option_help * posix_options(void ** init_backend_options, void * init_values){
+option_help * POSIX_options(void ** init_backend_options, void * init_values){
   posix_options_t * o = malloc(sizeof(posix_options_t));
 
   if (init_values != NULL){
@@ -118,7 +119,7 @@ ior_aiori_t posix_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = aiori_posix_access,
         .stat = aiori_posix_stat,
-        .get_options = posix_options,
+        .get_options = POSIX_options,
         .enable_mdtest = true,
 };
 

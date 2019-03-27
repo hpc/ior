@@ -162,8 +162,6 @@ typedef struct
     int fsyncPerWrite;               /* fsync() after each write */
     int fsync;                       /* fsync() after write */
 
-    void* mmap_ptr;
-
     /* MPI variables */
     MPI_Comm     testComm;           /* MPI communicator */
     MPI_Datatype transferType;       /* datatype for transfer */

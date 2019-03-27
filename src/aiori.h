@@ -129,6 +129,8 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param);
 IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName);
 void POSIX_Delete(char *testFileName, IOR_param_t * param);
 void POSIX_Close(void *fd, IOR_param_t * param);
+option_help * POSIX_options(void ** init_backend_options, void * init_values);
+
 
 /* NOTE: these 3 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
 void MPIIO_Delete(char *testFileName, IOR_param_t * param);
