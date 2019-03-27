@@ -221,7 +221,6 @@ void option_print_current(option_help * args){
 }
 
 static void option_parse_token(char ** argv, int * flag_parsed_next, int * requiredArgsSeen, options_all_t * opt_all, int * error, int * print_help){
-  int foundOption = 0;
   char * txt = argv[0];
   char * arg = strstr(txt, "=");
   int replaced_equal = 0;
@@ -243,8 +242,6 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
         continue;
       }
       if ( (txt[0] == '-' && o->shortVar == txt[1]) || (strlen(txt) > 2 && txt[0] == '-' && txt[1] == '-' && o->longVar != NULL && strcmp(txt + 2, o->longVar) == 0)){
-        foundOption = 1;
-
         // now process the option.
         switch(o->arg){
           case (OPTION_FLAG):{
@@ -324,18 +321,15 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
           (*requiredArgsSeen)++;
         }
 
-        break;
+        return;
       }
     }
   }
 
-
-  if (! foundOption){
-      if(strcmp(txt, "-h") == 0 || strcmp(txt, "--help") == 0){
-        *print_help = 1;
-      }else{
-        *error = 1;
-      }
+  if(strcmp(txt, "-h") == 0 || strcmp(txt, "--help") == 0){
+    *print_help = 1;
+  }else{
+    *error = 1;
   }
 }
 

@@ -111,8 +111,6 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
             fprintf(out_logfile, "Could not load backend API %s\n", params->api);
             exit(-1);
           }
-          /* copy the actual module options into the test */
-          params->backend_options = airoi_update_module_options(params->backend, global_options);
         } else if (strcasecmp(option, "summaryFile") == 0) {
           if (rank == 0){
             out_resultfile = fopen(value, "w");
@@ -411,6 +409,8 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                                    create duplicate test */
                                 tail->next = CreateTest(&tail->params, test_num++);
                                 AllocResults(tail);
+                                ((IOR_test_t*) tail)->params.backend_options = airoi_update_module_options(((IOR_test_t*) tail)->params.backend, global_options);
+                              
                                 tail = tail->next;
                                 *option_p = createGlobalOptions(& ((IOR_test_t*) tail->next)->params);
                         }
@@ -422,6 +422,8 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                         tail->next = CreateTest(&tail->params, test_num++);
                         *option_p = createGlobalOptions(& ((IOR_test_t*) tail->next)->params);
                         AllocResults(tail);
+                        ((IOR_test_t*) tail)->params.backend_options = airoi_update_module_options(((IOR_test_t*) tail)->params.backend, global_options);
+
                         tail = tail->next;
                         ParseLine(ptr, &tail->params, global_options);
                 } else {
@@ -432,7 +434,8 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         /* close the script */
         if (fclose(file) != 0)
                 ERR("fclose() of script file failed");
-        AllocResults(tail);
+        AllocResults(tail);          /* copy the actual module options into the test */
+        ((IOR_test_t*) tail)->params.backend_options = airoi_update_module_options(((IOR_test_t*) tail)->params.backend, global_options);
 
         return head;
 }

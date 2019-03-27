@@ -304,8 +304,9 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
         posix_options_t * o = (posix_options_t*) param->backend_options;
-        if (o->direct_io == TRUE)
-                set_o_direct_flag(&fd_oflag);
+        if (o->direct_io == TRUE){
+          set_o_direct_flag(&fd_oflag);
+        }
 
         if(param->dryRun)
           return 0;

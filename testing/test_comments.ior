@@ -14,4 +14,6 @@ transferSize=100k
 blockSize=100k
     # space-prefixed comment
 run
+--dummy.delay-create=1000
+api=dummy
     ior stop
