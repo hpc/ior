@@ -246,7 +246,12 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
         switch(o->arg){
           case (OPTION_FLAG):{
             assert(o->type == 'd');
-            (*(int*) o->variable)++;
+            if(arg != NULL){
+              int val = atoi(arg);
+              (*(int*) o->variable) = (val < 0) ? 0 : val;
+            }else{
+              (*(int*) o->variable)++;
+            }
             break;
           }
           case (OPTION_OPTIONAL_ARGUMENT):
