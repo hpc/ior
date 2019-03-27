@@ -72,7 +72,35 @@ static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void POSIX_Fsync(void *, IOR_param_t *);
 
+/************************** O P T I O N S *****************************/
+typedef struct{
+  int direct_io;
+} posix_options_t;
+
+
+static option_help * posix_options(void ** init_backend_options, void * init_values){
+  posix_options_t * o = malloc(sizeof(posix_options_t));
+
+  if (init_values != NULL){
+    memcpy(o, init_values, sizeof(posix_options_t));
+  }else{
+    o->direct_io = 0;
+  }
+
+  *init_backend_options = o;
+
+  option_help h [] = {
+    {0, "posix.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
+    LAST_OPTION
+  };
+  option_help * help = malloc(sizeof(h));
+  memcpy(help, h, sizeof(h));
+  return help;
+}
+
+
 /************************** D E C L A R A T I O N S ***************************/
+
 
 ior_aiori_t posix_aiori = {
         .name = "POSIX",
@@ -90,6 +118,7 @@ ior_aiori_t posix_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = aiori_posix_access,
         .stat = aiori_posix_stat,
+        .get_options = posix_options,
         .enable_mdtest = true,
 };
 
@@ -274,8 +303,8 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         fd = (int *)malloc(sizeof(int));
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
-
-        if (param->useO_DIRECT == TRUE)
+        posix_options_t * o = (posix_options_t*) param->backend_options;
+        if (o->direct_io == TRUE)
                 set_o_direct_flag(&fd_oflag);
 
         if(param->dryRun)
@@ -389,7 +418,8 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
 
-        if (param->useO_DIRECT == TRUE)
+        posix_options_t * o = (posix_options_t*) param->backend_options;
+        if (o->direct_io == TRUE)
                 set_o_direct_flag(&fd_oflag);
 
         fd_oflag |= O_RDWR;

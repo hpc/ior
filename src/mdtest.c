@@ -151,7 +151,6 @@ static pid_t pid;
 static uid_t uid;
 
 /* Use the POSIX backend by default */
-static const char *backend_name = "POSIX";
 static const ior_aiori_t *backend;
 
 static IOR_param_t param;
@@ -2099,7 +2098,6 @@ void mdtest_init_args(){
    nstride = 0;
 }
 
-
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
     testComm = world_com;
     out_logfile = world_out;
@@ -2132,7 +2130,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     sprintf(apiStr, "API for I/O [%s]", APIs);
 
     option_help options [] = {
-      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & backend_name},
+      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & param.api},
       {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & branch_factor},
       {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
@@ -2168,12 +2166,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
       LAST_OPTION
     };
-    airoi_parse_options(argc, argv, options);
-
-    backend = aiori_select(backend_name);
-    if (NULL == backend) {
-        FAIL("Could not find suitable backend to use");
-    }
+    options_all_t * global_options = airoi_create_all_module_options(options);
+    option_parse(argc, argv, global_options);
+    updateParsedOptions(& param, global_options);
+    backend = param.backend;
 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
@@ -2222,7 +2218,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
         // option_print_current(options);
-        fprintf (out_logfile, "api                     : %s\n", backend_name);
+        fprintf (out_logfile, "api                     : %s\n", param.api);
         fprintf( out_logfile, "barriers                : %s\n", ( barriers ? "True" : "False" ));
         fprintf( out_logfile, "collective_creates      : %s\n", ( collective_creates ? "True" : "False" ));
         fprintf( out_logfile, "create_only             : %s\n", ( create_only ? "True" : "False" ));

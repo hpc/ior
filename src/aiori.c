@@ -72,24 +72,37 @@ ior_aiori_t *available_aiori[] = {
         NULL
 };
 
-void airoi_parse_options(int argc, char ** argv, option_help * global_options){
-    int airoi_c = aiori_count();
-    options_all opt;
-    opt.module_count = airoi_c + 1;
-    opt.modules = malloc(sizeof(option_module) * (airoi_c + 1));
-    opt.modules[0].prefix = NULL;
-    opt.modules[0].options = global_options;
-    ior_aiori_t **tmp = available_aiori;
-    for (int i=1; *tmp != NULL; ++tmp, i++) {
-      opt.modules[i].prefix = (*tmp)->name;
-      if((*tmp)->get_options != NULL){
-        opt.modules[i].options = (*tmp)->get_options();
-      }else{
-        opt.modules[i].options = NULL;
-      }
+void * airoi_update_module_options(const ior_aiori_t * backend, options_all_t * opt){
+  if (backend->get_options == NULL)
+    return NULL;
+  char * name = backend->name;
+  ior_aiori_t **tmp = available_aiori;
+  for (int i=1; *tmp != NULL; ++tmp, i++) {
+    if (strcmp(opt->modules[i].prefix, name) == 0){
+      opt->modules[i].options = (*tmp)->get_options(& opt->modules[i].defaults,  opt->modules[i].defaults);
+      return opt->modules[i].defaults;
     }
-    option_parse(argc, argv, &opt);
-    free(opt.modules);
+  }
+  return NULL;
+}
+
+options_all_t * airoi_create_all_module_options(option_help * global_options){
+  int airoi_c = aiori_count();
+  options_all_t * opt = malloc(sizeof(options_all_t));
+  opt->module_count = airoi_c + 1;
+  opt->modules = malloc(sizeof(option_module) * (airoi_c + 1));
+  opt->modules[0].prefix = NULL;
+  opt->modules[0].options = global_options;
+  ior_aiori_t **tmp = available_aiori;
+  for (int i=1; *tmp != NULL; ++tmp, i++) {
+    opt->modules[i].prefix = (*tmp)->name;
+    if((*tmp)->get_options != NULL){
+      opt->modules[i].options = (*tmp)->get_options(& opt->modules[i].defaults, NULL);
+    }else{
+      opt->modules[i].options = NULL;
+    }
+  }
+  return opt;
 }
 
 void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)

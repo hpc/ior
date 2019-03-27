@@ -36,6 +36,8 @@
     typedef void *rados_ioctx_t;
 #endif
 
+#include "option.h"
+
 #include "iordef.h"
 /******************** DATA Packet Type ***************************************/
 /* Holds the types of data packets: generic, offset, timestamp, incompressible */
@@ -93,6 +95,7 @@ typedef struct
     char * testFileName_fppReadCheck;/* filename for fpp read check */
     char * hintsFileName;  /* full name for hints file */
     char * options;        /* options string */
+    // intermediate options
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
     int numTasks;                    /* number of tasks for test */
     int nodes;                       /* number of nodes for test */
@@ -126,7 +129,6 @@ typedef struct
     int useFileView;                 /* use MPI_File_set_view */
     int useSharedFilePointer;        /* use shared file pointer */
     int useStridedDatatype;          /* put strided access into datatype */
-    int useO_DIRECT;                 /* use O_DIRECT, bypassing I/O buffers */
     int showHints;                   /* show hints */
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
@@ -148,8 +150,12 @@ typedef struct
     int randomOffset;                /* access is to random offsets */
     size_t memoryPerTask;            /* additional memory used per task */
     size_t memoryPerNode;            /* additional memory used per node */
-    enum PACKET_TYPE dataPacketType;             /* The type of data packet.  */
+    char * memoryPerNodeStr;         /* for parsing */
+    char * testscripts;              /* for parsing */
+    char * buffer_type;              /* for parsing */
+    enum PACKET_TYPE dataPacketType; /* The type of data packet.  */
 
+    void * backend_options;          /* Backend-specific options */
 
     /* POSIX variables */
     int singleXferAttempt;           /* do not retry transfer if incomplete */
@@ -180,7 +186,7 @@ typedef struct
     size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
     char*       UploadId; /* key for multi-part-uploads */
     int         collective_md;       /* use collective metatata optimization */
- 
+
 
     /* RADOS variables */
     rados_t rados_cluster;           /* RADOS cluster handle */
