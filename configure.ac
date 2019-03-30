@@ -185,7 +185,20 @@ AM_COND_IF([USE_RADOS_AIORI],[
         AC_DEFINE([USE_RADOS_AIORI], [], [Build RADOS backend AIORI])
 ])
 
-# DAOS Backends (DAOS and DFS) IO support
+# DAOS Backends (DAOS and DFS) IO support require DAOS and CART/GURT
+AC_ARG_WITH([cart],
+    [AS_HELP_STRING([--with-cart],
+	    [support IO with DAOS backends @<:@default=no@:>@])],
+	    [],
+    	    [with_daos=no])
+
+AS_IF([test "x$with_cart" != xno],
+    CART="yes"
+    LDFLAGS="$LDFLAGS -L$with_cart/lib"
+    CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
+    AC_CHECK_HEADERS(gurt/common.h,, [unset CART])
+    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset CART]))
+
 AC_ARG_WITH([daos],
     [AS_HELP_STRING([--with-daos],
 	    [support IO with DAOS backends @<:@default=no@:>@])],

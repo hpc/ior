@@ -4,14 +4,16 @@ Building
 The DAOS library must be installed on the system.
 
 ./bootsrap
-./configure --prefix=iorInstallDir --with-daos=DIR
+./configure --prefix=iorInstallDir --with-daos=DIR --with-cart=DIR
 
-One must specify "--with-daos=/path/to/daos/install".  When that is specified
-the DAOS and DFS driver will be built.
+One must specify "--with-daos=/path/to/daos/install and --with-cart".  When that
+is specified the DAOS and DFS driver will be built.
 
-The DAOS driver uses the DAOS API to create a container (file) and update/fetch
-an object to the container using the daos object API. The DAOS driver works with
-IOR only (no mdtest support yet).
+The DAOS driver uses the DAOS API to open a container (or create it if it
+doesn't exist first) then create an array object in that container (file) and
+read/write to the array object using the daos Array API. The DAOS driver works
+with IOR only (no mdtest support yet). The file name used by IOR (passed by -o
+option) is hashed to an object ID that is used as the array oid.
 
 The DFS (DAOS File System) driver creates an encapsulated namespace and emulates
 the POSIX driver using the DFS API directly on top of DAOS. The DFS driver works
@@ -33,40 +35,22 @@ The DAOS options include:
 Required Options:
 --daos.pool <pool_uuid>: pool uuid to connect to (has to be created beforehand)
 --daos.svcl <pool_svcl>: pool svcl list (: separated)
+--daos.cont <cont_uuid>: container for the IOR files/objects (can use `uuidgen`)
 
 Optional Options:
 --daos.group <group_name>: group name of servers with the pool
---daos.recordSize	<record_size>: object record size for IO
---daos.stripeSize	<stripe_size>
---daos.stripeCount	<stripe_count>
---daos.stripeMax	<max_stripe_size>
---daos.aios		<num>: number of concurrent async IOs
---daos.kill		flag to kill a rank during IO
---daos.objectClass	<object_class>: specific object class
-
-When benchmarking write performance, one likely does not want "-W", which causes
-the write phase to do one additional memory copy for every I/O. This is due to
-IOR's assumption that when a DAOS_Xfer() call returns the buffer may be
-released. Therefore, random data is written when "-W" is absent, while data is
-copied from IOR buffers when "-W" is present.
-
-See doc/USER_GUIDE for all options and directives. Note that not all
-combinations of options are supported. For example specifying an epoch to access
-and running ior with multiple iterations would cause all iterations other than
-first one to fail because the epoch will be committed in the first iteration. In
-that case, the epoch should not be specified and the DAOS driver would choose
-the epoch to access automatically on each iteration.
+--daos.chunk_size	<chunk_size>: Chunk size of the array object controlling striping over DKEYs
+--daos.destroy		flag to destory the container on finalize
+--daos.oclass		<object_class>: specific object class for array object
 
 Examples that should work include:
 
-  - "ior -a DAOS -w -W -o <container_uuid> --daos.pool <pool_uuid> --daos.svcl <svc_ranks>"
-    writes into a new container and verifies the data, using default
-    daosRecordSize, transferSize, daosStripeSize, blockSize, daosAios, etc.
+  - "ior -a DAOS -w -W -o file_name --daos.pool <pool_uuid> --daos.svcl <svc_ranks>\
+    --daos.cont <cont_uuid>"
 
-  - "ior -a DAOS -w -W -r -R -o <container_uuid> -b 1g -t 4m -C \
-    --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.recordSize 1m --daos.stripeSize 4m\
-    --daos.stripeCount 256 --daos.aios 8
-    does all IOR tests and shifts ranks during checkWrite and checkRead.
+  - "ior -a DAOS -w -W -r -R -o file_name -b 1g -t 4m \
+    --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <cont_uuid>\
+    --daos.chunk_size 1024 --daos.oclass R2"
 
 Running with DFS API
 ---------------------
