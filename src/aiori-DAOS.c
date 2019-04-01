@@ -370,7 +370,6 @@ DAOS_Create(char *testFileName, IOR_param_t *param)
 
 	/** Create the array */
 	if (param->filePerProc || rank == 0) {
-		printf("Chunk size = %zu\n", o.chunk_size);
 		rc = daos_array_create(coh, oid, DAOS_TX_NONE, 1, o.chunk_size,
 				       &aoh, NULL);
 		DCHECK(rc, "Failed to create array object\n");
