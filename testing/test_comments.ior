@@ -15,5 +15,7 @@ blockSize=100k
     # space-prefixed comment
 run
 --dummy.delay-create=1000
+useo_direct=0
+#--posix.odirect=0
 api=dummy
     ior stop

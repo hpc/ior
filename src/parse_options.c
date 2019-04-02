@@ -291,6 +291,10 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
         } else {
+                // backward compatibility for now
+                if (strcasecmp(option, "useo_direct") == 0) {
+                  strcpy(option, "--posix.odirect");
+                }
                 int parsing_error = option_parse_key_value(option, value, module_options);
                 if(parsing_error){
                   if (rank == 0)
@@ -410,7 +414,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                                 tail->next = CreateTest(&tail->params, test_num++);
                                 AllocResults(tail);
                                 ((IOR_test_t*) tail)->params.backend_options = airoi_update_module_options(((IOR_test_t*) tail)->params.backend, global_options);
-                              
+
                                 tail = tail->next;
                                 *option_p = createGlobalOptions(& ((IOR_test_t*) tail->next)->params);
                         }

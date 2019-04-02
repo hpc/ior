@@ -223,6 +223,7 @@ void option_print_current(option_help * args){
 static void option_parse_token(char ** argv, int * flag_parsed_next, int * requiredArgsSeen, options_all_t * opt_all, int * error, int * print_help){
   char * txt = argv[0];
   char * arg = strstr(txt, "=");
+
   int replaced_equal = 0;
   int i = 0;
   if(arg != NULL){
@@ -338,12 +339,14 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
   }
 }
 
-int option_parse_key_value(char * key, char * value, options_all_t * opt_all){
+int option_parse_key_value(char * key, char *val, options_all_t * opt_all){
   int flag_parsed_next;
-  char * argv[2] = {key, value};
   int error = 0;
   int requiredArgsSeen = 0;
   int print_help = 0;
+  char value[1024];
+  sprintf(value, "%s=%s", key, val);
+  char * argv[2] = {value, NULL};
   option_parse_token(argv, & flag_parsed_next, & requiredArgsSeen, opt_all, & error, & print_help);
   return error;
 }
