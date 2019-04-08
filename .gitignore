@@ -26,10 +26,15 @@ src/stamp-h1
 NOTES.txt
 autom4te.cache
 contrib/cbif.o
+contrib/cbif
 src/*.o
 src/*.i
 src/*.s
+src/*.a
 src/ior
+src/mdtest
+src/testlib
+src/test/*.o
 
 doc/doxygen/build
 doc/sphinx/_*/
