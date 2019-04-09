@@ -152,6 +152,17 @@ AM_COND_IF([USE_NCMPI_AIORI],[
         AC_DEFINE([USE_NCMPI_AIORI], [], [Build NCMPI backend AIORI])
 ])
 
+# NC (netcdf-4 with parallel support) support
+AC_ARG_WITH([nc4],
+        [AS_HELP_STRING([--with-nc4],
+           [support IO with NC4 backend @<:@default=no@:>@])],
+        [],
+        [with_nc4=no])
+AM_CONDITIONAL([USE_NC4_AIORI], [test x$with_nc4 = xyes])
+AM_COND_IF([USE_NC4_AIORI],[
+        AC_DEFINE([USE_NC4_AIORI], [], [Build NC4 backend AIORI])
+])
+
 # MMAP IO support
 AC_ARG_WITH([mmap],
         [AS_HELP_STRING([--with-mmap],

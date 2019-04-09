@@ -32,6 +32,9 @@ src/*.o
 src/*.i
 src/*.s
 src/*.a
+src/test-suite.log
+src/testlib.log
+src/testlib.trs
 src/ior
 src/mdtest
 src/testlib
