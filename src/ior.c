@@ -1583,10 +1583,10 @@ static void ValidateTests(IOR_param_t * test)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
                 ERR("block/transfer size may not be smaller than IOR_size_t for NCMPI");
-        if ((strcasecmp(test->api, "NC") == 0)
+        if ((strcasecmp(test->api, "NC4") == 0)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
-            ERR("block/transfer size may not be smaller than IOR_size_t for NC");
+            ERR("block/transfer size may not be smaller than IOR_size_t for NC4");
         if ((test->useFileView == TRUE)
             && (sizeof(MPI_Aint) < 8)   /* used for 64-bit datatypes */
             &&((test->numTasks * test->blockSize) >
@@ -1660,8 +1660,8 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("random offset not available with HDF5");
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->randomOffset)
                 ERR("random offset not available with NCMPI");
-        if ((strcasecmp(test->api, "NC") == 0) && test->randomOffset)
-            ERR("random offset not available with NC");
+        if ((strcasecmp(test->api, "NC4") == 0) && test->randomOffset)
+            ERR("random offset not available with NC4");
         if ((strcasecmp(test->api, "HDF5") != 0) && test->individualDataSets)
                 WARN_RESET("individual datasets only available in HDF5",
                            test, &defaults, individualDataSets);
@@ -1670,8 +1670,8 @@ static void ValidateTests(IOR_param_t * test)
                            test, &defaults, individualDataSets);
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->filePerProc)
                 ERR("file-per-proc not available in current NCMPI");
-        if ((strcasecmp(test->api, "NC") == 0) && test->filePerProc)
-            ERR("file-per-proc not available in current NC");
+        if ((strcasecmp(test->api, "NC4") == 0) && test->filePerProc)
+            ERR("file-per-proc not available in current NC4");
         if (test->noFill) {
                 if (strcasecmp(test->api, "HDF5") != 0) {
                         ERR("'no fill' option only available in HDF5");
