@@ -191,23 +191,22 @@ static IOR_offset_t NC4_Xfer(int access, void *fd, IOR_size_t *buffer,
             message = "cannot define dataset dimension";
             name = "segments_times_np";
             NC4_CHECK(nc_def_dim(*(int *) fd, name, numSegmentsTimesN, &dim_id[0]),
-                    GetNamedMessage(message, name));
+                      GetNamedMessage(message, name));
 
-            int numTransfers =
-                    param->blockSize / param->transferSize;
+            int numTransfers = param->blockSize / param->transferSize;
 
             name = "number_of_transfers";
             NC4_CHECK(nc_def_dim(*(int *) fd, name, numTransfers, &dim_id[1]),
-                    GetNamedMessage(message, name));
+                      GetNamedMessage(message, name));
 
             name = "transfer_size";
             NC4_CHECK(nc_def_dim(*(int *) fd, name, param->transferSize, &dim_id[2]),
-                    GetNamedMessage(message, name));
+                      GetNamedMessage(message, name));
 
             message = "cannot define dataset variable";
             name = "data_var";
             NC4_CHECK(nc_def_var(*(int *) fd, name, NC_BYTE, NUM_DIMS, dim_id, &var_id),
-                    GetNamedMessage(message, name));
+                      GetNamedMessage(message, name));
 
             message = "cannot define chunksizes for dataset variable";
             name = "data_var";
@@ -223,12 +222,12 @@ static IOR_offset_t NC4_Xfer(int access, void *fd, IOR_size_t *buffer,
             message = "cannot retrieve dataset variable";
             name = "data_var";
             NC4_CHECK(nc_inq_varid(*(int *) fd, name, &var_id),
-                    GetNamedMessage(message, name));
+                      GetNamedMessage(message, name));
         }
 
         if (param->collective) {
             NC4_CHECK(nc_var_par_access(*(int *) fd, var_id, NC_COLLECTIVE),
-                    "cannot enable collective data mode");
+                      "cannot enable collective data mode");
         }
 
         param->var_id = var_id;
@@ -251,10 +250,10 @@ static IOR_offset_t NC4_Xfer(int access, void *fd, IOR_size_t *buffer,
 
     if (access == WRITE) {
         NC4_CHECK(nc_put_vara_schar(*(int *) fd, var_id, offset, bufSize, bufferPtr),
-                "cannot write to dataset");
+                  "cannot write to dataset");
     } else {
         NC4_CHECK(nc_get_vara_schar(*(int *) fd, var_id, offset, bufSize, bufferPtr),
-                "cannot read from dataset");
+                  "cannot read from dataset");
     }
 
     return (length);
@@ -339,8 +338,6 @@ static int GetFileMode(IOR_param_t *param) {
         fprintf(stdout, "O_DIRECT not implemented in NC4\n");
     }
 
-//    fd_mode |= NC_64BIT_OFFSET;
-//    fd_mode |= NC_64BIT_DATA;
     fd_mode |= NC_NETCDF4;
 
     return (fd_mode);
