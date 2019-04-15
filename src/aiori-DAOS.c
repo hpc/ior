@@ -173,6 +173,7 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
                             MPI_COMM_WORLD),
                   "Failed to bcast global handle buffer size");
 
+	global.iov_len = global.iov_buf_len;
         global.iov_buf = malloc(global.iov_buf_len);
         if (global.iov_buf == NULL)
                 ERR("Failed to allocate global handle buffer");
@@ -192,9 +193,6 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
                   "Failed to bcast global pool handle");
 
         if (rank != 0) {
-                /* A larger-than-actual length works just fine. */
-                global.iov_len = global.iov_buf_len;
-
                 if (type == POOL_HANDLE)
                         rc = daos_pool_global2local(global, handle);
                 else if (type == CONT_HANDLE)
@@ -384,30 +382,22 @@ static int
 DAOS_Access(const char *testFileName, int mode, IOR_param_t * param)
 {
 	daos_obj_id_t	oid;
+	daos_size_t	cell_size, chunk_size;
 	int		rc;
 
 	/** Convert file name into object ID */
 	gen_oid(testFileName, &oid);
 
-	/** open the array to verify it exists */
-	if (param->filePerProc || rank == 0) {
-		daos_size_t cell_size, chunk_size;
+	rc = daos_array_open(coh, oid, DAOS_TX_NONE, DAOS_OO_RO,
+			     &cell_size, &chunk_size, &aoh, NULL);
+	if (rc)
+		return rc;
 
-		rc = daos_array_open(coh, oid, DAOS_TX_NONE, DAOS_OO_RO,
-				     &cell_size, &chunk_size, &aoh, NULL);
-		if (rc)
-			return rc;
+	if (cell_size != 1)
+		GERR("Invalid DAOS Array object.\n");
 
-		if (cell_size != 1)
-			GERR("Invalid DAOS Array object.\n");
-
-		rc = daos_array_close(aoh, NULL);
-		aoh.cookie = 0;
-	}
-
-	if (!param->filePerProc)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
+	rc = daos_array_close(aoh, NULL);
+	aoh.cookie = 0;
 	return rc;
 }
 
@@ -487,6 +477,7 @@ static void
 DAOS_Delete(char *testFileName, IOR_param_t *param)
 {
 	daos_obj_id_t	oid;
+	daos_size_t	cell_size, chunk_size;
         int		rc;
 
 	if (!daos_initialized)
@@ -496,26 +487,19 @@ DAOS_Delete(char *testFileName, IOR_param_t *param)
 	gen_oid(testFileName, &oid);
 
 	/** open the array to verify it exists */
-	if (param->filePerProc || rank == 0) {
-		daos_size_t cell_size, chunk_size;
+	rc = daos_array_open(coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
+			     &cell_size, &chunk_size, &aoh, NULL);
+	DCHECK(rc, "daos_array_open() failed (%d).", rc);
 
-		rc = daos_array_open(coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
-				     &cell_size, &chunk_size, &aoh, NULL);
-		DCHECK(rc, "daos_array_open() failed (%d).", rc);
+	if (cell_size != 1)
+		GERR("Invalid DAOS Array object.\n");
 
-		if (cell_size != 1)
-			GERR("Invalid DAOS Array object.\n");
+	rc = daos_array_destroy(aoh, DAOS_TX_NONE, NULL);
+	DCHECK(rc, "daos_array_destroy() failed (%d).", rc);
 
-		rc = daos_array_destroy(aoh, DAOS_TX_NONE, NULL);
-		DCHECK(rc, "daos_array_destroy() failed (%d).", rc);
-
-		rc = daos_array_close(aoh, NULL);
-		DCHECK(rc, "daos_array_close() failed (%d).", rc);
-		aoh.cookie = 0;
-	}
-
-	if (!param->filePerProc)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	rc = daos_array_close(aoh, NULL);
+	DCHECK(rc, "daos_array_close() failed (%d).", rc);
+	aoh.cookie = 0;
 }
 
 static char *
