@@ -322,9 +322,12 @@ void ParseLine(char *line, IOR_param_t * test, options_all_t * module_options)
 
         start = line;
         do {
+                end = strchr(start, '#');
+                if (end != NULL)
+                  *end = '\0';
                 end = strchr(start, ',');
                 if (end != NULL)
-                        *end = '\0';
+                   *end = '\0';
                 DecodeDirective(start, test, module_options);
                 start = end + 1;
         } while (end != NULL);
