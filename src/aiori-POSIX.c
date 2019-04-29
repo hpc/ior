@@ -201,6 +201,24 @@ bool beegfs_isOptionSet(int opt) {
    return opt != -1;
 }
 
+bool beegfs_compatibleFileExists(char* filepath, int numTargets, int chunkSize)
+{
+      int fd = open(filepath, O_RDWR);
+
+      if (fd == -1)
+         return false;
+
+      unsigned read_stripePattern = 0;
+      u_int16_t read_numTargets = 0;
+      int read_chunkSize = 0;
+
+      bool retVal = beegfs_getStripeInfo(fd, &read_stripePattern, &read_chunkSize, &read_numTargets);
+
+      close(fd);
+
+      return retVal && read_numTargets == numTargets && read_chunkSize == chunkSize;
+}
+
 /*
  * Create a file on a BeeGFS file system with striping parameters
  */
@@ -247,8 +265,9 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 
                                 char* filenameTmp = strdup(filepath);
                                 char* filename = basename(filepath);
-                                bool isFileCreated = beegfs_createFile(parentDirFd, filename,
-                                                                       mode, numTargets, chunkSize);
+                                bool isFileCreated =    beegfs_compatibleFileExists(filepath, numTargets, chunkSize)
+                                                     || beegfs_createFile(parentDirFd, filename,
+                                                                          mode, numTargets, chunkSize);
                                 if (!isFileCreated)
                                         ERR("Could not create file");
                                 retVal = true;
