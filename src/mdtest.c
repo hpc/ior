@@ -273,7 +273,7 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
 
     //create dirs
     sprintf(curr_item, "%s/dir.%s%" PRIu64, path, create ? mk_name : rm_name, itemNum);
-    if (rank == 0 && verbose >= 3) {
+    if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
         fprintf(out_logfile, "V-3: create_remove_items_helper (dirs %s): curr_item is \"%s\"\n", operation, curr_item);
         fflush(out_logfile);
     }
@@ -302,7 +302,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
 
     //remove files
     sprintf(curr_item, "%s/file.%s"LLU"", path, rm_name, itemNum);
-    if (rank == 0 && verbose >= 3) {
+    if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
         fprintf(out_logfile, "V-3: create_remove_items_helper (non-dirs remove): curr_item is \"%s\"\n", curr_item);
         fflush(out_logfile);
     }
@@ -333,7 +333,7 @@ static void create_file (const char *path, uint64_t itemNum) {
     if (collective_creates) {
         param.openFlags = IOR_WRONLY;
 
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile,  "V-3: create_remove_items_helper (collective): open...\n" );
             fflush( out_logfile );
         }
@@ -350,7 +350,7 @@ static void create_file (const char *path, uint64_t itemNum) {
         param.openFlags = IOR_CREAT | IOR_WRONLY;
         param.filePerProc = !shared_file;
 
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile,  "V-3: create_remove_items_helper (non-collective, shared): open...\n" );
             fflush( out_logfile );
         }
@@ -362,7 +362,7 @@ static void create_file (const char *path, uint64_t itemNum) {
     }
 
     if (write_bytes > 0) {
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile,  "V-3: create_remove_items_helper: write...\n" );
             fflush( out_logfile );
         }
@@ -378,7 +378,7 @@ static void create_file (const char *path, uint64_t itemNum) {
         }
     }
 
-    if (rank == 0 && verbose >= 3) {
+    if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
         fprintf(out_logfile,  "V-3: create_remove_items_helper: close...\n" );
         fflush( out_logfile );
     }
@@ -430,7 +430,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
         }
 
         sprintf(curr_item, "%s/file.%s"LLU"", path, create ? mk_name : rm_name, itemNum+i);
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile, "V-3: create file: %s\n", curr_item);
             fflush(out_logfile);
         }
@@ -476,7 +476,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
     memset(dir, 0, MAX_PATHLEN);
     strcpy(temp_path, path);
 
-    if (rank == 0 && verbose >= 3) {
+    if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
         fprintf(out_logfile,  "V-3: create_remove_items (start): temp_path is \"%s\"\n", temp_path );
         fflush(out_logfile);
     }
@@ -505,7 +505,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
             strcat(temp_path, "/");
             strcat(temp_path, dir);
 
-            if (rank == 0 && verbose >= 3) {
+            if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
                 fprintf(out_logfile,  "V-3: create_remove_items (for loop): temp_path is \"%s\"\n", temp_path );
                 fflush(out_logfile);
             }
@@ -583,13 +583,13 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
         /* create name of file/dir to stat */
         if (dirs) {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if ((verbose >= 5 || (rank == 0 && verbose >= 3)) && (i%ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: stat dir: "LLU"\n", i);
                 fflush(out_logfile);
             }
             sprintf(item, "dir.%s"LLU"", stat_name, item_num);
         } else {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if ((verbose >= 5 || (rank == 0 && verbose >= 3)) && (i%ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: stat file: "LLU"\n", i);
                 fflush(out_logfile);
             }
@@ -618,7 +618,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
         strcpy( item, temp );
 
         /* below temp used to be hiername */
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             if (dirs) {
                 fprintf(out_logfile, "V-3: mdtest_stat dir : %s\n", item);
             } else {
@@ -700,7 +700,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* create name of file to read */
         if (!dirs) {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if ((verbose >= 5 || (rank == 0 && verbose >= 3)) && (i%ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: read file: "LLU"\n", i);
                 fflush(out_logfile);
             }
@@ -729,7 +729,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         strcpy( item, temp );
 
         /* below temp used to be hiername */
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             if (!dirs) {
                 fprintf(out_logfile, "V-3: mdtest_read file: %s\n", item);
             }
@@ -805,7 +805,7 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
         }
 
         /* Now that everything is set up as it should be, do the create or remove */
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile, "V-3: collective_create_remove (create_remove_items): temp is \"%s\"\n", temp);
             fflush( out_logfile );
         }
