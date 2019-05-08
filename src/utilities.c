@@ -292,21 +292,23 @@ int CountTasksPerNode(MPI_Comm comm) {
  */
 void ExtractHint(char *settingVal, char *valueVal, char *hintString)
 {
-        char *settingPtr, *valuePtr, *tmpPtr1, *tmpPtr2;
+        char *settingPtr, *valuePtr, *tmpPtr2;
 
+        /* find the value */
         settingPtr = (char *)strtok(hintString, " =");
         valuePtr = (char *)strtok(NULL, " =\t\r\n");
-        tmpPtr1 = settingPtr;
-        tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__MPI__");
-        if (tmpPtr1 == tmpPtr2) {
+        /* is this an MPI hint? */
+        tmpPtr2 = (char *) strstr(settingPtr, "IOR_HINT__MPI__");
+        if (settingPtr == tmpPtr2) {
                 settingPtr += strlen("IOR_HINT__MPI__");
-
         } else {
-                tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__GPFS__");
-                if (tmpPtr1 == tmpPtr2) {
-                        settingPtr += strlen("IOR_HINT__GPFS__");
-                        fprintf(out_logfile,
-                                "WARNING: Unable to set GPFS hints (not implemented.)\n");
+                tmpPtr2 = (char *) strstr(hintString, "IOR_HINT__GPFS__");
+                /* is it an GPFS hint? */
+                if (settingPtr == tmpPtr2) {
+                  settingPtr += strlen("IOR_HINT__GPFS__");
+                }else{
+                  fprintf(out_logfile, "WARNING: Unable to set unknown hint type (not implemented.)\n");
+                  return;
                 }
         }
         strcpy(settingVal, settingPtr);
