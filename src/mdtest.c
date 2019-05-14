@@ -2330,7 +2330,11 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
     if (items_per_dir > 0) {
         if(items == 0){
-          items = items_per_dir * num_dirs_in_tree;
+          if (leaf_only) {
+              items = items_per_dir * (uint64_t) pow(branch_factor, depth);
+          } else {
+              items = items_per_dir * num_dirs_in_tree;
+          }
         }else{
           num_dirs_in_tree_calc = num_dirs_in_tree;
         }
