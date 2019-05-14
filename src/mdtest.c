@@ -551,7 +551,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
     uint64_t stop_items = items;
 
-    if( directory_loops != 1 || leaf_only ){
+    if( directory_loops != 1 ){
       stop_items = items_per_dir;
     }
 
@@ -2270,7 +2270,11 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
     if (items_per_dir > 0) {
         if(items == 0){
-          items = items_per_dir * num_dirs_in_tree;
+          if (leaf_only) {
+              items = items_per_dir * (uint64_t) pow(branch_factor, depth);
+          } else {
+              items = items_per_dir * num_dirs_in_tree;
+          }
         }else{
           num_dirs_in_tree_calc = num_dirs_in_tree;
         }
