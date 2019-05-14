@@ -367,7 +367,6 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("setAlignment", test->setAlignment);
     PrintKeyValInt("storeFileOffset", test->storeFileOffset);
     PrintKeyValInt("useSharedFilePointer", test->useSharedFilePointer);
-    PrintKeyValInt("useO_DIRECT", test->useO_DIRECT);
     PrintKeyValInt("useStridedDatatype", test->useStridedDatatype);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);

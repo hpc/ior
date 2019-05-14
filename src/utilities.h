@@ -53,6 +53,7 @@ extern enum OutputFormat_t outputFormat;  /* format of the output */
     } while(0)
 #endif
 
+void* safeMalloc(uint64_t size);
 void set_o_direct_flag(int *fd);
 
 char *CurrentTimeString(void);
@@ -65,6 +66,8 @@ void ShowHints (MPI_Info *);
 char *HumanReadable(IOR_offset_t value, int base);
 int CountTasksPerNode(MPI_Comm comm);
 void DelaySecs(int delay);
+void updateParsedOptions(IOR_param_t * options, options_all_t * global_options);
+size_t NodeMemoryStringToBytes(char *size_str);
 
 /* Returns -1, if cannot be read  */
 int64_t ReadStoneWallingIterations(char * const filename);

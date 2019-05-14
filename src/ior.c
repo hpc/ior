@@ -218,8 +218,6 @@ void init_IOR_Param_t(IOR_param_t * p)
 
         p->beegfs_numTargets = -1;
         p->beegfs_chunkSize = -1;
-
-        p->mmap_ptr = NULL;
 }
 
 static void
@@ -493,20 +491,13 @@ static void aligned_buffer_free(void *buf)
         free(*(void **)((char *)buf - sizeof(char *)));
 }
 
-static void* safeMalloc(uint64_t size){
-  void * d = malloc(size);
-  if (d == NULL){
-    ERR("Could not malloc an array");
-  }
-  memset(d, 0, size);
-  return d;
-}
-
 void AllocResults(IOR_test_t *test)
 {
   int reps;
   if (test->results != NULL)
-          return;
+    return;
+
+  IOR_param_t * params = & test->params;
 
   reps = test->params.repetitions;
   test->results = (IOR_results_t *) safeMalloc(sizeof(IOR_results_t) * reps);
@@ -1235,13 +1226,7 @@ static void TestIoSys(IOR_test_t *test)
                 fflush(out_logfile);
         }
         params->tasksPerNode = CountTasksPerNode(testComm);
-
-        /* bind I/O calls to specific API */
-        backend = aiori_select(params->api);
-        if (backend == NULL)
-                ERR_SIMPLE("unrecognized I/O API");
-
-
+        backend = params->backend;
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
