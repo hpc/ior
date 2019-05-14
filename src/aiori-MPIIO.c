@@ -592,7 +592,8 @@ IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * module_options, char *testFileN
                 comm = testComm;
         }
 
-        SetHints(&mpiHints, test->hintsFileName);
+        if(test)
+                SetHints(&mpiHints, test->hintsFileName);
         MPI_CHECK(MPI_File_open(comm, testFileName, MPI_MODE_RDONLY,
                                 mpiHints, &fd),
                   "cannot open file to get file size");

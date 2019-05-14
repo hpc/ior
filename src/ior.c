@@ -196,13 +196,13 @@ int ior_main(int argc, char **argv)
     out_logfile = stdout;
     out_resultfile = stdout;
 
+    /* start the MPI code */
+    MPI_CHECK(MPI_Init(&argc, &argv), "cannot initialize MPI");
+
     /*
      * check -h option from commandline without starting MPI;
      */
     tests_head = ParseCommandLine(argc, argv, MPI_COMM_WORLD);
-
-    /* start the MPI code */
-    MPI_CHECK(MPI_Init(&argc, &argv), "cannot initialize MPI");
 
     MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank), "cannot get rank");
 
