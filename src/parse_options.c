@@ -92,7 +92,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
         char value[MAX_STR];
         int rc;
         int initialized;
-
+        
         rc = sscanf(line, " %[^=# \t\r\n] = %[^# \t\r\n] ", option, value);
         if (rc != 2 && rank == 0) {
                 fprintf(out_logfile, "Syntax error in configuration options: %s\n",
@@ -309,9 +309,6 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
         }
 }
 
-static void decodeDirectiveWrapper(char *line){
-  DecodeDirective(line, parameters, global_options);
-}
 
 /*
  * Parse a single line, which may contain multiple comma-seperated directives
@@ -331,6 +328,11 @@ void ParseLine(char *line, IOR_param_t * test, options_all_t * module_options)
                 DecodeDirective(start, test, module_options);
                 start = end + 1;
         } while (end != NULL);
+}
+
+
+static void decodeDirectiveWrapper(char *line){
+  ParseLine(line, parameters, global_options);
 }
 
 /*
