@@ -130,9 +130,6 @@ static void *IME_Open(char *testFileName, IOR_param_t *param)
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
 
-        if (param->useO_DIRECT)
-                set_o_direct_flag(&fd_oflag);
-
         if (param->openFlags & IOR_RDONLY)
                 fd_oflag |= O_RDONLY;
         if (param->openFlags & IOR_WRONLY)
