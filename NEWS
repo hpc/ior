@@ -1,7 +1,9 @@
 Version 3.2.1
 --------------------------------------------------------------------------------
 
-- Fixed a memory protection bug in mdtest
+- Fixed a memory protection bug in mdtest (Julian Kunkel)
+- Fixed correctness bugs in mdtest leaf-only mode (#147) (rmn1)
+- Fixed bug where mdtest attempted to stat uncreated files (Julian Kunkel)
 
 Version 3.2.0
 --------------------------------------------------------------------------------
