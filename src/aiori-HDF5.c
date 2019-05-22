@@ -94,6 +94,34 @@ static void HDF5_Fsync(void *, IOR_param_t *);
 static IOR_offset_t HDF5_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static int HDF5_Access(const char *, int, IOR_param_t *);
 
+/************************** O P T I O N S *****************************/
+typedef struct{
+  int collective_md;
+} HDF5_options_t;
+/***************************** F U N C T I O N S ******************************/
+
+static option_help * HDF5_options(void ** init_backend_options, void * init_values){
+  HDF5_options_t * o = malloc(sizeof(HDF5_options_t));
+
+  if (init_values != NULL){
+    memcpy(o, init_values, sizeof(HDF5_options_t));
+  }else{
+    /* initialize the options properly */
+    o->collective_md = 0;
+  }
+
+  *init_backend_options = o;
+
+  option_help h [] = {
+    {0, "hdf5.collectiveMetadata", "Use collectiveMetadata (available since HDF5-1.10.0)", OPTION_FLAG, 'd', & o->collective_md},
+    LAST_OPTION
+  };
+  option_help * help = malloc(sizeof(h));
+  memcpy(help, h, sizeof(h));
+  return help;
+}
+
+
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t hdf5_aiori = {
@@ -112,6 +140,7 @@ ior_aiori_t hdf5_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = HDF5_Access,
         .stat = aiori_posix_stat,
+        .get_options = HDF5_options
 };
 
 static hid_t xferPropList;      /* xfer property list */
@@ -230,7 +259,8 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
                    "cannot set alignment");
 
 #ifdef HAVE_H5PSET_ALL_COLL_METADATA_OPS
-        if (param->collective_md) {
+        HDF5_options_t *o = (HDF5_options_t*) param->backend_options;
+        if (o->collective_md) {
                 /* more scalable metadata */
 
                 HDF5_CHECK(H5Pset_all_coll_metadata_ops(accessPropList, 1),
