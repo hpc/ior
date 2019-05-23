@@ -92,7 +92,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
         char value[MAX_STR];
         int rc;
         int initialized;
-        
+
         rc = sscanf(line, " %[^=# \t\r\n] = %[^# \t\r\n] ", option, value);
         if (rc != 2 && rank == 0) {
                 fprintf(out_logfile, "Syntax error in configuration options: %s\n",
@@ -317,17 +317,26 @@ void ParseLine(char *line, IOR_param_t * test, options_all_t * module_options)
 {
         char *start, *end;
 
-        start = line;
+        char * newline = strdup(line);
+        start = newline;
         do {
                 end = strchr(start, '#');
-                if (end != NULL)
+                if (end != NULL){
                   *end = '\0';
+                  end = NULL; // stop parsing after comment
+                }
                 end = strchr(start, ',');
-                if (end != NULL)
-                   *end = '\0';
+                if (end != NULL){
+                  *end = '\0';
+                }
+                if(strlen(start) < 3){
+                  fprintf(out_logfile, "Invalid option substring string: \"%s\" in \"%s\"\n", start, line);
+                  exit(1);
+                }
                 DecodeDirective(start, test, module_options);
                 start = end + 1;
         } while (end != NULL);
+        free(newline);
 }
 
 
