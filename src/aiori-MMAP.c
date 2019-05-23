@@ -64,7 +64,7 @@ static option_help * MMAP_options(void ** init_backend_options, void * init_valu
   if (init_values != NULL){
     memcpy(o, init_values, sizeof(mmap_options_t));
   }else{
-    o->direct_io_ignored = 0;
+    memset(o, 0, sizeof(mmap_options_t));
   }
 
   *init_backend_options = o;
