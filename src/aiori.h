@@ -68,6 +68,7 @@ typedef struct ior_aiori {
         char *name;
         char *name_legacy;
         void *(*create)(char *, IOR_param_t *);
+        void *(*mknod)(char *);
         void *(*open)(char *, IOR_param_t *);
         IOR_offset_t (*xfer)(int, void *, IOR_size_t *,
                              IOR_offset_t, IOR_param_t *);
@@ -125,6 +126,7 @@ int aiori_posix_access (const char *path, int mode, IOR_param_t * param);
 int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param);
 
 void *POSIX_Create(char *testFileName, IOR_param_t * param);
+void *POSIX_Mknod(char *testFileName);
 void *POSIX_Open(char *testFileName, IOR_param_t * param);
 IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName);
 void POSIX_Delete(char *testFileName, IOR_param_t * param);

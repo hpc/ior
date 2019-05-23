@@ -145,6 +145,7 @@ static size_t read_bytes;
 static int sync_file;
 static int path_count;
 static int nstride; /* neighbor stride */
+static int make_node = 0;
 
 static mdtest_results_t * summary_table;
 static pid_t pid;
@@ -337,7 +338,10 @@ static void create_file (const char *path, uint64_t itemNum) {
             fflush( out_logfile );
         }
 
-        aiori_fh = backend->open (curr_item, &param);
+        if (make_node)
+            aiori_fh = backend->mknod (curr_item);
+	else
+            aiori_fh = backend->open (curr_item, &param);
         if (NULL == aiori_fh) {
             FAIL("unable to open file");
         }
@@ -354,7 +358,10 @@ static void create_file (const char *path, uint64_t itemNum) {
             fflush( out_logfile );
         }
 
-        aiori_fh = backend->create (curr_item, &param);
+        if (make_node)
+            aiori_fh = backend->mknod (curr_item);
+	else
+            aiori_fh = backend->create (curr_item, &param);
         if (NULL == aiori_fh) {
             FAIL("unable to create file");
         }
@@ -382,7 +389,8 @@ static void create_file (const char *path, uint64_t itemNum) {
         fflush( out_logfile );
     }
 
-    backend->close (aiori_fh, &param);
+    if (!make_node)
+        backend->close (aiori_fh, &param);
 }
 
 /* helper for creating/removing items */
@@ -1328,7 +1336,7 @@ void print_help (void) {
 
     fprintf(out_logfile,
         "Usage: mdtest [-b branching_factor] [-B] [-c] [-C] [-d testdir] [-D] [-e number_of_bytes_to_read]\n"
-        "              [-E] [-f first] [-F] [-h] [-i iterations] [-I items_per_dir] [-l last] [-L]\n"
+        "              [-E] [-f first] [-F] [-h] [-i iterations] [-I items_per_dir] [-k] [-l last] [-L]\n"
         "              [-n number_of_items] [-N stride_length] [-p seconds] [-r]\n"
         "              [-R[seed]] [-s stride] [-S] [-t] [-T] [-u] [-v] [-a API]\n"
         "              [-V verbosity_value] [-w number_of_bytes_to_write] [-W seconds] [-y] [-z depth] -Z\n"
@@ -1346,6 +1354,7 @@ void print_help (void) {
         "\t-h: prints this help message\n"
         "\t-i: number of iterations the test will run\n"
         "\t-I: number of items per directory in tree\n"
+        "\t-k: use mknod\n"
         "\t-l: last number of tasks on which the test will run\n"
         "\t-L: files only at leaf level of tree\n"
         "\t-n: every process will creat/stat/read/remove # directories and files\n"
@@ -1610,7 +1619,10 @@ void valid_tests() {
          FAIL("items + items_per_dir can only be set without stonewalling");
        }
     }
-
+    /* check for using mknod */
+    if (write_bytes > 0 && make_node) {
+        FAIL("-k not compatible with -w");
+    }
 }
 
 void show_file_system_size(char *file_system) {
@@ -2096,6 +2108,7 @@ void mdtest_init_args(){
    sync_file = 0;
    path_count = 0;
    nstride = 0;
+   make_node = 0;
 }
 
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
@@ -2144,6 +2157,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'F', NULL,        "perform test on files only (no directories)", OPTION_FLAG, 'd', & files_only},
       {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & iterations},
       {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & items_per_dir},
+      {'k', NULL,        "use mknod to create file", OPTION_FLAG, 'd', & make_node},
       {'l', NULL,        "last number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & last},
       {'L', NULL,        "files only at leaf level of tree", OPTION_FLAG, 'd', & leaf_only},
       {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & items},
@@ -2249,6 +2263,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         fprintf( out_logfile, "write_bytes             : "LLU"\n", write_bytes );
         fprintf( out_logfile, "sync_file               : %s\n", ( sync_file ? "True" : "False" ));
         fprintf( out_logfile, "depth                   : %d\n", depth );
+        fprintf( out_logfile, "make_node               : %d\n", make_node );
         fflush( out_logfile );
     }
 
