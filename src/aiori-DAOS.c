@@ -151,7 +151,7 @@ do {                                                                    \
 static void
 HandleDistribute(daos_handle_t *handle, enum handleType type)
 {
-        daos_iov_t global;
+        d_iov_t global;
         int        rc;
 
         global.iov_buf = NULL;
@@ -281,7 +281,7 @@ DAOS_Init()
 
                 rc = daos_pool_connect(uuid, o.group, svcl, DAOS_PC_RW,
 				       &poh, &po_info, NULL);
-		daos_rank_list_free(svcl);
+		d_rank_list_free(svcl);
                 DCHECK(rc, "Failed to connect to pool %s", o.pool);
 
                 INFO(VERBOSE_1, "Create/Open Container %s", o.cont);
@@ -433,8 +433,8 @@ DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
 {
 	daos_array_iod_t        iod;
 	daos_range_t            rg;
-	daos_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_sg_list_t		sgl;
+	d_iov_t			iov;
 	int			rc;
 
 	/** set array location */
@@ -445,7 +445,7 @@ DAOS_Xfer(int access, void *file, IOR_size_t *buffer,
 
 	/** set memory location */
 	sgl.sg_nr = 1;
-	daos_iov_set(&iov, buffer, length);
+	d_iov_set(&iov, buffer, length);
 	sgl.sg_iovs = &iov;
 
         if (access == WRITE) {

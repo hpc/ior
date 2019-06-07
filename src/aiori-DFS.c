@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <libgen.h>
 
+#include <gurt/common.h>
 #include <daos_types.h>
 #include <daos_api.h>
 #include <daos_fs.h>
@@ -269,7 +270,7 @@ DFS_Init() {
 	rc = daos_pool_connect(pool_uuid, o.group, svcl, DAOS_PC_RW, &poh,
                                &pool_info, NULL);
         DCHECK(rc, "Failed to connect to pool");
-
+        d_rank_list_free(svcl);
 	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	/* If NOEXIST we create it */
 	if (rc == -DER_NONEXIST) {
@@ -402,13 +403,13 @@ DFS_Xfer(int access, void *file, IOR_size_t *buffer, IOR_offset_t length,
         obj = (dfs_obj_t *)file;
 
         while (remaining > 0) {
-                daos_iov_t iov;
-                daos_sg_list_t sgl;
+                d_iov_t iov;
+                d_sg_list_t sgl;
 
                 /** set memory location */
                 sgl.sg_nr = 1;
                 sgl.sg_nr_out = 0;
-                daos_iov_set(&iov, (void *)ptr, remaining);
+                d_iov_set(&iov, (void *)ptr, remaining);
                 sgl.sg_iovs = &iov;
 
                 /* write/read file */
