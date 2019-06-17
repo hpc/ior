@@ -198,7 +198,7 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
                 else if (type == CONT_HANDLE)
                         rc = daos_cont_global2local(poh, global, handle);
 		else
-			rc = daos_array_global2local(coh, global, handle);
+			rc = daos_array_global2local(coh, global, 0, handle);
                 DCHECK(rc, "Failed to get local handle");
         }
 
