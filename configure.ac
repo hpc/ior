@@ -185,7 +185,25 @@ AM_COND_IF([USE_RADOS_AIORI],[
         AC_DEFINE([USE_RADOS_AIORI], [], [Build RADOS backend AIORI])
 ])
 
-
+# Gfarm support
+AC_MSG_CHECKING([for Gfarm file system])
+AC_ARG_WITH([gfarm],
+  [AS_HELP_STRING([--with-gfarm=GFARM_ROOT],
+    [support IO with libgfarm backend @<:@default=no@:>@])],
+    [], [with_gfarm=no])
+AC_MSG_RESULT([$with_gfarm])
+AM_CONDITIONAL([USE_GFARM_AIORI], [test x$with_gfarm != xno])
+if test x$with_gfarm != xno; then
+  AC_DEFINE([USE_GFARM_AIORI], [], [Build Gfarm backend AIORI])
+  case x$with_gfarm in
+    xyes) ;;
+    *)
+    CPPFLAGS="$CPPFLAGS -I$with_gfarm/include"
+    LDFLAGS="$LDFLAGS -L$with_gfarm/lib" ;;
+  esac
+  AC_CHECK_LIB([gfarm], [gfarm_initialize],, [AC_MSG_ERROR([libgfarm not found])])
+  AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec])
+fi
 
 # aws4c is needed for the S3 backend (see --with-S3, below).
 # Version 0.5.2 of aws4c is available at https://github.com/jti-lanl/aws4c.git
