@@ -189,8 +189,8 @@ AM_COND_IF([USE_RADOS_AIORI],[
 AC_MSG_CHECKING([for Gfarm file system])
 AC_ARG_WITH([gfarm],
   [AS_HELP_STRING([--with-gfarm=GFARM_ROOT],
-    [support IO with libgfarm backend @<:@default=no@:>@])],
-    [], [with_gfarm=no])
+    [support IO with Gfarm backend @<:@default=no@:>@])],
+  [], [with_gfarm=no])
 AC_MSG_RESULT([$with_gfarm])
 AM_CONDITIONAL([USE_GFARM_AIORI], [test x$with_gfarm != xno])
 if test x$with_gfarm != xno; then

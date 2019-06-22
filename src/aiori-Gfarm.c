@@ -77,7 +77,7 @@ Gfarm_xfer(int access, void *fd, IOR_size_t *buffer, IOR_offset_t len,
 #define MAX_SZ	(1024 * 1024 * 1024)
 	int sz, n;
 	char *buf = (char *)buffer;
-	
+
 	if (param->dryRun)
 		return (len);
 
@@ -109,7 +109,7 @@ Gfarm_close(void *fd, IOR_param_t *param)
 {
 	struct gfarm_file *fp = fd;
 
-	if(param->dryRun)
+	if (param->dryRun)
 		return;
 
 	if (gfs_pio_close(fp->gf) != GFARM_ERR_NO_ERROR)
@@ -141,7 +141,7 @@ Gfarm_fsync(void *fd, IOR_param_t *param)
 {
 	struct gfarm_file *fp = fd;
 
-	if(param->dryRun)
+	if (param->dryRun)
 		return;
 
 	if (gfs_pio_sync(fp->gf) != GFARM_ERR_NO_ERROR)
@@ -213,7 +213,7 @@ Gfarm_mkdir(const char *fn, mode_t mode, IOR_param_t *param)
 	if (param->dryRun)
 		return (0);
 
-        e = gfs_mkdir(fn, mode);
+	e = gfs_mkdir(fn, mode);
 	if (e == GFARM_ERR_NO_ERROR)
 		return (0);
 	errno = gfarm_error_to_errno(e);
@@ -228,7 +228,7 @@ Gfarm_rmdir(const char *fn, IOR_param_t *param)
 	if (param->dryRun)
 		return (0);
 
-        e = gfs_rmdir(fn);
+	e = gfs_rmdir(fn);
 	if (e == GFARM_ERR_NO_ERROR)
 		return (0);
 	errno = gfarm_error_to_errno(e);
