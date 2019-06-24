@@ -77,7 +77,7 @@
 
 #define FILEMODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #define DIRMODE S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IXOTH
-#define RELEASE_VERS "1.9.3"
+#define RELEASE_VERS META_VERSION
 #define TEST_DIR "#test-dir"
 #define ITEM_COUNT 25000
 
@@ -145,13 +145,13 @@ static size_t read_bytes;
 static int sync_file;
 static int path_count;
 static int nstride; /* neighbor stride */
+static int make_node = 0;
 
 static mdtest_results_t * summary_table;
 static pid_t pid;
 static uid_t uid;
 
-/* just use the POSIX backend for now */
-static const char *backend_name = "POSIX";
+/* Use the POSIX backend by default */
 static const ior_aiori_t *backend;
 
 static IOR_param_t param;
@@ -210,8 +210,10 @@ void parse_dirpath(char *dirpath_arg) {
         }
         tmp++;
     }
+    // prevent changes to the original dirpath_arg
+    dirpath_arg = strdup(dirpath_arg);
     filenames = (char **)malloc(path_count * sizeof(char **));
-    if (filenames == NULL) {
+    if (filenames == NULL || dirpath_arg == NULL) {
         FAIL("out of memory");
     }
 
@@ -271,7 +273,7 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
 
     //create dirs
     sprintf(curr_item, "%s/dir.%s%" PRIu64, path, create ? mk_name : rm_name, itemNum);
-    if (rank == 0 && verbose >= 3) {
+    if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
         fprintf(out_logfile, "V-3: create_remove_items_helper (dirs %s): curr_item is \"%s\"\n", operation, curr_item);
         fflush(out_logfile);
     }
@@ -300,7 +302,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
 
     //remove files
     sprintf(curr_item, "%s/file.%s"LLU"", path, rm_name, itemNum);
-    if (rank == 0 && verbose >= 3) {
+    if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
         fprintf(out_logfile, "V-3: create_remove_items_helper (non-dirs remove): curr_item is \"%s\"\n", curr_item);
         fflush(out_logfile);
     }
@@ -331,12 +333,15 @@ static void create_file (const char *path, uint64_t itemNum) {
     if (collective_creates) {
         param.openFlags = IOR_WRONLY;
 
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile,  "V-3: create_remove_items_helper (collective): open...\n" );
             fflush( out_logfile );
         }
 
-        aiori_fh = backend->open (curr_item, &param);
+        if (make_node)
+            aiori_fh = backend->mknod (curr_item);
+	else
+            aiori_fh = backend->open (curr_item, &param);
         if (NULL == aiori_fh) {
             FAIL("unable to open file");
         }
@@ -349,19 +354,22 @@ static void create_file (const char *path, uint64_t itemNum) {
         param.filePerProc = !shared_file;
 	param.mode = FILEMODE;
 
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile,  "V-3: create_remove_items_helper (non-collective, shared): open...\n" );
             fflush( out_logfile );
         }
 
-        aiori_fh = backend->create (curr_item, &param);
+        if (make_node)
+            aiori_fh = backend->mknod (curr_item);
+	else
+            aiori_fh = backend->create (curr_item, &param);
         if (NULL == aiori_fh) {
             FAIL("unable to create file");
         }
     }
 
     if (write_bytes > 0) {
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile,  "V-3: create_remove_items_helper: write...\n" );
             fflush( out_logfile );
         }
@@ -377,12 +385,13 @@ static void create_file (const char *path, uint64_t itemNum) {
         }
     }
 
-    if (rank == 0 && verbose >= 3) {
+    if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
         fprintf(out_logfile,  "V-3: create_remove_items_helper: close...\n" );
         fflush( out_logfile );
     }
 
-    backend->close (aiori_fh, &param);
+    if (!make_node)
+        backend->close (aiori_fh, &param);
 }
 
 /* helper for creating/removing items */
@@ -429,7 +438,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
         }
 
         sprintf(curr_item, "%s/file.%s"LLU"", path, create ? mk_name : rm_name, itemNum+i);
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile, "V-3: create file: %s\n", curr_item);
             fflush(out_logfile);
         }
@@ -476,7 +485,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
     memset(dir, 0, MAX_PATHLEN);
     strcpy(temp_path, path);
 
-    if (rank == 0 && verbose >= 3) {
+    if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
         fprintf(out_logfile,  "V-3: create_remove_items (start): temp_path is \"%s\"\n", temp_path );
         fflush(out_logfile);
     }
@@ -505,7 +514,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
             strcat(temp_path, "/");
             strcat(temp_path, dir);
 
-            if (rank == 0 && verbose >= 3) {
+            if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
                 fprintf(out_logfile,  "V-3: create_remove_items (for loop): temp_path is \"%s\"\n", temp_path );
                 fflush(out_logfile);
             }
@@ -551,7 +560,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
     uint64_t stop_items = items;
 
-    if( directory_loops != 1 || leaf_only ){
+    if( directory_loops != 1 ){
       stop_items = items_per_dir;
     }
 
@@ -583,13 +592,13 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
         /* create name of file/dir to stat */
         if (dirs) {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if ((verbose >= 5 || (rank == 0 && verbose >= 3)) && (i%ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: stat dir: "LLU"\n", i);
                 fflush(out_logfile);
             }
             sprintf(item, "dir.%s"LLU"", stat_name, item_num);
         } else {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if ((verbose >= 5 || (rank == 0 && verbose >= 3)) && (i%ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: stat file: "LLU"\n", i);
                 fflush(out_logfile);
             }
@@ -618,7 +627,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
         strcpy( item, temp );
 
         /* below temp used to be hiername */
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             if (dirs) {
                 fprintf(out_logfile, "V-3: mdtest_stat dir : %s\n", item);
             } else {
@@ -700,7 +709,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* create name of file to read */
         if (!dirs) {
-            if (rank == 0 && verbose >= 3 && (i%ITEM_COUNT == 0) && (i != 0)) {
+            if ((verbose >= 5 || (rank == 0 && verbose >= 3)) && (i%ITEM_COUNT == 0) && (i != 0)) {
                 fprintf(out_logfile, "V-3: read file: "LLU"\n", i);
                 fflush(out_logfile);
             }
@@ -729,7 +738,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         strcpy( item, temp );
 
         /* below temp used to be hiername */
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             if (!dirs) {
                 fprintf(out_logfile, "V-3: mdtest_read file: %s\n", item);
             }
@@ -805,7 +814,7 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
         }
 
         /* Now that everything is set up as it should be, do the create or remove */
-        if (rank == 0 && verbose >= 3) {
+        if (verbose >= 5 || (rank == 0 && verbose >= 3)) {
             fprintf(out_logfile, "V-3: collective_create_remove (create_remove_items): temp is \"%s\"\n", temp);
             fflush( out_logfile );
         }
@@ -1323,13 +1332,13 @@ void print_help (void) {
 
     char APIs[1024];
     char APIs_legacy[1024];
-    aiori_supported_apis(APIs, APIs_legacy);
+    aiori_supported_apis(APIs, APIs_legacy, MDTEST);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
 
     fprintf(out_logfile,
         "Usage: mdtest [-b branching_factor] [-B] [-c] [-C] [-d testdir] [-D] [-e number_of_bytes_to_read]\n"
-        "              [-E] [-f first] [-F] [-h] [-i iterations] [-I items_per_dir] [-l last] [-L]\n"
+        "              [-E] [-f first] [-F] [-h] [-i iterations] [-I items_per_dir] [-k] [-l last] [-L]\n"
         "              [-n number_of_items] [-N stride_length] [-p seconds] [-r]\n"
         "              [-R[seed]] [-s stride] [-S] [-t] [-T] [-u] [-v] [-a API]\n"
         "              [-V verbosity_value] [-w number_of_bytes_to_write] [-W seconds] [-y] [-z depth] -Z\n"
@@ -1347,6 +1356,7 @@ void print_help (void) {
         "\t-h: prints this help message\n"
         "\t-i: number of iterations the test will run\n"
         "\t-I: number of items per directory in tree\n"
+        "\t-k: use mknod\n"
         "\t-l: last number of tasks on which the test will run\n"
         "\t-L: files only at leaf level of tree\n"
         "\t-n: every process will creat/stat/read/remove # directories and files\n"
@@ -1573,11 +1583,6 @@ void valid_tests() {
         FAIL("-c not compatible with -B");
     }
 
-    if (strcasecmp(backend_name, "POSIX") != 0 && strcasecmp(backend_name, "DUMMY") != 0 &&
-        strcasecmp(backend_name, "DFS") != 0) {
-        FAIL("-a only supported interface is POSIX, DFS (and DUMMY) right now!");
-    }
-
     /* check for shared file incompatibilities */
     if (unique_dir_per_task && shared_file && rank == 0) {
         FAIL("-u not compatible with -S");
@@ -1616,7 +1621,10 @@ void valid_tests() {
          FAIL("items + items_per_dir can only be set without stonewalling");
        }
     }
-
+    /* check for using mknod */
+    if (write_bytes > 0 && make_node) {
+        FAIL("-k not compatible with -w");
+    }
 }
 
 void show_file_system_size(char *file_system) {
@@ -1716,7 +1724,7 @@ void display_freespace(char *testdirpath)
         strcpy(dirpath, ".");
     }
 
-    if (strcasecmp(backend_name, "DFS") == 0)
+    if (strcasecmp(param.api, "DFS") == 0)
 	    return;
 
     if (verbose >= 3 && rank == 0) {
@@ -2105,8 +2113,8 @@ void mdtest_init_args(){
    sync_file = 0;
    path_count = 0;
    nstride = 0;
+   make_node = 0;
 }
-
 
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
     testComm = world_com;
@@ -2135,12 +2143,12 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     int randomize = 0;
     char APIs[1024];
     char APIs_legacy[1024];
-    aiori_supported_apis(APIs, APIs_legacy);
+    aiori_supported_apis(APIs, APIs_legacy, MDTEST);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
 
     option_help options [] = {
-      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & backend_name},
+      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & param.api},
       {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & branch_factor},
       {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
@@ -2154,6 +2162,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'F', NULL,        "perform test on files only (no directories)", OPTION_FLAG, 'd', & files_only},
       {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & iterations},
       {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & items_per_dir},
+      {'k', NULL,        "use mknod to create file", OPTION_FLAG, 'd', & make_node},
       {'l', NULL,        "last number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & last},
       {'L', NULL,        "files only at leaf level of tree", OPTION_FLAG, 'd', & leaf_only},
       {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & items},
@@ -2176,12 +2185,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
       LAST_OPTION
     };
-    airoi_parse_options(argc, argv, options);
-
-    backend = aiori_select(backend_name);
-    if (NULL == backend) {
-        FAIL("Could not find suitable backend to use");
-    }
+    options_all_t * global_options = airoi_create_all_module_options(options);
+    option_parse(argc, argv, global_options);
+    updateParsedOptions(& param, global_options);
+    backend = param.backend;
 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
@@ -2233,7 +2240,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     if (( rank == 0 ) && ( verbose >= 1 )) {
         // option_print_current(options);
-        fprintf (out_logfile, "api                     : %s\n", backend_name);
+        fprintf (out_logfile, "api                     : %s\n", param.api);
         fprintf( out_logfile, "barriers                : %s\n", ( barriers ? "True" : "False" ));
         fprintf( out_logfile, "collective_creates      : %s\n", ( collective_creates ? "True" : "False" ));
         fprintf( out_logfile, "create_only             : %s\n", ( create_only ? "True" : "False" ));
@@ -2264,6 +2271,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         fprintf( out_logfile, "write_bytes             : "LLU"\n", write_bytes );
         fprintf( out_logfile, "sync_file               : %s\n", ( sync_file ? "True" : "False" ));
         fprintf( out_logfile, "depth                   : %d\n", depth );
+        fprintf( out_logfile, "make_node               : %d\n", make_node );
         fflush( out_logfile );
     }
 
@@ -2281,7 +2289,11 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
     if (items_per_dir > 0) {
         if(items == 0){
-          items = items_per_dir * num_dirs_in_tree;
+          if (leaf_only) {
+              items = items_per_dir * (uint64_t) pow(branch_factor, depth);
+          } else {
+              items = items_per_dir * num_dirs_in_tree;
+          }
         }else{
           num_dirs_in_tree_calc = num_dirs_in_tree;
         }

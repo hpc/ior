@@ -48,19 +48,27 @@
 dfs_t *dfs;
 daos_handle_t poh, coh;
 
+enum handleType {
+        POOL_HANDLE,
+        CONT_HANDLE,
+	ARRAY_HANDLE
+};
+
 /************************** O P T I O N S *****************************/
 struct dfs_options{
-        char * pool;
-        char * svcl;
-        char * group;
-        char * cont;
+        char	*pool;
+        char	*svcl;
+        char	*group;
+        char	*cont;
+        int	destroy;
 };
 
 static struct dfs_options o = {
-        .pool = NULL,
-        .svcl = NULL,
-        .group = NULL,
-        .cont = NULL,
+        .pool		= NULL,
+        .svcl		= NULL,
+        .group		= NULL,
+        .cont		= NULL,
+        .destroy        = 0,
 };
 
 static option_help options [] = {
@@ -68,6 +76,7 @@ static option_help options [] = {
       {0, "dfs.svcl", "DAOS pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
       {0, "dfs.group", "DAOS server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
       {0, "dfs.cont", "DFS container uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.cont},
+      {0, "dfs.destroy", "Destroy DFS Container", OPTION_FLAG, 'd', &o.destroy},
       LAST_OPTION
 };
 
@@ -140,6 +149,59 @@ do {                                                                    \
                 goto out;                                               \
         }                                                               \
 } while (0)
+
+/* Distribute process 0's pool or container handle to others. */
+static void
+HandleDistribute(daos_handle_t *handle, enum handleType type)
+{
+        d_iov_t global;
+        int        rc;
+
+        global.iov_buf = NULL;
+        global.iov_buf_len = 0;
+        global.iov_len = 0;
+
+        assert(type == POOL_HANDLE || type == CONT_HANDLE);
+        if (rank == 0) {
+                /* Get the global handle size. */
+                if (type == POOL_HANDLE)
+                        rc = daos_pool_local2global(*handle, &global);
+                else
+                        rc = daos_cont_local2global(*handle, &global);
+                DCHECK(rc, "Failed to get global handle size");
+        }
+
+        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0,
+                            MPI_COMM_WORLD),
+                  "Failed to bcast global handle buffer size");
+
+	global.iov_len = global.iov_buf_len;
+        global.iov_buf = malloc(global.iov_buf_len);
+        if (global.iov_buf == NULL)
+                ERR("Failed to allocate global handle buffer");
+
+        if (rank == 0) {
+                if (type == POOL_HANDLE)
+                        rc = daos_pool_local2global(*handle, &global);
+                else
+                        rc = daos_cont_local2global(*handle, &global);
+                DCHECK(rc, "Failed to create global handle");
+        }
+
+        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0,
+                            MPI_COMM_WORLD),
+                  "Failed to bcast global pool handle");
+
+        if (rank != 0) {
+                if (type == POOL_HANDLE)
+                        rc = daos_pool_global2local(global, handle);
+                else
+                        rc = daos_cont_global2local(poh, global, handle);
+                DCHECK(rc, "Failed to get local handle");
+        }
+
+        free(global.iov_buf);
+}
 
 static int
 parse_filename(const char *path, char **_obj_name, char **_cont_name)
@@ -238,52 +300,59 @@ static option_help * DFS_options(){
 
 static void
 DFS_Init() {
-	uuid_t			pool_uuid, co_uuid;
-	daos_pool_info_t	pool_info;
-	daos_cont_info_t	co_info;
-	d_rank_list_t		*svcl = NULL;
-        bool			cont_created = false;
-	int			rc;
+	int rc;
 
         if (o.pool == NULL || o.svcl == NULL || o.cont == NULL)
                 ERR("Invalid pool or container options\n");
 
-	rc = uuid_parse(o.pool, pool_uuid);
-        DCHECK(rc, "Failed to parse 'Pool uuid': %s", o.pool);
-
-	rc = uuid_parse(o.cont, co_uuid);
-        DCHECK(rc, "Failed to parse 'Cont uuid': %s", o.cont);
-
-	svcl = daos_rank_list_parse(o.svcl, ":");
-	if (svcl == NULL)
-                ERR("Failed to allocate svcl");
-
-        if (verbose >= VERBOSE_1) {
-                printf("Pool uuid = %s, SVCL = %s\n", o.pool, o.svcl);
-                printf("DFS Container namespace uuid = %s\n", o.cont);
-        }
-
 	rc = daos_init();
         DCHECK(rc, "Failed to initialize daos");
 
-	/** Connect to DAOS pool */
-	rc = daos_pool_connect(pool_uuid, o.group, svcl, DAOS_PC_RW, &poh,
-                               &pool_info, NULL);
-        DCHECK(rc, "Failed to connect to pool");
-        d_rank_list_free(svcl);
-	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
-	/* If NOEXIST we create it */
-	if (rc == -DER_NONEXIST) {
-                if (verbose >= VERBOSE_1)
-                        printf("Creating DFS Container ...\n");
-		rc = daos_cont_create(poh, co_uuid, NULL, NULL);
-		if (rc == 0) {
-			cont_created = true;
-			rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh,
-					    &co_info, NULL);
-		}
-	}
-        DCHECK(rc, "Failed to create container");
+        if (rank == 0) {
+                uuid_t pool_uuid, co_uuid;
+                d_rank_list_t *svcl = NULL;
+                daos_pool_info_t pool_info;
+                daos_cont_info_t co_info;
+
+                rc = uuid_parse(o.pool, pool_uuid);
+                DCHECK(rc, "Failed to parse 'Pool uuid': %s", o.pool);
+
+                rc = uuid_parse(o.cont, co_uuid);
+                DCHECK(rc, "Failed to parse 'Cont uuid': %s", o.cont);
+
+                svcl = daos_rank_list_parse(o.svcl, ":");
+                if (svcl == NULL)
+                        ERR("Failed to allocate svcl");
+
+                if (verbose >= VERBOSE_1) {
+                        printf("Pool uuid = %s, SVCL = %s\n", o.pool, o.svcl);
+                        printf("DFS Container namespace uuid = %s\n", o.cont);
+                }
+
+                /** Connect to DAOS pool */
+                rc = daos_pool_connect(pool_uuid, o.group, svcl, DAOS_PC_RW,
+                                       &poh, &pool_info, NULL);
+                d_rank_list_free(svcl);
+                DCHECK(rc, "Failed to connect to pool");
+
+                rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
+                                    NULL);
+                /* If NOEXIST we create it */
+                if (rc == -DER_NONEXIST) {
+                        if (verbose >= VERBOSE_1)
+                                printf("Creating DFS Container ...\n");
+
+                        rc = daos_cont_create(poh, co_uuid, NULL, NULL);
+                        if (rc == 0) {
+                                rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW,
+                                                    &coh, &co_info, NULL);
+                        }
+                }
+                DCHECK(rc, "Failed to create container");
+        }
+
+        HandleDistribute(&poh, POOL_HANDLE);
+        HandleDistribute(&coh, CONT_HANDLE);
 
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
         DCHECK(rc, "Failed to mount DFS namespace");
@@ -299,6 +368,19 @@ DFS_Finalize()
 
 	rc = daos_cont_close(coh, NULL);
         DCHECK(rc, "Failed to close container");
+
+	if (rank == 0 && o.destroy) {
+                uuid_t uuid;
+
+                if (verbose >= VERBOSE_1)
+                        printf("Destorying DFS Container: %s\n", o.cont);
+                uuid_parse(o.cont, uuid);
+                rc = daos_cont_destroy(poh, uuid, 1, NULL);
+        }
+
+        MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        if (rc)
+                DCHECK(rc, "Failed to destroy container %s (%d)", o.cont, rc);
 
         daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
@@ -321,21 +403,32 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 
         assert(param);
 
-        fd_oflag |= O_CREAT | O_RDWR;
-	mode = S_IFREG | param->mode;
-
-	rc = parse_filename(testFileName, &name, &dir_name);
+        rc = parse_filename(testFileName, &name, &dir_name);
         DERR(rc, "Failed to parse path %s", testFileName);
 
-	assert(dir_name);
-	assert(name);
+        assert(dir_name);
+        assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+        rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
         DERR(rc, "dfs_lookup() of %s Failed", dir_name);
+        mode = S_IFREG | param->mode;
 
-	rc = dfs_open(dfs, parent, name, mode, fd_oflag, DAOS_OC_LARGE_RW,
-                      0, NULL, &obj);
-        DERR(rc, "dfs_open() of %s Failed", name);
+	if (param->filePerProc || rank == 0) {
+                fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
+
+                rc = dfs_open(dfs, parent, name, mode, fd_oflag,
+                              DAOS_OC_LARGE_RW, 0, NULL, &obj);
+                DERR(rc, "dfs_open() of %s Failed", name);
+
+                MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+        } else {
+                MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+
+                fd_oflag |= O_RDWR;
+                rc = dfs_open(dfs, parent, name, mode, fd_oflag,
+                              DAOS_OC_LARGE_RW, 0, NULL, &obj);
+                DERR(rc, "dfs_open() of %s Failed", name);
+        }
 
 out:
 	if (name)

@@ -102,6 +102,10 @@ ior_aiori_t daos_aiori = {
         .initialize	= DAOS_Init,
         .finalize	= DAOS_Fini,
 	.get_options	= DAOS_options,
+        .statfs		= aiori_posix_statfs,
+        .mkdir		= aiori_posix_mkdir,
+        .rmdir		= aiori_posix_rmdir,
+        .stat		= aiori_posix_stat,
 };
 
 #define IOR_DAOS_MUR_SEED 0xDEAD10CC
@@ -327,7 +331,7 @@ DAOS_Fini()
 
 			INFO(VERBOSE_1, "Destroying Container %s", o.cont);
 			uuid_parse(o.cont, uuid);
-			rc = daos_cont_destroy(poh, o.cont, 1, NULL);
+			rc = daos_cont_destroy(poh, uuid, 1, NULL);
 		}
 
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);

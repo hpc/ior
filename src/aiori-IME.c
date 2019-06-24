@@ -54,6 +54,33 @@ static int          IME_Stat(const char *, struct stat *, IOR_param_t *);
 static void         IME_Initialize();
 static void         IME_Finalize();
 
+
+/************************** O P T I O N S *****************************/
+typedef struct{
+  int direct_io;
+} ime_options_t;
+
+
+option_help * IME_options(void ** init_backend_options, void * init_values){
+  ime_options_t * o = malloc(sizeof(ime_options_t));
+
+  if (init_values != NULL){
+    memcpy(o, init_values, sizeof(ime_options_t));
+  }else{
+    o->direct_io = 0;
+  }
+
+  *init_backend_options = o;
+
+  option_help h [] = {
+    {0, "ime.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
+    LAST_OPTION
+  };
+  option_help * help = malloc(sizeof(h));
+  memcpy(help, h, sizeof(h));
+  return help;
+}
+
 /************************** D E C L A R A T I O N S ***************************/
 
 extern int      rank;
@@ -79,6 +106,8 @@ ior_aiori_t ime_aiori = {
         .stat          = IME_Stat,
         .initialize    = IME_Initialize,
         .finalize      = IME_Finalize,
+        .get_options   = IME_options,
+        .enable_mdtest = true,
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -129,8 +158,10 @@ static void *IME_Open(char *testFileName, IOR_param_t *param)
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
 
-        if (param->useO_DIRECT)
-                set_o_direct_flag(&fd_oflag);
+        ime_options_t * o = (ime_options_t*) param->backend_options;
+        if (o->direct_io == TRUE){
+          set_o_direct_flag(&fd_oflag);
+        }
 
         if (param->openFlags & IOR_RDONLY)
                 fd_oflag |= O_RDONLY;
@@ -269,19 +300,34 @@ static char *IME_GetVersion()
         return ver;
 }
 
-/*
- * XXX: statfs call is currently not exposed by IME native interface.
- */
 static int IME_StatFS(const char *path, ior_aiori_statfs_t *stat_buf,
                       IOR_param_t *param)
 {
+        (void)param;
+
+#if (IME_NATIVE_API_VERSION >= 130)
+        struct statvfs statfs_buf;
+
+        int ret = ime_native_statvfs(path, &statfs_buf);
+        if (ret)
+            return ret;
+
+        stat_buf->f_bsize = statfs_buf.f_bsize;
+        stat_buf->f_blocks = statfs_buf.f_blocks;
+        stat_buf->f_bfree = statfs_buf.f_bfree;
+        stat_buf->f_files = statfs_buf.f_files;
+        stat_buf->f_ffree = statfs_buf.f_ffree;
+
+        return 0;
+#else
         (void)path;
         (void)stat_buf;
-        (void)param;
 
         WARN("statfs is currently not supported in IME backend!");
         return -1;
+#endif
 }
+
 
 static int IME_MkDir(const char *path, mode_t mode, IOR_param_t *param)
 {

@@ -66,6 +66,83 @@ enum OutputFormat_t outputFormat;
 
 /***************************** F U N C T I O N S ******************************/
 
+void* safeMalloc(uint64_t size){
+  void * d = malloc(size);
+  if (d == NULL){
+    ERR("Could not malloc an array");
+  }
+  memset(d, 0, size);
+  return d;
+}
+
+
+size_t NodeMemoryStringToBytes(char *size_str)
+{
+        int percent;
+        int rc;
+        long page_size;
+        long num_pages;
+        long long mem;
+
+        rc = sscanf(size_str, " %d %% ", &percent);
+        if (rc == 0)
+                return (size_t) string_to_bytes(size_str);
+        if (percent > 100 || percent < 0)
+                ERR("percentage must be between 0 and 100");
+
+#ifdef HAVE_SYSCONF
+        page_size = sysconf(_SC_PAGESIZE);
+#else
+        page_size = getpagesize();
+#endif
+
+#ifdef  _SC_PHYS_PAGES
+        num_pages = sysconf(_SC_PHYS_PAGES);
+        if (num_pages == -1)
+                ERR("sysconf(_SC_PHYS_PAGES) is not supported");
+#else
+        ERR("sysconf(_SC_PHYS_PAGES) is not supported");
+#endif
+        mem = page_size * num_pages;
+
+        return mem / 100 * percent;
+}
+
+void updateParsedOptions(IOR_param_t * options, options_all_t * global_options){
+    if (options->setTimeStampSignature){
+      options->incompressibleSeed = options->setTimeStampSignature;
+    }
+
+    if (options->buffer_type && options->buffer_type[0] != 0){
+      switch(options->buffer_type[0]) {
+      case 'i': /* Incompressible */
+              options->dataPacketType = incompressible;
+              break;
+      case 't': /* timestamp */
+              options->dataPacketType = timestamp;
+              break;
+      case 'o': /* offset packet */
+              options->storeFileOffset = TRUE;
+              options->dataPacketType = offset;
+              break;
+      default:
+              fprintf(out_logfile,
+                      "Unknown argument for -l %s; generic assumed\n", options->buffer_type);
+              break;
+      }
+    }
+    if (options->memoryPerNodeStr){
+      options->memoryPerNode = NodeMemoryStringToBytes(options->memoryPerNodeStr);
+    }
+    const ior_aiori_t * backend = aiori_select(options->api);
+    if (backend == NULL)
+        ERR_SIMPLE("unrecognized I/O API");
+
+    options->backend = backend;
+    /* copy the actual module options into the test */
+    options->backend_options = airoi_update_module_options(backend, global_options);
+    options->apiVersion = backend->get_version();
+}
 
 /* Used in aiori-POSIX.c and aiori-PLFS.c
  */
@@ -215,21 +292,23 @@ int CountTasksPerNode(MPI_Comm comm) {
  */
 void ExtractHint(char *settingVal, char *valueVal, char *hintString)
 {
-        char *settingPtr, *valuePtr, *tmpPtr1, *tmpPtr2;
+        char *settingPtr, *valuePtr, *tmpPtr2;
 
+        /* find the value */
         settingPtr = (char *)strtok(hintString, " =");
         valuePtr = (char *)strtok(NULL, " =\t\r\n");
-        tmpPtr1 = settingPtr;
-        tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__MPI__");
-        if (tmpPtr1 == tmpPtr2) {
+        /* is this an MPI hint? */
+        tmpPtr2 = (char *) strstr(settingPtr, "IOR_HINT__MPI__");
+        if (settingPtr == tmpPtr2) {
                 settingPtr += strlen("IOR_HINT__MPI__");
-
         } else {
-                tmpPtr2 = (char *)strstr(settingPtr, "IOR_HINT__GPFS__");
-                if (tmpPtr1 == tmpPtr2) {
-                        settingPtr += strlen("IOR_HINT__GPFS__");
-                        fprintf(out_logfile,
-                                "WARNING: Unable to set GPFS hints (not implemented.)\n");
+                tmpPtr2 = (char *) strstr(hintString, "IOR_HINT__GPFS__");
+                /* is it an GPFS hint? */
+                if (settingPtr == tmpPtr2) {
+                  settingPtr += strlen("IOR_HINT__GPFS__");
+                }else{
+                  fprintf(out_logfile, "WARNING: Unable to set unknown hint type (not implemented.)\n");
+                  return;
                 }
         }
         strcpy(settingVal, settingPtr);

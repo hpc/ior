@@ -368,7 +368,6 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("setAlignment", test->setAlignment);
     PrintKeyValInt("storeFileOffset", test->storeFileOffset);
     PrintKeyValInt("useSharedFilePointer", test->useSharedFilePointer);
-    PrintKeyValInt("useO_DIRECT", test->useO_DIRECT);
     PrintKeyValInt("useStridedDatatype", test->useStridedDatatype);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);
@@ -452,7 +451,7 @@ void ShowSetup(IOR_param_t *params)
   if (params->lustre_set_striping) {
     PrintKeyVal("Lustre stripe size", ((params->lustre_stripe_size == 0) ? "Use default" :
      HumanReadable(params->lustre_stripe_size, BASE_TWO)));
-    PrintKeyVal("stripe count", (params->lustre_stripe_count == 0 ? "Use default" : HumanReadable(params->lustre_stripe_count, BASE_TWO)));
+    PrintKeyValInt("Lustre stripe count", params->lustre_stripe_count);
   }
 #endif /* HAVE_LUSTRE_LUSTRE_USER_H */
   if (params->deadlineForStonewalling > 0) {

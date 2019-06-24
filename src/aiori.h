@@ -22,6 +22,7 @@
 #endif /* not MPI_FILE_NULL */
 
 #include <sys/stat.h>
+#include <stdbool.h>
 
 #include "ior.h"
 #include "iordef.h"                                     /* IOR Definitions */
@@ -67,6 +68,7 @@ typedef struct ior_aiori {
         char *name;
         char *name_legacy;
         void *(*create)(char *, IOR_param_t *);
+        void *(*mknod)(char *);
         void *(*open)(char *, IOR_param_t *);
         IOR_offset_t (*xfer)(int, void *, IOR_size_t *,
                              IOR_offset_t, IOR_param_t *);
@@ -82,8 +84,14 @@ typedef struct ior_aiori {
         int (*stat) (const char *path, struct stat *buf, IOR_param_t * param);
         void (*initialize)(); /* called once per program before MPI is started */
         void (*finalize)(); /* called once per program after MPI is shutdown */
-        option_help * (*get_options)();
+        option_help * (*get_options)(void ** init_backend_options, void* init_values); /* initializes the backend options as well and returns the pointer to the option help structure */
+        bool enable_mdtest;
 } ior_aiori_t;
+
+enum bench_type {
+    IOR,
+    MDTEST
+};
 
 extern ior_aiori_t dummy_aiori;
 extern ior_aiori_t hdf5_aiori;
@@ -104,8 +112,11 @@ void aiori_initialize(IOR_test_t * tests);
 void aiori_finalize(IOR_test_t * tests);
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);
-void aiori_supported_apis(char * APIs, char * APIs_legacy);
-void airoi_parse_options(int argc, char ** argv, option_help * global_options);
+void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type);
+options_all_t * airoi_create_all_module_options(option_help * global_options);
+
+void * airoi_update_module_options(const ior_aiori_t * backend, options_all_t * module_defaults);
+
 const char *aiori_default (void);
 
 /* some generic POSIX-based backend calls */
@@ -117,10 +128,13 @@ int aiori_posix_access (const char *path, int mode, IOR_param_t * param);
 int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param);
 
 void *POSIX_Create(char *testFileName, IOR_param_t * param);
+void *POSIX_Mknod(char *testFileName);
 void *POSIX_Open(char *testFileName, IOR_param_t * param);
 IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName);
 void POSIX_Delete(char *testFileName, IOR_param_t * param);
 void POSIX_Close(void *fd, IOR_param_t * param);
+option_help * POSIX_options(void ** init_backend_options, void * init_values);
+
 
 /* NOTE: these 3 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
 void MPIIO_Delete(char *testFileName, IOR_param_t * param);

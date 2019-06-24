@@ -72,12 +72,42 @@ static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void POSIX_Fsync(void *, IOR_param_t *);
 
+/************************** O P T I O N S *****************************/
+typedef struct{
+  /* in case of a change, please update depending MMAP module too */
+  int direct_io;
+} posix_options_t;
+
+
+option_help * POSIX_options(void ** init_backend_options, void * init_values){
+  posix_options_t * o = malloc(sizeof(posix_options_t));
+
+  if (init_values != NULL){
+    memcpy(o, init_values, sizeof(posix_options_t));
+  }else{
+    o->direct_io = 0;
+  }
+
+  *init_backend_options = o;
+
+  option_help h [] = {
+    {0, "posix.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
+    LAST_OPTION
+  };
+  option_help * help = malloc(sizeof(h));
+  memcpy(help, h, sizeof(h));
+  return help;
+}
+
+
 /************************** D E C L A R A T I O N S ***************************/
+
 
 ior_aiori_t posix_aiori = {
         .name = "POSIX",
         .name_legacy = NULL,
         .create = POSIX_Create,
+        .mknod = POSIX_Mknod,
         .open = POSIX_Open,
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
@@ -90,6 +120,8 @@ ior_aiori_t posix_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = aiori_posix_access,
         .stat = aiori_posix_stat,
+        .get_options = POSIX_options,
+        .enable_mdtest = true,
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -200,6 +232,24 @@ bool beegfs_isOptionSet(int opt) {
    return opt != -1;
 }
 
+bool beegfs_compatibleFileExists(char* filepath, int numTargets, int chunkSize)
+{
+      int fd = open(filepath, O_RDWR);
+
+      if (fd == -1)
+         return false;
+
+      unsigned read_stripePattern = 0;
+      u_int16_t read_numTargets = 0;
+      int read_chunkSize = 0;
+
+      bool retVal = beegfs_getStripeInfo(fd, &read_stripePattern, &read_chunkSize, &read_numTargets);
+
+      close(fd);
+
+      return retVal && read_numTargets == numTargets && read_chunkSize == chunkSize;
+}
+
 /*
  * Create a file on a BeeGFS file system with striping parameters
  */
@@ -246,8 +296,9 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 
                                 char* filenameTmp = strdup(filepath);
                                 char* filename = basename(filepath);
-                                bool isFileCreated = beegfs_createFile(parentDirFd, filename,
-                                                                       mode, numTargets, chunkSize);
+                                bool isFileCreated =    beegfs_compatibleFileExists(filepath, numTargets, chunkSize)
+                                                     || beegfs_createFile(parentDirFd, filename,
+                                                                          mode, numTargets, chunkSize);
                                 if (!isFileCreated)
                                         ERR("Could not create file");
                                 retVal = true;
@@ -273,9 +324,10 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         fd = (int *)malloc(sizeof(int));
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
-
-        if (param->useO_DIRECT == TRUE)
-                set_o_direct_flag(&fd_oflag);
+        posix_options_t * o = (posix_options_t*) param->backend_options;
+        if (o->direct_io == TRUE){
+          set_o_direct_flag(&fd_oflag);
+        }
 
         if(param->dryRun)
           return 0;
@@ -377,6 +429,24 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
 }
 
 /*
+ * Creat a file through mknod interface.
+ */
+void *POSIX_Mknod(char *testFileName)
+{
+	int *fd;
+
+	fd = (int *)malloc(sizeof(int));
+	if (fd == NULL)
+		ERR("Unable to malloc file descriptor");
+
+	*fd = mknod(testFileName, S_IFREG | S_IRUSR, 0);
+	if (*fd < 0)
+		ERR("mknod failed");
+
+	return ((void *)fd);
+}
+
+/*
  * Open a file through the POSIX interface.
  */
 void *POSIX_Open(char *testFileName, IOR_param_t * param)
@@ -388,7 +458,8 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
 
-        if (param->useO_DIRECT == TRUE)
+        posix_options_t * o = (posix_options_t*) param->backend_options;
+        if (o->direct_io == TRUE)
                 set_o_direct_flag(&fd_oflag);
 
         fd_oflag |= O_RDWR;
