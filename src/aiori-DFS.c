@@ -1,24 +1,20 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
-/******************************************************************************\
-*                                                                              *
-*        Copyright (c) 2003, The Regents of the University of California       *
-*      See the file COPYRIGHT for a complete copyright notice and license.     *
-*                                                                              *
-* Copyright (C) 2018 Intel Corporation
-*
-* GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-* The Government's rights to use, modify, reproduce, release, perform, display,
-* or disclose this software are subject to the terms of the Apache License as
-* provided in Contract No. 8F-30005.
-* Any reproduction of computer software, computer software documentation, or
-* portions thereof marked with this legend must also reproduce the markings.
-********************************************************************************
-*
-* Implement of abstract I/O interface for DFS.
-*
-\******************************************************************************/
+/*
+ * Copyright (C) 2018-2019 Intel Corporation
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+
+/*
+ * This file implements the abstract I/O interface for DAOS FS API.
+ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
