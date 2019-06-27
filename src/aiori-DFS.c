@@ -32,6 +32,7 @@
 #include <libgen.h>
 
 #include <gurt/common.h>
+#include <gurt/hash.h>
 #include <daos_types.h>
 #include <daos_api.h>
 #include <daos_fs.h>
@@ -43,6 +44,13 @@
 
 dfs_t *dfs;
 daos_handle_t poh, coh;
+static struct d_hash_table *dir_hash;
+
+struct aiori_dir_hdl {
+        d_list_t	entry;
+        dfs_obj_t	*oh;
+        char		name[PATH_MAX];
+};
 
 enum handleType {
         POOL_HANDLE,
@@ -145,6 +153,36 @@ do {                                                                    \
                 goto out;                                               \
         }                                                               \
 } while (0)
+
+static inline struct aiori_dir_hdl *
+hdl_obj(d_list_t *rlink)
+{
+    return container_of(rlink, struct aiori_dir_hdl, entry);
+}
+
+static bool
+key_cmp(struct d_hash_table *htable, d_list_t *rlink,
+	const void *key, unsigned int ksize)
+{
+    struct aiori_dir_hdl *hdl = hdl_obj(rlink);
+
+    return (strcmp(hdl->name, (const char *)key) == 0);
+}
+
+static void
+rec_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+    struct aiori_dir_hdl *hdl = hdl_obj(rlink);
+
+    assert(d_hash_rec_unlinked(&hdl->entry));
+    dfs_release(hdl->oh);
+    free(hdl);
+}
+
+static d_hash_table_ops_t hdl_hash_ops = {
+    .hop_key_cmp	= key_cmp,
+    .hop_rec_free	= rec_free
+};
 
 /* Distribute process 0's pool or container handle to others. */
 static void
@@ -290,6 +328,39 @@ out:
 	return rc;
 }
 
+static dfs_obj_t *
+lookup_insert_dir(const char *name)
+{
+        struct aiori_dir_hdl *hdl;
+        d_list_t *rlink;
+	mode_t mode;
+        int rc;
+
+        rlink = d_hash_rec_find(dir_hash, name, strlen(name));
+        if (rlink != NULL) {
+                hdl = hdl_obj(rlink);
+                return hdl->oh;
+        }
+
+        hdl = calloc(1, sizeof(struct aiori_dir_hdl));
+        if (hdl == NULL)
+                DERR(ENOMEM, "failed to alloc dir handle");
+
+        strncpy(hdl->name, name, PATH_MAX-1);
+        hdl->name[PATH_MAX-1] = '\0';
+
+        rc = dfs_lookup(dfs, name, O_RDWR, &hdl->oh, &mode);
+        DERR(rc, "dfs_lookup() of %s Failed", name);
+
+        rc = d_hash_rec_insert(dir_hash, hdl->name, strlen(hdl->name),
+                               &hdl->entry, true);
+        DERR(rc, "Failed to insert dir handle in hashtable");
+
+        return hdl->oh;
+out:
+        return NULL;
+}
+
 static option_help * DFS_options(){
   return options;
 }
@@ -303,6 +374,9 @@ DFS_Init() {
 
 	rc = daos_init();
         DCHECK(rc, "Failed to initialize daos");
+
+        rc = d_hash_table_create(0, 16, NULL, &hdl_hash_ops, &dir_hash);
+        DCHECK(rc, "Failed to initialize dir hashtable");
 
         if (rank == 0) {
                 uuid_t pool_uuid, co_uuid;
@@ -359,6 +433,8 @@ DFS_Finalize()
 {
         int rc;
 
+        d_hash_table_destroy(dir_hash, true /* force */);
+
 	rc = dfs_umount(dfs);
         DCHECK(rc, "Failed to umount DFS namespace");
 
@@ -393,22 +469,22 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *obj = NULL, *parent = NULL;
-	mode_t pmode, mode;
+	mode_t mode;
         int fd_oflag = 0;
 	int rc;
 
         assert(param);
 
-        rc = parse_filename(testFileName, &name, &dir_name);
+	rc = parse_filename(testFileName, &name, &dir_name);
         DERR(rc, "Failed to parse path %s", testFileName);
+	assert(dir_name);
+	assert(name);
 
-        assert(dir_name);
-        assert(name);
+        parent = lookup_insert_dir(dir_name);
+        if (parent == NULL)
+                DERR(rc, "Failed to lookup parent dir");
 
-        rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
         mode = S_IFREG | param->mode;
-
 	if (param->filePerProc || rank == 0) {
                 fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
 
@@ -431,8 +507,6 @@ out:
 		free(name);
 	if (dir_name)
 		free(dir_name);
-	if (parent)
-		dfs_release(parent);
 
         return ((void *)obj);
 }
@@ -445,7 +519,7 @@ DFS_Open(char *testFileName, IOR_param_t *param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *obj = NULL, *parent = NULL;
-	mode_t pmode, mode;
+	mode_t mode;
 	int rc;
         int fd_oflag = 0;
 
@@ -458,8 +532,9 @@ DFS_Open(char *testFileName, IOR_param_t *param)
 	assert(dir_name);
 	assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
+        parent = lookup_insert_dir(dir_name);
+        if (parent == NULL)
+                DERR(rc, "Failed to lookup parent dir");
 
 	rc = dfs_open(dfs, parent, name, mode, fd_oflag, 0, 0, NULL, &obj);
         DERR(rc, "dfs_open() of %s Failed", name);
@@ -469,8 +544,6 @@ out:
 		free(name);
 	if (dir_name)
 		free(dir_name);
-	if (parent)
-		dfs_release(parent);
 
         return ((void *)obj);
 }
@@ -559,7 +632,6 @@ DFS_Delete(char *testFileName, IOR_param_t * param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *parent = NULL;
-	mode_t pmode;
 	int rc;
 
 	rc = parse_filename(testFileName, &name, &dir_name);
@@ -568,8 +640,9 @@ DFS_Delete(char *testFileName, IOR_param_t * param)
 	assert(dir_name);
 	assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
+        parent = lookup_insert_dir(dir_name);
+        if (parent == NULL)
+                DERR(rc, "Failed to lookup parent dir");
 
 	rc = dfs_remove(dfs, parent, name, false);
         DERR(rc, "dfs_remove() of %s Failed", name);
@@ -579,8 +652,6 @@ out:
 		free(name);
 	if (dir_name)
 		free(dir_name);
-	if (parent)
-		dfs_release(parent);
 }
 
 static char* DFS_GetVersion()
@@ -647,7 +718,6 @@ static int
 DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
 {
         dfs_obj_t *parent = NULL;
-	mode_t pmode;
 	char *name = NULL, *dir_name = NULL;
 	int rc;
 
@@ -657,8 +727,9 @@ DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
+        parent = lookup_insert_dir(dir_name);
+        if (parent == NULL)
+                DERR(rc, "Failed to lookup parent dir");
 
 	rc = dfs_mkdir(dfs, parent, name, mode);
         DERR(rc, "dfs_mkdir() of %s Failed", name);
@@ -668,8 +739,6 @@ out:
 		free(name);
 	if (dir_name)
 		free(dir_name);
-	if (parent)
-		dfs_release(parent);
         if (rc)
                 return -1;
 	return rc;
@@ -679,7 +748,6 @@ static int
 DFS_Rmdir(const char *path, IOR_param_t * param)
 {
         dfs_obj_t *parent = NULL;
-	mode_t pmode;
 	char *name = NULL, *dir_name = NULL;
 	int rc;
 
@@ -689,8 +757,9 @@ DFS_Rmdir(const char *path, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
+        parent = lookup_insert_dir(dir_name);
+        if (parent == NULL)
+                DERR(rc, "Failed to lookup parent dir");
 
 	rc = dfs_remove(dfs, parent, name, false);
         DERR(rc, "dfs_remove() of %s Failed", name);
@@ -700,8 +769,6 @@ out:
 		free(name);
 	if (dir_name)
 		free(dir_name);
-	if (parent)
-		dfs_release(parent);
         if (rc)
                 return -1;
 	return rc;
@@ -711,7 +778,6 @@ static int
 DFS_Access(const char *path, int mode, IOR_param_t * param)
 {
         dfs_obj_t *parent = NULL;
-	mode_t pmode;
 	char *name = NULL, *dir_name = NULL;
         struct stat stbuf;
 	int rc;
@@ -721,8 +787,9 @@ DFS_Access(const char *path, int mode, IOR_param_t * param)
 
 	assert(dir_name);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
+        parent = lookup_insert_dir(dir_name);
+        if (parent == NULL)
+                DERR(rc, "Failed to lookup parent dir");
 
         if (name && strcmp(name, ".") == 0) {
                 free(name);
@@ -735,8 +802,6 @@ out:
 		free(name);
 	if (dir_name)
 		free(dir_name);
-	if (parent)
-		dfs_release(parent);
         if (rc)
                 return -1;
 	return rc;
@@ -746,7 +811,6 @@ static int
 DFS_Stat(const char *path, struct stat *buf, IOR_param_t * param)
 {
         dfs_obj_t *parent = NULL;
-	mode_t pmode;
 	char *name = NULL, *dir_name = NULL;
 	int rc;
 
@@ -756,8 +820,9 @@ DFS_Stat(const char *path, struct stat *buf, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
-        DERR(rc, "dfs_lookup() of %s Failed", dir_name);
+        parent = lookup_insert_dir(dir_name);
+        if (parent == NULL)
+                DERR(rc, "Failed to lookup parent dir");
 
 	rc = dfs_stat(dfs, parent, name, buf);
         DERR(rc, "dfs_stat() of %s Failed", name);
@@ -767,8 +832,6 @@ out:
 		free(name);
 	if (dir_name)
 		free(dir_name);
-	if (parent)
-		dfs_release(parent);
         if (rc)
                 return -1;
 	return rc;
