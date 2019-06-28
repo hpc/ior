@@ -89,7 +89,7 @@ static void *NCMPI_Create(char *testFileName, IOR_param_t * param)
         int fd_mode;
         MPI_Info mpiHints = MPI_INFO_NULL;
 
-        /* Wei-keng Liao: read and set MPI file hints from hintsFile */
+        /* read and set MPI file hints from hintsFile */
         SetHints(&mpiHints, param->hintsFileName);
         if (rank == 0 && param->showHints) {
                 fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
@@ -105,22 +105,23 @@ static void *NCMPI_Create(char *testFileName, IOR_param_t * param)
         NCMPI_CHECK(ncmpi_create(testComm, testFileName, fd_mode,
                                  mpiHints, fd), "cannot create file");
 
-        /* Wei-keng Liao: print the MPI file hints currently used */
-/* WEL - add when ncmpi_get_file_info() is in current parallel-netcdf release
-    if (rank == 0 && param->showHints) {
-        MPI_CHECK(ncmpi_get_file_info(*fd, &mpiHints),
-                  "cannot get file info");
-        fprintf(stdout, "\nhints returned from opened file {\n");
-        ShowHints(&mpiHints);
-        fprintf(stdout, "}\n");
-    }
-*/
+        /* free up the mpiHints object */
+        if (mpiHints != MPI_INFO_NULL)
+            MPI_CHECK(MPI_Info_free(&mpiHints), "cannot free file info");
 
-        /* Wei-keng Liao: free up the mpiHints object */
-/* WEL - this needs future fix from next release of PnetCDF
-    if (mpiHints != MPI_INFO_NULL)
-        MPI_CHECK(MPI_Info_free(&mpiHints), "cannot free file info");
-*/
+#if defined(PNETCDF_VERSION_MAJOR) && (PNETCDF_VERSION_MAJOR > 1 || PNETCDF_VERSION_MINOR >= 2)
+        /* ncmpi_get_file_info is first available in 1.2.0 */
+        if (rank == 0 && param->showHints) {
+            MPI_Info info_used;
+            MPI_CHECK(ncmpi_get_file_info(*fd, &info_used),
+                      "cannot inquire file info");
+            /* print the MPI file hints currently used */
+            fprintf(stdout, "\nhints returned from opened file {\n");
+            ShowHints(&info_used);
+            fprintf(stdout, "}\n");
+            MPI_CHECK(MPI_Info_free(&info_used), "cannot free file info");
+        }
+#endif
 
         return (fd);
 }
@@ -134,7 +135,7 @@ static void *NCMPI_Open(char *testFileName, IOR_param_t * param)
         int fd_mode;
         MPI_Info mpiHints = MPI_INFO_NULL;
 
-        /* Wei-keng Liao: read and set MPI file hints from hintsFile */
+        /* read and set MPI file hints from hintsFile */
         SetHints(&mpiHints, param->hintsFileName);
         if (rank == 0 && param->showHints) {
                 fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
@@ -150,22 +151,23 @@ static void *NCMPI_Open(char *testFileName, IOR_param_t * param)
         NCMPI_CHECK(ncmpi_open(testComm, testFileName, fd_mode,
                                mpiHints, fd), "cannot open file");
 
-        /* Wei-keng Liao: print the MPI file hints currently used */
-/* WEL - add when ncmpi_get_file_info() is in current parallel-netcdf release
-    if (rank == 0 && param->showHints) {
-        MPI_CHECK(ncmpi_get_file_info(*fd, &mpiHints),
-                  "cannot get file info");
-        fprintf(stdout, "\nhints returned from opened file {\n");
-        ShowHints(&mpiHints);
-        fprintf(stdout, "}\n");
-    }
-*/
+        /* free up the mpiHints object */
+        if (mpiHints != MPI_INFO_NULL)
+            MPI_CHECK(MPI_Info_free(&mpiHints), "cannot free file info");
 
-        /* Wei-keng Liao: free up the mpiHints object */
-/* WEL - this needs future fix from next release of PnetCDF
-    if (mpiHints != MPI_INFO_NULL)
-        MPI_CHECK(MPI_Info_free(&mpiHints), "cannot free file info");
-*/
+#if defined(PNETCDF_VERSION_MAJOR) && (PNETCDF_VERSION_MAJOR > 1 || PNETCDF_VERSION_MINOR >= 2)
+        /* ncmpi_get_file_info is first available in 1.2.0 */
+        if (rank == 0 && param->showHints) {
+            MPI_Info info_used;
+            MPI_CHECK(ncmpi_get_file_info(*fd, &info_used),
+                      "cannot inquire file info");
+            /* print the MPI file hints currently used */
+            fprintf(stdout, "\nhints returned from opened file {\n");
+            ShowHints(&info_used);
+            fprintf(stdout, "}\n");
+            MPI_CHECK(MPI_Info_free(&info_used), "cannot free file info");
+        }
+#endif
 
         return (fd);
 }
@@ -182,17 +184,6 @@ static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
         MPI_Offset bufSize[NUM_DIMS], offset[NUM_DIMS];
         IOR_offset_t segmentPosition;
         int segmentNum, transferNum;
-
-        /* Wei-keng Liao: In ior.c line 1979 says "block size must be a multiple
-           of transfer size."  Hence, length should always == param->transferSize
-           below.  I leave it here to double check.
-         */
-        if (length != param->transferSize) {
-                char errMsg[256];
-                sprintf(errMsg, "length(%lld) != param->transferSize(%lld)\n",
-                        length, param->transferSize);
-                NCMPI_CHECK(-1, errMsg);
-        }
 
         /* determine by offset if need to start data set */
         if (param->filePerProc == TRUE) {
@@ -224,7 +215,7 @@ static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
                         int numTransfers =
                             param->blockSize / param->transferSize;
 
-                        /* Wei-keng Liao: change 1D array to 3D array of dimensions:
+                        /* reshape 1D array to 3D array:
                            [segmentCount*numTasksWorld][numTransfers][transferSize]
                            Requirement: none of these dimensions should be > 4G,
                          */
@@ -264,13 +255,13 @@ static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
 
         var_id = param->var_id;
 
-        /* Wei-keng Liao: calculate the segment number */
+        /* calculate the segment number */
         segmentNum = param->offset / (param->numTasks * param->blockSize);
 
-        /* Wei-keng Liao: calculate the transfer number in each block */
+        /* calculate the transfer number in each block */
         transferNum = param->offset % param->blockSize / param->transferSize;
 
-        /* Wei-keng Liao: read/write the 3rd dim of the dataset, each is of
+        /* read/write the 3rd dim of the dataset, each is of
            amount param->transferSize */
         bufSize[0] = 1;
         bufSize[1] = 1;
@@ -381,7 +372,7 @@ static int GetFileMode(IOR_param_t * param)
                 fprintf(stdout, "O_DIRECT not implemented in NCMPI\n");
         }
 
-        /* Wei-keng Liao: to enable > 4GB file size */
+        /* to enable > 4GB file size */
         fd_mode |= NC_64BIT_OFFSET;
 
         return (fd_mode);
