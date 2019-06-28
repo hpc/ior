@@ -258,8 +258,11 @@ DAOS_Init()
 	if (daos_initialized)
 		return;
 
-	if (o.pool == NULL || o.svcl == NULL || o.cont == NULL)
+	if (o.pool == NULL || o.svcl == NULL || o.cont == NULL) {
+		GERR("Invalid DAOS pool/cont\n");
 		return;
+	}
+
         if (o.oclass)
                 ObjectClassParse(o.oclass);
 
