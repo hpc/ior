@@ -209,65 +209,6 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
         free(global.iov_buf);
 }
 
-static void
-ObjectClassParse(const char *string)
-{
-        if (strcasecmp(string, "oc_s1") == 0)
-                objectClass = OC_S1;
-        else if (strcasecmp(string, "oc_s2") == 0)
-                objectClass = OC_S2;
-        else if (strcasecmp(string, "oc_s4") == 0)
-                objectClass = OC_S4;
-        else if (strcasecmp(string, "oc_sx") == 0)
-                objectClass = OC_SX;
-        else if (strcasecmp(string, "oc_tiny") == 0)
-                objectClass = OC_TINY;
-        else if (strcasecmp(string, "oc_small") == 0)
-                objectClass = OC_SMALL;
-        else if (strcasecmp(string, "oc_large") == 0)
-                objectClass = OC_LARGE;
-        else if (strcasecmp(string, "oc_max") == 0)
-                objectClass = OC_MAX;
-        else if (strcasecmp(string, "oc_rp_tiny") == 0)
-                objectClass = OC_RP_TINY;
-        else if (strcasecmp(string, "oc_rp_small") == 0)
-                objectClass = OC_RP_SMALL;
-        else if (strcasecmp(string, "oc_rp_large") == 0)
-                objectClass = OC_RP_LARGE;
-        else if (strcasecmp(string, "oc_rp_max") == 0)
-                objectClass = OC_RP_MAX;
-        else if (strcasecmp(string, "oc_rp_sf_tiny") == 0)
-                objectClass = OC_RP_SF_TINY;
-        else if (strcasecmp(string, "oc_rp_sf_small") == 0)
-                objectClass = OC_RP_SF_SMALL;
-        else if (strcasecmp(string, "oc_rp_sf_large") == 0)
-                objectClass = OC_RP_SF_LARGE;
-        else if (strcasecmp(string, "oc_rp_sf_max") == 0)
-                objectClass = OC_RP_SF_MAX;
-        else if (strcasecmp(string, "oc_ec_tiny") == 0)
-                objectClass = OC_EC_TINY;
-        else if (strcasecmp(string, "oc_ec_small") == 0)
-                objectClass = OC_EC_SMALL;
-        else if (strcasecmp(string, "oc_ec_large") == 0)
-                objectClass = OC_EC_LARGE;
-        else if (strcasecmp(string, "oc_ec_max") == 0)
-                objectClass = OC_EC_MAX;
-        else if (strcasecmp(string, "oc_rp_2g1") == 0)
-                objectClass = OC_RP_2G1;
-        else if (strcasecmp(string, "oc_rp_2g4") == 0)
-                objectClass = OC_RP_2G4;
-        else if (strcasecmp(string, "oc_rp_2gx") == 0)
-                objectClass = OC_RP_2GX;
-        else if (strcasecmp(string, "oc_rp_3g1") == 0)
-                objectClass = OC_RP_3G1;
-        else if (strcasecmp(string, "oc_rp_3g4") == 0)
-                objectClass = OC_RP_3G4;
-        else if (strcasecmp(string, "oc_rp_3gx") == 0)
-                objectClass = OC_RP_3GX;
-        else
-                GERR("Invalid 'oclass' argument: '%s'", string);
-}
-
 static option_help *
 DAOS_options()
 {
@@ -288,7 +229,7 @@ DAOS_Init()
 	}
 
         if (o.oclass)
-                ObjectClassParse(o.oclass);
+                objectClass = daos_oclass_name2id(o.oclass);
 
         rc = daos_init();
 	if (rc)
