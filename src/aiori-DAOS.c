@@ -28,9 +28,9 @@
 #include <sys/types.h>
 #include <libgen.h>
 #include <stdbool.h>
+
 #include <gurt/common.h>
 #include <daos.h>
-#include <daos_types.h>
 #include <daos_addons.h>
 
 #include "ior.h"
@@ -119,7 +119,7 @@ enum handleType {
 static daos_handle_t	poh;
 static daos_handle_t	coh;
 static daos_handle_t	aoh;
-static daos_oclass_id_t objectClass = DAOS_OC_LARGE_RW;
+static daos_oclass_id_t objectClass = OC_SX;
 static bool		daos_initialized = false;
 
 /***************************** F U N C T I O N S ******************************/
@@ -212,34 +212,58 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
 static void
 ObjectClassParse(const char *string)
 {
-        if (strcasecmp(string, "tiny") == 0)
-                objectClass = DAOS_OC_TINY_RW;
-        else if (strcasecmp(string, "small") == 0)
-                objectClass = DAOS_OC_SMALL_RW;
-        else if (strcasecmp(string, "large") == 0)
-                objectClass = DAOS_OC_LARGE_RW;
-        else if (strcasecmp(string, "echo_tiny") == 0)
-                objectClass = DAOS_OC_ECHO_TINY_RW;
-        else if (strcasecmp(string, "echo_R2S") == 0)
-                objectClass = DAOS_OC_ECHO_R2S_RW;
-        else if (strcasecmp(string, "echo_R3S") == 0)
-                objectClass = DAOS_OC_ECHO_R3S_RW;
-        else if (strcasecmp(string, "echo_R4S") == 0)
-                objectClass = DAOS_OC_ECHO_R4S_RW;
-        else if (strcasecmp(string, "R2") == 0)
-                objectClass = DAOS_OC_R2_RW;
-        else if (strcasecmp(string, "R2S") == 0)
-                objectClass = DAOS_OC_R2S_RW;
-        else if (strcasecmp(string, "R3S") == 0)
-                objectClass = DAOS_OC_R3S_RW;
-        else if (strcasecmp(string, "R3") == 0)
-                objectClass = DAOS_OC_R3_RW;
-        else if (strcasecmp(string, "R4") == 0)
-                objectClass = DAOS_OC_R4_RW;
-        else if (strcasecmp(string, "R4S") == 0)
-                objectClass = DAOS_OC_R4S_RW;
-        else if (strcasecmp(string, "repl_max") == 0)
-                objectClass = DAOS_OC_REPL_MAX_RW;
+        if (strcasecmp(string, "oc_s1") == 0)
+                objectClass = OC_S1;
+        else if (strcasecmp(string, "oc_s2") == 0)
+                objectClass = OC_S2;
+        else if (strcasecmp(string, "oc_s4") == 0)
+                objectClass = OC_S4;
+        else if (strcasecmp(string, "oc_sx") == 0)
+                objectClass = OC_SX;
+        else if (strcasecmp(string, "oc_tiny") == 0)
+                objectClass = OC_TINY;
+        else if (strcasecmp(string, "oc_small") == 0)
+                objectClass = OC_SMALL;
+        else if (strcasecmp(string, "oc_large") == 0)
+                objectClass = OC_LARGE;
+        else if (strcasecmp(string, "oc_max") == 0)
+                objectClass = OC_MAX;
+        else if (strcasecmp(string, "oc_rp_tiny") == 0)
+                objectClass = OC_RP_TINY;
+        else if (strcasecmp(string, "oc_rp_small") == 0)
+                objectClass = OC_RP_SMALL;
+        else if (strcasecmp(string, "oc_rp_large") == 0)
+                objectClass = OC_RP_LARGE;
+        else if (strcasecmp(string, "oc_rp_max") == 0)
+                objectClass = OC_RP_MAX;
+        else if (strcasecmp(string, "oc_rp_sf_tiny") == 0)
+                objectClass = OC_RP_SF_TINY;
+        else if (strcasecmp(string, "oc_rp_sf_small") == 0)
+                objectClass = OC_RP_SF_SMALL;
+        else if (strcasecmp(string, "oc_rp_sf_large") == 0)
+                objectClass = OC_RP_SF_LARGE;
+        else if (strcasecmp(string, "oc_rp_sf_max") == 0)
+                objectClass = OC_RP_SF_MAX;
+        else if (strcasecmp(string, "oc_ec_tiny") == 0)
+                objectClass = OC_EC_TINY;
+        else if (strcasecmp(string, "oc_ec_small") == 0)
+                objectClass = OC_EC_SMALL;
+        else if (strcasecmp(string, "oc_ec_large") == 0)
+                objectClass = OC_EC_LARGE;
+        else if (strcasecmp(string, "oc_ec_max") == 0)
+                objectClass = OC_EC_MAX;
+        else if (strcasecmp(string, "oc_rp_2g1") == 0)
+                objectClass = OC_RP_2G1;
+        else if (strcasecmp(string, "oc_rp_2g4") == 0)
+                objectClass = OC_RP_2G4;
+        else if (strcasecmp(string, "oc_rp_2gx") == 0)
+                objectClass = OC_RP_2GX;
+        else if (strcasecmp(string, "oc_rp_3g1") == 0)
+                objectClass = OC_RP_3G1;
+        else if (strcasecmp(string, "oc_rp_3g4") == 0)
+                objectClass = OC_RP_3G4;
+        else if (strcasecmp(string, "oc_rp_3gx") == 0)
+                objectClass = OC_RP_3GX;
         else
                 GERR("Invalid 'oclass' argument: '%s'", string);
 }
@@ -338,9 +362,12 @@ DAOS_Fini()
 		}
 
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		if (rc)
-			DCHECK(rc, "Failed to destroy container %s (%d)",
-			       o.cont, rc);
+		if (rc) {
+			if (rank == 0)
+				DCHECK(rc, "Failed to destroy container %s (%d)",
+				       o.cont, rc);
+			MPI_Abort(MPI_COMM_WORLD, -1);
+		}
 	}
 
 	rc = daos_pool_disconnect(poh, NULL);
@@ -360,8 +387,8 @@ gen_oid(const char *name, daos_obj_id_t *oid)
 	oid->lo = d_hash_murmur64(name, strlen(name), IOR_DAOS_MUR_SEED);
 	oid->hi = 0;
 
-	feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_HASHED;
-	daos_obj_generate_id(oid, feat, objectClass);
+	feat = DAOS_OF_DKEY_UINT64;
+	daos_obj_generate_id(oid, feat, objectClass, 0);
 }
 
 static void *

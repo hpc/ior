@@ -33,8 +33,7 @@
 
 #include <gurt/common.h>
 #include <gurt/hash.h>
-#include <daos_types.h>
-#include <daos_api.h>
+#include <daos.h>
 #include <daos_fs.h>
 
 #include "ior.h"
@@ -489,7 +488,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
                 fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
-                              DAOS_OC_LARGE_RW, 0, NULL, &obj);
+                              OC_SX, 0, NULL, &obj);
                 DERR(rc, "dfs_open() of %s Failed", name);
 
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
@@ -498,7 +497,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 
                 fd_oflag |= O_RDWR;
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
-                              DAOS_OC_LARGE_RW, 0, NULL, &obj);
+                              OC_SX, 0, NULL, &obj);
                 DERR(rc, "dfs_open() of %s Failed", name);
         }
 
@@ -725,7 +724,8 @@ DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
         DERR(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
-        assert(name);
+        if (!name)
+                return 0;
 
         parent = lookup_insert_dir(dir_name);
         if (parent == NULL)
