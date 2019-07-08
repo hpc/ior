@@ -228,8 +228,11 @@ DAOS_Init()
 		return;
 	}
 
-        if (o.oclass)
+        if (o.oclass) {
                 objectClass = daos_oclass_name2id(o.oclass);
+		if (objectClass == OC_UNKNOWN)
+			GERR("Invalid DAOS Object class %s\n", o.oclass);
+	}
 
         rc = daos_init();
 	if (rc)
