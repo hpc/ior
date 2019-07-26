@@ -1362,7 +1362,7 @@ void print_help (void) {
         "\t-p: pre-iteration delay (in seconds)\n"
         "\t-r: only remove files or directories left behind by previous runs\n"
         "\t-R: randomly stat files (optional argument for random seed)\n"
-        "\t-s: stride between the number of tasks for each test\n"
+        "\t-s: stride between the number of nodes for each test\n"
         "\t-S: shared file access (file only, no directories)\n"
         "\t-t: time unique working directory overhead\n"
         "\t-T: only stat files/dirs\n"
@@ -2191,7 +2191,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     pid = getpid();
     uid = getuid();
 
-    nodeCount = size / CountTasksPerNode(testComm);
+    tasksPerNode = CountTasksPerNode(testComm);
+    nodeCount = size / tasksPerNode;
 
     if (rank == 0) {
         fprintf(out_logfile, "-- started at %s --\n\n", PrintTimestamp());
@@ -2265,6 +2266,11 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         fprintf( out_logfile, "depth                   : %d\n", depth );
         fprintf( out_logfile, "make_node               : %d\n", make_node );
         fflush( out_logfile );
+    }
+
+    /* set the shift to mimic IOR and shift by procs per node */
+    if (nstride > 0) {
+        nstride *= tasksPerNode;
     }
 
     /* setup total number of items and number of items per dir */
