@@ -2268,11 +2268,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         fflush( out_logfile );
     }
 
-    /* set the shift to mimic IOR and shift by procs per node */
-    if (nstride > 0) {
-        nstride *= tasksPerNode;
-    }
-
     /* setup total number of items and number of items per dir */
     if (depth <= 0) {
         num_dirs_in_tree = 1;
@@ -2381,6 +2376,17 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     if (rank == 0) display_freespace(testdirpath);
+    int packedByNode = QueryNodeMapping(testComm);
+
+    /* set the shift to mimic IOR and shift by procs per node */
+    if (nstride > 0) {
+        if ( packedByNode ) {
+            nstride *= tasksPerNode;
+        }
+        if (rank == 0) {
+            fprintf(out_logfile, "Shifting ranks by %d for each phase.\n", nstride);
+        }
+    }
 
     if (verbose >= 3 && rank == 0) {
         fprintf(out_logfile,  "V-3: main (after display_freespace): testdirpath is \"%s\"\n", testdirpath );

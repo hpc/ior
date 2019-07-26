@@ -213,11 +213,49 @@ void DumpBuffer(void *buffer,
         return;
 }                               /* DumpBuffer() */
 
+/* a function that prints an int array where each index corresponds to a rank
+   and the value is whether that rank is on the same host as root.
+   Also returns 1 if rank 1 is on same host and 0 otherwise
+*/
+int QueryNodeMapping(MPI_Comm comm) {
+    char localhost[MAX_PATHLEN], roothost[MAX_PATHLEN];
+    int num_ranks;
+    MPI_Comm_size(comm, &num_ranks);
+    int *node_map = (int*)malloc(sizeof(int) * num_ranks);
+    if ( ! node_map ) {
+        FAIL("malloc");
+    }
+    if (gethostname(localhost, MAX_PATHLEN) != 0) {
+        FAIL("gethostname()");
+    }
+    if (rank==0) {
+        strncpy(roothost,localhost,MAX_PATHLEN);
+    }
+
+    /* have rank 0 broadcast out its hostname */
+    MPI_Bcast(roothost, MAX_PATHLEN, MPI_CHAR, 0, comm);
+    //printf("Rank %d received root host as %s\n", rank, roothost);
+    /* then every rank figures out whether it is same host as root and then gathers that */
+    int same_as_root = strcmp(roothost,localhost) == 0;
+    MPI_Gather( &same_as_root, 1, MPI_INT, node_map, 1, MPI_INT, 0, comm);
+    if (rank==0) {
+        fprintf( out_logfile, "Nodemap: " );
+        for ( int i = 0; i < num_ranks; i++ ) {
+            fprintf( out_logfile, "%d", node_map[i] );
+        }
+        fprintf( out_logfile, "\n" );
+    }
+    int ret = node_map[1] == 1;
+    free(node_map);
+    return ret;
+}
+
 #if MPI_VERSION >= 3
 int CountTasksPerNode(MPI_Comm comm) {
     /* modern MPI provides a simple way to get the local process count */
     MPI_Comm shared_comm;
     int count;
+
 
     MPI_Comm_split_type (comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm);
     MPI_Comm_size (shared_comm, &count);
