@@ -188,7 +188,14 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
         va_start (args, format);
         vsnprintf (buffer, 1024, format, args);
         va_end (args);
-        fprintf( out_logfile, "V-%d: Rank %3d Line %5d %s\n", root_level, rank, line, buffer );
+        if (root_level == 0 && any_level == -1) {
+            /* No header when it is just the standard output */
+            fprintf( out_logfile, "%s\n", buffer );
+        } else {
+            /* add a header when the verbose is greater than 0 */
+            fprintf( out_logfile, "V-%d: Rank %3d Line %5d %s\n", root_level, rank, line, buffer );
+        }
+        fflush(out_logfile);
     }
 }
 
@@ -211,7 +218,7 @@ void parse_dirpath(char *dirpath_arg) {
     int i = 0;
 
 
-    VERBOSE(1,-1, "Entering parse_dirpath..." );
+    VERBOSE(1,-1, "Entering parse_dirpath on %s...", dirpath_arg );
 
     tmp = dirpath_arg;
 
@@ -252,8 +259,6 @@ static void prep_testdir(int j, int dir_iter){
  */
 
 void unique_dir_access(int opt, char *to) {
-    VERBOSE(1,-1,"Entering unique_dir_access..." );
-
     if (opt == MK_UNI_DIR) {
         MPI_Barrier(testComm);
         sprintf( to, "%s/%s", testdir, unique_chdir_dir );
@@ -266,6 +271,7 @@ void unique_dir_access(int opt, char *to) {
     } else if (opt == RM_UNI_DIR) {
         sprintf( to, "%s/%s", testdir, unique_rm_uni_dir );
     }
+    VERBOSE(1,-1,"Entering unique_dir_access, set it to %s", to );
 }
 
 static void create_remove_dirs (const char *path, bool create, uint64_t itemNum) {
@@ -373,7 +379,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 void create_remove_items_helper(const int dirs, const int create, const char *path,
                                 uint64_t itemNum, rank_progress_t * progress) {
 
-    VERBOSE(1,-1,"Entering create_remove_items_helper..." );
+    VERBOSE(1,-1,"Entering create_remove_items_helper on %s", path );
 
     for (uint64_t i = progress->items_start; i < progress->items_per_dir ; ++i) {
         if (!dirs) {
@@ -399,7 +405,7 @@ void create_remove_items_helper(const int dirs, const int create, const char *pa
 void collective_helper(const int dirs, const int create, const char* path, uint64_t itemNum, rank_progress_t * progress) {
     char curr_item[MAX_PATHLEN];
 
-    VERBOSE(1,-1,"Entering collective_helper..." );
+    VERBOSE(1,-1,"Entering collective_helper on %s", path );
     for (uint64_t i = progress->items_start ; i < progress->items_per_dir ; ++i) {
         if (dirs) {
             create_remove_dirs (path, create, itemNum + i);
@@ -441,7 +447,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
     unsigned long long currDir = dirNum;
 
 
-    VERBOSE(1,-1,"Entering create_remove_items, currDepth = %d...", currDepth );
+    VERBOSE(1,-1,"Entering create_remove_items on %s, currDepth = %d...", path, currDepth );
 
 
     memset(dir, 0, MAX_PATHLEN);
@@ -509,7 +515,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
     uint64_t parent_dir, item_num = 0;
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
 
-    VERBOSE(1,-1,"Entering mdtest_stat..." );
+    VERBOSE(1,-1,"Entering mdtest_stat on %s", path );
 
     uint64_t stop_items = items;
 
@@ -594,7 +600,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
     void *aiori_fh;
 
-    VERBOSE(1,-1,"Entering mdtest_read..." );
+    VERBOSE(1,-1,"Entering mdtest_read on %s", path );
 
     /* allocate read buffer */
     if (read_bytes > 0) {
@@ -940,12 +946,12 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         summary_table[iteration].stonewall_last_item[3] = items;
     }
 
-    VERBOSE(1,-1,"   Directory creation: %14.3f sec, %14.3f ops/sec\n", t[1] - t[0], summary_table[iteration].rate[0]);
-    VERBOSE(1,-1,"   Directory stat    : %14.3f sec, %14.3f ops/sec\n", t[2] - t[1], summary_table[iteration].rate[1]);
+    VERBOSE(1,-1,"   Directory creation: %14.3f sec, %14.3f ops/sec", t[1] - t[0], summary_table[iteration].rate[0]);
+    VERBOSE(1,-1,"   Directory stat    : %14.3f sec, %14.3f ops/sec", t[2] - t[1], summary_table[iteration].rate[1]);
     /* N/A
-    VERBOSE(1,-1,"   Directory read    : %14.3f sec, %14.3f ops/sec\n", t[3] - t[2], summary_table[iteration].rate[2]);
+    VERBOSE(1,-1,"   Directory read    : %14.3f sec, %14.3f ops/sec", t[3] - t[2], summary_table[iteration].rate[2]);
     */
-    VERBOSE(1,-1,"   Directory removal : %14.3f sec, %14.3f ops/sec\n", t[4] - t[3], summary_table[iteration].rate[3]);
+    VERBOSE(1,-1,"   Directory removal : %14.3f sec, %14.3f ops/sec", t[4] - t[3], summary_table[iteration].rate[3]);
 }
 
 /* Returns if the stonewall was hit */
@@ -967,10 +973,7 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
   if(items != (sum_accessed / size)){
     summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
     summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
-    if (rank == 0){
-      fprintf( out_logfile, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
-      fflush( out_logfile );
-    }
+    VERBOSE(0,-1, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
     hit = 1;
   }
   progress->items_start = done;
@@ -1218,12 +1221,9 @@ void summarize_results(int iterations) {
 
     if (rank == 0) {
 
-        fprintf(out_logfile, "\nSUMMARY %s: (of %d iterations)\n", print_time ? "time": "rate", iterations);
-        fprintf(out_logfile,
-            "   Operation                      Max            Min           Mean        Std Dev\n");
-        fprintf(out_logfile,
-            "   ---------                      ---            ---           ----        -------\n");
-        fflush(out_logfile);
+        VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
+        VERBOSE(0,-1,"   Operation                      Max            Min           Mean        Std Dev");
+        VERBOSE(0,-1,"   ---------                      ---            ---           ----        -------");
 
         /* if files only access, skip entries 0-3 (the dir tests) */
         if (files_only && !dirs_only) {
@@ -1342,8 +1342,7 @@ void summarize_results(int iterations) {
 void valid_tests() {
 
     if (((stone_wall_timer_seconds > 0) && (branch_factor > 1)) || ! barriers) {
-        fprintf(out_logfile, "Error, stone wall timer does only work with a branch factor <= 1 and with barriers\n");
-        MPI_Abort(testComm, 1);
+        FAIL( "Error, stone wall timer does only work with a branch factor <= 1 and with barriers\n");
     }
 
     if (!create_only && !stat_only && !read_only && !remove_only) {
@@ -1443,7 +1442,7 @@ void show_file_system_size(char *file_system) {
     ior_aiori_statfs_t stat_buf;
     int ret;
 
-    VERBOSE(1,-1,"Entering show_file_system_size..." );
+    VERBOSE(1,-1,"Entering show_file_system_size on %s", file_system );
 
     ret = backend->statfs (file_system, &stat_buf, &param);
     if (0 != ret) {
@@ -1475,14 +1474,10 @@ void show_file_system_size(char *file_system) {
 
 
     /* show results */
-    fprintf(out_logfile, "Path: %s\n", real_path);
-    fprintf(out_logfile, "FS: %.1f %s   Used FS: %2.1f%%   ",
-            total_file_system_size_hr, file_system_unit_str,
-            used_file_system_percentage);
-    fprintf(out_logfile, "Inodes: %.1f %s   Used Inodes: %2.1f%%\n",
-            (double)total_inodes / (double)inode_unit_val,
-            inode_unit_str, used_inode_percentage);
-    fflush(out_logfile);
+    VERBOSE(0,-1,"Path: %s", real_path);
+    VERBOSE(0,-1,"FS: %.1f %s   Used FS: %2.1f%%   Inodes: %.1f %s   Used Inodes: %2.1f%%\n", 
+            total_file_system_size_hr, file_system_unit_str, used_file_system_percentage,
+            (double)total_inodes / (double)inode_unit_val, inode_unit_str, used_inode_percentage);
 
     return;
 }
@@ -1682,15 +1677,14 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
           sprintf(rm_name, "mdtest.%d.", (rank+(3*nstride))%i);
       }
       if (unique_dir_per_task) {
-          printf("DEBUG %5d Rank %d i %d nstride %d\n", __LINE__, rank, i, nstride);
+          VERBOSE(3,5,"i %d nstride %d", i, nstride);
           sprintf(unique_mk_dir, "mdtest_tree.%d.0",  (rank+(0*nstride))%i);
           sprintf(unique_chdir_dir, "mdtest_tree.%d.0", (rank+(1*nstride))%i);
           sprintf(unique_stat_dir, "mdtest_tree.%d.0", (rank+(2*nstride))%i);
           sprintf(unique_read_dir, "mdtest_tree.%d.0", (rank+(3*nstride))%i);
           sprintf(unique_rm_dir, "mdtest_tree.%d.0", (rank+(4*nstride))%i);
           unique_rm_uni_dir[0] = 0;
-          printf("DEBUG %5d Rank %d mk_dir %s chdir %s stat_dir %s read_dir %s rm_dir %s\n", __LINE__, 
-                  rank, unique_mk_dir,unique_chdir_dir,unique_stat_dir,unique_read_dir,unique_rm_dir);
+          VERBOSE(5,5,"mk_dir %s chdir %s stat_dir %s read_dir %s rm_dir %s\n", unique_mk_dir,unique_chdir_dir,unique_stat_dir,unique_read_dir,unique_rm_dir);
       }
 
       VERBOSE(3,-1,"V-3: main: Copied unique_mk_dir, \"%s\", to topdir", unique_mk_dir );
@@ -1705,7 +1699,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
           if (pre_delay) {
               DelaySecs(pre_delay);
           }
-          printf("DEBUG %5d Rank %d gonna file_test on %s\n", __LINE__, rank, unique_mk_dir);
+          VERBOSE(3,5,"will file_test on %s", unique_mk_dir);
           file_test(j, i, unique_mk_dir, progress);
       }
   }
@@ -1903,20 +1897,15 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     tasksPerNode = CountTasksPerNode(testComm);
     nodeCount = size / tasksPerNode;
 
-    if (rank == 0) {
-        fprintf(out_logfile, "-- started at %s --\n\n", PrintTimestamp());
-        fprintf(out_logfile, "mdtest-%s was launched with %d total task(s) on %d node(s)\n", RELEASE_VERS, size, nodeCount);
-        fflush(out_logfile);
+    char cmd_buffer[4096];
+    strncpy(cmd_buffer, argv[0], 4096);
+    for (i = 1; i < argc; i++) {
+        snprintf(&cmd_buffer[strlen(cmd_buffer)], 4096-strlen(cmd_buffer), " \"%s\"", argv[i]);
     }
 
-    if (rank == 0) {
-        fprintf(out_logfile, "Command line used: %s", argv[0]);
-        for (i = 1; i < argc; i++) {
-            fprintf(out_logfile, " \"%s\"", argv[i]);
-        }
-        fprintf(out_logfile, "\n");
-        fflush(out_logfile);
-    }
+    VERBOSE(0,-1,"-- started at %s --\n", PrintTimestamp());
+    VERBOSE(0,-1,"mdtest-%s was launched with %d total task(s) on %d node(s)", RELEASE_VERS, size, nodeCount);
+    VERBOSE(0,-1,"Command line used: %s", cmd_buffer);
 
     /* adjust special variables */
     barriers = ! no_barriers;
@@ -2082,19 +2071,17 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* set the shift to mimic IOR and shift by procs per node */
     if (nstride > 0) {
-        if ( packedByNode ) {
+        if ( nodeCount > 1 && packedByNode ) {
             nstride *= tasksPerNode;
         }
-        if (rank == 0) {
-            fprintf(out_logfile, "Shifting ranks by %d for each phase.\n", nstride);
-        }
+        VERBOSE(0,5,"Shifting ranks by %d for each phase.", nstride);
     }
 
     VERBOSE(3,-1,"main (after display_freespace): testdirpath is \"%s\"", testdirpath );
 
     if (rank == 0) {
         if (random_seed > 0) {
-            fprintf(out_logfile, "random seed: %d\n", random_seed);
+            VERBOSE(0,-1,"random seed: %d", random_seed);
         }
     }
 
@@ -2147,16 +2134,16 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
               items_all *= num_dirs_in_tree_calc;
             }
             if (files_only && dirs_only) {
-                fprintf(out_logfile, "\n%d tasks, "LLU" files/directories\n", i, items_all);
+                VERBOSE(0,-1,"%d tasks, "LLU" files/directories", i, items_all);
             } else if (files_only) {
                 if (!shared_file) {
-                    fprintf(out_logfile, "\n%d tasks, "LLU" files\n", i, items_all);
+                    VERBOSE(0,-1,"%d tasks, "LLU" files", i, items_all);
                 }
                 else {
-                    fprintf(out_logfile, "\n%d tasks, 1 file\n", i);
+                    VERBOSE(0,-1,"%d tasks, 1 file", i);
                 }
             } else if (dirs_only) {
-                fprintf(out_logfile, "\n%d tasks, "LLU" directories\n", i, items_all);
+                VERBOSE(0,-1,"%d tasks, "LLU" directories", i, items_all);
             }
         }
         VERBOSE(1,-1,"");
