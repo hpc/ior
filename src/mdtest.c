@@ -494,6 +494,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
             if (collective) {
                 collective_helper(dirs, create, temp_path, 0, progress);
             } else {
+                printf("DEBUG %5d rank %d gonna create %s\n", __LINE__, rank, temp_path);
                 create_remove_items_helper(dirs, create, temp_path, 0, progress);
             }
         }
@@ -522,6 +523,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
                 if (collective) {
                     collective_helper(dirs, create, temp_path, currDir*items_per_dir, progress);
                 } else {
+                    printf("DEBUG %5d rank %d gonna create %s\n", __LINE__, rank, temp_path);
                     create_remove_items_helper(dirs, create, temp_path, currDir*items_per_dir, progress);
                 }
             }
@@ -641,7 +643,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
                 fflush( out_logfile );
             }
             snprintf(msg_buf, 4096, "unable to stat %s %s", dirs ? "directory" : "file", item);
-            FAIL("unable to stat directory");
+            FAIL(msg_buf);
         }
     }
 }
@@ -792,6 +794,7 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
             sprintf(rm_name, "mdtest.%d.", (i+(3*nstride))%ntasks);
         }
         if (unique_dir_per_task) {
+            printf("DEBUG %5d Rank %d i %d nstride %d ntasks %d", __LINE__, rank, i, nstride, ntasks);
             sprintf(unique_mk_dir, "%s/mdtest_tree.%d.0", testdir,
                     (i+(0*nstride))%ntasks);
             sprintf(unique_chdir_dir, "%s/mdtest_tree.%d.0", testdir,
@@ -1085,6 +1088,8 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     char temp_path[MAX_PATHLEN];
     MPI_Comm_size(testComm, &size);
 
+    printf("DEBUG %5d Rank %d file_test on %s\n", __LINE__, rank, path);
+
     if (( rank == 0 ) && ( verbose >= 1 )) {
         fprintf( out_logfile, "V-1: Entering file_test...\n" );
         fflush( out_logfile );
@@ -1099,13 +1104,17 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         prep_testdir(iteration, dir_iter);
 
         if (unique_dir_per_task) {
+            printf("DEBUG %5d Rank %d operating on %s\n", __LINE__, rank, temp_path);
             unique_dir_access(MK_UNI_DIR, temp_path);
+            printf("DEBUG %5d Rank %d operating on %s\n", __LINE__, rank, temp_path);
             if (!time_unique_dir_overhead) {
                 offset_timers(t, 0);
             }
         } else {
             sprintf( temp_path, "%s/%s", testdir, path );
         }
+
+
 
         if (verbose >= 3 && rank == 0) {
             fprintf(out_logfile,  "V-3: file_test: create path is \"%s\"\n", temp_path );
@@ -1250,6 +1259,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
                 collective_create_remove(0, 0, ntasks, temp_path, progress);
             }
         } else {
+            printf("DEBUG %5d rank %d gonna create %s\n", __LINE__, rank, temp_path);
             create_remove_items(0, 0, 0, 0, temp_path, 0, progress);
         }
       }
@@ -1942,12 +1952,15 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
           sprintf(rm_name, "mdtest.%d.", (rank+(3*nstride))%i);
       }
       if (unique_dir_per_task) {
+          printf("DEBUG %5d Rank %d i %d nstride %d\n", __LINE__, rank, i, nstride);
           sprintf(unique_mk_dir, "mdtest_tree.%d.0",  (rank+(0*nstride))%i);
           sprintf(unique_chdir_dir, "mdtest_tree.%d.0", (rank+(1*nstride))%i);
           sprintf(unique_stat_dir, "mdtest_tree.%d.0", (rank+(2*nstride))%i);
           sprintf(unique_read_dir, "mdtest_tree.%d.0", (rank+(3*nstride))%i);
           sprintf(unique_rm_dir, "mdtest_tree.%d.0", (rank+(4*nstride))%i);
           unique_rm_uni_dir[0] = 0;
+          printf("DEBUG %5d Rank %d mk_dir %s chdir %s stat_dir %s read_dir %s rm_dir %s\n", __LINE__, 
+                  rank, unique_mk_dir,unique_chdir_dir,unique_stat_dir,unique_read_dir,unique_rm_dir);
       }
 
       if (verbose >= 3 && rank == 0) {
@@ -1965,6 +1978,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
           if (pre_delay) {
               DelaySecs(pre_delay);
           }
+          printf("DEBUG %5d Rank %d gonna file_test on %s\n", __LINE__, rank, unique_mk_dir);
           file_test(j, i, unique_mk_dir, progress);
       }
   }

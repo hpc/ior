@@ -246,6 +246,7 @@ int QueryNodeMapping(MPI_Comm comm) {
         fprintf( out_logfile, "\n" );
     }
     int ret = node_map[1] == 1;
+    MPI_Bcast(&ret, 1, MPI_INT, 0, comm);
     free(node_map);
     return ret;
 }
