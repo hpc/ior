@@ -455,7 +455,6 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
             if (collective) {
                 collective_helper(dirs, create, temp_path, 0, progress);
             } else {
-                printf("DEBUG %5d rank %d gonna create %s\n", __LINE__, rank, temp_path);
                 create_remove_items_helper(dirs, create, temp_path, 0, progress);
             }
         }
@@ -481,7 +480,6 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
                 if (collective) {
                     collective_helper(dirs, create, temp_path, currDir*items_per_dir, progress);
                 } else {
-                    printf("DEBUG %5d rank %d gonna create %s\n", __LINE__, rank, temp_path);
                     create_remove_items_helper(dirs, create, temp_path, currDir*items_per_dir, progress);
                 }
             }
@@ -1196,66 +1194,6 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     VERBOSE(1,-1,"  File stat         : %14.3f sec, %14.3f ops/sec", t[2] - t[1], summary_table[iteration].rate[5]);
     VERBOSE(1,-1,"  File read         : %14.3f sec, %14.3f ops/sec", t[3] - t[2], summary_table[iteration].rate[6]);
     VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", t[4] - t[3], summary_table[iteration].rate[7]);
-}
-
-void print_help (void) {
-    int j;
-
-    char APIs[1024];
-    char APIs_legacy[1024];
-    aiori_supported_apis(APIs, APIs_legacy, MDTEST);
-    char apiStr[1024];
-    sprintf(apiStr, "API for I/O [%s]", APIs);
-
-    fprintf(out_logfile,
-        "Usage: mdtest [-b branching_factor] [-B] [-c] [-C] [-d testdir] [-D] [-e number_of_bytes_to_read]\n"
-        "              [-E] [-f first] [-F] [-h] [-i iterations] [-I items_per_dir] [-k] [-l last] [-L]\n"
-        "              [-n number_of_items] [-N stride_length] [-p seconds] [-r]\n"
-        "              [-R[seed]] [-s stride] [-S] [-t] [-T] [-u] [-v] [-a API]\n"
-        "              [-V verbosity_value] [-w number_of_bytes_to_write] [-W seconds] [-y] [-z depth] -Z\n"
-        "\t-a: %s\n"
-        "\t-b: branching factor of hierarchical directory structure\n"
-        "\t-B: no barriers between phases\n"
-        "\t-c: collective creates: task 0 does all creates\n"
-        "\t-C: only create files/dirs\n"
-        "\t-d: the directory in which the tests will run\n"
-        "\t-D: perform test on directories only (no files)\n"
-        "\t-e: bytes to read from each file\n"
-        "\t-E: only read files/dir\n"
-        "\t-f: first number of tasks on which the test will run\n"
-        "\t-F: perform test on files only (no directories)\n"
-        "\t-h: prints this help message\n"
-        "\t-i: number of iterations the test will run\n"
-        "\t-I: number of items per directory in tree\n"
-        "\t-k: use mknod\n"
-        "\t-l: last number of tasks on which the test will run\n"
-        "\t-L: files only at leaf level of tree\n"
-        "\t-n: every process will creat/stat/read/remove # directories and files\n"
-        "\t-N: stride # between neighbor tasks for file/dir operation (local=0)\n"
-        "\t-p: pre-iteration delay (in seconds)\n"
-        "\t-r: only remove files or directories left behind by previous runs\n"
-        "\t-R: randomly stat files (optional argument for random seed)\n"
-        "\t-s: stride between the number of nodes for each test\n"
-        "\t-S: shared file access (file only, no directories)\n"
-        "\t-t: time unique working directory overhead\n"
-        "\t-T: only stat files/dirs\n"
-        "\t-u: unique working directory for each task\n"
-        "\t-v: verbosity (each instance of option increments by one)\n"
-        "\t-V: verbosity value\n"
-        "\t-w: bytes to write to each file after it is created\n"
-        "\t-W: number in seconds; stonewall timer, write as many seconds and ensure all processes did the same number of operations (currently only stops during create phase)\n"
-        "\t-x: StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs\n"
-        "\t-y: sync file after writing\n"
-        "\t-z: depth of hierarchical directory structure\n"
-        "\t-Z: print time instead of rate\n",
-        apiStr
-        );
-
-    MPI_Initialized(&j);
-    if (j) {
-        MPI_Finalize();
-    }
-    exit(0);
 }
 
 void summarize_results(int iterations) {
