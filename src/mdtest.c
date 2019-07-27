@@ -635,19 +635,13 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
         }
 
         if (-1 == backend->stat (item, &buf, &param)) {
-            if (dirs) {
-                if ( verbose >= 3 ) {
-                    fprintf( out_logfile, "V-3: Stat'ing directory \"%s\"\n", item );
-                    fflush( out_logfile );
-                }
-                FAIL("unable to stat directory");
-            } else {
-                if ( verbose >= 3 ) {
-                    fprintf( out_logfile, "V-3: Stat'ing file \"%s\"\n", item );
-                    fflush( out_logfile );
-                }
-                FAIL("unable to stat file");
+            char msg_buf[4096];
+            if ( verbose >=3 ) {
+                fprintf( out_logfile, "V-3: Stat'ing %s \"%s\"\n", dirs ? "directory" : "file", item );
+                fflush( out_logfile );
             }
+            snprintf(msg_buf, 4096, "unable to stat %s %s", dirs ? "directory" : "file", item);
+            FAIL("unable to stat directory");
         }
     }
 }
