@@ -2067,11 +2067,13 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     VERBOSE(3,-1,"main (before display_freespace): testdirpath is '%s'", testdirpath );
 
     if (rank == 0) display_freespace(testdirpath);
-    int packedByNode = QueryNodeMapping(testComm);
+    int tasksBlockMapping = QueryNodeMapping(testComm);
 
     /* set the shift to mimic IOR and shift by procs per node */
     if (nstride > 0) {
-        if ( nodeCount > 1 && packedByNode ) {
+        if ( nodeCount > 1 && tasksBlockMapping ) {
+            /* the user set the stride presumably to get the consumer tasks on a different node than the producer tasks
+               however, if the mpirun scheduler placed the tasks by-slot (in a contiguous block) then we need to adjust the shift by ppn */
             nstride *= tasksPerNode;
         }
         VERBOSE(0,5,"Shifting ranks by %d for each phase.", nstride);

@@ -939,7 +939,7 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
                 params->testComm = com;
                 params->nodes = params->numTasks / tasksPerNode;
                 params->tasksPerNode = tasksPerNode;
-                params->packedTasks = QueryNodeMapping(com);
+                params->tasksBlockMapping = QueryNodeMapping(com);
                 if (params->numTasks == 0) {
                   params->numTasks = size;
                 }
@@ -1361,11 +1361,9 @@ static void TestIoSys(IOR_test_t *test)
                         }
                         if (params->reorderTasks) {
                                 /* move two nodes away from writing node */
-                                int shift = 1;
-                                if (params->packedTasks) {
-                                    shift = params->tasksPerNode;
-                                } else {
-                                    shift = 1;
+                                int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
+                                if (params->tasksBlockMapping) {
+                                    shift = params->tasksPerNode; /* switch to by-slot (contiguous block) mapping */
                                 }
                                 rankOffset = (2 * shift) % params->numTasks;
                         }
@@ -1403,11 +1401,9 @@ static void TestIoSys(IOR_test_t *test)
                         /* Constant process offset reading */
                         if (params->reorderTasks) {
                                 /* move one node away from writing node */ 
-                                int shift = 1;
-                                if (params->packedTasks) {
-                                    shift=params->tasksPerNode;
-                                } else {
-                                    shift=1;
+                                int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
+                                if (params->tasksBlockMapping) {
+                                    shift=params->tasksPerNode; /* switch to a by-slot (contiguous block) mapping */
                                 }
                                 rankOffset = (params->taskPerNodeOffset * shift) % params->numTasks;
                         }
