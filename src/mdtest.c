@@ -288,11 +288,11 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
 
     if (create) {
         if (backend->mkdir(curr_item, DIRMODE, &param) == -1) {
-            FAIL("unable to create directory");
+            FAIL("unable to create directory %s", curr_item);
         }
     } else {
         if (backend->rmdir(curr_item, &param) == -1) {
-            FAIL("unable to remove directory");
+            FAIL("unable to remove directory %s", curr_item);
         }
     }
 }
@@ -334,7 +334,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 	else
             aiori_fh = backend->open (curr_item, &param);
         if (NULL == aiori_fh) {
-            FAIL("unable to open file");
+            FAIL("unable to open file %s", curr_item);
         }
 
         /*
@@ -351,7 +351,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 	else
             aiori_fh = backend->create (curr_item, &param);
         if (NULL == aiori_fh) {
-            FAIL("unable to create file");
+            FAIL("unable to create file %s", curr_item);
         }
     }
 
@@ -365,7 +365,7 @@ static void create_file (const char *path, uint64_t itemNum) {
         param.offset = 0;
         param.fsyncPerWrite = sync_file;
         if ( write_bytes != (size_t) backend->xfer (WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, &param)) {
-            FAIL("unable to write file");
+            FAIL("unable to write file %s", curr_item);
         }
     }
 
@@ -422,7 +422,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
             param.openFlags = IOR_WRONLY | IOR_CREAT;
             aiori_fh = backend->create (curr_item, &param);
             if (NULL == aiori_fh) {
-                FAIL("unable to create file");
+                FAIL("unable to create file %s", curr_item);
             }
 
             backend->close (aiori_fh, &param);
@@ -586,9 +586,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
         /* below temp used to be hiername */
         VERBOSE(3,5,"mdtest_stat %4s: %s", (dirs ? "dir" : "file"), item);
         if (-1 == backend->stat (item, &buf, &param)) {
-            char msg_buf[4096];
-            snprintf(msg_buf, 4096, "unable to stat %s %s", dirs ? "directory" : "file", item);
-            FAIL(msg_buf);
+            FAIL("unable to stat %s %s", dirs ? "directory" : "file", item);
         }
     }
 }
@@ -679,13 +677,13 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         param.openFlags = O_RDONLY;
         aiori_fh = backend->open (item, &param);
         if (NULL == aiori_fh) {
-            FAIL("unable to open file");
+            FAIL("unable to open file %s", item);
         }
 
         /* read file */
         if (read_bytes > 0) {
             if (read_bytes != (size_t) backend->xfer (READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, &param)) {
-                FAIL("unable to read file");
+                FAIL("unable to read file %s", item);
             }
         }
 
@@ -1342,7 +1340,7 @@ void summarize_results(int iterations) {
 void valid_tests() {
 
     if (((stone_wall_timer_seconds > 0) && (branch_factor > 1)) || ! barriers) {
-        FAIL( "Error, stone wall timer does only work with a branch factor <= 1 and with barriers\n");
+        FAIL( "Error, stone wall timer does only work with a branch factor <= 1 (current is %d) and with barriers\n", branch_factor);
     }
 
     if (!create_only && !stat_only && !read_only && !remove_only) {
@@ -1446,7 +1444,7 @@ void show_file_system_size(char *file_system) {
 
     ret = backend->statfs (file_system, &stat_buf, &param);
     if (0 != ret) {
-        FAIL("unable to stat file system");
+        FAIL("unable to stat file system %s", file_system);
     }
 
     total_file_system_size = stat_buf.f_blocks * stat_buf.f_bsize;
@@ -1469,7 +1467,7 @@ void show_file_system_size(char *file_system) {
         * 100;
 
     if (realpath(file_system, real_path) == NULL) {
-        FAIL("unable to use realpath()");
+        FAIL("unable to use realpath() on file system %s", file_system);
     }
 
 
@@ -1539,7 +1537,7 @@ void create_remove_directory_tree(int create,
         if (!create) {
             VERBOSE(2,5,"Remove directory '%s'", dir);
             if (-1 == backend->rmdir(dir, &param)) {
-                FAIL("Unable to remove directory");
+                FAIL("Unable to remove directory %s", dir);
             }
         }
     } else if (currDepth <= depth) {
@@ -1555,7 +1553,7 @@ void create_remove_directory_tree(int create,
             if (create) {
                 VERBOSE(2,5,"Making directory '%s'", temp_path);
                 if (-1 == backend->mkdir(temp_path, DIRMODE, &param)) {
-                    FAIL("Unable to create directory");
+                    FAIL("Unable to create directory %s", temp_path);
                 }
             }
 
@@ -1566,7 +1564,7 @@ void create_remove_directory_tree(int create,
             if (!create) {
                 VERBOSE(2,5,"Remove directory '%s'", temp_path);
                 if (-1 == backend->rmdir(temp_path, &param)) {
-                    FAIL("Unable to remove directory");
+                    FAIL("Unable to remove directory %s", temp_path);
                 }
             }
 
@@ -1596,7 +1594,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
     VERBOSE(2,5,"main (for j loop): making testdir, '%s'", testdir );
     if ((rank < path_count) && backend->access(testdir, F_OK, &param) != 0) {
         if (backend->mkdir(testdir, DIRMODE, &param) != 0) {
-            FAIL("Unable to create test directory");
+            FAIL("Unable to create test directory %s", testdir);
         }
     }
   }
@@ -1772,7 +1770,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
         if ((rank < path_count) && backend->access(testdir, F_OK, &param) == 0) {
             //if (( rank == 0 ) && access(testdir, F_OK) == 0) {
             if (backend->rmdir(testdir, &param) == -1) {
-                FAIL("unable to remove directory");
+                FAIL("unable to remove directory %s", testdir);
             }
         }
       }
@@ -2049,7 +2047,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (path_count == 0) { /* special case where no directory path provided with '-d' option */
         char *ret = getcwd(testdirpath, MAX_PATHLEN);
         if (ret == NULL) {
-            FAIL("Unable to get current working directory");
+            FAIL("Unable to get current working directory on %s", testdirpath);
         }
         path_count = 1;
     } else {
@@ -2059,7 +2057,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /*   if directory does not exist, create it */
     if ((rank < path_count) && backend->access(testdirpath, F_OK, &param) != 0) {
         if (backend->mkdir(testdirpath, DIRMODE, &param) != 0) {
-            FAIL("Unable to create test directory path");
+            FAIL("Unable to create test directory path %s", testdirpath);
         }
     }
 

@@ -20,6 +20,7 @@
 #  define _GNU_SOURCE            /* Needed for O_DIRECT in fcntl */
 #endif                           /* __linux__ */
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -75,6 +76,17 @@ void* safeMalloc(uint64_t size){
   return d;
 }
 
+void FailMessage(int rank, const char *location, char *format, ...) {
+    char msg[4096];                                                  
+    va_list args;
+    va_start(args, format);
+    vsnprintf(msg, 4096, format, args);
+    va_end(args);
+    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n", 
+                PrintTimestamp(), rank, location, msg, strerror(errno));                               
+    fflush(out_logfile);                                        
+    MPI_Abort(testComm, 1);                                    
+}
 
 size_t NodeMemoryStringToBytes(char *size_str)
 {

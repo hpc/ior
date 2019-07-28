@@ -36,22 +36,13 @@ extern enum OutputFormat_t outputFormat;  /* format of the output */
 
 
 #ifdef __linux__
-#define FAIL(msg) do {                                                   \
-        fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n",   \
-                PrintTimestamp(), rank, __func__,                       \
-                msg, strerror(errno));                                   \
-        fflush(out_logfile);                                             \
-        MPI_Abort(testComm, 1);                                          \
-    } while(0)
+#define ERROR_LOCATION __func__
 #else
-#define FAIL(msg) do {                                                   \
-        fprintf(out_logfile, "%s: Process %d: FAILED at %d, %s: %s\n",   \
-                PrintTimestamp(), rank, __LINE__,                       \
-                msg, strerror(errno));                                   \
-        fflush(out_logfile);                                             \
-        MPI_Abort(testComm, 1);                                          \
-    } while(0)
+#define ERROR_LOCATION __LINE__
 #endif
+
+#define FAIL(...) FailMessage(rank, ERROR_LOCATION, __VA_ARGS__)
+void FailMessage(int rank, const char *location, char *format, ...);
 
 void* safeMalloc(uint64_t size);
 void set_o_direct_flag(int *fd);
