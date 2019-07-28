@@ -284,7 +284,7 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
 
     //create dirs
     sprintf(curr_item, "%s/dir.%s%" PRIu64, path, create ? mk_name : rm_name, itemNum);
-    VERBOSE(3,5,"create_remove_items_helper (dirs %s): curr_item is \"%s\"", operation, curr_item);
+    VERBOSE(3,5,"create_remove_items_helper (dirs %s): curr_item is '%s'", operation, curr_item);
 
     if (create) {
         if (backend->mkdir(curr_item, DIRMODE, &param) == -1) {
@@ -306,7 +306,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
 
     //remove files
     sprintf(curr_item, "%s/file.%s"LLU"", path, rm_name, itemNum);
-    VERBOSE(3,5,"create_remove_items_helper (non-dirs remove): curr_item is \"%s\"", curr_item);
+    VERBOSE(3,5,"create_remove_items_helper (non-dirs remove): curr_item is '%s'", curr_item);
     if (!(shared_file && rank != 0)) {
         backend->delete (curr_item, &param);
     }
@@ -322,7 +322,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 
     //create files
     sprintf(curr_item, "%s/file.%s"LLU"", path, mk_name, itemNum);
-    VERBOSE(3,5,"create_remove_items_helper (non-dirs create): curr_item is \"%s\"", curr_item);
+    VERBOSE(3,5,"create_remove_items_helper (non-dirs create): curr_item is '%s'", curr_item);
 
     if (collective_creates) {
         param.openFlags = IOR_WRONLY;
@@ -453,7 +453,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
     memset(dir, 0, MAX_PATHLEN);
     strcpy(temp_path, path);
 
-    VERBOSE(3,5,"create_remove_items (start): temp_path is \"%s\"", temp_path );
+    VERBOSE(3,5,"create_remove_items (start): temp_path is '%s'", temp_path );
 
     if (currDepth == 0) {
         /* create items at this depth */
@@ -479,7 +479,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
             strcat(temp_path, "/");
             strcat(temp_path, dir);
 
-            VERBOSE(3,5,"create_remove_items (for loop): temp_path is \"%s\"", temp_path );
+            VERBOSE(3,5,"create_remove_items (for loop): temp_path is '%s'", temp_path );
 
             /* create the items in this branch */
             if (!leaf_only || (leaf_only && currDepth == depth)) {
@@ -742,7 +742,7 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
         }
 
         /* Now that everything is set up as it should be, do the create or remove */
-        VERBOSE(3,5,"collective_create_remove (create_remove_items): temp is \"%s\"", temp);
+        VERBOSE(3,5,"collective_create_remove (create_remove_items): temp is '%s'", temp);
 
         create_remove_items(0, dirs, create, 1, temp, 0, progress);
     }
@@ -799,7 +799,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             sprintf( temp_path, "%s/%s", testdir, path );
         }
 
-        VERBOSE(3,-1,"directory_test: create path is \"%s\"", temp_path );
+        VERBOSE(3,-1,"directory_test: create path is '%s'", temp_path );
 
         /* "touch" the files */
         if (collective_creates) {
@@ -831,7 +831,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             sprintf( temp_path, "%s/%s", testdir, path );
         }
 
-        VERBOSE(3,5,"stat path is \"%s\"", temp_path );
+        VERBOSE(3,5,"stat path is '%s'", temp_path );
 
         /* stat directories */
         if (random_seed > 0) {
@@ -860,7 +860,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             sprintf( temp_path, "%s/%s", testdir, path );
         }
 
-        VERBOSE(3,5,"directory_test: read path is \"%s\"", temp_path );
+        VERBOSE(3,5,"directory_test: read path is '%s'", temp_path );
 
         /* read directories */
         if (random_seed > 0) {
@@ -888,7 +888,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             sprintf( temp_path, "%s/%s", testdir, path );
         }
 
-        VERBOSE(3,5,"directory_test: remove directories path is \"%s\"", temp_path );
+        VERBOSE(3,5,"directory_test: remove directories path is '%s'", temp_path );
 
         /* remove directories */
         if (collective_creates) {
@@ -913,7 +913,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             sprintf( temp_path, "%s/%s", testdir, path );
         }
 
-        VERBOSE(3,5,"directory_test: remove unique directories path is \"%s\"\n", temp_path );
+        VERBOSE(3,5,"directory_test: remove unique directories path is '%s'\n", temp_path );
     }
 
     if (unique_dir_per_task && !time_unique_dir_overhead) {
@@ -1010,7 +1010,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
 
 
-        VERBOSE(3,-1,"file_test: create path is \"%s\"", temp_path );
+        VERBOSE(3,-1,"file_test: create path is '%s'", temp_path );
 
         /* "touch" the files */
         if (collective_creates) {
@@ -1077,7 +1077,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             sprintf( temp_path, "%s/%s", testdir, path );
         }
 
-        VERBOSE(3,5,"file_test: stat path is \"%s\"", temp_path );
+        VERBOSE(3,5,"file_test: stat path is '%s'", temp_path );
 
         /* stat files */
         mdtest_stat((random_seed > 0 ? 1 : 0), 0, dir_iter, temp_path, progress);
@@ -1102,7 +1102,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             sprintf( temp_path, "%s/%s", testdir, path );
         }
 
-        VERBOSE(3,5,"file_test: read path is \"%s\"", temp_path );
+        VERBOSE(3,5,"file_test: read path is '%s'", temp_path );
 
         /* read files */
         if (random_seed > 0) {
@@ -1132,7 +1132,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             sprintf( temp_path, "%s/%s", testdir, path );
         }
 
-        VERBOSE(3,5,"file_test: rm directories path is \"%s\"", temp_path );
+        VERBOSE(3,5,"file_test: rm directories path is '%s'", temp_path );
 
         if (collective_creates) {
             if (rank == 0) {
@@ -1156,7 +1156,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             strcpy( temp_path, path );
         }
 
-        VERBOSE(3,5,"file_test: rm unique directories path is \"%s\"", temp_path );
+        VERBOSE(3,5,"file_test: rm unique directories path is '%s'", temp_path );
     }
 
     if (unique_dir_per_task && !time_unique_dir_overhead) {
@@ -1508,9 +1508,9 @@ void display_freespace(char *testdirpath)
         strcpy(dirpath, ".");
     }
 
-    VERBOSE(3,5,"Before show_file_system_size, dirpath is \"%s\"", dirpath );
+    VERBOSE(3,5,"Before show_file_system_size, dirpath is '%s'", dirpath );
     show_file_system_size(dirpath);
-    VERBOSE(3,5, "After show_file_system_size, dirpath is \"%s\"\n", dirpath );
+    VERBOSE(3,5, "After show_file_system_size, dirpath is '%s'\n", dirpath );
 
     return;
 }
@@ -1528,16 +1528,16 @@ void create_remove_directory_tree(int create,
         sprintf(dir, "%s/%s.%d/", path, base_tree_name, dirNum);
 
         if (create) {
-            VERBOSE(2,5,"Making directory \"%s\"", dir);
+            VERBOSE(2,5,"Making directory '%s'", dir);
             if (-1 == backend->mkdir (dir, DIRMODE, &param)) {
-                fprintf(out_logfile, "error could not create directory \"%s\"\n", dir);
+                fprintf(out_logfile, "error could not create directory '%s'\n", dir);
             }
         }
 
         create_remove_directory_tree(create, ++currDepth, dir, ++dirNum, progress);
 
         if (!create) {
-            VERBOSE(2,5,"Remove directory \"%s\"", dir);
+            VERBOSE(2,5,"Remove directory '%s'", dir);
             if (-1 == backend->rmdir(dir, &param)) {
                 FAIL("Unable to remove directory");
             }
@@ -1553,7 +1553,7 @@ void create_remove_directory_tree(int create,
             strcat(temp_path, dir);
 
             if (create) {
-                VERBOSE(2,5,"Making directory \"%s\"", temp_path);
+                VERBOSE(2,5,"Making directory '%s'", temp_path);
                 if (-1 == backend->mkdir(temp_path, DIRMODE, &param)) {
                     FAIL("Unable to create directory");
                 }
@@ -1564,7 +1564,7 @@ void create_remove_directory_tree(int create,
             currDepth--;
 
             if (!create) {
-                VERBOSE(2,5,"Remove directory \"%s\"", temp_path);
+                VERBOSE(2,5,"Remove directory '%s'", temp_path);
                 if (-1 == backend->rmdir(temp_path, &param)) {
                     FAIL("Unable to remove directory");
                 }
@@ -1593,7 +1593,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
   for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
     prep_testdir(j, dir_iter);
 
-    VERBOSE(2,5,"main (for j loop): making testdir, \"%s\"", testdir );
+    VERBOSE(2,5,"main (for j loop): making testdir, '%s'", testdir );
     if ((rank < path_count) && backend->access(testdir, F_OK, &param) != 0) {
         if (backend->mkdir(testdir, DIRMODE, &param) != 0) {
             FAIL("Unable to create test directory");
@@ -1618,7 +1618,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
                 for (k=0; k<size; k++) {
                     sprintf(base_tree_name, "mdtest_tree.%d", k);
 
-                    VERBOSE(3,5,"main (create hierarchical directory loop-collective): Calling create_remove_directory_tree with \"%s\"", testdir );
+                    VERBOSE(3,5,"main (create hierarchical directory loop-collective): Calling create_remove_directory_tree with '%s'", testdir );
                     /*
                      * Let's pass in the path to the directory we most recently made so that we can use
                      * full paths in the other calls.
@@ -1630,7 +1630,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
                     }
                 }
             } else if (!collective_creates) {
-                VERBOSE(3,5,"main (create hierarchical directory loop-!collective_creates): Calling create_remove_directory_tree with \"%s\"", testdir );
+                VERBOSE(3,5,"main (create hierarchical directory loop-!collective_creates): Calling create_remove_directory_tree with '%s'", testdir );
                 /*
                  * Let's pass in the path to the directory we most recently made so that we can use
                  * full paths in the other calls.
@@ -1639,7 +1639,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
             }
         } else {
             if (rank == 0) {
-                VERBOSE(3,5,"main (create hierarchical directory loop-!unque_dir_per_task): Calling create_remove_directory_tree with \"%s\"", testdir );
+                VERBOSE(3,5,"main (create hierarchical directory loop-!unque_dir_per_task): Calling create_remove_directory_tree with '%s'", testdir );
 
                 /*
                  * Let's pass in the path to the directory we most recently made so that we can use
@@ -1666,7 +1666,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
   unique_rm_uni_dir[0] = 0;
 
   if (!unique_dir_per_task) {
-    VERBOSE(3,-1,"V-3: main: Using unique_mk_dir, \"%s\"", unique_mk_dir );
+    VERBOSE(3,-1,"V-3: main: Using unique_mk_dir, '%s'", unique_mk_dir );
   }
 
   if (rank < i) {
@@ -1687,7 +1687,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
           VERBOSE(5,5,"mk_dir %s chdir %s stat_dir %s read_dir %s rm_dir %s\n", unique_mk_dir,unique_chdir_dir,unique_stat_dir,unique_read_dir,unique_rm_dir);
       }
 
-      VERBOSE(3,-1,"V-3: main: Copied unique_mk_dir, \"%s\", to topdir", unique_mk_dir );
+      VERBOSE(3,-1,"V-3: main: Copied unique_mk_dir, '%s', to topdir", unique_mk_dir );
 
       if (dirs_only && !shared_file) {
           if (pre_delay) {
@@ -1706,7 +1706,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   /* remove directory structure */
   if (!unique_dir_per_task) {
-      VERBOSE(3,-1,"main: Using testdir, \"%s\"", testdir );
+      VERBOSE(3,-1,"main: Using testdir, '%s'", testdir );
   }
 
   MPI_Barrier(testComm);
@@ -1724,7 +1724,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
                 for (k=0; k<size; k++) {
                     sprintf(base_tree_name, "mdtest_tree.%d", k);
 
-                    VERBOSE(3,-1,"main (remove hierarchical directory loop-collective): Calling create_remove_directory_tree with \"%s\"", testdir );
+                    VERBOSE(3,-1,"main (remove hierarchical directory loop-collective): Calling create_remove_directory_tree with '%s'", testdir );
 
                     /*
                      * Let's pass in the path to the directory we most recently made so that we can use
@@ -1737,7 +1737,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
                     }
                 }
             } else if (!collective_creates) {
-                VERBOSE(3,-1,"main (remove hierarchical directory loop-!collective): Calling create_remove_directory_tree with \"%s\"", testdir );
+                VERBOSE(3,-1,"main (remove hierarchical directory loop-!collective): Calling create_remove_directory_tree with '%s'", testdir );
 
                 /*
                  * Let's pass in the path to the directory we most recently made so that we can use
@@ -1747,7 +1747,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
             }
         } else {
             if (rank == 0) {
-                VERBOSE(3,-1,"V-3: main (remove hierarchical directory loop-!unique_dir_per_task): Calling create_remove_directory_tree with \"%s\"", testdir );
+                VERBOSE(3,-1,"V-3: main (remove hierarchical directory loop-!unique_dir_per_task): Calling create_remove_directory_tree with '%s'", testdir );
 
                 /*
                  * Let's pass in the path to the directory we most recently made so that we can use
@@ -1765,7 +1765,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
       summary_table->items[9] = num_dirs_in_tree;
       summary_table->stonewall_last_item[8] = num_dirs_in_tree;
       VERBOSE(1,-1,"main   Tree removal      : %14.3f sec, %14.3f ops/sec", (endCreate - startCreate), summary_table->rate[9]);
-      VERBOSE(2,-1,"main (at end of for j loop): Removing testdir of \"%s\"\n", testdir );
+      VERBOSE(2,-1,"main (at end of for j loop): Removing testdir of '%s'\n", testdir );
 
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
@@ -1900,7 +1900,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     char cmd_buffer[4096];
     strncpy(cmd_buffer, argv[0], 4096);
     for (i = 1; i < argc; i++) {
-        snprintf(&cmd_buffer[strlen(cmd_buffer)], 4096-strlen(cmd_buffer), " \"%s\"", argv[i]);
+        snprintf(&cmd_buffer[strlen(cmd_buffer)], 4096-strlen(cmd_buffer), " '%s'", argv[i]);
     }
 
     VERBOSE(0,-1,"-- started at %s --\n", PrintTimestamp());
@@ -2064,7 +2064,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     /* display disk usage */
-    VERBOSE(3,-1,"main (before display_freespace): testdirpath is \"%s\"", testdirpath );
+    VERBOSE(3,-1,"main (before display_freespace): testdirpath is '%s'", testdirpath );
 
     if (rank == 0) display_freespace(testdirpath);
     int packedByNode = QueryNodeMapping(testComm);
@@ -2077,7 +2077,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         VERBOSE(0,5,"Shifting ranks by %d for each phase.", nstride);
     }
 
-    VERBOSE(3,-1,"main (after display_freespace): testdirpath is \"%s\"", testdirpath );
+    VERBOSE(3,-1,"main (after display_freespace): testdirpath is '%s'", testdirpath );
 
     if (rank == 0) {
         if (random_seed > 0) {
