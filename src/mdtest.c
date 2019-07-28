@@ -551,12 +551,12 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
         /* create name of file/dir to stat */
         if (dirs) {
-            if ((i%ITEM_COUNT == 0) && (i != 0)) {
+            if ( (i % ITEM_COUNT == 0) && (i != 0)) {
                 VERBOSE(3,5,"stat dir: "LLU"", i);
             }
             sprintf(item, "dir.%s"LLU"", stat_name, item_num);
         } else {
-            if ((i%ITEM_COUNT == 0) && (i != 0)) {
+            if ( (i % ITEM_COUNT == 0) && (i != 0)) {
                 VERBOSE(3,5,"stat file: "LLU"", i);
             }
             sprintf(item, "file.%s"LLU"", stat_name, item_num);
