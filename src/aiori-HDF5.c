@@ -228,17 +228,6 @@ static void *HDF5_Open(char *testFileName, IOR_param_t * param)
                                     param->setAlignment),
                    "cannot set alignment");
 
-#ifdef HAVE_H5PSET_ALL_COLL_METADATA_OPS
-        if (param->collective_md) {
-                /* more scalable metadata */
-
-                HDF5_CHECK(H5Pset_all_coll_metadata_ops(accessPropList, 1),
-                        "cannot set collective md read");
-                HDF5_CHECK(H5Pset_coll_metadata_write(accessPropList, 1),
-                        "cannot set collective md write");
-        }
-#endif
-
         /* open file */
         if (param->open == WRITE) {     /* WRITE */
                 *fd = H5Fcreate(testFileName, fd_mode,
