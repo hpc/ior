@@ -31,7 +31,6 @@
 
 #include <gurt/common.h>
 #include <daos.h>
-#include <daos_addons.h>
 
 #include "ior.h"
 #include "aiori.h"
@@ -326,13 +325,11 @@ DAOS_Fini()
 static void
 gen_oid(const char *name, daos_obj_id_t *oid)
 {
-	daos_ofeat_t feat = 0;
 
 	oid->lo = d_hash_murmur64(name, strlen(name), IOR_DAOS_MUR_SEED);
 	oid->hi = 0;
 
-	feat = DAOS_OF_DKEY_UINT64;
-	daos_obj_generate_id(oid, feat, objectClass, 0);
+	daos_array_generate_id(oid, objectClass, true, 0);
 }
 
 static void *

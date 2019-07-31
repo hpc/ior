@@ -490,11 +490,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                               OC_SX, 0, NULL, &obj);
                 DERR(rc, "dfs_open() of %s Failed", name);
-
-                MPI_CHECK(MPI_Barrier(testComm), "barrier error");
         } else {
-                MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-
                 fd_oflag |= O_RDWR;
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                               OC_SX, 0, NULL, &obj);
