@@ -700,6 +700,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* read file */
         if (read_bytes > 0) {
+            read_buffer[0] = 42;
             if (read_bytes != (size_t) backend->xfer (READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, &param)) {
                 FAIL("unable to read file %s", item);
             }
