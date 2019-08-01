@@ -1862,7 +1862,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'l', NULL,        "last number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & last},
       {'L', NULL,        "files only at leaf level of tree", OPTION_FLAG, 'd', & leaf_only},
       {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & items},
-      {'N', NULL,        "stride # between neighbor tasks for file/dir operation (local=0)", OPTION_OPTIONAL_ARGUMENT, 'd', & nstride},
+      {'N', NULL,        "stride # between tasks for file/dir operation (local=0; set to 1 to avoid client cache)", OPTION_OPTIONAL_ARGUMENT, 'd', & nstride},
       {'p', NULL,        "pre-iteration delay (in seconds)", OPTION_OPTIONAL_ARGUMENT, 'd', & pre_delay},
       {'R', NULL,        "random access to files (only for stat)", OPTION_FLAG, 'd', & randomize},
       {0, "random-seed", "random seed for -R", OPTION_OPTIONAL_ARGUMENT, 'd', & random_seed},
@@ -2065,7 +2065,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     VERBOSE(3,-1,"main (before display_freespace): testdirpath is '%s'", testdirpath );
 
     if (rank == 0) display_freespace(testdirpath);
-    int tasksBlockMapping = QueryNodeMapping(testComm);
+    int tasksBlockMapping = QueryNodeMapping(testComm, true);
 
     /* set the shift to mimic IOR and shift by procs per node */
     if (nstride > 0) {

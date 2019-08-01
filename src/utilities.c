@@ -229,7 +229,7 @@ void DumpBuffer(void *buffer,
    and the value is whether that rank is on the same host as root.
    Also returns 1 if rank 1 is on same host and 0 otherwise
 */
-int QueryNodeMapping(MPI_Comm comm) {
+int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
     char localhost[MAX_PATHLEN], roothost[MAX_PATHLEN];
     int num_ranks;
     MPI_Comm_size(comm, &num_ranks);
@@ -250,7 +250,7 @@ int QueryNodeMapping(MPI_Comm comm) {
     /* then every rank figures out whether it is same host as root and then gathers that */
     int same_as_root = strcmp(roothost,localhost) == 0;
     MPI_Gather( &same_as_root, 1, MPI_INT, node_map, 1, MPI_INT, 0, comm);
-    if (rank==0) {
+    if ( print_nodemap && rank==0) {
         fprintf( out_logfile, "Nodemap: " );
         for ( int i = 0; i < num_ranks; i++ ) {
             fprintf( out_logfile, "%d", node_map[i] );

@@ -939,7 +939,7 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
                 params->testComm = com;
                 params->nodes = params->numTasks / tasksPerNode;
                 params->tasksPerNode = tasksPerNode;
-                params->tasksBlockMapping = QueryNodeMapping(com);
+                params->tasksBlockMapping = QueryNodeMapping(com,false);
                 if (params->numTasks == 0) {
                   params->numTasks = size;
                 }
@@ -1223,7 +1223,7 @@ static void TestIoSys(IOR_test_t *test)
         }
         if (rank == 0 && params->reorderTasks == TRUE && verbose >= VERBOSE_1) {
                 fprintf(out_logfile,
-                        "Using reorderTasks '-C' (expecting block, not cyclic, task assignment)\n");
+                        "Using reorderTasks '-C' (useful to avoid read cache in client)\n");
                 fflush(out_logfile);
         }
         params->tasksPerNode = CountTasksPerNode(testComm);

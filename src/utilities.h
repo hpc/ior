@@ -56,7 +56,7 @@ void SetHints (MPI_Info *, char *);
 void ShowHints (MPI_Info *);
 char *HumanReadable(IOR_offset_t value, int base);
 int CountTasksPerNode(MPI_Comm comm);
-int QueryNodeMapping(MPI_Comm comm);
+int QueryNodeMapping(MPI_Comm comm, int print_nodemap);
 void DelaySecs(int delay);
 void updateParsedOptions(IOR_param_t * options, options_all_t * global_options);
 size_t NodeMemoryStringToBytes(char *size_str);

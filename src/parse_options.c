@@ -471,7 +471,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'A', NULL,        "refNum -- user supplied reference number to include in the summary", OPTION_OPTIONAL_ARGUMENT, 'd', & params->referenceNumber},
     {'b', NULL,        "blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'l', & params->blockSize},
     {'c', NULL,        "collective -- collective I/O", OPTION_FLAG, 'd', & params->collective},
-    {'C', NULL,        "reorderTasks -- changes task ordering to n+1 ordering for readback", OPTION_FLAG, 'd', & params->reorderTasks},
+    {'C', NULL,        "reorderTasks -- changes task ordering for readback (useful to avoid client cache)", OPTION_FLAG, 'd', & params->reorderTasks},
     {'d', NULL,        "interTestDelay -- delay between reps in seconds", OPTION_OPTIONAL_ARGUMENT, 'd', & params->interTestDelay},
     {'D', NULL,        "deadlineForStonewalling -- seconds before stopping write or read phase", OPTION_OPTIONAL_ARGUMENT, 'd', & params->deadlineForStonewalling},
     {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
