@@ -20,6 +20,7 @@
 #  define _GNU_SOURCE            /* Needed for O_DIRECT in fcntl */
 #endif                           /* __linux__ */
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -75,6 +76,17 @@ void* safeMalloc(uint64_t size){
   return d;
 }
 
+void FailMessage(int rank, const char *location, char *format, ...) {
+    char msg[4096];                                                  
+    va_list args;
+    va_start(args, format);
+    vsnprintf(msg, 4096, format, args);
+    va_end(args);
+    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n", 
+                PrintTimestamp(), rank, location, msg, strerror(errno));                               
+    fflush(out_logfile);                                        
+    MPI_Abort(testComm, 1);                                    
+}
 
 size_t NodeMemoryStringToBytes(char *size_str)
 {
@@ -213,11 +225,50 @@ void DumpBuffer(void *buffer,
         return;
 }                               /* DumpBuffer() */
 
+/* a function that prints an int array where each index corresponds to a rank
+   and the value is whether that rank is on the same host as root.
+   Also returns 1 if rank 1 is on same host and 0 otherwise
+*/
+int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
+    char localhost[MAX_PATHLEN], roothost[MAX_PATHLEN];
+    int num_ranks;
+    MPI_Comm_size(comm, &num_ranks);
+    int *node_map = (int*)malloc(sizeof(int) * num_ranks);
+    if ( ! node_map ) {
+        FAIL("malloc");
+    }
+    if (gethostname(localhost, MAX_PATHLEN) != 0) {
+        FAIL("gethostname()");
+    }
+    if (rank==0) {
+        strncpy(roothost,localhost,MAX_PATHLEN);
+    }
+
+    /* have rank 0 broadcast out its hostname */
+    MPI_Bcast(roothost, MAX_PATHLEN, MPI_CHAR, 0, comm);
+    //printf("Rank %d received root host as %s\n", rank, roothost);
+    /* then every rank figures out whether it is same host as root and then gathers that */
+    int same_as_root = strcmp(roothost,localhost) == 0;
+    MPI_Gather( &same_as_root, 1, MPI_INT, node_map, 1, MPI_INT, 0, comm);
+    if ( print_nodemap && rank==0) {
+        fprintf( out_logfile, "Nodemap: " );
+        for ( int i = 0; i < num_ranks; i++ ) {
+            fprintf( out_logfile, "%d", node_map[i] );
+        }
+        fprintf( out_logfile, "\n" );
+    }
+    int ret = node_map[1] == 1;
+    MPI_Bcast(&ret, 1, MPI_INT, 0, comm);
+    free(node_map);
+    return ret;
+}
+
 #if MPI_VERSION >= 3
 int CountTasksPerNode(MPI_Comm comm) {
     /* modern MPI provides a simple way to get the local process count */
     MPI_Comm shared_comm;
     int count;
+
 
     MPI_Comm_split_type (comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm);
     MPI_Comm_size (shared_comm, &count);

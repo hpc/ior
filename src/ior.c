@@ -939,6 +939,7 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
                 params->testComm = com;
                 params->nodes = params->numTasks / tasksPerNode;
                 params->tasksPerNode = tasksPerNode;
+                params->tasksBlockMapping = QueryNodeMapping(com,false);
                 if (params->numTasks == 0) {
                   params->numTasks = size;
                 }
@@ -1222,7 +1223,7 @@ static void TestIoSys(IOR_test_t *test)
         }
         if (rank == 0 && params->reorderTasks == TRUE && verbose >= VERBOSE_1) {
                 fprintf(out_logfile,
-                        "Using reorderTasks '-C' (expecting block, not cyclic, task assignment)\n");
+                        "Using reorderTasks '-C' (useful to avoid read cache in client)\n");
                 fflush(out_logfile);
         }
         params->tasksPerNode = CountTasksPerNode(testComm);
@@ -1360,7 +1361,11 @@ static void TestIoSys(IOR_test_t *test)
                         }
                         if (params->reorderTasks) {
                                 /* move two nodes away from writing node */
-                                rankOffset = (2 * params->tasksPerNode) % params->numTasks;
+                                int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
+                                if (params->tasksBlockMapping) {
+                                    shift = params->tasksPerNode; /* switch to by-slot (contiguous block) mapping */
+                                }
+                                rankOffset = (2 * shift) % params->numTasks;
                         }
 
                         // update the check buffer
@@ -1395,9 +1400,12 @@ static void TestIoSys(IOR_test_t *test)
                         /* Get rankOffset [file offset] for this process to read, based on -C,-Z,-Q,-X options */
                         /* Constant process offset reading */
                         if (params->reorderTasks) {
-                                /* move taskPerNodeOffset nodes[1==default] away from writing node */
-                                rankOffset = (params->taskPerNodeOffset *
-                                          params->tasksPerNode) % params->numTasks;
+                                /* move one node away from writing node */ 
+                                int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
+                                if (params->tasksBlockMapping) {
+                                    shift=params->tasksPerNode; /* switch to a by-slot (contiguous block) mapping */
+                                }
+                                rankOffset = (params->taskPerNodeOffset * shift) % params->numTasks;
                         }
                         /* random process offset reading */
                         if (params->reorderTasksRandom) {
