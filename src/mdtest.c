@@ -131,6 +131,7 @@ static uint64_t items_per_dir;
 static uint64_t num_dirs_in_tree_calc; /* this is a workaround until the overal code is refactored */
 static int directory_loops;
 static int print_time;
+static int print_rate_and_time;
 static int random_seed;
 static int shared_file;
 static int files_only;
@@ -967,10 +968,10 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
   MPI_Reduce(& progress->items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm);
   long long sum_accessed = 0;
   MPI_Reduce(& progress->items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
+  summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
+  summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
 
   if(items != (sum_accessed / size)){
-    summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
-    summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
     VERBOSE(0,-1, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
     hit = 1;
   }
@@ -1192,12 +1193,15 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     }
 
     VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", t[1] - t[0], summary_table[iteration].rate[4]);
+    if(summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM]){
+      VERBOSE(1,-1,"  File creation (stonewall): %14.3f sec, %14.3f ops/sec", summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM], summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM]);
+    }
     VERBOSE(1,-1,"  File stat         : %14.3f sec, %14.3f ops/sec", t[2] - t[1], summary_table[iteration].rate[5]);
     VERBOSE(1,-1,"  File read         : %14.3f sec, %14.3f ops/sec", t[3] - t[2], summary_table[iteration].rate[6]);
     VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", t[4] - t[3], summary_table[iteration].rate[7]);
 }
 
-void summarize_results(int iterations) {
+void summarize_results(int iterations, int print_time) {
     char access[MAX_PATHLEN];
     int i, j, k;
     int start, stop, tableSize = MDTEST_LAST_NUM;
@@ -1210,129 +1214,141 @@ void summarize_results(int iterations) {
 
     MPI_Barrier(testComm);
     for(int i=0; i < iterations; i++){
-      if(print_time){
-        MPI_Gather(& summary_table[i].time[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
-      }else{
-        MPI_Gather(& summary_table[i].rate[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
-      }
+      MPI_Gather(& summary_table[i].time[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
+      MPI_Gather(& summary_table[i].rate[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
     }
 
-    if (rank == 0) {
+    if (rank != 0) {
+      return;
+    }
 
-        VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
-        VERBOSE(0,-1,"   Operation                      Max            Min           Mean        Std Dev");
-        VERBOSE(0,-1,"   ---------                      ---            ---           ----        -------");
+    VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
+    VERBOSE(0,-1,"   Operation                      Max            Min           Mean        Std Dev");
+    VERBOSE(0,-1,"   ---------                      ---            ---           ----        -------");
 
-        /* if files only access, skip entries 0-3 (the dir tests) */
-        if (files_only && !dirs_only) {
-            start = 4;
-        } else {
-            start = 0;
-        }
+    /* if files only access, skip entries 0-3 (the dir tests) */
+    if (files_only && !dirs_only) {
+        start = 4;
+    } else {
+        start = 0;
+    }
 
-        /* if directories only access, skip entries 4-7 (the file tests) */
-        if (dirs_only && !files_only) {
-            stop = 4;
-        } else {
-            stop = 8;
-        }
+    /* if directories only access, skip entries 4-7 (the file tests) */
+    if (dirs_only && !files_only) {
+        stop = 4;
+    } else {
+        stop = 8;
+    }
 
-        /* special case: if no directory or file tests, skip all */
-        if (!dirs_only && !files_only) {
-            start = stop = 0;
-        }
+    /* special case: if no directory or file tests, skip all */
+    if (!dirs_only && !files_only) {
+        start = stop = 0;
+    }
 
-        for (i = start; i < stop; i++) {
-                min = max = all[i];
-                for (k=0; k < size; k++) {
-                    for (j = 0; j < iterations; j++) {
-                        curr = all[(k*tableSize*iterations)
-                                   + (j*tableSize) + i];
-                        if (min > curr) {
-                            min = curr;
-                        }
-                        if (max < curr) {
-                            max =  curr;
-                        }
-                        sum += curr;
-                    }
-                }
-                mean = sum / (iterations * size);
-                for (k=0; k<size; k++) {
-                    for (j = 0; j < iterations; j++) {
-                        var += pow((mean -  all[(k*tableSize*iterations)
-                                                + (j*tableSize) + i]), 2);
-                    }
-                }
-                var = var / (iterations * size);
-                sd = sqrt(var);
-                switch (i) {
-                case 0: strcpy(access, "Directory creation:"); break;
-                case 1: strcpy(access, "Directory stat    :"); break;
-                    /* case 2: strcpy(access, "Directory read    :"); break; */
-                case 2: ;                                      break; /* N/A */
-                case 3: strcpy(access, "Directory removal :"); break;
-                case 4: strcpy(access, "File creation     :"); break;
-                case 5: strcpy(access, "File stat         :"); break;
-                case 6: strcpy(access, "File read         :"); break;
-                case 7: strcpy(access, "File removal      :"); break;
-                default: strcpy(access, "ERR");                 break;
-                }
-                if (i != 2) {
-                    fprintf(out_logfile, "   %s ", access);
-                    fprintf(out_logfile, "%14.3f ", max);
-                    fprintf(out_logfile, "%14.3f ", min);
-                    fprintf(out_logfile, "%14.3f ", mean);
-                    fprintf(out_logfile, "%14.3f\n", sd);
-                    fflush(out_logfile);
-                }
-                sum = var = 0;
-
-        }
-
-        /* calculate tree create/remove rates */
-        for (i = 8; i < tableSize; i++) {
+    for (i = start; i < stop; i++) {
             min = max = all[i];
-            for (j = 0; j < iterations; j++) {
-                if(print_time){
-                  curr = summary_table[j].time[i];
-                }else{
-                  curr = summary_table[j].rate[i];
+            for (k=0; k < size; k++) {
+                for (j = 0; j < iterations; j++) {
+                    curr = all[(k*tableSize*iterations)
+                               + (j*tableSize) + i];
+                    if (min > curr) {
+                        min = curr;
+                    }
+                    if (max < curr) {
+                        max =  curr;
+                    }
+                    sum += curr;
                 }
-
-                if (min > curr) {
-                    min = curr;
-                }
-                if (max < curr) {
-                    max =  curr;
-                }
-                sum += curr;
             }
-            mean = sum / (iterations);
-            for (j = 0; j < iterations; j++) {
-                if(print_time){
-                  curr = summary_table[j].time[i];
-                }else{
-                  curr = summary_table[j].rate[i];
+            mean = sum / (iterations * size);
+            for (k=0; k<size; k++) {
+                for (j = 0; j < iterations; j++) {
+                    var += pow((mean -  all[(k*tableSize*iterations)
+                                            + (j*tableSize) + i]), 2);
                 }
-
-                var += pow((mean -  curr), 2);
             }
-            var = var / (iterations);
+            var = var / (iterations * size);
             sd = sqrt(var);
             switch (i) {
-            case 8: strcpy(access, "Tree creation     :"); break;
-            case 9: strcpy(access, "Tree removal      :"); break;
+            case 0: strcpy(access, "Directory creation        :"); break;
+            case 1: strcpy(access, "Directory stat            :"); break;
+                /* case 2: strcpy(access, "Directory read    :"); break; */
+            case 2: ;                                      break; /* N/A */
+            case 3: strcpy(access, "Directory removal         :"); break;
+            case 4: strcpy(access, "File creation             :"); break;
+            case 5: strcpy(access, "File stat                 :"); break;
+            case 6: strcpy(access, "File read                 :"); break;
+            case 7: strcpy(access, "File removal              :"); break;
             default: strcpy(access, "ERR");                 break;
             }
-            fprintf(out_logfile, "   %s ", access);
-            fprintf(out_logfile, "%14.3f ", max);
-            fprintf(out_logfile, "%14.3f ", min);
-            fprintf(out_logfile, "%14.3f ", mean);
-            fprintf(out_logfile, "%14.3f\n", sd);
-            fflush(out_logfile);
+            if (i != 2) {
+                fprintf(out_logfile, "   %s ", access);
+                fprintf(out_logfile, "%14.3f ", max);
+                fprintf(out_logfile, "%14.3f ", min);
+                fprintf(out_logfile, "%14.3f ", mean);
+                fprintf(out_logfile, "%14.3f\n", sd);
+                fflush(out_logfile);
+            }
             sum = var = 0;
+
+    }
+
+    // TODO generalize once more stonewall timers are supported
+    double stonewall_time = 0;
+    uint64_t stonewall_items = 0;
+    for(int i=0; i < iterations; i++){
+      if(summary_table[i].stonewall_time[MDTEST_FILE_CREATE_NUM]){
+        stonewall_time += summary_table[i].stonewall_time[MDTEST_FILE_CREATE_NUM];
+        stonewall_items += summary_table[i].stonewall_item_sum[MDTEST_FILE_CREATE_NUM];
+      }
+    }
+    if(stonewall_items != 0){
+      fprintf(out_logfile, "   File create (stonewall)   : ");
+      fprintf(out_logfile, "%14s %14s %14.3f %14s\n", "NA", "NA", print_time ? stonewall_time :  stonewall_items / stonewall_time, "NA");
+    }
+
+    /* calculate tree create/remove rates */
+    for (i = 8; i < tableSize; i++) {
+        min = max = all[i];
+        for (j = 0; j < iterations; j++) {
+            if(print_time){
+              curr = summary_table[j].time[i];
+            }else{
+              curr = summary_table[j].rate[i];
+            }
+
+            if (min > curr) {
+                min = curr;
+            }
+            if (max < curr) {
+                max =  curr;
+            }
+            sum += curr;
         }
+        mean = sum / (iterations);
+        for (j = 0; j < iterations; j++) {
+            if(print_time){
+              curr = summary_table[j].time[i];
+            }else{
+              curr = summary_table[j].rate[i];
+            }
+
+            var += pow((mean -  curr), 2);
+        }
+        var = var / (iterations);
+        sd = sqrt(var);
+        switch (i) {
+        case 8: strcpy(access, "Tree creation             :"); break;
+        case 9: strcpy(access, "Tree removal              :"); break;
+        default: strcpy(access, "ERR");                 break;
+        }
+        fprintf(out_logfile, "   %s ", access);
+        fprintf(out_logfile, "%14.3f ", max);
+        fprintf(out_logfile, "%14.3f ", min);
+        fprintf(out_logfile, "%14.3f ", mean);
+        fprintf(out_logfile, "%14.3f\n", sd);
+        fflush(out_logfile);
+        sum = var = 0;
     }
 }
 
@@ -1473,7 +1489,7 @@ void show_file_system_size(char *file_system) {
 
     /* show results */
     VERBOSE(0,-1,"Path: %s", real_path);
-    VERBOSE(0,-1,"FS: %.1f %s   Used FS: %2.1f%%   Inodes: %.1f %s   Used Inodes: %2.1f%%\n", 
+    VERBOSE(0,-1,"FS: %.1f %s   Used FS: %2.1f%%   Inodes: %.1f %s   Used Inodes: %2.1f%%\n",
             total_file_system_size_hr, file_system_unit_str, used_file_system_percentage,
             (double)total_inodes / (double)inode_unit_val, inode_unit_str, used_inode_percentage);
 
@@ -1794,6 +1810,7 @@ void mdtest_init_args(){
    items_per_dir = 0;
    random_seed = 0;
    print_time = 0;
+   print_rate_and_time = 0;
    shared_file = 0;
    files_only = 0;
    dirs_only = 0;
@@ -1864,6 +1881,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & items},
       {'N', NULL,        "stride # between tasks for file/dir operation (local=0; set to 1 to avoid client cache)", OPTION_OPTIONAL_ARGUMENT, 'd', & nstride},
       {'p', NULL,        "pre-iteration delay (in seconds)", OPTION_OPTIONAL_ARGUMENT, 'd', & pre_delay},
+      {'P', NULL,        "print rate AND time", OPTION_FLAG, 'd', & print_rate_and_time},
       {'R', NULL,        "random access to files (only for stat)", OPTION_FLAG, 'd', & randomize},
       {0, "random-seed", "random seed for -R", OPTION_OPTIONAL_ARGUMENT, 'd', & random_seed},
       {'s', NULL,        "stride between the number of tasks for each test", OPTION_OPTIONAL_ARGUMENT, 'd', & stride},
@@ -1878,7 +1896,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'x', NULL,        "StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs", OPTION_OPTIONAL_ARGUMENT, 's', & stoneWallingStatusFile},
       {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & sync_file},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
-      {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
@@ -2154,7 +2171,12 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
             // keep track of the current status for stonewalling
             mdtest_iteration(i, j, testgroup, & summary_table[j]);
         }
-        summarize_results(iterations);
+        if (print_rate_and_time){
+          summarize_results(iterations, 0);
+          summarize_results(iterations, 1);
+        }else{
+          summarize_results(iterations, print_time);
+        }
         if (i == 1 && stride > 1) {
             i = 0;
         }

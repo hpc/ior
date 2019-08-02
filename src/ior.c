@@ -1400,7 +1400,7 @@ static void TestIoSys(IOR_test_t *test)
                         /* Get rankOffset [file offset] for this process to read, based on -C,-Z,-Q,-X options */
                         /* Constant process offset reading */
                         if (params->reorderTasks) {
-                                /* move one node away from writing node */ 
+                                /* move one node away from writing node */
                                 int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
                                 if (params->tasksBlockMapping) {
                                     shift=params->tasksPerNode; /* switch to a by-slot (contiguous block) mapping */
@@ -1943,10 +1943,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
              pairs_accessed_min, point->pairs_accessed,
              point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 / test->numTasks , point->stonewall_time);
              point->stonewall_min_data_accessed *= test->numTasks;
-          }
-          if(pairs_accessed_min == pairCnt){
-            point->stonewall_min_data_accessed = 0;
-            point->stonewall_avg_data_accessed = 0;
           }
           if(pairCnt != point->pairs_accessed){
             // some work needs still to be done !
