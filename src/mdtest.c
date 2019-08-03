@@ -1928,6 +1928,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     options_all_t * global_options = airoi_create_all_module_options(options);
     option_parse(argc, argv, global_options);
     updateParsedOptions(& param, global_options);
+
+    free(global_options->modules);
+    free(global_options);
     backend = param.backend;
 
     MPI_Comm_rank(testComm, &rank);
