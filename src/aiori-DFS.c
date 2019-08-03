@@ -332,7 +332,6 @@ lookup_insert_dir(const char *name)
 {
         struct aiori_dir_hdl *hdl;
         d_list_t *rlink;
-	mode_t mode;
         int rc;
 
         rlink = d_hash_rec_find(dir_hash, name, strlen(name));
@@ -348,7 +347,7 @@ lookup_insert_dir(const char *name)
         strncpy(hdl->name, name, PATH_MAX-1);
         hdl->name[PATH_MAX-1] = '\0';
 
-        rc = dfs_lookup(dfs, name, O_RDWR, &hdl->oh, &mode);
+        rc = dfs_lookup(dfs, name, O_RDWR, &hdl->oh, NULL, NULL);
         DERR(rc, "dfs_lookup() of %s Failed", name);
 
         rc = d_hash_rec_insert(dir_hash, hdl->name, strlen(hdl->name),
@@ -667,7 +666,7 @@ DFS_GetFileSize(IOR_param_t * test, MPI_Comm comm, char *testFileName)
         daos_size_t fsize, tmpMin, tmpMax, tmpSum;
         int rc;
 
-	rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL);
+	rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
         if (rc) {
                 fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
                 return -1;
