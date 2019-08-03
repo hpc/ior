@@ -103,6 +103,7 @@ static char unique_rm_dir[MAX_PATHLEN];
 static char unique_rm_uni_dir[MAX_PATHLEN];
 static char *write_buffer;
 static char *read_buffer;
+static char *verify_read_buffer;
 static char *stoneWallingStatusFile;
 
 
@@ -110,6 +111,8 @@ static int barriers;
 static int create_only;
 static int stat_only;
 static int read_only;
+static int verify_read;
+static int verification_error;
 static int remove_only;
 static int leaf_only;
 static unsigned branch_factor;
@@ -198,6 +201,12 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
         }
         fflush(out_logfile);
     }
+}
+
+void generate_memory_pattern(char * buffer, size_t bytes){
+  for(int i=0; i < bytes; i++){
+    buffer[i] = i + 1;
+  }
 }
 
 void offset_timers(double * t, int tcount) {
@@ -607,6 +616,14 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         if (read_buffer == NULL) {
             FAIL("out of memory");
         }
+
+        if (verify_read > 0) {
+            verify_read_buffer = (char *)malloc(read_bytes);
+            if (verify_read_buffer == NULL) {
+                FAIL("out of memory");
+            }
+            generate_memory_pattern(verify_read_buffer, read_bytes);
+        }
     }
 
     uint64_t stop_items = items;
@@ -683,8 +700,15 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* read file */
         if (read_bytes > 0) {
+            read_buffer[0] = 42;
             if (read_bytes != (size_t) backend->xfer (READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, &param)) {
                 FAIL("unable to read file %s", item);
+            }
+            if(verify_read){
+              if (memcmp(read_buffer, verify_read_buffer, read_bytes) != 0){
+                VERBOSE(2, -1, "Error verifying %s", item);
+                verification_error++;
+              }
             }
         }
 
@@ -1803,6 +1827,8 @@ void mdtest_init_args(){
    create_only = 0;
    stat_only = 0;
    read_only = 0;
+   verify_read = 0;
+   verification_error = 0;
    remove_only = 0;
    leaf_only = 0;
    depth = 0;
@@ -1894,6 +1920,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'w', NULL,        "bytes to write to each file after it is created", OPTION_OPTIONAL_ARGUMENT, 'l', & write_bytes},
       {'W', NULL,        "number in seconds; stonewall timer, write as many seconds and ensure all processes did the same number of operations (currently only stops during create phase)", OPTION_OPTIONAL_ARGUMENT, 'd', & stone_wall_timer_seconds},
       {'x', NULL,        "StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs", OPTION_OPTIONAL_ARGUMENT, 's', & stoneWallingStatusFile},
+      {'X', "verify-read", "Verify the data read", OPTION_FLAG, 'd', & verify_read},
       {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & sync_file},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
       LAST_OPTION
@@ -2057,7 +2084,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         if (write_buffer == NULL) {
             FAIL("out of memory");
         }
-        memset(write_buffer, 0x23, write_bytes);
+        generate_memory_pattern(write_buffer, write_bytes);
     }
 
     /* setup directory path to work in */
@@ -2182,6 +2209,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         }
     }
 
+    if(verification_error){
+      VERBOSE(0, -1, "\nERROR: verifying the data read! Take the performance values with care!\n");
+    }
     VERBOSE(0,-1,"-- finished at %s --\n", PrintTimestamp());
 
     if (random_seed > 0) {
