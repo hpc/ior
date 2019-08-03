@@ -9,7 +9,7 @@ install:
     # Install MPI
     - sudo apt-get install -y openmpi-bin libopenmpi-dev
     # Install HDF5
-    - sudo apt-get install -y hdf5-tools libhdf5-mpi-dev
+    - sudo apt-get install -y hdf5-tools libhdf5-openmpi-dev
     # Install Lustre
     # TODO: As far as a i can see it needs to be compiled form source with kernel
     # module as there is no package.
@@ -22,10 +22,13 @@ install:
     # Install HDFS
     # TODO: Not sure with which c libray hdfs should be used and if it is in
     # the ubuntu repos
-    # Probably hadoop needs to be installed an provides nativ api.
+    # Probably hadoop needs to be installed an provides native API.
     # Install Amazon S3
     # TODO: The needed library needs to be installed. Follow the instructions in
     # aiori-S3.c to achive this.
     # GPFS
     # NOTE: Think GPFS need a license and is therefore not testable with travis.
-script: ./travis-build.sh && CONFIGURE_OPTS="--with-hdf5" ./travis-test.sh
+script:
+    - ./travis-build.sh
+    - export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/hdf5/openmpi:${LD_LIBRARY_PATH}
+    - CONFIGURE_OPTS="--with-hdf5" CFLAGS="-I/usr/include/hdf5/openmpi -L/usr/lib/x86_64-linux-gnu/hdf5/openmpi" ./travis-test.sh
