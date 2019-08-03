@@ -16,6 +16,11 @@ int main(int argc, char ** argv){
         fprintf(stderr, "Could not run ior\n");
         ret = 1;
     }
+    else
+    {
+        free(res->params.platform);
+        free(res);
+    }
   }
   if (rank == 0){
     char * param[] = {"./mdtest", "-a", "DUMMY"};

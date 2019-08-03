@@ -89,6 +89,7 @@ option_help * POSIX_options(void ** init_backend_options, void * init_values){
   }
 
   *init_backend_options = o;
+  free(o);
 
   option_help h [] = {
     {0, "posix.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
