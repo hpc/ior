@@ -211,7 +211,7 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
 static option_help *
 DAOS_options()
 {
-  return options;
+	return options;
 }
 
 static void

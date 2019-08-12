@@ -42,7 +42,8 @@
 #include "utilities.h"
 
 dfs_t *dfs;
-daos_handle_t poh, coh;
+static daos_handle_t poh, coh;
+static daos_oclass_id_t objectClass = OC_SX;
 static struct d_hash_table *dir_hash;
 
 struct aiori_dir_hdl {
@@ -63,6 +64,8 @@ struct dfs_options{
         char	*svcl;
         char	*group;
         char	*cont;
+	int	chunk_size;
+	char	*oclass;
         int	destroy;
 };
 
@@ -71,14 +74,18 @@ static struct dfs_options o = {
         .svcl		= NULL,
         .group		= NULL,
         .cont		= NULL,
+	.chunk_size	= 1048576,
+	.oclass		= NULL,
         .destroy        = 0,
 };
 
 static option_help options [] = {
-      {0, "dfs.pool", "DAOS pool uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
-      {0, "dfs.svcl", "DAOS pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
-      {0, "dfs.group", "DAOS server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
+      {0, "dfs.pool", "pool uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
+      {0, "dfs.svcl", "pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
+      {0, "dfs.group", "server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
       {0, "dfs.cont", "DFS container uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.cont},
+      {0, "dfs.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.chunk_size},
+      {0, "dfs.oclass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.oclass},
       {0, "dfs.destroy", "Destroy DFS Container", OPTION_FLAG, 'd', &o.destroy},
       LAST_OPTION
 };
@@ -156,31 +163,31 @@ do {                                                                    \
 static inline struct aiori_dir_hdl *
 hdl_obj(d_list_t *rlink)
 {
-    return container_of(rlink, struct aiori_dir_hdl, entry);
+        return container_of(rlink, struct aiori_dir_hdl, entry);
 }
 
 static bool
 key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	const void *key, unsigned int ksize)
 {
-    struct aiori_dir_hdl *hdl = hdl_obj(rlink);
+        struct aiori_dir_hdl *hdl = hdl_obj(rlink);
 
-    return (strcmp(hdl->name, (const char *)key) == 0);
+        return (strcmp(hdl->name, (const char *)key) == 0);
 }
 
 static void
 rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-    struct aiori_dir_hdl *hdl = hdl_obj(rlink);
+        struct aiori_dir_hdl *hdl = hdl_obj(rlink);
 
-    assert(d_hash_rec_unlinked(&hdl->entry));
-    dfs_release(hdl->oh);
-    free(hdl);
+        assert(d_hash_rec_unlinked(&hdl->entry));
+        dfs_release(hdl->oh);
+        free(hdl);
 }
 
 static d_hash_table_ops_t hdl_hash_ops = {
-    .hop_key_cmp	= key_cmp,
-    .hop_rec_free	= rec_free
+        .hop_key_cmp	= key_cmp,
+        .hop_rec_free	= rec_free
 };
 
 /* Distribute process 0's pool or container handle to others. */
@@ -360,7 +367,7 @@ out:
 }
 
 static option_help * DFS_options(){
-  return options;
+        return options;
 }
 
 static void
@@ -369,6 +376,12 @@ DFS_Init() {
 
         if (o.pool == NULL || o.svcl == NULL || o.cont == NULL)
                 ERR("Invalid pool or container options\n");
+
+        if (o.oclass) {
+                objectClass = daos_oclass_name2id(o.oclass);
+		if (objectClass == OC_UNKNOWN)
+			DCHECK(-1, "Invalid DAOS Object class %s\n", o.oclass);
+	}
 
 	rc = daos_init();
         DCHECK(rc, "Failed to initialize daos");
@@ -487,13 +500,17 @@ DFS_Create(char *testFileName, IOR_param_t *param)
                 fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
-                              OC_SX, 0, NULL, &obj);
+                              objectClass, o.chunk_size, NULL, &obj);
                 DERR(rc, "dfs_open() of %s Failed", name);
-        } else {
-                fd_oflag |= O_RDWR;
-                rc = dfs_open(dfs, parent, name, mode, fd_oflag,
-                              OC_SX, 0, NULL, &obj);
-                DERR(rc, "dfs_open() of %s Failed", name);
+        }
+        if (!param->filePerProc) {
+                MPI_Barrier(MPI_COMM_WORLD);
+                if (rank != 0) {
+                        fd_oflag |= O_RDWR;
+                        rc = dfs_open(dfs, parent, name, mode, fd_oflag,
+                                      objectClass, o.chunk_size, NULL, &obj);
+                        DERR(rc, "dfs_open() of %s Failed", name);
+                }
         }
 
 out:
@@ -530,7 +547,8 @@ DFS_Open(char *testFileName, IOR_param_t *param)
         if (parent == NULL)
                 DERR(rc, "Failed to lookup parent dir");
 
-	rc = dfs_open(dfs, parent, name, mode, fd_oflag, 0, 0, NULL, &obj);
+	rc = dfs_open(dfs, parent, name, mode, fd_oflag, objectClass,
+                      o.chunk_size, NULL, &obj);
         DERR(rc, "dfs_open() of %s Failed", name);
 
 out:
@@ -638,7 +656,7 @@ DFS_Delete(char *testFileName, IOR_param_t * param)
         if (parent == NULL)
                 DERR(rc, "Failed to lookup parent dir");
 
-	rc = dfs_remove(dfs, parent, name, false);
+	rc = dfs_remove(dfs, parent, name, false, NULL);
         DERR(rc, "dfs_remove() of %s Failed", name);
 
 out:
@@ -756,7 +774,7 @@ DFS_Rmdir(const char *path, IOR_param_t * param)
         if (parent == NULL)
                 DERR(rc, "Failed to lookup parent dir");
 
-	rc = dfs_remove(dfs, parent, name, false);
+	rc = dfs_remove(dfs, parent, name, false, NULL);
         DERR(rc, "dfs_remove() of %s Failed", name);
 
 out:
