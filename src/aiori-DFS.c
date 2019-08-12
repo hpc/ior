@@ -444,13 +444,16 @@ DFS_Finalize()
 {
         int rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
         d_hash_table_destroy(dir_hash, true /* force */);
 
 	rc = dfs_umount(dfs);
         DCHECK(rc, "Failed to umount DFS namespace");
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = daos_cont_close(coh, NULL);
-        DCHECK(rc, "Failed to close container");
+        DCHECK(rc, "Failed to close container %s (%d)", o.cont, rc);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (rank == 0 && o.destroy) {
                 uuid_t uuid;

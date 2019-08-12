@@ -292,8 +292,13 @@ DAOS_Fini()
 	if (!daos_initialized)
 		return;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	rc = daos_cont_close(coh, NULL);
-	DCHECK(rc, "Failed to close container\n");
+	if (rc) {
+		DCHECK(rc, "Failed to close container %s (%d)", o.cont, rc);
+		MPI_Abort(MPI_COMM_WORLD, -1);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (o.destroy) {
 		if (rank == 0) {
@@ -307,8 +312,7 @@ DAOS_Fini()
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (rc) {
 			if (rank == 0)
-				DCHECK(rc, "Failed to destroy container %s (%d)",
-				       o.cont, rc);
+				DCHECK(rc, "Failed to destroy container %s (%d)", o.cont, rc);
 			MPI_Abort(MPI_COMM_WORLD, -1);
 		}
 	}

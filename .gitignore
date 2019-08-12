@@ -42,6 +42,7 @@ src/testlib
 src/test/.deps/
 src/test/.dirstamp
 src/test/lib.o
+build/
 
 doc/doxygen/build
 doc/sphinx/_*/
