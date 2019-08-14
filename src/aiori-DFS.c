@@ -16,6 +16,8 @@
  * This file implements the abstract I/O interface for DAOS FS API.
  */
 
+#define _BSD_SOURCE
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -470,6 +472,9 @@ DFS_Finalize()
 
         daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
+
+	MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
+	usleep(20000 * rank);
 
 	rc = daos_fini();
         DCHECK(rc, "Failed to finalize DAOS");

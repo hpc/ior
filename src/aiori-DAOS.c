@@ -17,6 +17,8 @@
  * This file implements the abstract I/O interface for DAOS Array API.
  */
 
+#define _BSD_SOURCE
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -319,6 +321,9 @@ DAOS_Fini()
 
 	rc = daos_pool_disconnect(poh, NULL);
 	DCHECK(rc, "Failed to disconnect from pool %s", o.pool);
+
+	MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
+	usleep(20000 * rank);
 
         rc = daos_fini();
         DCHECK(rc, "Failed to finalize daos");
