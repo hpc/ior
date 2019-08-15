@@ -1238,8 +1238,11 @@ void summarize_results(int iterations, int print_time) {
 
     MPI_Barrier(testComm);
     for(int i=0; i < iterations; i++){
-      MPI_Gather(& summary_table[i].time[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
-      MPI_Gather(& summary_table[i].rate[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
+      if(print_time){
+        MPI_Gather(& summary_table[i].time[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
+      }else{
+        MPI_Gather(& summary_table[i].rate[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
+      }
     }
 
     if (rank != 0) {
@@ -1923,6 +1926,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'X', "verify-read", "Verify the data read", OPTION_FLAG, 'd', & verify_read},
       {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & sync_file},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
+      {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
