@@ -140,7 +140,7 @@ ior_aiori_t dfs_aiori = {
 do {                                                                    \
         int _rc = (rc);                                                 \
                                                                         \
-        if (_rc < 0) {                                                  \
+        if (_rc != 0) {                                                  \
                 fprintf(stderr, "ERROR (%s:%d): %d: %d: "               \
                         format"\n", __FILE__, __LINE__, rank, _rc,      \
                         ##__VA_ARGS__);                                 \
@@ -153,7 +153,7 @@ do {                                                                    \
 do {                                                                    \
         int _rc = (rc);                                                 \
                                                                         \
-        if (_rc < 0) {                                                  \
+        if (_rc != 0) {                                                  \
                 fprintf(stderr, "ERROR (%s:%d): %d: %d: "               \
                         format"\n", __FILE__, __LINE__, rank, _rc,      \
                         ##__VA_ARGS__);                                 \
@@ -470,11 +470,17 @@ DFS_Finalize()
         if (rc)
                 DCHECK(rc, "Failed to destroy container %s (%d)", o.cont, rc);
 
-        daos_pool_disconnect(poh, NULL);
+        if (rank == 0 && verbose >= VERBOSE_1)
+                printf("Disconnecting from DAOS POOL\n");
+
+        rc = daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
 
 	MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
 	usleep(20000 * rank);
+
+        if (rank == 0 && verbose >= VERBOSE_1)
+                printf("Finalizing DAOS..\n");
 
 	rc = daos_fini();
         DCHECK(rc, "Failed to finalize DAOS");

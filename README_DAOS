@@ -3,7 +3,7 @@ Building
 
 The DAOS library must be installed on the system.
 
-./bootsrap
+./bootstrap
 ./configure --prefix=iorInstallDir --with-daos=DIR --with-cart=DIR
 
 One must specify "--with-daos=/path/to/daos/install and --with-cart".  When that

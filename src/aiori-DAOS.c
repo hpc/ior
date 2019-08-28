@@ -306,7 +306,7 @@ DAOS_Fini()
 		if (rank == 0) {
 			uuid_t uuid;
 
-			INFO(VERBOSE_1, "Destroying Container %s", o.cont);
+			INFO(VERBOSE_1, "Destroying DAOS Container %s", o.cont);
 			uuid_parse(o.cont, uuid);
 			rc = daos_cont_destroy(poh, uuid, 1, NULL);
 		}
@@ -319,11 +319,17 @@ DAOS_Fini()
 		}
 	}
 
+        if (rank == 0)
+		INFO(VERBOSE_1, "Disconnecting from DAOS POOL..");
+
 	rc = daos_pool_disconnect(poh, NULL);
 	DCHECK(rc, "Failed to disconnect from pool %s", o.pool);
 
 	MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
 	usleep(20000 * rank);
+
+        if (rank == 0)
+		INFO(VERBOSE_1, "Finalizing DAOS..");
 
         rc = daos_fini();
         DCHECK(rc, "Failed to finalize daos");
