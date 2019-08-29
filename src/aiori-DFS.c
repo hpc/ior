@@ -459,11 +459,16 @@ DFS_Finalize()
 
 	if (rank == 0 && o.destroy) {
                 uuid_t uuid;
+                double t1, t2;
 
                 if (verbose >= VERBOSE_1)
                         printf("Destorying DFS Container: %s\n", o.cont);
                 uuid_parse(o.cont, uuid);
+                t1 = MPI_Wtime();
                 rc = daos_cont_destroy(poh, uuid, 1, NULL);
+                t2 = MPI_Wtime();
+                if (rc == 0 && verbose >= VERBOSE_1)
+                        printf("Container Destroy time = %f secs", t2-t1);
         }
 
         MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);

@@ -305,10 +305,15 @@ DAOS_Fini()
 	if (o.destroy) {
 		if (rank == 0) {
 			uuid_t uuid;
+			double t1, t2;
 
 			INFO(VERBOSE_1, "Destroying DAOS Container %s", o.cont);
 			uuid_parse(o.cont, uuid);
+			t1 = MPI_Wtime();
 			rc = daos_cont_destroy(poh, uuid, 1, NULL);
+			t2 = MPI_Wtime();
+			if (rc == 0)
+				INFO(VERBOSE_1, "Container Destroy time = %f secs", t2-t1);
 		}
 
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
