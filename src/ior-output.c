@@ -339,10 +339,10 @@ void ShowTestStart(IOR_param_t *test)
 
     PrintKeyVal("options", test->options);
     PrintKeyValInt("dryRun", test->dryRun);
-    PrintKeyValInt("nodes", test->nodes);
+    PrintKeyValInt("nodes", test->numNodes);
     PrintKeyValInt("memoryPerTask", (unsigned long) test->memoryPerTask);
     PrintKeyValInt("memoryPerNode", (unsigned long) test->memoryPerNode);
-    PrintKeyValInt("tasksPerNode", tasksPerNode);
+    PrintKeyValInt("tasksPerNode", test->numTasksOnNode0);
     PrintKeyValInt("repetitions", test->repetitions);
     PrintKeyValInt("multiFile", test->multiFile);
     PrintKeyValInt("interTestDelay", test->interTestDelay);
@@ -430,8 +430,9 @@ void ShowSetup(IOR_param_t *params)
     PrintKeyValInt("task offset", params->taskPerNodeOffset);
     PrintKeyValInt("reorder random seed", params->reorderTasksRandomSeed);
   }
+  PrintKeyValInt("nodes", params->numNodes);
   PrintKeyValInt("tasks", params->numTasks);
-  PrintKeyValInt("clients per node", params->tasksPerNode);
+  PrintKeyValInt("clients per node", params->numTasksOnNode0);
   if (params->memoryPerTask != 0){
     PrintKeyVal("memoryPerTask", HumanReadable(params->memoryPerTask, BASE_TWO));
   }
@@ -571,7 +572,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           }
           fprintf(out_resultfile, "%5d ", params->id);
           fprintf(out_resultfile, "%6d ", params->numTasks);
-          fprintf(out_resultfile, "%3d ", params->tasksPerNode);
+          fprintf(out_resultfile, "%3d ", params->numTasksOnNode0);
           fprintf(out_resultfile, "%4d ", params->repetitions);
           fprintf(out_resultfile, "%3d ", params->filePerProc);
           fprintf(out_resultfile, "%5d ", params->reorderTasks);
@@ -595,7 +596,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           PrintKeyValInt("blockSize", params->blockSize);
           PrintKeyValInt("transferSize", params->transferSize);
           PrintKeyValInt("numTasks", params->numTasks);
-          PrintKeyValInt("tasksPerNode", params->tasksPerNode);
+          PrintKeyValInt("tasksPerNode", params->numTasksOnNode0);
           PrintKeyValInt("repetitions", params->repetitions);
           PrintKeyValInt("filePerProc", params->filePerProc);
           PrintKeyValInt("reorderTasks", params->reorderTasks);

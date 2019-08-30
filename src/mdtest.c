@@ -1867,7 +1867,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     mdtest_init_args();
     int i, j;
-    int nodeCount;
+    int numNodes;
+    int numTasksOnNode0 = 0;
     MPI_Group worldgroup, testgroup;
     struct {
         int first;
@@ -1943,8 +1944,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     pid = getpid();
     uid = getuid();
 
-    tasksPerNode = CountTasksPerNode(testComm);
-    nodeCount = size / tasksPerNode;
+    numNodes = GetNumNodes(testComm);
+    numTasksOnNode0 = GetNumTasksOnNode0(testComm);
 
     char cmd_buffer[4096];
     strncpy(cmd_buffer, argv[0], 4096);
@@ -1953,7 +1954,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     VERBOSE(0,-1,"-- started at %s --\n", PrintTimestamp());
-    VERBOSE(0,-1,"mdtest-%s was launched with %d total task(s) on %d node(s)", RELEASE_VERS, size, nodeCount);
+    VERBOSE(0,-1,"mdtest-%s was launched with %d total task(s) on %d node(s)", RELEASE_VERS, size, numNodes);
     VERBOSE(0,-1,"Command line used: %s", cmd_buffer);
 
     /* adjust special variables */
@@ -2120,10 +2121,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* set the shift to mimic IOR and shift by procs per node */
     if (nstride > 0) {
-        if ( nodeCount > 1 && tasksBlockMapping ) {
+        if ( numNodes > 1 && tasksBlockMapping ) {
             /* the user set the stride presumably to get the consumer tasks on a different node than the producer tasks
                however, if the mpirun scheduler placed the tasks by-slot (in a contiguous block) then we need to adjust the shift by ppn */
-            nstride *= tasksPerNode;
+            nstride *= numTasksOnNode0;
         }
         VERBOSE(0,5,"Shifting ranks by %d for each phase.", nstride);
     }

@@ -18,10 +18,8 @@
 #include <mpi.h>
 #include "ior.h"
 
-extern int numTasksWorld;
 extern int rank;
 extern int rankOffset;
-extern int tasksPerNode;
 extern int verbose;
 extern MPI_Comm testComm;
 extern MPI_Comm mpi_comm_world;
@@ -55,8 +53,10 @@ void SeedRandGen(MPI_Comm);
 void SetHints (MPI_Info *, char *);
 void ShowHints (MPI_Info *);
 char *HumanReadable(IOR_offset_t value, int base);
-int CountTasksPerNode(MPI_Comm comm);
 int QueryNodeMapping(MPI_Comm comm, int print_nodemap);
+int GetNumNodes(MPI_Comm);
+int GetNumTasks(MPI_Comm);
+int GetNumTasksOnNode0(MPI_Comm);
 void DelaySecs(int delay);
 void updateParsedOptions(IOR_param_t * options, options_all_t * global_options);
 size_t NodeMemoryStringToBytes(char *size_str);

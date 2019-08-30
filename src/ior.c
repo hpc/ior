@@ -65,7 +65,6 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         out_resultfile = world_out;
         mpi_comm_world = world_com;
 
-        MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld), "cannot get number of tasks");
         MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
 
         /* setup tests, and validate parameters */
@@ -113,8 +112,6 @@ int ior_main(int argc, char **argv)
     MPI_CHECK(MPI_Init(&argc, &argv), "cannot initialize MPI");
 
     mpi_comm_world = MPI_COMM_WORLD;
-    MPI_CHECK(MPI_Comm_size(mpi_comm_world, &numTasksWorld),
-              "cannot get number of tasks");
     MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
 
     /* set error-handling */
@@ -188,8 +185,14 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->writeFile = p->readFile = FALSE;
         p->checkWrite = p->checkRead = FALSE;
 
-        p->nodes = 1;
-        p->tasksPerNode = 1;
+        /*
+         * These can be overridden from the command-line but otherwise will be
+         * set from MPI.
+         */
+        p->numTasks = -1;
+        p->numNodes = -1;
+        p->numTasksOnNode0 = -1;
+
         p->repetitions = 1;
         p->repCounter = -1;
         p->open = WRITE;
@@ -919,12 +922,17 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
  */
 static void InitTests(IOR_test_t *tests, MPI_Comm com)
 {
-        int size;
+        int mpiNumNodes = 0;
+        int mpiNumTasks = 0;
+        int mpiNumTasksOnNode0 = 0;
 
-        MPI_CHECK(MPI_Comm_size(com, & size), "MPI_Comm_size() error");
-
-        /* count the tasks per node */
-        tasksPerNode = CountTasksPerNode(com);
+        /*
+         * These default values are the same for every test and expensive to
+         * retrieve so just do it once.
+         */
+        mpiNumNodes = GetNumNodes(com);
+        mpiNumTasks = GetNumTasks(com);
+        mpiNumTasksOnNode0 = GetNumTasksOnNode0(com);
 
         /*
          * Since there is no guarantee that anyone other than
@@ -937,12 +945,28 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
         while (tests != NULL) {
                 IOR_param_t *params = & tests->params;
                 params->testComm = com;
-                params->nodes = params->numTasks / tasksPerNode;
-                params->tasksPerNode = tasksPerNode;
-                params->tasksBlockMapping = QueryNodeMapping(com,false);
-                if (params->numTasks == 0) {
-                  params->numTasks = size;
+
+                /* use MPI values if not overridden on command-line */
+                if (params->numNodes == -1) {
+                        params->numNodes = mpiNumNodes;
                 }
+                if (params->numTasks == -1) {
+                        params->numTasks = mpiNumTasks;
+                } else if (params->numTasks > mpiNumTasks) {
+                        if (rank == 0) {
+                                fprintf(out_logfile,
+                                        "WARNING: More tasks requested (%d) than available (%d),",
+                                        params->numTasks, mpiNumTasks);
+                                fprintf(out_logfile, "         running with %d tasks.\n",
+                                        mpiNumTasks);
+                        }
+                        params->numTasks = mpiNumTasks;
+                }
+                if (params->numTasksOnNode0 == -1) {
+                        params->numTasksOnNode0 = mpiNumTasksOnNode0;
+                }
+
+                params->tasksBlockMapping = QueryNodeMapping(com,false);
                 params->expectedAggFileSize =
                   params->blockSize * params->segmentCount * params->numTasks;
 
@@ -1090,7 +1114,7 @@ static void *HogMemory(IOR_param_t *params)
                 if (verbose >= VERBOSE_3)
                         fprintf(out_logfile, "This node hogging %ld bytes of memory\n",
                                 params->memoryPerNode);
-                size = params->memoryPerNode / params->tasksPerNode;
+                size = params->memoryPerNode / params->numTasksOnNode0;
         } else {
                 return NULL;
         }
@@ -1190,16 +1214,6 @@ static void TestIoSys(IOR_test_t *test)
         IOR_io_buffers ioBuffers;
 
         /* set up communicator for test */
-        if (params->numTasks > numTasksWorld) {
-                if (rank == 0) {
-                        fprintf(out_logfile,
-                                "WARNING: More tasks requested (%d) than available (%d),",
-                                params->numTasks, numTasksWorld);
-                        fprintf(out_logfile, "         running on %d tasks.\n",
-                                numTasksWorld);
-                }
-                params->numTasks = numTasksWorld;
-        }
         MPI_CHECK(MPI_Comm_group(mpi_comm_world, &orig_group),
                   "MPI_Comm_group() error");
         range[0] = 0;                     /* first rank */
@@ -1226,7 +1240,6 @@ static void TestIoSys(IOR_test_t *test)
                         "Using reorderTasks '-C' (useful to avoid read cache in client)\n");
                 fflush(out_logfile);
         }
-        params->tasksPerNode = CountTasksPerNode(testComm);
         backend = params->backend;
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
@@ -1363,7 +1376,7 @@ static void TestIoSys(IOR_test_t *test)
                                 /* move two nodes away from writing node */
                                 int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
                                 if (params->tasksBlockMapping) {
-                                    shift = params->tasksPerNode; /* switch to by-slot (contiguous block) mapping */
+                                    shift = params->numTasksOnNode0; /* switch to by-slot (contiguous block) mapping */
                                 }
                                 rankOffset = (2 * shift) % params->numTasks;
                         }
@@ -1388,7 +1401,7 @@ static void TestIoSys(IOR_test_t *test)
                         if(params->stoneWallingStatusFile){
                           params->stoneWallingWearOutIterations = ReadStoneWallingIterations(params->stoneWallingStatusFile);
                           if(params->stoneWallingWearOutIterations == -1 && rank == 0){
-                            fprintf(out_logfile, "WARNING: Could not read back the stonewalling status from the file!");
+                            fprintf(out_logfile, "WARNING: Could not read back the stonewalling status from the file!\n");
                             params->stoneWallingWearOutIterations = 0;
                           }
                         }
@@ -1403,7 +1416,7 @@ static void TestIoSys(IOR_test_t *test)
                                 /* move one node away from writing node */
                                 int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
                                 if (params->tasksBlockMapping) {
-                                    shift=params->tasksPerNode; /* switch to a by-slot (contiguous block) mapping */
+                                    shift=params->numTasksOnNode0; /* switch to a by-slot (contiguous block) mapping */
                                 }
                                 rankOffset = (params->taskPerNodeOffset * shift) % params->numTasks;
                         }
@@ -1414,7 +1427,7 @@ static void TestIoSys(IOR_test_t *test)
                                 int nodeoffset;
                                 unsigned int iseed0;
                                 nodeoffset = params->taskPerNodeOffset;
-                                nodeoffset = (nodeoffset < params->nodes) ? nodeoffset : params->nodes - 1;
+                                nodeoffset = (nodeoffset < params->numNodes) ? nodeoffset : params->numNodes - 1;
                                 if (params->reorderTasksRandomSeed < 0)
                                         iseed0 = -1 * params->reorderTasksRandomSeed + rep;
                                 else
@@ -1424,7 +1437,7 @@ static void TestIoSys(IOR_test_t *test)
                                         rankOffset = rand() % params->numTasks;
                                 }
                                 while (rankOffset <
-                                       (nodeoffset * params->tasksPerNode)) {
+                                       (nodeoffset * params->numTasksOnNode0)) {
                                         rankOffset = rand() % params->numTasks;
                                 }
                                 /* Get more detailed stats if requested by verbose level */
@@ -1454,7 +1467,7 @@ static void TestIoSys(IOR_test_t *test)
                                           "barrier error");
                         if (rank == 0 && verbose >= VERBOSE_1) {
                                 fprintf(out_logfile,
-                                        "Commencing read performance test: %s",
+                                        "Commencing read performance test: %s\n",
                                         CurrentTimeString());
                         }
                         timer[2] = GetTimeStamp();
