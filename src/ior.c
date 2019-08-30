@@ -1682,6 +1682,10 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("Lustre stripe options are incompatible with useExistingTestFile");
 
         /* N:1 and N:N */
+        /*
+         * This is a regression for non-S3 backends: https://github.com/hpc/ior/issues/24
+         */
+        /*
         IOR_offset_t  NtoN = test->filePerProc;
         IOR_offset_t  Nto1 = ! NtoN;
         IOR_offset_t  s    = test->segmentCount;
@@ -1691,6 +1695,7 @@ static void ValidateTests(IOR_param_t * test)
         if (Nto1 && (s != 1) && (b != t)) {
                 ERR("N:1 (strided) requires xfer-size == block-size");
         }
+        */
 }
 
 /**
