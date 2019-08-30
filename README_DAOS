@@ -78,6 +78,6 @@ Examples that should work include:
 
 Running mdtest, the user needs to specify a directory with -d where the test
 tree will be created. Some examples:
-  - "mdtest -a DFS -n 100 -F -D -d /bla --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
-  - "mdtest -a DFS -n 1000 -F -C -d /bla --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
-  - "mdtest -a DFS -I 10 -z 5 -b 2 -L -d /bla --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
+  - "mdtest -a DFS -n 100 -F -D -d /bla --dfs.pool <pool_uuid> --dfs.svcl <svc_ranks> --dfs.cont <co_uuid>"
+  - "mdtest -a DFS -n 1000 -F -C -d /bla --dfs.pool <pool_uuid> --dfs.svcl <svc_ranks> --dfs.cont <co_uuid>"
+  - "mdtest -a DFS -I 10 -z 5 -b 2 -L -d /bla --dfs.pool <pool_uuid> --dfs.svcl <svc_ranks> --dfs.cont <co_uuid>"
