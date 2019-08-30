@@ -785,8 +785,7 @@ void GetTestFileName(char *testFileName, IOR_param_t * test)
 static char *PrependDir(IOR_param_t * test, char *rootDir)
 {
         char *dir;
-        char fname[MAX_STR + 1];
-        char *p;
+        char *fname;
         int i;
 
         dir = (char *)malloc(MAX_STR + 1);
@@ -806,18 +805,10 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
         }
 
         /* get file name */
-        strcpy(fname, rootDir);
-        p = fname;
-        while (i > 0) {
-                if (fname[i] == '\0' || fname[i] == '/') {
-                        p = fname + (i + 1);
-                        break;
-                }
-                i--;
-        }
+        fname = rootDir + i + 1;
 
         /* create directory with rank as subdirectory */
-        sprintf(dir, "%s%d", dir, (rank + rankOffset) % test->numTasks);
+        sprintf(dir + i + 1, "%d", (rank + rankOffset) % test->numTasks);
 
         /* dir doesn't exist, so create */
         if (backend->access(dir, F_OK, test) != 0) {
@@ -834,7 +825,7 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
 
         /* concatenate dir and file names */
         strcat(dir, "/");
-        strcat(dir, p);
+        strcat(dir, fname);
 
         return dir;
 }
