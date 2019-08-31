@@ -2148,7 +2148,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* setup summary table for recording results */
     summary_table = (mdtest_results_t *) malloc(iterations * sizeof(mdtest_results_t));
-    memset(summary_table, 0, sizeof(mdtest_results_t));
+    memset(summary_table, 0, iterations * sizeof(mdtest_results_t));
     for(int i=0; i < iterations; i++){
       for(int j=0; j < MDTEST_LAST_NUM; j++){
         summary_table[i].rate[j] = 0.0;
