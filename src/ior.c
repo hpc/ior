@@ -822,14 +822,14 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
         /* dir doesn't exist, so create */
         if (backend->access(dir, F_OK, test) != 0) {
                 if (backend->mkdir(dir, S_IRWXU, test) < 0) {
-                        ERR("cannot create directory");
+                        ERRF("cannot create directory: %s", dir);
                 }
 
                 /* check if correct permissions */
         } else if (backend->access(dir, R_OK, test) != 0 ||
                    backend->access(dir, W_OK, test) != 0 ||
                    backend->access(dir, X_OK, test) != 0) {
-                ERR("invalid directory permissions");
+                ERRF("invalid directory permissions: %s", dir);
         }
 
         /* concatenate dir and file names */
@@ -900,6 +900,10 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         GetTestFileName(testFileName, test);
                 }
                 if (backend->access(testFileName, F_OK, test) == 0) {
+                        if (verbose >= VERBOSE_3) {
+                                fprintf(out_logfile, "task %d removing %s\n", rank,
+                                        testFileName);
+                        }
                         backend->delete(testFileName, test);
                 }
                 if (test->reorderTasksRandom == TRUE) {
@@ -908,6 +912,10 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                 }
         } else {
                 if ((rank == 0) && (backend->access(testFileName, F_OK, test) == 0)) {
+                        if (verbose >= VERBOSE_3) {
+                                fprintf(out_logfile, "task %d removing %s\n", rank,
+                                        testFileName);
+                        }
                         backend->delete(testFileName, test);
                 }
         }
@@ -1667,11 +1675,8 @@ static void ValidateTests(IOR_param_t * test)
 #if (H5_VERS_MAJOR > 0 && H5_VERS_MINOR > 5)
                         ;
 #else
-                        char errorString[MAX_STR];
-                        sprintf(errorString,
-                                "'no fill' option not available in %s",
+                        ERRF("'no fill' option not available in %s",
                                 test->apiVersion);
-                        ERR(errorString);
 #endif
 #else
                         WARN("unable to determine HDF5 version for 'no fill' usage");
