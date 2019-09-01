@@ -60,6 +60,7 @@ int QueryNodeMapping(MPI_Comm comm, int print_nodemap);
 void DelaySecs(int delay);
 void updateParsedOptions(IOR_param_t * options, options_all_t * global_options);
 size_t NodeMemoryStringToBytes(char *size_str);
+void call_sync_cmd();
 
 /* Returns -1, if cannot be read  */
 int64_t ReadStoneWallingIterations(char * const filename);

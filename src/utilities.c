@@ -77,15 +77,15 @@ void* safeMalloc(uint64_t size){
 }
 
 void FailMessage(int rank, const char *location, char *format, ...) {
-    char msg[4096];                                                  
+    char msg[4096];
     va_list args;
     va_start(args, format);
     vsnprintf(msg, 4096, format, args);
     va_end(args);
-    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n", 
-                PrintTimestamp(), rank, location, msg, strerror(errno));                               
-    fflush(out_logfile);                                        
-    MPI_Abort(testComm, 1);                                    
+    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n",
+                PrintTimestamp(), rank, location, msg, strerror(errno));
+    fflush(out_logfile);
+    MPI_Abort(testComm, 1);
 }
 
 size_t NodeMemoryStringToBytes(char *size_str)
@@ -808,4 +808,11 @@ char *HumanReadable(IOR_offset_t value, int base)
                 snprintf(valueStr, MAX_STR-1, "-");
         }
         return valueStr;
+}
+
+void call_sync_cmd(){
+  int ret = system("sync");
+  if (ret != 0){
+    FAIL("Error executing the sync command, ensure it exists.");
+  }
 }
