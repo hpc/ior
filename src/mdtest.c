@@ -266,7 +266,10 @@ static void prep_testdir(int j, int dir_iter){
 
 static void phase_end(){
   if (call_sync){
-    call_sync_cmd();
+    if(! backend->sync){
+      FAIL("Error, backend does not provide the sync method, but your requested to use sync.");
+    }
+    backend->sync(& param);
   }
 
   if (barriers) {

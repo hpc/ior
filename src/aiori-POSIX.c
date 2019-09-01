@@ -71,6 +71,7 @@
 static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void POSIX_Fsync(void *, IOR_param_t *);
+static void POSIX_Sync(IOR_param_t * );
 
 /************************** O P T I O N S *****************************/
 typedef struct{
@@ -122,6 +123,7 @@ ior_aiori_t posix_aiori = {
         .stat = aiori_posix_stat,
         .get_options = POSIX_options,
         .enable_mdtest = true,
+        .sync = POSIX_Sync
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -587,6 +589,16 @@ static void POSIX_Fsync(void *fd, IOR_param_t * param)
         if (fsync(*(int *)fd) != 0)
                 EWARNF("fsync(%d) failed", *(int *)fd);
 }
+
+
+static void POSIX_Sync(IOR_param_t * param)
+{
+  int ret = system("sync");
+  if (ret != 0){
+    FAIL("Error executing the sync command, ensure it exists.");
+  }
+}
+
 
 /*
  * Close a file through the POSIX interface.

@@ -86,6 +86,7 @@ typedef struct ior_aiori {
         void (*finalize)(); /* called once per program after MPI is shutdown */
         option_help * (*get_options)(void ** init_backend_options, void* init_values); /* initializes the backend options as well and returns the pointer to the option help structure */
         bool enable_mdtest;
+        void (*sync)(IOR_param_t * ); /* synchronize every pending operation for this storage */
 } ior_aiori_t;
 
 enum bench_type {

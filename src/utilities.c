@@ -809,10 +809,3 @@ char *HumanReadable(IOR_offset_t value, int base)
         }
         return valueStr;
 }
-
-void call_sync_cmd(){
-  int ret = system("sync");
-  if (ret != 0){
-    FAIL("Error executing the sync command, ensure it exists.");
-  }
-}
