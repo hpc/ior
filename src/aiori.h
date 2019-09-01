@@ -86,6 +86,7 @@ typedef struct ior_aiori {
         void (*finalize)(); /* called once per program after MPI is shutdown */
         option_help * (*get_options)(void ** init_backend_options, void* init_values); /* initializes the backend options as well and returns the pointer to the option help structure */
         bool enable_mdtest;
+        int (*check_params)(IOR_param_t *); /* check if the provided parameters for the given test and the module options are correct, if they aren't print a message and exit(1) or return 1*/
         void (*sync)(IOR_param_t * ); /* synchronize every pending operation for this storage */
 } ior_aiori_t;
 
