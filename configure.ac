@@ -83,7 +83,7 @@ AC_ARG_WITH([lustre],
         [AS_HELP_STRING([--with-lustre],
                 [support configurable Lustre striping values @<:@default=check@:>@])],
         [], [with_lustre=check])
-AS_IF([test "x$with_lustre" != xno], [
+AS_IF([test "x$with_lustre" = xyes ], [
         AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], break, [
                 if test "x$with_lustre" != xcheck -a \
                         "x$ac_cv_header_linux_lustre_lustre_user_h" = "xno" -a \
@@ -91,6 +91,17 @@ AS_IF([test "x$with_lustre" != xno], [
                         AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
                 fi
         ])
+        AC_CHECK_HEADERS([linux/lustre/lustreapi.h lustre/lustreapi.h], break, [
+                if test "x$with_lustre" != xcheck -a \
+                        "x$ac_cv_header_linux_lustre_lustreapi_h" = "xno" -a \
+                        "x$ac_cv_header_lustre_lustreapi_h" = "xno" ; then
+                        AC_MSG_FAILURE([--with-lustre was given, <lustre/lustreapi.h> not found])
+                fi
+        ])
+])
+AM_CONDITIONAL([WITH_LUSTRE], [test x$with_lustre = xyes])
+AM_COND_IF([WITH_LUSTRE],[
+        AC_DEFINE([WITH_LUSTRE], [], [Build wth LUSTRE backend])
 ])
 
 # IME (DDN's Infinite Memory Engine) support
