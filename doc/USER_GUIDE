@@ -369,43 +369,6 @@ BeeGFS-SPECIFIC (POSIX only):
   * beegfsChunkSize      - set the striping chunk size. Must be a power of two,
                              and greater than 64kiB, (e.g.: 256k, 1M, ...)
 
-DAOS-ONLY:
-==========
-  * daosGroup            - group name [NULL]
-
-  * daosPool             - UUID of the pool []
-
-  * daosPoolSvc          - pool service replica ranks (e.g., 1:2:3:4:5) []
-
-  * daosRecordSize       - size (in bytes) of an akey record [256k]
-                           NOTE: must divide transferSize
-
-  * daosStripeSize       - size (in bytes) of a chunk in a stripe [512k]
-                           NOTE: must be a multiple of transferSize
-
-  * daosStripeCount      - number of stripes [64 * number of targets]
-                           NOTE: i.e., number of dkeys
-
-  * daosStripeMax        - max length of each stripe [0]
-                           NOTE: must be a multiple of daosStripeSize
-                           NOTE: for write testing with small storage
-                           NOTE: offsets in a stripe larger than daosStripeMax
-                                 are mapped to offset % daosStripeMax
-
-  * daosAios             - max number of asychonous I/Os [1]
-
-  * daosWriteOnly        - skip flushing and committing [0=FALSE]
-
-  * daosEpoch            - epoch to read or write [0]
-                           NOTE: 0 denotes reading GHCE or writing GHCE + 1
-
-  * daosWait             - epoch to wait when opening the container [0]
-
-  * daosKill             - kill a target in the middle of the test [0]
-                           NOTE: must also specify daosObjectClass=repl
-
-  * daosObjectClass      - object class (tiny, small, large, repl, repl_max)
-                           [large]
 
 ***********************
 * 5. VERBOSITY LEVELS *

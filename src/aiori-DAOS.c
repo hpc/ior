@@ -37,7 +37,6 @@
 #include "ior.h"
 #include "aiori.h"
 #include "iordef.h"
-#include "list.h"
 
 /************************** O P T I O N S *****************************/
 struct daos_options{
