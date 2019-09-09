@@ -148,6 +148,7 @@ static size_t write_bytes;
 static int stone_wall_timer_seconds;
 static size_t read_bytes;
 static int sync_file;
+static int call_sync;
 static int path_count;
 static int nstride; /* neighbor stride */
 static int make_node = 0;
@@ -261,6 +262,19 @@ static void prep_testdir(int j, int dir_iter){
   }
   pos += sprintf(& testdir[pos], "%s", TEST_DIR);
   pos += sprintf(& testdir[pos], ".%d-%d", j, dir_iter);
+}
+
+static void phase_end(){
+  if (call_sync){
+    if(! backend->sync){
+      FAIL("Error, backend does not provide the sync method, but your requested to use sync.");
+    }
+    backend->sync(& param);
+  }
+
+  if (barriers) {
+    MPI_Barrier(testComm);
+  }
 }
 
 /*
@@ -836,9 +850,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[1] = GetTimeStamp();
 
     /* stat phase */
@@ -864,10 +876,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         }
       }
     }
-
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[2] = GetTimeStamp();
 
     /* read phase */
@@ -894,9 +903,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[3] = GetTimeStamp();
 
     if (remove_only) {
@@ -924,9 +931,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[4] = GetTimeStamp();
 
     if (remove_only) {
@@ -1082,9 +1087,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    if (barriers) {
-      MPI_Barrier(testComm);
-    }
+    phase_end();
     t[1] = GetTimeStamp();
 
     /* stat phase */
@@ -1107,9 +1110,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[2] = GetTimeStamp();
 
     /* read phase */
@@ -1136,9 +1137,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[3] = GetTimeStamp();
 
     if (remove_only) {
@@ -1168,9 +1167,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[4] = GetTimeStamp();
     if (remove_only) {
         if (unique_dir_per_task) {
@@ -1853,6 +1850,7 @@ void mdtest_init_args(){
    stone_wall_timer_seconds = 0;
    read_bytes = 0;
    sync_file = 0;
+   call_sync = 0;
    path_count = 0;
    nstride = 0;
    make_node = 0;
@@ -1925,6 +1923,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'x', NULL,        "StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs", OPTION_OPTIONAL_ARGUMENT, 's', & stoneWallingStatusFile},
       {'X', "verify-read", "Verify the data read", OPTION_FLAG, 'd', & verify_read},
       {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & sync_file},
+      {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
       LAST_OPTION
@@ -2008,6 +2007,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     VERBOSE(1,-1, "unique_dir_per_task     : %s", ( unique_dir_per_task ? "True" : "False" ));
     VERBOSE(1,-1, "write_bytes             : "LLU"", write_bytes );
     VERBOSE(1,-1, "sync_file               : %s", ( sync_file ? "True" : "False" ));
+    VERBOSE(1,-1, "call_sync               : %s", ( call_sync ? "True" : "False" ));
     VERBOSE(1,-1, "depth                   : %d", depth );
     VERBOSE(1,-1, "make_node               : %d", make_node );
 

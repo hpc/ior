@@ -1678,15 +1678,12 @@ static void ValidateTests(IOR_param_t * test)
         if (test->useExistingTestFile && test->lustre_set_striping)
                 ERR("Lustre stripe options are incompatible with useExistingTestFile");
 
-        /* N:1 and N:N */
-        IOR_offset_t  NtoN = test->filePerProc;
-        IOR_offset_t  Nto1 = ! NtoN;
-        IOR_offset_t  s    = test->segmentCount;
-        IOR_offset_t  t    = test->transferSize;
-        IOR_offset_t  b    = test->blockSize;
-
-        if (Nto1 && (s != 1) && (b != t)) {
-                ERR("N:1 (strided) requires xfer-size == block-size");
+        /* allow the backend to validate the options */
+        if(test->backend->check_params){
+          int check = test->backend->check_params(test);
+          if (check == 0){
+            ERR("The backend returned that the test parameters are invalid.");
+          }
         }
 }
 
