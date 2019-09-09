@@ -74,6 +74,11 @@ if USE_DAOS_AIORI
 extraSOURCES += aiori-DAOS.c aiori-DFS.c list.h
 endif
 
+if USE_GFARM_AIORI
+extraSOURCES += aiori-Gfarm.c
+extraLDADD += -lgfarm
+endif
+
 if USE_S3_AIORI
 extraSOURCES  += aiori-S3.c
 if AWS4C_DIR

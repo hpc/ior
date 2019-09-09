@@ -182,8 +182,8 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
                 fprintf(stdout, "}\n");
         }
         if(! param->dryRun){
-            MPI_CHECK(MPI_File_open(comm, testFileName, fd_mode, mpiHints, fd),
-                  "cannot open file");
+            MPI_CHECKF(MPI_File_open(comm, testFileName, fd_mode, mpiHints, fd),
+                       "cannot open file: %s", testFileName);
         }
 
         /* show hints actually attached to file handle */
@@ -432,8 +432,8 @@ void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 {
   if(param->dryRun)
     return;
-  MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
-            "cannot delete file");
+  MPI_CHECKF(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
+             "cannot delete file: %s", testFileName);
 }
 
 /*

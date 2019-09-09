@@ -787,8 +787,7 @@ void GetTestFileName(char *testFileName, IOR_param_t * test)
 static char *PrependDir(IOR_param_t * test, char *rootDir)
 {
         char *dir;
-        char fname[MAX_STR + 1];
-        char *p;
+        char *fname;
         int i;
 
         dir = (char *)malloc(MAX_STR + 1);
@@ -808,35 +807,27 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
         }
 
         /* get file name */
-        strcpy(fname, rootDir);
-        p = fname;
-        while (i > 0) {
-                if (fname[i] == '\0' || fname[i] == '/') {
-                        p = fname + (i + 1);
-                        break;
-                }
-                i--;
-        }
+        fname = rootDir + i + 1;
 
         /* create directory with rank as subdirectory */
-        sprintf(dir, "%s%d", dir, (rank + rankOffset) % test->numTasks);
+        sprintf(dir + i + 1, "%d", (rank + rankOffset) % test->numTasks);
 
         /* dir doesn't exist, so create */
         if (backend->access(dir, F_OK, test) != 0) {
                 if (backend->mkdir(dir, S_IRWXU, test) < 0) {
-                        ERR("cannot create directory");
+                        ERRF("cannot create directory: %s", dir);
                 }
 
                 /* check if correct permissions */
         } else if (backend->access(dir, R_OK, test) != 0 ||
                    backend->access(dir, W_OK, test) != 0 ||
                    backend->access(dir, X_OK, test) != 0) {
-                ERR("invalid directory permissions");
+                ERRF("invalid directory permissions: %s", dir);
         }
 
         /* concatenate dir and file names */
         strcat(dir, "/");
-        strcat(dir, p);
+        strcat(dir, fname);
 
         return dir;
 }
@@ -902,6 +893,10 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         GetTestFileName(testFileName, test);
                 }
                 if (backend->access(testFileName, F_OK, test) == 0) {
+                        if (verbose >= VERBOSE_3) {
+                                fprintf(out_logfile, "task %d removing %s\n", rank,
+                                        testFileName);
+                        }
                         backend->delete(testFileName, test);
                 }
                 if (test->reorderTasksRandom == TRUE) {
@@ -909,7 +904,11 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         GetTestFileName(testFileName, test);
                 }
         } else {
-                if (rank == 0 && backend->access(testFileName, F_OK, test) == 0) {
+                if ((rank == 0) && (backend->access(testFileName, F_OK, test) == 0)) {
+                        if (verbose >= VERBOSE_3) {
+                                fprintf(out_logfile, "task %d removing %s\n", rank,
+                                        testFileName);
+                        }
                         backend->delete(testFileName, test);
                 }
         }
@@ -941,6 +940,7 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
                 params->testComm = com;
                 params->nodes = params->numTasks / tasksPerNode;
                 params->tasksPerNode = tasksPerNode;
+                params->tasksBlockMapping = QueryNodeMapping(com,false);
                 if (params->numTasks == 0) {
                   params->numTasks = size;
                 }
@@ -1224,7 +1224,7 @@ static void TestIoSys(IOR_test_t *test)
         }
         if (rank == 0 && params->reorderTasks == TRUE && verbose >= VERBOSE_1) {
                 fprintf(out_logfile,
-                        "Using reorderTasks '-C' (expecting block, not cyclic, task assignment)\n");
+                        "Using reorderTasks '-C' (useful to avoid read cache in client)\n");
                 fflush(out_logfile);
         }
         params->tasksPerNode = CountTasksPerNode(testComm);
@@ -1362,7 +1362,11 @@ static void TestIoSys(IOR_test_t *test)
                         }
                         if (params->reorderTasks) {
                                 /* move two nodes away from writing node */
-                                rankOffset = (2 * params->tasksPerNode) % params->numTasks;
+                                int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
+                                if (params->tasksBlockMapping) {
+                                    shift = params->tasksPerNode; /* switch to by-slot (contiguous block) mapping */
+                                }
+                                rankOffset = (2 * shift) % params->numTasks;
                         }
 
                         // update the check buffer
@@ -1397,9 +1401,12 @@ static void TestIoSys(IOR_test_t *test)
                         /* Get rankOffset [file offset] for this process to read, based on -C,-Z,-Q,-X options */
                         /* Constant process offset reading */
                         if (params->reorderTasks) {
-                                /* move taskPerNodeOffset nodes[1==default] away from writing node */
-                                rankOffset = (params->taskPerNodeOffset *
-                                          params->tasksPerNode) % params->numTasks;
+                                /* move one node away from writing node */
+                                int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
+                                if (params->tasksBlockMapping) {
+                                    shift=params->tasksPerNode; /* switch to a by-slot (contiguous block) mapping */
+                                }
+                                rankOffset = (params->taskPerNodeOffset * shift) % params->numTasks;
                         }
                         /* random process offset reading */
                         if (params->reorderTasksRandom) {
@@ -1582,6 +1589,7 @@ static void ValidateTests(IOR_param_t * test)
             && (strcasecmp(test->api, "MPIIO") != 0)
             && (strcasecmp(test->api, "MMAP") != 0)
             && (strcasecmp(test->api, "HDFS") != 0)
+            && (strcasecmp(test->api, "Gfarm") != 0)
             && (strcasecmp(test->api, "RADOS") != 0)) && test->fsync)
                 WARN_RESET("fsync() not supported in selected backend",
                            test, &defaults, fsync);
@@ -1661,11 +1669,8 @@ static void ValidateTests(IOR_param_t * test)
 #if (H5_VERS_MAJOR > 0 && H5_VERS_MINOR > 5)
                         ;
 #else
-                        char errorString[MAX_STR];
-                        sprintf(errorString,
-                                "'no fill' option not available in %s",
+                        ERRF("'no fill' option not available in %s",
                                 test->apiVersion);
-                        ERR(errorString);
 #endif
 #else
                         WARN("unable to determine HDF5 version for 'no fill' usage");
@@ -1675,15 +1680,12 @@ static void ValidateTests(IOR_param_t * test)
         if (test->useExistingTestFile && test->lustre_set_striping)
                 ERR("Lustre stripe options are incompatible with useExistingTestFile");
 
-        /* N:1 and N:N */
-        IOR_offset_t  NtoN = test->filePerProc;
-        IOR_offset_t  Nto1 = ! NtoN;
-        IOR_offset_t  s    = test->segmentCount;
-        IOR_offset_t  t    = test->transferSize;
-        IOR_offset_t  b    = test->blockSize;
-
-        if (Nto1 && (s != 1) && (b != t)) {
-                ERR("N:1 (strided) requires xfer-size == block-size");
+        /* allow the backend to validate the options */
+        if(test->backend->check_params){
+          int check = test->backend->check_params(test);
+          if (check == 0){
+            ERR("The backend returned that the test parameters are invalid.");
+          }
         }
 }
 
@@ -1937,10 +1939,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
              pairs_accessed_min, point->pairs_accessed,
              point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 / test->numTasks , point->stonewall_time);
              point->stonewall_min_data_accessed *= test->numTasks;
-          }
-          if(pairs_accessed_min == pairCnt){
-            point->stonewall_min_data_accessed = 0;
-            point->stonewall_avg_data_accessed = 0;
           }
           if(pairCnt != point->pairs_accessed){
             // some work needs still to be done !

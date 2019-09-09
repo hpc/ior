@@ -82,10 +82,10 @@ static struct dfs_options o = {
 };
 
 static option_help options [] = {
-      {0, "dfs.pool", "pool uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.pool},
-      {0, "dfs.svcl", "pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', & o.svcl},
+      {0, "dfs.pool", "pool uuid", OPTION_OPTIONAL_ARGUMENT, 's', & o.pool},
+      {0, "dfs.svcl", "pool SVCL", OPTION_OPTIONAL_ARGUMENT, 's', & o.svcl},
       {0, "dfs.group", "server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
-      {0, "dfs.cont", "DFS container uuid", OPTION_REQUIRED_ARGUMENT, 's', & o.cont},
+      {0, "dfs.cont", "DFS container uuid", OPTION_OPTIONAL_ARGUMENT, 's', & o.cont},
       {0, "dfs.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.chunk_size},
       {0, "dfs.oclass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.oclass},
       {0, "dfs.destroy", "Destroy DFS Container", OPTION_FLAG, 'd', &o.destroy},

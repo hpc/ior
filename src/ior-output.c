@@ -18,8 +18,8 @@ static void PrintNextToken();
 void PrintTableHeader(){
   if (outputFormat == OUTPUT_DEFAULT){
     fprintf(out_resultfile, "\n");
-    fprintf(out_resultfile, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
-    fprintf(out_resultfile, "------    ---------  ---------- ---------  --------   --------   --------   --------   ----\n");
+    fprintf(out_resultfile, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s) iter\n");
+    fprintf(out_resultfile, "------    ---------  ---------- ---------  --------   --------   --------   -------- ----\n");
   }
 }
 
@@ -535,10 +535,14 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
         reps = params->repetitions;
 
         double * times = malloc(sizeof(double)* reps);
+        long long  stonewall_avg_data_accessed = 0;
+        double stonewall_time = 0;
         for(int i=0; i < reps; i++){
                 IOR_point_t *point = (access == WRITE) ? &results[i].write :
                                                          &results[i].read;
                 times[i] = point->time;
+                stonewall_time += point->stonewall_time;
+                stonewall_avg_data_accessed += point->stonewall_avg_data_accessed;
         }
 
         bw = bw_values(reps, results, times, access);
@@ -559,6 +563,13 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           fprintf(out_resultfile, "%10.2f ", ops->mean);
           fprintf(out_resultfile, "%10.2f ", ops->sd);
           fprintf(out_resultfile, "%10.5f ", mean_of_array_of_doubles(times, reps));
+          if(test->params.stoneWallingWearOut){
+            fprintf(out_resultfile, "%10.2f ", stonewall_time / reps);
+            fprintf(out_resultfile, "%13.2f ", stonewall_avg_data_accessed / stonewall_time / MEBIBYTE);
+          }else{
+            fprintf(out_resultfile, "%10s ", "NA");
+            fprintf(out_resultfile, "%13s ", "NA");
+          }
           fprintf(out_resultfile, "%5d ", params->id);
           fprintf(out_resultfile, "%6d ", params->numTasks);
           fprintf(out_resultfile, "%3d ", params->tasksPerNode);
@@ -604,6 +615,10 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           PrintKeyValDouble("OPsMean", ops->mean);
           PrintKeyValDouble("OPsSD", ops->sd);
           PrintKeyValDouble("MeanTime", mean_of_array_of_doubles(times, reps));
+          if(test->params.stoneWallingWearOut){
+            PrintKeyValDouble("StoneWallTime", stonewall_time / reps);
+            PrintKeyValDouble("StoneWallbwMeanMIB", stonewall_avg_data_accessed / stonewall_time / MEBIBYTE);
+          }
           PrintKeyValDouble("xsizeMiB", (double) point->aggFileSizeForBW / MEBIBYTE);
           PrintEndSection();
         }else if (outputFormat == OUTPUT_CSV){
@@ -636,10 +651,10 @@ void PrintLongSummaryHeader()
         }
 
         fprintf(out_resultfile, "\n");
-        fprintf(out_resultfile, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s",
+        fprintf(out_resultfile, "%-9s %10s %10s %10s %10s %10s %10s %10s %10s %10s %10s %13s",
                 "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
                 "Max(OPs)", "Min(OPs)", "Mean(OPs)", "StdDev",
-                "Mean(s)");
+                "Mean(s)", "Stonewall(s)", "Stonewall(MiB)");
         fprintf(out_resultfile, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
                 " segcnt ");
         fprintf(out_resultfile, "%8s %8s %9s %5s", " blksiz", "xsize","aggs(MiB)", "API");

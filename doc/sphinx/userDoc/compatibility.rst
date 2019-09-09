@@ -1,10 +1,11 @@
 .. _compatibility:
 
-Compatibility
-=============
+Version Compatibility
+=====================
 
-IOR has a long history. Here are some hints about compatibility with older
-versions.
+IOR has a long history and only IOR version 3 is currently supported.  However,
+there are many forks of IOR based on earlier versions, and the following
+incompatibilities are known to exist between major versions.
 
 1)  IOR version 1 (c. 1996-2002) and IOR version 2 (c. 2003-present) are
     incompatible.  Input decks from one will not work on the other.  As version

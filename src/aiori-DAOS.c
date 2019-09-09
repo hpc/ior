@@ -61,10 +61,10 @@ static struct daos_options o = {
 };
 
 static option_help options [] = {
-      {0, "daos.pool", "pool uuid", OPTION_REQUIRED_ARGUMENT, 's', &o.pool},
-      {0, "daos.svcl", "pool SVCL", OPTION_REQUIRED_ARGUMENT, 's', &o.svcl},
+      {0, "daos.pool", "pool uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o.pool},
+      {0, "daos.svcl", "pool SVCL", OPTION_OPTIONAL_ARGUMENT, 's', &o.svcl},
       {0, "daos.group", "server group", OPTION_OPTIONAL_ARGUMENT, 's', &o.group},
-      {0, "daos.cont", "container uuid", OPTION_REQUIRED_ARGUMENT, 's', &o.cont},
+      {0, "daos.cont", "container uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o.cont},
       {0, "daos.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.chunk_size},
       {0, "daos.destroy", "Destroy Container", OPTION_FLAG, 'd', &o.destroy},
       {0, "daos.oclass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.oclass},

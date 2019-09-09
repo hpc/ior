@@ -390,9 +390,15 @@ int option_parse(int argc, char ** argv, options_all_t * opt_all){
     }
   }
 
+  if( requiredArgsSeen != requiredArgsNeeded ){
+	  printf("Seen = %d, needed = %d\n", requiredArgsSeen, requiredArgsNeeded);
+    printf("Error: Missing some required arguments\n\n");
+    printhelp = 1;
+  }
+
   if(error != 0){
     printf("Invalid options\n");
-    printhelp = -1;
+    printhelp = 1;
   }
 
   if(printhelp == 1){

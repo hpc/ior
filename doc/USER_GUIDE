@@ -342,7 +342,7 @@ MPIIO-, HDF5-, AND NCMPI-ONLY:
   * collective           - uses collective operations for access [0=FALSE]
 
   * showHints            - show hint/value pairs attached to open file [0=FALSE]
-                           NOTE: not available in NCMPI
+                           NOTE: available in NCMPI only if PnetCDF is 1.2.0 or later
 
 LUSTRE-SPECIFIC:
 ================

@@ -71,6 +71,7 @@
 static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
                                IOR_offset_t, IOR_param_t *);
 static void POSIX_Fsync(void *, IOR_param_t *);
+static void POSIX_Sync(IOR_param_t * );
 
 /************************** O P T I O N S *****************************/
 typedef struct{
@@ -122,6 +123,7 @@ ior_aiori_t posix_aiori = {
         .stat = aiori_posix_stat,
         .get_options = POSIX_options,
         .enable_mdtest = true,
+        .sync = POSIX_Sync
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -146,7 +148,7 @@ void gpfs_free_all_locks(int fd)
 
         rc = gpfs_fcntl(fd, &release_all);
         if (verbose >= VERBOSE_0 && rc != 0) {
-                EWARN("gpfs_fcntl release all locks hint failed.");
+                EWARNF("gpfs_fcntl(%d, ...) release all locks hint failed.", fd);
         }
 }
 void gpfs_access_start(int fd, IOR_offset_t length, IOR_param_t *param, int access)
@@ -169,7 +171,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, IOR_param_t *param, int acce
 
         rc = gpfs_fcntl(fd, &take_locks);
         if (verbose >= VERBOSE_2 && rc != 0) {
-                EWARN("gpfs_fcntl access range hint failed.");
+                EWARNF("gpfs_fcntl(fd, ...) access range hint failed.", fd);
         }
 }
 
@@ -193,7 +195,7 @@ void gpfs_access_end(int fd, IOR_offset_t length, IOR_param_t *param, int access
 
         rc = gpfs_fcntl(fd, &free_locks);
         if (verbose >= VERBOSE_2 && rc != 0) {
-                EWARN("gpfs_fcntl free range hint failed.");
+                EWARNF("gpfs_fcntl(fd, ...) free range hint failed.", fd);
         }
 }
 
@@ -260,14 +262,14 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
         char* dir = dirname(dirTmp);
         DIR* parentDirS = opendir(dir);
         if (!parentDirS) {
-                ERR("Failed to get directory");
+                ERRF("Failed to get directory: %s", dir);
         }
         else
         {
                 int parentDirFd = dirfd(parentDirS);
                 if (parentDirFd < 0)
                 {
-                        ERR("Failed to get directory descriptor");
+                        ERRF("Failed to get directory descriptor: %s", dir);
                 }
                 else
                 {
@@ -319,6 +321,7 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 void *POSIX_Create(char *testFileName, IOR_param_t * param)
 {
         int fd_oflag = O_BINARY;
+        int mode = 0664;
         int *fd;
 
         fd = (int *)malloc(sizeof(int));
@@ -346,9 +349,10 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                 if (!param->filePerProc && rank != 0) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         fd_oflag |= O_RDWR;
-                        *fd = open64(testFileName, fd_oflag, 0664);
+                        *fd = open64(testFileName, fd_oflag, mode);
                         if (*fd < 0)
-                                ERR("open64() failed");
+                                ERRF("open64(\"%s\", %d, %#o) failed",
+                                        testFileName, fd_oflag, mode);
                 } else {
                         struct lov_user_md opts = { 0 };
 
@@ -363,7 +367,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
 
                         fd_oflag |=
                             O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
-                        *fd = open64(testFileName, fd_oflag, 0664);
+                        *fd = open64(testFileName, fd_oflag, mode);
                         if (*fd < 0) {
                                 fprintf(stdout, "\nUnable to open '%s': %s\n",
                                         testFileName, strerror(errno));
@@ -392,7 +396,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                 if (beegfs_isOptionSet(param->beegfs_chunkSize)
                     || beegfs_isOptionSet(param->beegfs_numTargets)) {
                     bool result = beegfs_createFilePath(testFileName,
-                                                        0664,
+                                                        mode,
                                                         param->beegfs_numTargets,
                                                         param->beegfs_chunkSize);
                     if (result) {
@@ -403,9 +407,10 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                  }
 #endif /* HAVE_BEEGFS_BEEGFS_H */
 
-                *fd = open64(testFileName, fd_oflag, 0664);
+                *fd = open64(testFileName, fd_oflag, mode);
                 if (*fd < 0)
-                        ERR("open64() failed");
+                        ERRF("open64(\"%s\", %d, %#o) failed",
+                                testFileName, fd_oflag, mode);
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
         }
@@ -413,7 +418,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         if (param->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
-                        ERR("ioctl(LL_IOC_SETFLAGS) failed");
+                        ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
         }
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
 
@@ -469,7 +474,7 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
 
         *fd = open64(testFileName, fd_oflag);
         if (*fd < 0)
-                ERR("open64 failed");
+                ERRF("open64(\"%s\", %d) failed", testFileName, fd_oflag);
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
         if (param->lustre_ignore_locks) {
@@ -479,7 +484,7 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
                                 "** Disabling lustre range locking **\n");
                 }
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
-                        ERR("ioctl(LL_IOC_SETFLAGS) failed");
+                        ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
         }
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
 
@@ -517,7 +522,7 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
 
         /* seek to offset */
         if (lseek64(fd, param->offset, SEEK_SET) == -1)
-                ERR("lseek64() failed");
+                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, param->offset);
 
         while (remaining > 0) {
                 /* write/read file */
@@ -530,7 +535,8 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                         }
                         rc = write(fd, ptr, remaining);
                         if (rc == -1)
-                                ERR("write() failed");
+                                ERRF("write(%d, %p, %lld) failed",
+                                        fd, (void*)ptr, remaining);
                         if (param->fsyncPerWrite == TRUE)
                                 POSIX_Fsync(&fd, param);
                 } else {        /* READ or CHECK */
@@ -542,9 +548,11 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                         }
                         rc = read(fd, ptr, remaining);
                         if (rc == 0)
-                                ERR("read() returned EOF prematurely");
+                                ERRF("read(%d, %p, %lld) returned EOF prematurely",
+                                        fd, (void*)ptr, remaining);
                         if (rc == -1)
-                                ERR("read() failed");
+                                ERRF("read(%d, %p, %lld) failed",
+                                        fd, (void*)ptr, remaining);
                 }
                 if (rc < remaining) {
                         fprintf(stdout,
@@ -579,8 +587,18 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
 static void POSIX_Fsync(void *fd, IOR_param_t * param)
 {
         if (fsync(*(int *)fd) != 0)
-                EWARN("fsync() failed");
+                EWARNF("fsync(%d) failed", *(int *)fd);
 }
+
+
+static void POSIX_Sync(IOR_param_t * param)
+{
+  int ret = system("sync");
+  if (ret != 0){
+    FAIL("Error executing the sync command, ensure it exists.");
+  }
+}
+
 
 /*
  * Close a file through the POSIX interface.
@@ -590,7 +608,7 @@ void POSIX_Close(void *fd, IOR_param_t * param)
         if(param->dryRun)
           return;
         if (close(*(int *)fd) != 0)
-                ERR("close() failed");
+                ERRF("close(%d) failed", *(int *)fd);
         free(fd);
 }
 
@@ -602,10 +620,8 @@ void POSIX_Delete(char *testFileName, IOR_param_t * param)
         if(param->dryRun)
           return;
         if (unlink(testFileName) != 0){
-                char errmsg[256];
-                sprintf(errmsg, "[RANK %03d]: unlink() of file \"%s\" failed\n",
-                        rank, testFileName);
-                EWARN(errmsg);
+                EWARNF("[RANK %03d]: unlink() of file \"%s\" failed\n",
+                       rank, testFileName);
         }
 }
 
@@ -621,7 +637,7 @@ IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
 
         if (stat(testFileName, &stat_buf) != 0) {
-                ERR("stat() failed");
+                ERRF("stat(\"%s\", ...) failed", testFileName);
         }
         aggFileSizeFromStat = stat_buf.st_size;
 
