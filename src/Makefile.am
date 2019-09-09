@@ -71,7 +71,7 @@ extraLDADD += -lrados
 endif
 
 if USE_DAOS_AIORI
-extraSOURCES += aiori-DAOS.c aiori-DFS.c list.h
+extraSOURCES += aiori-DAOS.c aiori-DFS.c
 endif
 
 if USE_GFARM_AIORI
