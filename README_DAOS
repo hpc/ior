@@ -59,12 +59,15 @@ ior -a DFS [ior_options] [dfs_options]
 mdtest -a DFS [mdtest_options] [dfs_options]
 
 Required Options:
---daos.pool <pool_uuid>: pool uuid to connect to (has to be created beforehand)
---daos.svcl <pool_svcl>: pool svcl list (: separated)
---daos.cont <co_uuid>: container uuid that will hold the encapsulated namespace
+--dfs.pool <pool_uuid>: pool uuid to connect to (has to be created beforehand)
+--dfs.svcl <pool_svcl>: pool svcl list (: separated)
+--dfs.cont <co_uuid>: container uuid that will hold the encapsulated namespace
 
 Optional Options:
---daos.group <group_name>: group name of servers with the pool
+--dfs.group <group_name>: group name of servers with the pool
+--dfs.chunk_size	<chunk_size>: Chunk size of the files
+--dfs.destroy		flag to destory the container on finalize
+--dfs.oclass		<object_class>: specific object class for files
 
 In the IOR options, the file name should be specified on the root dir directly
 since ior does not create directories and the DFS container representing the
@@ -72,9 +75,9 @@ encapsulated namespace is not the same as the system namespace the user is
 executing from.
 
 Examples that should work include:
-  - "ior -a DFS -w -W -o /test1 --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
-  - "ior -a DFS -w -W -r -R -o /test2 -b 1g -t 4m -C --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
-  - "ior -a DFS -w -r -o /test3 -b 8g -t 1m -C --daos.pool <pool_uuid> --daos.svcl <svc_ranks> --daos.cont <co_uuid>"
+  - "ior -a DFS -w -W -o /test1 --dfs.pool <pool_uuid> --dfs.svcl <svc_ranks> --dfs.cont <co_uuid>"
+  - "ior -a DFS -w -W -r -R -o /test2 -b 1g -t 4m -C --dfs.pool <pool_uuid> --dfs.svcl <svc_ranks> --dfs.cont <co_uuid>"
+  - "ior -a DFS -w -r -o /test3 -b 8g -t 1m -C --dfs.pool <pool_uuid> --dfs.svcl <svc_ranks> --dfs.cont <co_uuid>"
 
 Running mdtest, the user needs to specify a directory with -d where the test
 tree will be created. Some examples:

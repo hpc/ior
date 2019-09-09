@@ -131,7 +131,7 @@ do {                                                                    \
         int _rc = (rc);                                                 \
                                                                         \
         if (_rc < 0) {                                                  \
-                fprintf(stdout, "ior ERROR (%s:%d): %d: %d: "           \
+                fprintf(stderr, "ior ERROR (%s:%d): %d: %d: "           \
                         format"\n", __FILE__, __LINE__, rank, _rc,      \
                         ##__VA_ARGS__);                                 \
                 fflush(stdout);                                         \
@@ -148,7 +148,7 @@ do {                                                                    \
 /* For generic errors like invalid command line options. */
 #define GERR(format, ...)                                               \
 do {                                                                    \
-        fprintf(stdout, format"\n", ##__VA_ARGS__);                     \
+        fprintf(stderr, format"\n", ##__VA_ARGS__);                     \
         MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");  \
 } while (0)
 
@@ -331,8 +331,6 @@ DAOS_Fini()
 	DCHECK(rc, "Failed to disconnect from pool %s", o.pool);
 
 	MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
-	usleep(20000 * rank);
-
         if (rank == 0)
 		INFO(VERBOSE_1, "Finalizing DAOS..");
 

@@ -149,17 +149,16 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
-#define DERR(rc, format, ...)                                           \
+#define INFO(level, format, ...)					\
 do {                                                                    \
-        int _rc = (rc);                                                 \
-                                                                        \
-        if (_rc != 0) {                                                  \
-                fprintf(stderr, "ERROR (%s:%d): %d: %d: "               \
-                        format"\n", __FILE__, __LINE__, rank, _rc,      \
-                        ##__VA_ARGS__);                                 \
-                fflush(stderr);                                         \
-                goto out;                                               \
-        }                                                               \
+        if (verbose >= level)						\
+                printf("[%d] "format"\n", rank, ##__VA_ARGS__);         \
+} while (0)
+
+#define GERR(format, ...)                                               \
+do {                                                                    \
+        fprintf(stderr, format"\n", ##__VA_ARGS__);                     \
+        MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");  \
 } while (0)
 
 static inline struct aiori_dir_hdl *
@@ -351,21 +350,19 @@ lookup_insert_dir(const char *name)
 
         hdl = calloc(1, sizeof(struct aiori_dir_hdl));
         if (hdl == NULL)
-                DERR(ENOMEM, "failed to alloc dir handle");
+                GERR("failed to alloc dir handle");
 
         strncpy(hdl->name, name, PATH_MAX-1);
         hdl->name[PATH_MAX-1] = '\0';
 
         rc = dfs_lookup(dfs, name, O_RDWR, &hdl->oh, NULL, NULL);
-        DERR(rc, "dfs_lookup() of %s Failed", name);
+        DCHECK(rc, "dfs_lookup() of %s Failed", name);
 
         rc = d_hash_rec_insert(dir_hash, hdl->name, strlen(hdl->name),
                                &hdl->entry, true);
-        DERR(rc, "Failed to insert dir handle in hashtable");
+        DCHECK(rc, "Failed to insert dir handle in hashtable");
 
         return hdl->oh;
-out:
-        return NULL;
 }
 
 static option_help * DFS_options(){
@@ -382,7 +379,7 @@ DFS_Init() {
         if (o.oclass) {
                 objectClass = daos_oclass_name2id(o.oclass);
 		if (objectClass == OC_UNKNOWN)
-			DCHECK(-1, "Invalid DAOS Object class %s\n", o.oclass);
+			GERR("Invalid DAOS Object class %s\n", o.oclass);
 	}
 
 	rc = daos_init();
@@ -407,10 +404,8 @@ DFS_Init() {
                 if (svcl == NULL)
                         ERR("Failed to allocate svcl");
 
-                if (verbose >= VERBOSE_1) {
-                        printf("Pool uuid = %s, SVCL = %s\n", o.pool, o.svcl);
-                        printf("DFS Container namespace uuid = %s\n", o.cont);
-                }
+                INFO(VERBOSE_1, "Pool uuid = %s, SVCL = %s\n", o.pool, o.svcl);
+                INFO(VERBOSE_1, "DFS Container namespace uuid = %s\n", o.cont);
 
                 /** Connect to DAOS pool */
                 rc = daos_pool_connect(pool_uuid, o.group, svcl, DAOS_PC_RW,
@@ -422,8 +417,7 @@ DFS_Init() {
                                     NULL);
                 /* If NOEXIST we create it */
                 if (rc == -DER_NONEXIST) {
-                        if (verbose >= VERBOSE_1)
-                                printf("Creating DFS Container ...\n");
+                        INFO(VERBOSE_1, "Creating DFS Container ...\n");
 
                         rc = daos_cont_create(poh, co_uuid, NULL, NULL);
                         if (rc == 0) {
@@ -457,35 +451,38 @@ DFS_Finalize()
         DCHECK(rc, "Failed to close container %s (%d)", o.cont, rc);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	if (rank == 0 && o.destroy) {
-                uuid_t uuid;
-                double t1, t2;
+	if (o.destroy) {
+                if (rank == 0) {
+                        uuid_t uuid;
+                        double t1, t2;
 
-                if (verbose >= VERBOSE_1)
-                        printf("Destorying DFS Container: %s\n", o.cont);
-                uuid_parse(o.cont, uuid);
-                t1 = MPI_Wtime();
-                rc = daos_cont_destroy(poh, uuid, 1, NULL);
-                t2 = MPI_Wtime();
-                if (rc == 0 && verbose >= VERBOSE_1)
-                        printf("Container Destroy time = %f secs", t2-t1);
+                        INFO(VERBOSE_1, "Destorying DFS Container: %s\n", o.cont);
+                        uuid_parse(o.cont, uuid);
+                        t1 = MPI_Wtime();
+                        rc = daos_cont_destroy(poh, uuid, 1, NULL);
+                        t2 = MPI_Wtime();
+                        if (rc == 0)
+                                INFO(VERBOSE_1, "Container Destroy time = %f secs", t2-t1);
+                }
+
+                MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                if (rc) {
+			if (rank == 0)
+				DCHECK(rc, "Failed to destroy container %s (%d)", o.cont, rc);
+			MPI_Abort(MPI_COMM_WORLD, -1);
+                }
         }
 
-        MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        if (rc)
-                DCHECK(rc, "Failed to destroy container %s (%d)", o.cont, rc);
-
-        if (rank == 0 && verbose >= VERBOSE_1)
-                printf("Disconnecting from DAOS POOL\n");
+        if (rank == 0)
+                INFO(VERBOSE_1, "Disconnecting from DAOS POOL\n");
 
         rc = daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
 
 	MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
-	usleep(20000 * rank);
 
-        if (rank == 0 && verbose >= VERBOSE_1)
-                printf("Finalizing DAOS..\n");
+        if (rank == 0)
+                INFO(VERBOSE_1, "Finalizing DAOS..\n");
 
 	rc = daos_fini();
         DCHECK(rc, "Failed to finalize DAOS");
@@ -506,13 +503,13 @@ DFS_Create(char *testFileName, IOR_param_t *param)
         assert(param);
 
 	rc = parse_filename(testFileName, &name, &dir_name);
-        DERR(rc, "Failed to parse path %s", testFileName);
+        DCHECK(rc, "Failed to parse path %s", testFileName);
 	assert(dir_name);
 	assert(name);
 
         parent = lookup_insert_dir(dir_name);
         if (parent == NULL)
-                DERR(rc, "Failed to lookup parent dir");
+                GERR("Failed to lookup parent dir");
 
         mode = S_IFREG | param->mode;
 	if (param->filePerProc || rank == 0) {
@@ -520,7 +517,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                               objectClass, o.chunk_size, NULL, &obj);
-                DERR(rc, "dfs_open() of %s Failed", name);
+                DCHECK(rc, "dfs_open() of %s Failed", name);
         }
         if (!param->filePerProc) {
                 MPI_Barrier(MPI_COMM_WORLD);
@@ -528,11 +525,10 @@ DFS_Create(char *testFileName, IOR_param_t *param)
                         fd_oflag |= O_RDWR;
                         rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                                       objectClass, o.chunk_size, NULL, &obj);
-                        DERR(rc, "dfs_open() of %s Failed", name);
+                        DCHECK(rc, "dfs_open() of %s Failed", name);
                 }
         }
 
-out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -557,20 +553,19 @@ DFS_Open(char *testFileName, IOR_param_t *param)
 	mode = S_IFREG | param->mode;
 
 	rc = parse_filename(testFileName, &name, &dir_name);
-        DERR(rc, "Failed to parse path %s", testFileName);
+        DCHECK(rc, "Failed to parse path %s", testFileName);
 
 	assert(dir_name);
 	assert(name);
 
         parent = lookup_insert_dir(dir_name);
         if (parent == NULL)
-                DERR(rc, "Failed to lookup parent dir");
+                GERR("Failed to lookup parent dir");
 
 	rc = dfs_open(dfs, parent, name, mode, fd_oflag, objectClass,
                       o.chunk_size, NULL, &obj);
-        DERR(rc, "dfs_open() of %s Failed", name);
+        DCHECK(rc, "dfs_open() of %s Failed", name);
 
-out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -666,19 +661,18 @@ DFS_Delete(char *testFileName, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(testFileName, &name, &dir_name);
-        DERR(rc, "Failed to parse path %s", testFileName);
+        DCHECK(rc, "Failed to parse path %s", testFileName);
 
 	assert(dir_name);
 	assert(name);
 
         parent = lookup_insert_dir(dir_name);
         if (parent == NULL)
-                DERR(rc, "Failed to lookup parent dir");
+                GERR("Failed to lookup parent dir");
 
 	rc = dfs_remove(dfs, parent, name, false, NULL);
-        DERR(rc, "dfs_remove() of %s Failed", name);
+        DCHECK(rc, "dfs_remove() of %s Failed", name);
 
-out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -753,7 +747,7 @@ DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(path, &name, &dir_name);
-        DERR(rc, "Failed to parse path %s", path);
+        DCHECK(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
         if (!name)
@@ -761,12 +755,11 @@ DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
 
         parent = lookup_insert_dir(dir_name);
         if (parent == NULL)
-                DERR(rc, "Failed to lookup parent dir");
+                GERR("Failed to lookup parent dir");
 
 	rc = dfs_mkdir(dfs, parent, name, mode);
-        DERR(rc, "dfs_mkdir() of %s Failed", name);
+        DCHECK(rc, "dfs_mkdir() of %s Failed", name);
 
-out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -784,19 +777,18 @@ DFS_Rmdir(const char *path, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(path, &name, &dir_name);
-        DERR(rc, "Failed to parse path %s", path);
+        DCHECK(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
         assert(name);
 
         parent = lookup_insert_dir(dir_name);
         if (parent == NULL)
-                DERR(rc, "Failed to lookup parent dir");
+                GERR("Failed to lookup parent dir");
 
 	rc = dfs_remove(dfs, parent, name, false, NULL);
-        DERR(rc, "dfs_remove() of %s Failed", name);
+        DCHECK(rc, "dfs_remove() of %s Failed", name);
 
-out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -815,13 +807,13 @@ DFS_Access(const char *path, int mode, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(path, &name, &dir_name);
-        DERR(rc, "Failed to parse path %s", path);
+        DCHECK(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
 
         parent = lookup_insert_dir(dir_name);
         if (parent == NULL)
-                DERR(rc, "Failed to lookup parent dir");
+                GERR("Failed to lookup parent dir");
 
         if (name && strcmp(name, ".") == 0) {
                 free(name);
@@ -829,7 +821,6 @@ DFS_Access(const char *path, int mode, IOR_param_t * param)
         }
 	rc = dfs_stat(dfs, parent, name, &stbuf);
 
-out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -847,19 +838,18 @@ DFS_Stat(const char *path, struct stat *buf, IOR_param_t * param)
 	int rc;
 
 	rc = parse_filename(path, &name, &dir_name);
-        DERR(rc, "Failed to parse path %s", path);
+        DCHECK(rc, "Failed to parse path %s", path);
 
 	assert(dir_name);
         assert(name);
 
         parent = lookup_insert_dir(dir_name);
         if (parent == NULL)
-                DERR(rc, "Failed to lookup parent dir");
+                GERR("Failed to lookup parent dir");
 
 	rc = dfs_stat(dfs, parent, name, buf);
-        DERR(rc, "dfs_stat() of %s Failed", name);
+        DCHECK(rc, "dfs_stat() of Failed (%d)", rc);
 
-out:
 	if (name)
 		free(name);
 	if (dir_name)
