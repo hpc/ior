@@ -1548,7 +1548,7 @@ void display_freespace(char *testdirpath)
         strcpy(dirpath, ".");
     }
 
-    if (strcasecmp(param.api, "DFS") == 0)
+    if (param.api && strcasecmp(param.api, "DFS") == 0)
 	    return;
 
     VERBOSE(3,5,"Before show_file_system_size, dirpath is '%s'", dirpath );
