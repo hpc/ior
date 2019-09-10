@@ -316,6 +316,7 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
                 if(strlen(arg) > 1){
                   printf("Error, ignoring remainder of string for option %c (%s).\n", o->shortVar, o->longVar);
                 }
+		break;
 	      }
               case('l'):{
                 *(long long*) o->variable = string_to_bytes(arg);
