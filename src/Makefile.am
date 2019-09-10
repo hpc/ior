@@ -70,6 +70,10 @@ extraSOURCES += aiori-RADOS.c
 extraLDADD += -lrados
 endif
 
+if USE_DAOS_AIORI
+extraSOURCES += aiori-DAOS.c aiori-DFS.c
+endif
+
 if USE_GFARM_AIORI
 extraSOURCES += aiori-Gfarm.c
 extraLDADD += -lgfarm

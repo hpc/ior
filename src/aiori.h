@@ -96,6 +96,8 @@ enum bench_type {
 };
 
 extern ior_aiori_t dummy_aiori;
+extern ior_aiori_t daos_aiori;
+extern ior_aiori_t dfs_aiori;
 extern ior_aiori_t hdf5_aiori;
 extern ior_aiori_t hdfs_aiori;
 extern ior_aiori_t ime_aiori;

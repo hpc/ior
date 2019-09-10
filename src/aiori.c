@@ -42,6 +42,10 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_POSIX_AIORI
         &posix_aiori,
 #endif
+#ifdef USE_DAOS_AIORI
+        &daos_aiori,
+        &dfs_aiori,
+#endif
         & dummy_aiori,
 #ifdef USE_HDF5_AIORI
         &hdf5_aiori,

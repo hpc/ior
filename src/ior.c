@@ -143,6 +143,7 @@ int ior_main(int argc, char **argv)
                     sleep(5);
                     fprintf(out_logfile, "\trank %d: awake.\n", rank);
             }
+
             TestIoSys(tptr);
             ShowTestEnd(tptr);
     }
@@ -155,9 +156,9 @@ int ior_main(int argc, char **argv)
     /* display finish time */
     PrintTestEnds();
 
-    MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
-
     aiori_finalize(tests_head);
+
+    MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
 
     DestroyTests(tests_head);
 
@@ -293,7 +294,8 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep,
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
                   "cannot total data moved");
 
-        if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0) {
+        if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0 &&
+            strcasecmp(params->api, "DAOS") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
                         if ((params->expectedAggFileSize
                              != point->aggFileSizeFromXfer)

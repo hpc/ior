@@ -367,6 +367,7 @@ static void create_file (const char *path, uint64_t itemNum) {
     } else {
         param.openFlags = IOR_CREAT | IOR_WRONLY;
         param.filePerProc = !shared_file;
+	param.mode = FILEMODE;
 
         VERBOSE(3,5,"create_remove_items_helper (non-collective, shared): open..." );
 
@@ -444,6 +445,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
 
             //create files
             param.openFlags = IOR_WRONLY | IOR_CREAT;
+	    param.mode = FILEMODE;
             aiori_fh = backend->create (curr_item, &param);
             if (NULL == aiori_fh) {
                 FAIL("unable to create file %s", curr_item);
@@ -1546,6 +1548,9 @@ void display_freespace(char *testdirpath)
         strcpy(dirpath, ".");
     }
 
+    if (param.api && strcasecmp(param.api, "DFS") == 0)
+	    return;
+
     VERBOSE(3,5,"Before show_file_system_size, dirpath is '%s'", dirpath );
     show_file_system_size(dirpath);
     VERBOSE(3,5, "After show_file_system_size, dirpath is '%s'\n", dirpath );
@@ -1939,6 +1944,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
 
+    if (backend->initialize)
+	    backend->initialize();
+
     pid = getpid();
     uid = getuid();
 
@@ -2224,5 +2232,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (random_seed > 0) {
         free(rand_array);
     }
+
+    if (backend->finalize)
+            backend->finalize(NULL);
+
     return summary_table;
 }
