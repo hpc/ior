@@ -20,7 +20,8 @@ void PrintLongSummaryOneTest(IOR_test_t *test);
 void DisplayFreespace(IOR_param_t * test);
 void GetTestFileName(char *, IOR_param_t *);
 void PrintRemoveTiming(double start, double finish, int rep);
-void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_subset, double totalTime, int rep);
+void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, double latency,
+			double *diff_subset, double totalTime, int rep);
 void PrintTestEnds();
 void PrintTableHeader();
 /* End of ior-output */
