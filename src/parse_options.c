@@ -240,25 +240,25 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->memoryPerNode = NodeMemoryStringToBytes(value);
                 params->memoryPerTask = 0;
         } else if (strcasecmp(option, "lustrestripecount") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
+#ifndef HAVE_LUSTRE_USER
                 ERR("ior was not compiled with Lustre support");
 #endif
                 params->lustre_stripe_count = atoi(value);
                 params->lustre_set_striping = 1;
         } else if (strcasecmp(option, "lustrestripesize") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
+#ifndef HAVE_LUSTRE_USER
                 ERR("ior was not compiled with Lustre support");
 #endif
                 params->lustre_stripe_size = string_to_bytes(value);
                 params->lustre_set_striping = 1;
         } else if (strcasecmp(option, "lustrestartost") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
+#ifndef HAVE_LUSTRE_USER
                 ERR("ior was not compiled with Lustre support");
 #endif
                 params->lustre_start_ost = atoi(value);
                 params->lustre_set_striping = 1;
         } else if (strcasecmp(option, "lustreignorelocks") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
+#ifndef HAVE_LUSTRE_USER
                 ERR("ior was not compiled with Lustre support");
 #endif
                 params->lustre_ignore_locks = atoi(value);

@@ -335,7 +335,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         if(param->dryRun)
           return 0;
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
 /* Add a #define for FASYNC if not available, as it forms part of
  * the Lustre O_LOV_DELAY_CREATE definition. */
 #ifndef FASYNC
@@ -388,7 +388,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                                           "barrier error");
                 }
         } else {
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
                 fd_oflag |= O_CREAT | O_RDWR;
 
@@ -412,7 +412,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                         ERRF("open64(\"%s\", %d, %#o) failed",
                                 testFileName, fd_oflag, mode);
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
         }
 
         if (param->lustre_ignore_locks) {
@@ -420,7 +420,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
                         ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         /* in the single shared file case, immediately release all locks, with
@@ -476,7 +476,7 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
         if (*fd < 0)
                 ERRF("open64(\"%s\", %d) failed", testFileName, fd_oflag);
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
         if (param->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
                 if (verbose >= VERBOSE_1) {
@@ -486,7 +486,7 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
                         ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         if(param->gpfs_release_token) {

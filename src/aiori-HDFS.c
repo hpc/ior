@@ -76,11 +76,6 @@
 #include <fcntl.h>              /* IO operations */
 #include <sys/stat.h>
 #include <assert.h>
-/*
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
-#include <lustre/lustre_user.h>
-#endif
-*/
 
 #include "ior.h"
 #include "aiori.h"

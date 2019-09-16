@@ -91,11 +91,6 @@
 
 #include <errno.h>
 #include <assert.h>
-/*
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
-#include <lustre/lustre_user.h>
-#endif
-*/
 
 #include "ior.h"
 #include "aiori.h"

@@ -84,7 +84,8 @@ AC_ARG_WITH([lustre],
                 [support configurable Lustre striping values @<:@default=check@:>@])],
         [], [with_lustre=check])
 AS_IF([test "x$with_lustre" != xno], [
-        AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], break, [
+        AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], 
+                [AC_DEFINE([HAVE_LUSTRE_USER], [], [Lustre user API available in some shape or form])], [
                 if test "x$with_lustre" != xcheck -a \
                         "x$ac_cv_header_linux_lustre_lustre_user_h" = "xno" -a \
                         "x$ac_cv_header_lustre_lustre_user_h" = "xno" ; then
