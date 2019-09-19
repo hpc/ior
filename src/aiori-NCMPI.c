@@ -216,7 +216,7 @@ static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
                             param->blockSize / param->transferSize;
 
                         /* reshape 1D array to 3D array:
-                           [segmentCount*numTasksWorld][numTransfers][transferSize]
+                           [segmentCount*numTasks][numTransfers][transferSize]
                            Requirement: none of these dimensions should be > 4G,
                          */
                         NCMPI_CHECK(ncmpi_def_dim
@@ -267,7 +267,7 @@ static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
         bufSize[1] = 1;
         bufSize[2] = param->transferSize;
 
-        offset[0] = segmentNum * numTasksWorld + rank;
+        offset[0] = segmentNum * param->numTasks + rank;
         offset[1] = transferNum;
         offset[2] = 0;
 

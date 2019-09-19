@@ -120,7 +120,7 @@ Version 2.10.1
 - Corrected IOR_GetFileSize() function to point to HDF5 and NCMPI versions of
   IOR_GetFileSize() calls
 - Changed the netcdf dataset from 1D array to 4D array, where the 4 dimensions
-  are: [segmentCount][numTasksWorld][numTransfers][transferSize]
+  are: [segmentCount][numTasks][numTransfers][transferSize]
   This patch from Wei-keng Liao allows for file sizes > 4GB (provided no
   single dimension is > 4GB).
 - Finalized random-capability release
