@@ -241,7 +241,6 @@ DAOS_Init()
         if (rank == 0) {
                 uuid_t			uuid;
 		d_rank_list_t		*svcl = NULL;
-                d_rank_list_t    	ranks;
 		static daos_pool_info_t po_info;
 		static daos_cont_info_t co_info;
 
@@ -368,6 +367,8 @@ DAOS_Create(char *testFileName, IOR_param_t *param)
 	/** Distribute the array handle if not FPP */
 	if (!param->filePerProc)
 		HandleDistribute(&aoh, ARRAY_HANDLE);
+
+	return &aoh;
 }
 
 static int
@@ -417,6 +418,8 @@ DAOS_Open(char *testFileName, IOR_param_t *param)
 	/** Distribute the array handle if not FPP */
 	if (!param->filePerProc)
 		HandleDistribute(&aoh, ARRAY_HANDLE);
+
+	return &aoh;
 }
 
 static IOR_offset_t
