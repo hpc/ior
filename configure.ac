@@ -91,7 +91,8 @@ AS_IF([test "x$with_lustre" = xyes ], [
                         AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
                 fi
         ])
-        AC_CHECK_HEADERS([linux/lustre/lustreapi.h lustre/lustreapi.h], break, [
+        AC_CHECK_HEADERS([linux/lustre/lustreapi.h lustre/lustreapi.h],
+		[AC_DEFINE([HAVE_LUSTRE_LUSTREAPI], [], [Lustre user API available in some shape or form])], [
                 if test "x$with_lustre" != xcheck -a \
                         "x$ac_cv_header_linux_lustre_lustreapi_h" = "xno" -a \
                         "x$ac_cv_header_lustre_lustreapi_h" = "xno" ; then

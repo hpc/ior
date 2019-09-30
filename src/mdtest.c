@@ -76,9 +76,9 @@
 
 #include <mpi.h>
 
-#ifdef HAVE_LUSTRE_LUSTREAPI_H
+#ifdef HAVE_LUSTRE_LUSTREAPI
 #include <lustre/lustreapi.h>
-#endif /* HAVE_LUSTRE_LUSTREAPI_H */
+#endif /* HAVE_LUSTRE_LUSTREAPI */
 
 #define FILEMODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #define DIRMODE S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IXOTH
@@ -156,9 +156,9 @@ static int call_sync;
 static int path_count;
 static int nstride; /* neighbor stride */
 static int make_node = 0;
-#ifdef HAVE_LUSTRE_LUSTREAPI_H
+#ifdef HAVE_LUSTRE_LUSTREAPI
 static int global_dir_layout;
-#endif /* HAVE_LUSTRE_LUSTREAPI_H */
+#endif /* HAVE_LUSTRE_LUSTREAPI */
 
 static mdtest_results_t * summary_table;
 static pid_t pid;
@@ -1582,7 +1582,7 @@ void create_remove_directory_tree(int create,
             if (-1 == backend->mkdir (dir, DIRMODE, &param)) {
                 fprintf(out_logfile, "error could not create directory '%s'\n", dir);
             }
-#ifdef HAVE_LUSTRE_LUSTREAPI_H
+#ifdef HAVE_LUSTRE_LUSTREAPI
             /* internal node for branching, can be non-striped for children */
             if (global_dir_layout && \
                 llapi_dir_set_default_lmv_stripe(dir, -1, 0,
@@ -1590,7 +1590,7 @@ void create_remove_directory_tree(int create,
                                                  NULL) == -1) {
                 FAIL("Unable to reset to global default directory layout");
             }
-#endif /* HAVE_LUSTRE_LUSTREAPI_H */
+#endif /* HAVE_LUSTRE_LUSTREAPI */
         }
 
         create_remove_directory_tree(create, ++currDepth, dir, ++dirNum, progress);
@@ -1657,12 +1657,12 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
         if (backend->mkdir(testdir, DIRMODE, &param) != 0) {
             FAIL("Unable to create test directory %s", testdir);
         }
-#ifdef HAVE_LUSTRE_LUSTREAPI_H
+#ifdef HAVE_LUSTRE_LUSTREAPI
         /* internal node for branching, can be non-striped for children */
         if (global_dir_layout && unique_dir_per_task && llapi_dir_set_default_lmv_stripe(testdir, -1, 0, LMV_HASH_TYPE_FNV_1A_64, NULL) == -1) {
             FAIL("Unable to reset to global default directory layout");
         }
-#endif /* HAVE_LUSTRE_LUSTREAPI_H */
+#endif /* HAVE_LUSTRE_LUSTREAPI */
     }
   }
 
@@ -1881,9 +1881,9 @@ void mdtest_init_args(){
    path_count = 0;
    nstride = 0;
    make_node = 0;
-#ifdef HAVE_LUSTRE_LUSTREAPI_H
+#ifdef HAVE_LUSTRE_LUSTREAPI
    global_dir_layout = 0;
-#endif /* HAVE_LUSTRE_LUSTREAPI_H */
+#endif /* HAVE_LUSTRE_LUSTREAPI */
 }
 
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
@@ -1930,9 +1930,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'e', NULL,        "bytes to read from each file", OPTION_OPTIONAL_ARGUMENT, 'l', & read_bytes},
       {'f', NULL,        "first number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & first},
       {'F', NULL,        "perform test on files only (no directories)", OPTION_FLAG, 'd', & files_only},
-#ifdef HAVE_LUSTRE_LUSTREAPI_H
+#ifdef HAVE_LUSTRE_LUSTREAPI
       {'g', NULL,        "global default directory layout for test subdirectories (deletes inherited striping layout)", OPTION_FLAG, 'd', & global_dir_layout},
-#endif /* HAVE_LUSTRE_LUSTREAPI_H */
+#endif /* HAVE_LUSTRE_LUSTREAPI */
       {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & iterations},
       {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & items_per_dir},
       {'k', NULL,        "use mknod to create file", OPTION_FLAG, 'd', & make_node},
@@ -2026,9 +2026,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     VERBOSE(1,-1, "read_only               : %s", ( read_only ? "True" : "False" ));
     VERBOSE(1,-1, "first                   : %d", first );
     VERBOSE(1,-1, "files_only              : %s", ( files_only ? "True" : "False" ));
-#ifdef HAVE_LUSTRE_LUSTREAPI_H
+#ifdef HAVE_LUSTRE_LUSTREAPI
     VERBOSE(1,-1, "global_dir_layout       : %s", ( global_dir_layout ? "True" : "False" ));
-#endif /* HAVE_LUSTRE_LUSTREAPI_H */
+#endif /* HAVE_LUSTRE_LUSTREAPI */
     VERBOSE(1,-1, "iterations              : %d", iterations );
     VERBOSE(1,-1, "items_per_dir           : "LLU"", items_per_dir );
     VERBOSE(1,-1, "last                    : %d", last );
