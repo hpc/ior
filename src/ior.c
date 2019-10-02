@@ -844,8 +844,9 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
 {
         double reduced[IOR_NB_TIMERS] = { 0 };
         double diff[IOR_NB_TIMERS / 2 + 1];
-        double totalTime;
-        double bw;
+        double totalTime, accessTime;
+        IOR_param_t *params = &test->params;
+        double bw, iops, latency, minlatency;
         int i;
         MPI_Op op;
 
@@ -859,15 +860,12 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
                                      op, 0, testComm), "MPI_Reduce()");
         }
 
-        /* Only rank 0 tallies and prints the results. */
-        if (rank != 0)
-                return;
-
         /* Calculate elapsed times and throughput numbers */
         for (i = 0; i < IOR_NB_TIMERS / 2; i++)
                 diff[i] = reduced[2 * i + 1] - reduced[2 * i];
 
         totalTime = reduced[5] - reduced[0];
+        accessTime = reduced[3] - reduced[2];
 
         IOR_point_t *point = (access == WRITE) ? &test->results[rep].write :
                                                  &test->results[rep].read;
@@ -878,7 +876,25 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
                 return;
 
         bw = (double)point->aggFileSizeForBW / totalTime;
-        PrintReducedResult(test, access, bw, diff, totalTime, rep);
+
+        /* For IOPS in this iteration, we divide the total amount of IOs from
+         * all ranks over the entire access time (first start -> last end). */
+        iops = (point->aggFileSizeForBW / params->transferSize) / accessTime;
+
+        /* For Latency, we divide the total access time for each task over the
+         * number of I/Os issued from that task; then reduce and display the
+         * minimum (best) latency achieved. So what is reported is the average
+         * latency of all ops from a single task, then taking the minimum of
+         * that between all tasks. */ 
+        latency = (timer[3] - timer[2]) / (params->blockSize / params->transferSize);
+        MPI_CHECK(MPI_Reduce(&latency, &minlatency, 1, MPI_DOUBLE,
+                             MPI_MIN, 0, testComm), "MPI_Reduce()");
+
+        /* Only rank 0 tallies and prints the results. */
+        if (rank != 0)
+                return;
+
+        PrintReducedResult(test, access, bw, iops, latency, diff, totalTime, rep);
 }
 
 /*

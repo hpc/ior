@@ -18,8 +18,8 @@ static void PrintNextToken();
 void PrintTableHeader(){
   if (outputFormat == OUTPUT_DEFAULT){
     fprintf(out_resultfile, "\n");
-    fprintf(out_resultfile, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s) iter\n");
-    fprintf(out_resultfile, "------    ---------  ---------- ---------  --------   --------   --------   -------- ----\n");
+    fprintf(out_resultfile, "access    bw(MiB/s)  IOPS       Latency(s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
+    fprintf(out_resultfile, "------    ---------  ----       ----------  ---------- ---------  --------   --------   --------   --------   ----\n");
   }
 }
 
@@ -219,10 +219,13 @@ void PrintTestEnds(){
   PrintEndSection();
 }
 
-void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_subset, double totalTime, int rep){
+void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, double latency,
+			double *diff_subset, double totalTime, int rep){
   if (outputFormat == OUTPUT_DEFAULT){
     fprintf(out_resultfile, "%-10s", access == WRITE ? "write" : "read");
     PPDouble(1, bw / MEBIBYTE, " ");
+    PPDouble(1, iops, " ");
+    PPDouble(1, latency, "  ");
     PPDouble(1, (double)test->params.blockSize / KIBIBYTE, " ");
     PPDouble(1, (double)test->params.transferSize / KIBIBYTE, " ");
     PPDouble(1, diff_subset[0], " ");
@@ -773,7 +776,7 @@ void PrintRemoveTiming(double start, double finish, int rep)
     return;
 
   if (outputFormat == OUTPUT_DEFAULT){
-    fprintf(out_resultfile, "remove    -          -          -          -          -          -          ");
+    fprintf(out_resultfile, "remove    -          -          -           -          -          -          -          -          ");
     PPDouble(1, finish-start, " ");
     fprintf(out_resultfile, "%-4d\n", rep);
   }else if (outputFormat == OUTPUT_JSON){
