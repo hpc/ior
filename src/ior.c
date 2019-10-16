@@ -130,7 +130,8 @@ int ior_main(int argc, char **argv)
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
             verbose = tptr->params.verbose;
             if (rank == 0 && verbose >= VERBOSE_0) {
-                    ShowTestStart(&tptr->params);
+                backend = tptr->params.backend;
+                ShowTestStart(&tptr->params);
             }
 
             // This is useful for trapping a running MPI process.  While
