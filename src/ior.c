@@ -1896,14 +1896,16 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
                                    *transferCount, test,
                                    WRITECHECK);
   } else if (access == READCHECK) {
-          amtXferred = backend->xfer(access, fd, buffer, transfer, test);
+          memset(checkBuffer, 'a', transfer);
+
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
           if (amtXferred != transfer){
             ERR("cannot read from file");
           }
           if (test->storeFileOffset == TRUE) {
                   FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
           }
-          *errors += CompareBuffers(readCheckBuffer, buffer, transfer, *transferCount, test, READCHECK);
+          *errors += CompareBuffers(readCheckBuffer, checkBuffer, transfer, *transferCount, test, READCHECK);
   }
   return amtXferred;
 }
