@@ -147,9 +147,9 @@ int ior_main(int argc, char **argv)
             ShowTestEnd(tptr);
     }
 
-    if (verbose < 0)
+    if (verbose <= VERBOSE_0)
             /* always print final summary */
-            verbose = 0;
+            verbose = VERBOSE_1;
     PrintLongSummaryAllTests(tests_head);
 
     /* display finish time */
@@ -1218,7 +1218,7 @@ static void TestIoSys(IOR_test_t *test)
                 return;
         }
         if (rank == 0 && verbose >= VERBOSE_1) {
-                fprintf(out_logfile, "Participating tasks: %d\n", params->numTasks);
+                fprintf(out_logfile, "Participating tasks : %d\n", params->numTasks);
                 fflush(out_logfile);
         }
         if (rank == 0 && params->reorderTasks == TRUE && verbose >= VERBOSE_1) {
@@ -1261,12 +1261,12 @@ static void TestIoSys(IOR_test_t *test)
                                 }
                                 params->timeStampSignatureValue =
                                         (unsigned int)currentTime;
-                                if (verbose >= VERBOSE_2) {
-                                        fprintf(out_logfile,
-                                                "Using Time Stamp %u (0x%x) for Data Signature\n",
-                                                params->timeStampSignatureValue,
-                                                params->timeStampSignatureValue);
-                                }
+                        }
+                        if (verbose >= VERBOSE_2) {
+                                fprintf(out_logfile,
+                                        "Using Time Stamp %u (0x%x) for Data Signature\n",
+                                        params->timeStampSignatureValue,
+                                        params->timeStampSignatureValue);
                         }
                         if (rep == 0 && verbose >= VERBOSE_0) {
                                 PrintTableHeader();

@@ -210,7 +210,7 @@ void PrintRepeatStart(){
 }
 
 void PrintTestEnds(){
-  if (rank != 0 ||  verbose < VERBOSE_0) {
+  if (rank != 0 ||  verbose <= VERBOSE_0) {
     PrintEndSection();
     return;
   }
@@ -445,6 +445,9 @@ void ShowSetup(IOR_param_t *params)
   if(params->dryRun){
     PrintKeyValInt("dryRun", params->dryRun);
   }
+  if(params->verbose) {
+    PrintKeyValInt("verbose", params->verbose);
+  }
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
   if (params->lustre_set_striping) {
@@ -528,7 +531,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
         struct results *ops;
 
         int reps;
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
         reps = params->repetitions;
@@ -643,7 +646,7 @@ void PrintLongSummaryOneTest(IOR_test_t *test)
 
 void PrintLongSummaryHeader()
 {
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
         if(outputFormat != OUTPUT_DEFAULT){
           return;
@@ -663,7 +666,7 @@ void PrintLongSummaryHeader()
 void PrintLongSummaryAllTests(IOR_test_t *tests_head)
 {
   IOR_test_t *tptr;
-  if (rank != 0 || verbose < VERBOSE_0)
+  if (rank != 0 || verbose <= VERBOSE_0)
           return;
 
   PrintArrayEnd();
@@ -696,7 +699,7 @@ void PrintShortSummary(IOR_test_t * test)
         int reps;
         int i;
 
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
         PrintArrayEnd();
@@ -767,7 +770,7 @@ void DisplayFreespace(IOR_param_t * test)
 
 void PrintRemoveTiming(double start, double finish, int rep)
 {
-  if (rank != 0 || verbose < VERBOSE_0)
+  if (rank != 0 || verbose <= VERBOSE_0)
     return;
 
   if (outputFormat == OUTPUT_DEFAULT){

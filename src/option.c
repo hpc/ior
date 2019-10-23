@@ -233,106 +233,120 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
   }
   *flag_parsed_next = 0;
 
-  for(int m = 0; m < opt_all->module_count; m++ ){
-    option_help * args = opt_all->modules[m].options;
-    if(args == NULL) continue;
-    // try to find matching option help
-    for(option_help * o = args; o->shortVar != 0 || o->longVar != 0 || o->help != NULL ; o++ ){
-      if( o->shortVar == 0 && o->longVar == 0 ){
-        // section
-        continue;
-      }
-      if ( (txt[0] == '-' && o->shortVar == txt[1]) || (strlen(txt) > 2 && txt[0] == '-' && txt[1] == '-' && o->longVar != NULL && strcmp(txt + 2, o->longVar) == 0)){
-        // now process the option.
-        switch(o->arg){
-          case (OPTION_FLAG):{
-            assert(o->type == 'd');
-            if(arg != NULL){
-              int val = atoi(arg);
-              (*(int*) o->variable) = (val < 0) ? 0 : val;
-            }else{
-              (*(int*) o->variable)++;
-            }
-            break;
-          }
-          case (OPTION_OPTIONAL_ARGUMENT):
-          case (OPTION_REQUIRED_ARGUMENT):{
-            // check if next is an argument
-            if(arg == NULL){
-              if(o->shortVar == txt[1] && txt[2] != 0){
-                arg = & txt[2];
+  // just skip over the first dash so we don't have to handle it everywhere below
+  if(txt[0] != '-'){
+      *error = 1;
+      return;
+  }
+  txt++;
+
+  // support groups of multiple flags like -vvv or -vq
+  for(int flag_index = 0; flag_index < strlen(txt); ++flag_index){
+    // don't loop looking for multiple flags if we already processed a long option
+    if(txt[0] == '-' && flag_index > 0)
+        break;
+
+    for(int m = 0; m < opt_all->module_count; m++ ){
+      option_help * args = opt_all->modules[m].options;
+      if(args == NULL) continue;
+      // try to find matching option help
+      for(option_help * o = args; o->shortVar != 0 || o->longVar != 0 || o->help != NULL ; o++ ){
+        if( o->shortVar == 0 && o->longVar == 0 ){
+          // section
+          continue;
+        }
+        if ( (o->shortVar == txt[flag_index]) || (strlen(txt) > 2 && txt[0] == '-' && o->longVar != NULL && strcmp(txt + 1, o->longVar) == 0)){
+          // now process the option.
+          switch(o->arg){
+            case (OPTION_FLAG):{
+              assert(o->type == 'd');
+              if(arg != NULL){
+                int val = atoi(arg);
+                (*(int*) o->variable) = (val < 0) ? 0 : val;
               }else{
-                // simply take the next value as argument
-                i++;
-                arg = argv[1];
-                *flag_parsed_next = 1;
+                (*(int*) o->variable)++;
               }
+              break;
             }
-
-            if(arg == NULL){
-              const char str[] = {o->shortVar, 0};
-              printf("Error, argument missing for option %s\n", (o->longVar != NULL) ? o->longVar : str);
-              exit(1);
-            }
-
-            switch(o->type){
-              case('p'):{
-                // call the function in the variable
-                void(*fp)() = o->variable;
-                fp(arg);
-                break;
-              }
-              case('F'):{
-                *(double*) o->variable = atof(arg);
-                break;
-              }
-              case('f'):{
-                *(float*) o->variable = atof(arg);
-                break;
-              }
-              case('d'):{
-                int64_t val = string_to_bytes(arg);
-                if (val > INT_MAX || val < INT_MIN){
-                  printf("WARNING: parsing the number %s to integer, this produced an overflow!\n", arg);
+            case (OPTION_OPTIONAL_ARGUMENT):
+            case (OPTION_REQUIRED_ARGUMENT):{
+              // check if next is an argument
+              if(arg == NULL){
+                if(o->shortVar == txt[0] && txt[1] != 0){
+                  arg = & txt[1];
+                }else{
+                  // simply take the next value as argument
+                  i++;
+                  arg = argv[1];
+                  *flag_parsed_next = 1;
                 }
-                *(int*) o->variable = val;
-                break;
               }
-              case('H'):
-              case('s'):{
-                (*(char **) o->variable) = strdup(arg);
-                break;
+
+              if(arg == NULL){
+                const char str[] = {o->shortVar, 0};
+                printf("Error, argument missing for option %s\n", (o->longVar != NULL) ? o->longVar : str);
+                exit(1);
               }
-              case('c'):{
-                (*(char *)o->variable) = arg[0];
-                if(strlen(arg) > 1){
-                  printf("Error, ignoring remainder of string for option %c (%s).\n", o->shortVar, o->longVar);
+
+              switch(o->type){
+                case('p'):{
+                  // call the function in the variable
+                  void(*fp)() = o->variable;
+                  fp(arg);
+                  break;
                 }
-                break;
+                case('F'):{
+                  *(double*) o->variable = atof(arg);
+                  break;
+                }
+                case('f'):{
+                  *(float*) o->variable = atof(arg);
+                  break;
+                }
+                case('d'):{
+                  int64_t val = string_to_bytes(arg);
+                  if (val > INT_MAX || val < INT_MIN){
+                    printf("WARNING: parsing the number %s to integer, this produced an overflow!\n", arg);
+                  }
+                  *(int*) o->variable = val;
+                  break;
+                }
+                case('H'):
+                case('s'):{
+                  (*(char **) o->variable) = strdup(arg);
+                  break;
+                }
+                case('c'):{
+                  (*(char *)o->variable) = arg[0];
+                  if(strlen(arg) > 1){
+                    printf("Error, ignoring remainder of string for option %c (%s).\n", o->shortVar, o->longVar);
+                  }
+                  break;
+                }
+                case('l'):{
+                  *(long long*) o->variable = string_to_bytes(arg);
+                  break;
+                }
+                default:
+                  printf("ERROR: Unknown option type %c\n", o->type);
               }
-              case('l'):{
-                *(long long*) o->variable = string_to_bytes(arg);
-                break;
-              }
-              default:
-                printf("ERROR: Unknown option type %c\n", o->type);
             }
           }
-        }
-        if(replaced_equal){
-          arg[-1] = '=';
-        }
+          if(replaced_equal){
+            arg[-1] = '=';
+          }
 
-        if(o->arg == OPTION_REQUIRED_ARGUMENT){
-          (*requiredArgsSeen)++;
-        }
+          if(o->arg == OPTION_REQUIRED_ARGUMENT){
+            (*requiredArgsSeen)++;
+          }
 
-        return;
+          return;
+        }
       }
     }
   }
 
-  if(strcmp(txt, "-h") == 0 || strcmp(txt, "--help") == 0){
+  if(strcmp(txt, "h") == 0 || strcmp(txt, "-help") == 0){
     *print_help = 1;
   }else{
     *error = 1;
