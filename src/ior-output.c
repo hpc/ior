@@ -18,8 +18,8 @@ static void PrintNextToken();
 void PrintTableHeader(){
   if (outputFormat == OUTPUT_DEFAULT){
     fprintf(out_resultfile, "\n");
-    fprintf(out_resultfile, "access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s) iter\n");
-    fprintf(out_resultfile, "------    ---------  ---------- ---------  --------   --------   --------   -------- ----\n");
+    fprintf(out_resultfile, "access    bw(MiB/s)  IOPS       Latency(s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
+    fprintf(out_resultfile, "------    ---------  ----       ----------  ---------- ---------  --------   --------   --------   --------   ----\n");
   }
 }
 
@@ -219,10 +219,13 @@ void PrintTestEnds(){
   PrintEndSection();
 }
 
-void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_subset, double totalTime, int rep){
+void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, double latency,
+			double *diff_subset, double totalTime, int rep){
   if (outputFormat == OUTPUT_DEFAULT){
     fprintf(out_resultfile, "%-10s", access == WRITE ? "write" : "read");
     PPDouble(1, bw / MEBIBYTE, " ");
+    PPDouble(1, iops, " ");
+    PPDouble(1, latency, "  ");
     PPDouble(1, (double)test->params.blockSize / KIBIBYTE, " ");
     PPDouble(1, (double)test->params.transferSize / KIBIBYTE, " ");
     PPDouble(1, diff_subset[0], " ");
@@ -318,7 +321,8 @@ void ShowTestStart(IOR_param_t *test)
   PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
   /* if pvfs2:, then skip */
-  if (Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
+  if (strcasecmp(test->api, "DFS") && 
+      Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
       DisplayFreespace(test);
   }
 
@@ -339,10 +343,10 @@ void ShowTestStart(IOR_param_t *test)
 
     PrintKeyVal("options", test->options);
     PrintKeyValInt("dryRun", test->dryRun);
-    PrintKeyValInt("nodes", test->nodes);
+    PrintKeyValInt("nodes", test->numNodes);
     PrintKeyValInt("memoryPerTask", (unsigned long) test->memoryPerTask);
     PrintKeyValInt("memoryPerNode", (unsigned long) test->memoryPerNode);
-    PrintKeyValInt("tasksPerNode", tasksPerNode);
+    PrintKeyValInt("tasksPerNode", test->numTasksOnNode0);
     PrintKeyValInt("repetitions", test->repetitions);
     PrintKeyValInt("multiFile", test->multiFile);
     PrintKeyValInt("interTestDelay", test->interTestDelay);
@@ -430,8 +434,9 @@ void ShowSetup(IOR_param_t *params)
     PrintKeyValInt("task offset", params->taskPerNodeOffset);
     PrintKeyValInt("reorder random seed", params->reorderTasksRandomSeed);
   }
+  PrintKeyValInt("nodes", params->numNodes);
   PrintKeyValInt("tasks", params->numTasks);
-  PrintKeyValInt("clients per node", params->tasksPerNode);
+  PrintKeyValInt("clients per node", params->numTasksOnNode0);
   if (params->memoryPerTask != 0){
     PrintKeyVal("memoryPerTask", HumanReadable(params->memoryPerTask, BASE_TWO));
   }
@@ -574,7 +579,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           }
           fprintf(out_resultfile, "%5d ", params->id);
           fprintf(out_resultfile, "%6d ", params->numTasks);
-          fprintf(out_resultfile, "%3d ", params->tasksPerNode);
+          fprintf(out_resultfile, "%3d ", params->numTasksOnNode0);
           fprintf(out_resultfile, "%4d ", params->repetitions);
           fprintf(out_resultfile, "%3d ", params->filePerProc);
           fprintf(out_resultfile, "%5d ", params->reorderTasks);
@@ -598,7 +603,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           PrintKeyValInt("blockSize", params->blockSize);
           PrintKeyValInt("transferSize", params->transferSize);
           PrintKeyValInt("numTasks", params->numTasks);
-          PrintKeyValInt("tasksPerNode", params->tasksPerNode);
+          PrintKeyValInt("tasksPerNode", params->numTasksOnNode0);
           PrintKeyValInt("repetitions", params->repetitions);
           PrintKeyValInt("filePerProc", params->filePerProc);
           PrintKeyValInt("reorderTasks", params->reorderTasks);
@@ -774,7 +779,7 @@ void PrintRemoveTiming(double start, double finish, int rep)
     return;
 
   if (outputFormat == OUTPUT_DEFAULT){
-    fprintf(out_resultfile, "remove    -          -          -          -          -          -          ");
+    fprintf(out_resultfile, "remove    -          -          -           -          -          -          -          -          ");
     PPDouble(1, finish-start, " ");
     fprintf(out_resultfile, "%-4d\n", rep);
   }else if (outputFormat == OUTPUT_JSON){

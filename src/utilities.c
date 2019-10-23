@@ -53,11 +53,9 @@
 extern int errno;
 extern int numTasks;
 
-/* globals used by other files, also defined "extern" in ior.h */
-int      numTasksWorld = 0;
+/* globals used by other files, also defined "extern" in utilities.h */
 int      rank = 0;
 int      rankOffset = 0;
-int      tasksPerNode = 0;           /* tasks per node */
 int      verbose = VERBOSE_0;        /* verbose output */
 MPI_Comm testComm;
 MPI_Comm mpi_comm_world;
@@ -77,15 +75,15 @@ void* safeMalloc(uint64_t size){
 }
 
 void FailMessage(int rank, const char *location, char *format, ...) {
-    char msg[4096];                                                  
+    char msg[4096];
     va_list args;
     va_start(args, format);
     vsnprintf(msg, 4096, format, args);
     va_end(args);
-    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n", 
-                PrintTimestamp(), rank, location, msg, strerror(errno));                               
-    fflush(out_logfile);                                        
-    MPI_Abort(testComm, 1);                                    
+    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n",
+                PrintTimestamp(), rank, location, msg, strerror(errno));
+    fflush(out_logfile);
+    MPI_Abort(testComm, 1);
 }
 
 size_t NodeMemoryStringToBytes(char *size_str)
@@ -265,35 +263,108 @@ int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
     return ret;
 }
 
+/*
+ * There is a more direct way to determine the node count in modern MPI
+ * versions so we use that if possible.
+ *
+ * For older versions we use a method which should still provide accurate
+ * results even if the total number of tasks is not evenly divisible by the
+ * tasks on node rank 0.
+ */
+int GetNumNodes(MPI_Comm comm) {
 #if MPI_VERSION >= 3
-int CountTasksPerNode(MPI_Comm comm) {
-    /* modern MPI provides a simple way to get the local process count */
-    MPI_Comm shared_comm;
-    int count;
+        MPI_Comm shared_comm;
+        int shared_rank = 0;
+        int local_result = 0;
+        int numNodes = 0;
 
+        MPI_CHECK(MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm),
+                  "MPI_Comm_split_type() error");
+        MPI_CHECK(MPI_Comm_rank(shared_comm, &shared_rank), "MPI_Comm_rank() error");
+        local_result = shared_rank == 0? 1 : 0;
+        MPI_CHECK(MPI_Allreduce(&local_result, &numNodes, 1, MPI_INT, MPI_SUM, comm),
+                  "MPI_Allreduce() error");
+        MPI_CHECK(MPI_Comm_free(&shared_comm), "MPI_Comm_free() error");
 
-    MPI_Comm_split_type (comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm);
-    MPI_Comm_size (shared_comm, &count);
-    MPI_Comm_free (&shared_comm);
+        return numNodes;
+#else
+        int numTasks = 0;
+        int numTasksOnNode0 = 0;
 
-    return count;
+        numTasks = GetNumTasks(comm);
+        numTasksOnNode0 = GetNumTasksOnNode0(comm);
+
+        return ((numTasks - 1) / numTasksOnNode0) + 1;
+#endif
 }
+
+
+int GetNumTasks(MPI_Comm comm) {
+        int numTasks = 0;
+
+        MPI_CHECK(MPI_Comm_size(comm, &numTasks), "cannot get number of tasks");
+
+        return numTasks;
+}
+
+
+/*
+ * It's very important that this method provide the same result to every
+ * process as it's used for redistributing which jobs read from which files.
+ * It was renamed accordingly.
+ *
+ * If different nodes get different results from this method then jobs get
+ * redistributed unevenly and you no longer have a 1:1 relationship with some
+ * nodes reading multiple files while others read none.
+ *
+ * In the common case the number of tasks on each node (MPI_Comm_size on an
+ * MPI_COMM_TYPE_SHARED communicator) will be the same.  However, there is
+ * nothing which guarantees this.  It's valid to have, for example, 64 jobs
+ * across 4 systems which can run 20 jobs each.  In that scenario you end up
+ * with 3 MPI_COMM_TYPE_SHARED groups of 20, and one group of 4.
+ *
+ * In the (MPI_VERSION < 3) implementation of this method consistency is
+ * ensured by asking specifically about the number of tasks on the node with
+ * rank 0.  In the original implementation for (MPI_VERSION >= 3) this was
+ * broken by using the LOCAL process count which differed depending on which
+ * node you were on.
+ *
+ * This was corrected below by first splitting the comm into groups by node
+ * (MPI_COMM_TYPE_SHARED) and then having only the node with world rank 0 and
+ * shared rank 0 return the MPI_Comm_size of its shared subgroup. This yields
+ * the original consistent behavior no matter which node asks.
+ *
+ * In the common case where every node has the same number of tasks this
+ * method will return the same value it always has.
+ */
+int GetNumTasksOnNode0(MPI_Comm comm) {
+#if MPI_VERSION >= 3
+        MPI_Comm shared_comm;
+        int shared_rank = 0;
+        int tasks_on_node_rank0 = 0;
+        int local_result = 0;
+
+        MPI_CHECK(MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shared_comm),
+                  "MPI_Comm_split_type() error");
+        MPI_CHECK(MPI_Comm_rank(shared_comm, &shared_rank), "MPI_Comm_rank() error");
+        if (rank == 0 && shared_rank == 0) {
+                MPI_CHECK(MPI_Comm_size(shared_comm, &local_result), "MPI_Comm_size() error");
+        }
+        MPI_CHECK(MPI_Allreduce(&local_result, &tasks_on_node_rank0, 1, MPI_INT, MPI_SUM, comm),
+                  "MPI_Allreduce() error");
+        MPI_CHECK(MPI_Comm_free(&shared_comm), "MPI_Comm_free() error");
+
+        return tasks_on_node_rank0;
 #else
 /*
- * Count the number of tasks that share a host.
- *
- * This function employees the gethostname() call, rather than using
+ * This version employs the gethostname() call, rather than using
  * MPI_Get_processor_name().  We are interested in knowing the number
  * of tasks that share a file system client (I/O node, compute node,
  * whatever that may be).  However on machines like BlueGene/Q,
  * MPI_Get_processor_name() uniquely identifies a cpu in a compute node,
  * not the node where the I/O is function shipped to.  gethostname()
  * is assumed to identify the shared filesystem client in more situations.
- *
- * NOTE: This also assumes that the task count on all nodes is equal
- * to the task count on the host running MPI task 0.
  */
-int CountTasksPerNode(MPI_Comm comm) {
     int size;
     MPI_Comm_size(comm, & size);
     /* for debugging and testing */
@@ -336,8 +407,8 @@ int CountTasksPerNode(MPI_Comm comm) {
     MPI_Bcast(&count, 1, MPI_INT, 0, comm);
 
     return(count);
-}
 #endif
+}
 
 
 /*

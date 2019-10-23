@@ -79,7 +79,7 @@
 #define FILEMODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #define DIRMODE S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IXOTH
 #define RELEASE_VERS META_VERSION
-#define TEST_DIR "#test-dir"
+#define TEST_DIR "test-dir"
 #define ITEM_COUNT 25000
 
 #define LLU "%lu"
@@ -148,6 +148,7 @@ static size_t write_bytes;
 static int stone_wall_timer_seconds;
 static size_t read_bytes;
 static int sync_file;
+static int call_sync;
 static int path_count;
 static int nstride; /* neighbor stride */
 static int make_node = 0;
@@ -263,6 +264,19 @@ static void prep_testdir(int j, int dir_iter){
   pos += sprintf(& testdir[pos], ".%d-%d", j, dir_iter);
 }
 
+static void phase_end(){
+  if (call_sync){
+    if(! backend->sync){
+      FAIL("Error, backend does not provide the sync method, but your requested to use sync.");
+    }
+    backend->sync(& param);
+  }
+
+  if (barriers) {
+    MPI_Barrier(testComm);
+  }
+}
+
 /*
  * This function copies the unique directory name for a given option to
  * the "to" parameter. Some memory must be allocated to the "to" parameter.
@@ -353,6 +367,7 @@ static void create_file (const char *path, uint64_t itemNum) {
     } else {
         param.openFlags = IOR_CREAT | IOR_WRONLY;
         param.filePerProc = !shared_file;
+	param.mode = FILEMODE;
 
         VERBOSE(3,5,"create_remove_items_helper (non-collective, shared): open..." );
 
@@ -430,6 +445,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
 
             //create files
             param.openFlags = IOR_WRONLY | IOR_CREAT;
+	    param.mode = FILEMODE;
             aiori_fh = backend->create (curr_item, &param);
             if (NULL == aiori_fh) {
                 FAIL("unable to create file %s", curr_item);
@@ -836,9 +852,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[1] = GetTimeStamp();
 
     /* stat phase */
@@ -864,10 +878,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         }
       }
     }
-
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[2] = GetTimeStamp();
 
     /* read phase */
@@ -894,9 +905,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[3] = GetTimeStamp();
 
     if (remove_only) {
@@ -924,9 +933,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[4] = GetTimeStamp();
 
     if (remove_only) {
@@ -1082,9 +1089,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    if (barriers) {
-      MPI_Barrier(testComm);
-    }
+    phase_end();
     t[1] = GetTimeStamp();
 
     /* stat phase */
@@ -1107,9 +1112,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[2] = GetTimeStamp();
 
     /* read phase */
@@ -1136,9 +1139,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[3] = GetTimeStamp();
 
     if (remove_only) {
@@ -1168,9 +1169,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    if (barriers) {
-        MPI_Barrier(testComm);
-    }
+    phase_end();
     t[4] = GetTimeStamp();
     if (remove_only) {
         if (unique_dir_per_task) {
@@ -1549,6 +1548,9 @@ void display_freespace(char *testdirpath)
         strcpy(dirpath, ".");
     }
 
+    if (param.api && strcasecmp(param.api, "DFS") == 0)
+	    return;
+
     VERBOSE(3,5,"Before show_file_system_size, dirpath is '%s'", dirpath );
     show_file_system_size(dirpath);
     VERBOSE(3,5, "After show_file_system_size, dirpath is '%s'\n", dirpath );
@@ -1853,6 +1855,7 @@ void mdtest_init_args(){
    stone_wall_timer_seconds = 0;
    read_bytes = 0;
    sync_file = 0;
+   call_sync = 0;
    path_count = 0;
    nstride = 0;
    make_node = 0;
@@ -1867,7 +1870,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     mdtest_init_args();
     int i, j;
-    int nodeCount;
+    int numNodes;
+    int numTasksOnNode0 = 0;
     MPI_Group worldgroup, testgroup;
     struct {
         int first;
@@ -1925,6 +1929,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'x', NULL,        "StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs", OPTION_OPTIONAL_ARGUMENT, 's', & stoneWallingStatusFile},
       {'X', "verify-read", "Verify the data read", OPTION_FLAG, 'd', & verify_read},
       {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & sync_file},
+      {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
       LAST_OPTION
@@ -1940,11 +1945,14 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
 
+    if (backend->initialize)
+	    backend->initialize();
+
     pid = getpid();
     uid = getuid();
 
-    tasksPerNode = CountTasksPerNode(testComm);
-    nodeCount = size / tasksPerNode;
+    numNodes = GetNumNodes(testComm);
+    numTasksOnNode0 = GetNumTasksOnNode0(testComm);
 
     char cmd_buffer[4096];
     strncpy(cmd_buffer, argv[0], 4096);
@@ -1953,7 +1961,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     VERBOSE(0,-1,"-- started at %s --\n", PrintTimestamp());
-    VERBOSE(0,-1,"mdtest-%s was launched with %d total task(s) on %d node(s)", RELEASE_VERS, size, nodeCount);
+    VERBOSE(0,-1,"mdtest-%s was launched with %d total task(s) on %d node(s)", RELEASE_VERS, size, numNodes);
     VERBOSE(0,-1,"Command line used: %s", cmd_buffer);
 
     /* adjust special variables */
@@ -2008,6 +2016,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     VERBOSE(1,-1, "unique_dir_per_task     : %s", ( unique_dir_per_task ? "True" : "False" ));
     VERBOSE(1,-1, "write_bytes             : "LLU"", write_bytes );
     VERBOSE(1,-1, "sync_file               : %s", ( sync_file ? "True" : "False" ));
+    VERBOSE(1,-1, "call_sync               : %s", ( call_sync ? "True" : "False" ));
     VERBOSE(1,-1, "depth                   : %d", depth );
     VERBOSE(1,-1, "make_node               : %d", make_node );
 
@@ -2120,10 +2129,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* set the shift to mimic IOR and shift by procs per node */
     if (nstride > 0) {
-        if ( nodeCount > 1 && tasksBlockMapping ) {
+        if ( numNodes > 1 && tasksBlockMapping ) {
             /* the user set the stride presumably to get the consumer tasks on a different node than the producer tasks
                however, if the mpirun scheduler placed the tasks by-slot (in a contiguous block) then we need to adjust the shift by ppn */
-            nstride *= tasksPerNode;
+            nstride *= numTasksOnNode0;
         }
         VERBOSE(0,5,"Shifting ranks by %d for each phase.", nstride);
     }
@@ -2148,7 +2157,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* setup summary table for recording results */
     summary_table = (mdtest_results_t *) malloc(iterations * sizeof(mdtest_results_t));
-    memset(summary_table, 0, sizeof(mdtest_results_t));
+    memset(summary_table, 0, iterations * sizeof(mdtest_results_t));
     for(int i=0; i < iterations; i++){
       for(int j=0; j < MDTEST_LAST_NUM; j++){
         summary_table[i].rate[j] = 0.0;
@@ -2224,5 +2233,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (random_seed > 0) {
         free(rand_array);
     }
+
+    if (backend->finalize)
+            backend->finalize(NULL);
+
     return summary_table;
 }

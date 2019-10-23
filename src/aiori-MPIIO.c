@@ -74,6 +74,7 @@ int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
     }
     MPI_File fd;
     int mpi_mode = MPI_MODE_UNIQUE_OPEN;
+    MPI_Info mpiHints = MPI_INFO_NULL;
 
     if ((mode & W_OK) && (mode & R_OK))
         mpi_mode |= MPI_MODE_RDWR;
@@ -82,12 +83,15 @@ int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
     else
         mpi_mode |= MPI_MODE_RDONLY;
 
-    int ret = MPI_File_open(MPI_COMM_SELF, path, mpi_mode,
-                            MPI_INFO_NULL, &fd);
+    SetHints(&mpiHints, param->hintsFileName);
+
+    int ret = MPI_File_open(MPI_COMM_SELF, path, mpi_mode, mpiHints, &fd);
 
     if (!ret)
         MPI_File_close(&fd);
 
+    if (mpiHints != MPI_INFO_NULL)
+            MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
     return ret;
 }
 
@@ -178,8 +182,8 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
                 fprintf(stdout, "}\n");
         }
         if(! param->dryRun){
-            MPI_CHECK(MPI_File_open(comm, testFileName, fd_mode, mpiHints, fd),
-                  "cannot open file");
+            MPI_CHECKF(MPI_File_open(comm, testFileName, fd_mode, mpiHints, fd),
+                       "cannot open file: %s", testFileName);
         }
 
         /* show hints actually attached to file handle */
@@ -428,8 +432,8 @@ void MPIIO_Delete(char *testFileName, IOR_param_t * param)
 {
   if(param->dryRun)
     return;
-  MPI_CHECK(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
-            "cannot delete file");
+  MPI_CHECKF(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
+             "cannot delete file: %s", testFileName);
 }
 
 /*
@@ -497,6 +501,7 @@ IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
         MPI_File fd;
         MPI_Comm comm;
+        MPI_Info mpiHints = MPI_INFO_NULL;
 
         if (test->filePerProc == TRUE) {
                 comm = MPI_COMM_SELF;
@@ -504,12 +509,15 @@ IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
                 comm = testComm;
         }
 
+        SetHints(&mpiHints, test->hintsFileName);
         MPI_CHECK(MPI_File_open(comm, testFileName, MPI_MODE_RDONLY,
-                                MPI_INFO_NULL, &fd),
+                                mpiHints, &fd),
                   "cannot open file to get file size");
         MPI_CHECK(MPI_File_get_size(fd, (MPI_Offset *) & aggFileSizeFromStat),
                   "cannot get file size");
         MPI_CHECK(MPI_File_close(&fd), "cannot close file");
+        if (mpiHints != MPI_INFO_NULL)
+                MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
 
         if (test->filePerProc == TRUE) {
                 MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,

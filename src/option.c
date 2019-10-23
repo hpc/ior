@@ -89,6 +89,10 @@ static int print_value(option_help * o){
         pos += printf("=%lld", *(long long*) o->variable);
         break;
       }
+      case('u'):{
+        pos += printf("=%lu", *(uint64_t*) o->variable);
+        break;
+      }
     }
   }
   if (o->arg == OPTION_FLAG && (*(int*)o->variable) != 0){
@@ -178,6 +182,10 @@ static int print_option_value(option_help * o){
       }
       case('l'):{
         pos += printf("=%lld", *(long long*) o->variable);
+        break;
+      }
+      case('u'):{
+        pos += printf("=%lu", *(uint64_t*) o->variable);
         break;
       }
     }
@@ -327,8 +335,13 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
                   *(long long*) o->variable = string_to_bytes(arg);
                   break;
                 }
+                case('u'):{
+                  *(uint64_t*) o->variable = string_to_bytes(arg);
+                  break;
+                }
                 default:
                   printf("ERROR: Unknown option type %c\n", o->type);
+                  break;
               }
             }
           }

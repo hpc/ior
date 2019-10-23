@@ -151,8 +151,12 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->maxTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {
                 params->outlierThreshold = atoi(value);
-        } else if (strcasecmp(option, "nodes") == 0) {
-                params->nodes = atoi(value);
+        } else if (strcasecmp(option, "numnodes") == 0) {
+                params->numNodes = atoi(value);
+        } else if (strcasecmp(option, "numtasks") == 0) {
+                params->numTasks = atoi(value);
+        } else if (strcasecmp(option, "numtasksonnode0") == 0) {
+                params->numTasksOnNode0 = atoi(value);
         } else if (strcasecmp(option, "repetitions") == 0) {
                 params->repetitions = atoi(value);
         } else if (strcasecmp(option, "intertestdelay") == 0) {
@@ -286,8 +290,6 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                  params->beegfs_chunkSize = string_to_bytes(value);
                  if (!ISPOWEROFTWO(params->beegfs_chunkSize) || params->beegfs_chunkSize < (1<<16))
                          ERR("beegfsChunkSize must be a power of two and >64k");
-        } else if (strcasecmp(option, "numtasks") == 0) {
-                params->numTasks = atoi(value);
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
         } else {
@@ -477,7 +479,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
-    {'e', NULL,        "fsync -- perform sync operation after each block write", OPTION_FLAG, 'd', & params->fsync},
+    {'e', NULL,        "fsync -- perform a fsync() operation at the end of each read/write phase", OPTION_FLAG, 'd', & params->fsync},
     {'E', NULL,        "useExistingTestFile -- do not remove test file before write access", OPTION_FLAG, 'd', & params->useExistingTestFile},
     {'f', NULL,        "scriptFile -- test script name", OPTION_OPTIONAL_ARGUMENT, 's', & params->testscripts},
     {'F', NULL,        "filePerProc -- file-per-process", OPTION_FLAG, 'd', & params->filePerProc},
@@ -498,7 +500,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'m', NULL,        "multiFile -- use number of reps (-i) for multiple file count", OPTION_FLAG, 'd', & params->multiFile},
     {'M', NULL,        "memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)", OPTION_OPTIONAL_ARGUMENT, 's', & params->memoryPerNodeStr},
     {'n', NULL,        "noFill -- no fill in HDF5 file creation", OPTION_FLAG, 'd', & params->noFill},
-    {'N', NULL,        "numTasks -- number of tasks that should participate in the test", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},
+    {'N', NULL,        "numTasks -- number of tasks that are participating in the test (overrides MPI)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},
     {'o', NULL,        "testFile -- full name for test", OPTION_OPTIONAL_ARGUMENT, 's', & params->testFileName},
     {'O', NULL,        "string of IOR directives (e.g. -O checkRead=1,lustreStripeCount=32)", OPTION_OPTIONAL_ARGUMENT, 'p', & decodeDirectiveWrapper},
     {'p', NULL,        "preallocate -- preallocate file size", OPTION_FLAG, 'd', & params->preallocate},

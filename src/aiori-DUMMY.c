@@ -143,6 +143,10 @@ static int DUMMY_stat (const char *path, struct stat *buf, IOR_param_t * param){
   return 0;
 }
 
+static int DUMMY_check_params(IOR_param_t * test){  
+  return 1;
+}
+
 ior_aiori_t dummy_aiori = {
         .name = "DUMMY",
         .name_legacy = NULL,
@@ -163,4 +167,5 @@ ior_aiori_t dummy_aiori = {
         .finalize = NULL,
         .get_options = DUMMY_options,
         .enable_mdtest = true,
+        .check_params = DUMMY_check_params
 };
