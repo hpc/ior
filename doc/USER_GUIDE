@@ -550,6 +550,17 @@ HOW DOES IOR CALCULATE PERFORMANCE?
   operations (-g), the sum of the open, transfer, and close times may not equal
   the elapsed time from the first open to the last close.
 
+  After each iteration (-i) IOR reports performance for that iteration, and
+  those numbers include:
+
+  - Bandwidth (described above)
+
+  - IOPS: I/O rate (operations per second) achieved by all tasks given the total
+    time spent in reading and writing the data.
+
+  - Latency: computed by taking the average latency of all I/O operations from a
+    single task. If ior is run with multiple tasks, then the latency reported is
+    the minimum that was computed between all tasks.
 
 HOW DO I ACCESS MULTIPLE FILE SYSTEMS IN IOR?
 

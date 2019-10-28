@@ -130,7 +130,8 @@ int ior_main(int argc, char **argv)
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
             verbose = tptr->params.verbose;
             if (rank == 0 && verbose >= VERBOSE_0) {
-                    ShowTestStart(&tptr->params);
+                backend = tptr->params.backend;
+                ShowTestStart(&tptr->params);
             }
 
             // This is useful for trapping a running MPI process.  While
@@ -844,8 +845,9 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
 {
         double reduced[IOR_NB_TIMERS] = { 0 };
         double diff[IOR_NB_TIMERS / 2 + 1];
-        double totalTime;
-        double bw;
+        double totalTime, accessTime;
+        IOR_param_t *params = &test->params;
+        double bw, iops, latency, minlatency;
         int i;
         MPI_Op op;
 
@@ -859,15 +861,12 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
                                      op, 0, testComm), "MPI_Reduce()");
         }
 
-        /* Only rank 0 tallies and prints the results. */
-        if (rank != 0)
-                return;
-
         /* Calculate elapsed times and throughput numbers */
         for (i = 0; i < IOR_NB_TIMERS / 2; i++)
                 diff[i] = reduced[2 * i + 1] - reduced[2 * i];
 
         totalTime = reduced[5] - reduced[0];
+        accessTime = reduced[3] - reduced[2];
 
         IOR_point_t *point = (access == WRITE) ? &test->results[rep].write :
                                                  &test->results[rep].read;
@@ -878,7 +877,25 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
                 return;
 
         bw = (double)point->aggFileSizeForBW / totalTime;
-        PrintReducedResult(test, access, bw, diff, totalTime, rep);
+
+        /* For IOPS in this iteration, we divide the total amount of IOs from
+         * all ranks over the entire access time (first start -> last end). */
+        iops = (point->aggFileSizeForBW / params->transferSize) / accessTime;
+
+        /* For Latency, we divide the total access time for each task over the
+         * number of I/Os issued from that task; then reduce and display the
+         * minimum (best) latency achieved. So what is reported is the average
+         * latency of all ops from a single task, then taking the minimum of
+         * that between all tasks. */ 
+        latency = (timer[3] - timer[2]) / (params->blockSize / params->transferSize);
+        MPI_CHECK(MPI_Reduce(&latency, &minlatency, 1, MPI_DOUBLE,
+                             MPI_MIN, 0, testComm), "MPI_Reduce()");
+
+        /* Only rank 0 tallies and prints the results. */
+        if (rank != 0)
+                return;
+
+        PrintReducedResult(test, access, bw, iops, latency, diff, totalTime, rep);
 }
 
 /*
@@ -1879,14 +1896,16 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
                                    *transferCount, test,
                                    WRITECHECK);
   } else if (access == READCHECK) {
-          amtXferred = backend->xfer(access, fd, buffer, transfer, test);
+          memset(checkBuffer, 'a', transfer);
+
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
           if (amtXferred != transfer){
             ERR("cannot read from file");
           }
           if (test->storeFileOffset == TRUE) {
                   FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
           }
-          *errors += CompareBuffers(readCheckBuffer, buffer, transfer, *transferCount, test, READCHECK);
+          *errors += CompareBuffers(readCheckBuffer, checkBuffer, transfer, *transferCount, test, READCHECK);
   }
   return amtXferred;
 }

@@ -419,13 +419,12 @@ DFS_Init() {
                 if (rc == -DER_NONEXIST) {
                         INFO(VERBOSE_1, "Creating DFS Container ...\n");
 
-                        rc = daos_cont_create(poh, co_uuid, NULL, NULL);
-                        if (rc == 0) {
-                                rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW,
-                                                    &coh, &co_info, NULL);
-                        }
+                        rc = dfs_cont_create(poh, co_uuid, NULL, &coh, NULL);
+                        if (rc)
+                                DCHECK(rc, "Failed to create container");
+                } else if (rc) {
+                        DCHECK(rc, "Failed to create container");
                 }
-                DCHECK(rc, "Failed to create container");
         }
 
         HandleDistribute(&poh, POOL_HANDLE);

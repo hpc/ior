@@ -181,6 +181,7 @@ again, using this option changes our performance measurement quite a bit::
 and we finally have a believable bandwidth measurement for our file system.
 
 Defeating Page Cache
+--------------------
 Since IOR is specifically designed to benchmark I/O, it provides these options
 that make it as easy as possible to ensure that you are actually measuring the
 performance of your file system and not your compute nodes' memory.  That being
