@@ -91,6 +91,10 @@ extraLDADD    += -laws4c
 extraLDADD    += -laws4c_extra
 endif
 
+if WITH_LUSTRE
+extraLDADD  += -llustreapi
+endif
+
 ior_SOURCES  += $(extraSOURCES)
 ior_LDFLAGS  += $(extraLDFLAGS)
 ior_LDADD    += $(extraLDADD)
