@@ -171,7 +171,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, IOR_param_t *param, int acce
 
         rc = gpfs_fcntl(fd, &take_locks);
         if (verbose >= VERBOSE_2 && rc != 0) {
-                EWARNF("gpfs_fcntl(fd, ...) access range hint failed.", fd);
+                EWARNF("gpfs_fcntl(%d, ...) access range hint failed.", fd);
         }
 }
 
@@ -195,7 +195,7 @@ void gpfs_access_end(int fd, IOR_offset_t length, IOR_param_t *param, int access
 
         rc = gpfs_fcntl(fd, &free_locks);
         if (verbose >= VERBOSE_2 && rc != 0) {
-                EWARNF("gpfs_fcntl(fd, ...) free range hint failed.", fd);
+                EWARNF("gpfs_fcntl(%d, ...) free range hint failed.", fd);
         }
 }
 
