@@ -65,6 +65,11 @@ if USE_POSIX_AIORI
 extraSOURCES += aiori-POSIX.c
 endif
 
+if USE_PMDK_AIORI
+extraSOURCES += aiori-PMDK.c
+extraLDADD   += -lpmem
+endif
+
 if USE_RADOS_AIORI
 extraSOURCES += aiori-RADOS.c
 extraLDADD += -lrados

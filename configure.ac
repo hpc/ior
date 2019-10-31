@@ -174,6 +174,20 @@ AM_COND_IF([USE_POSIX_AIORI],[
         AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
 ])
 
+# PMDK IO support
+AC_ARG_WITH([pmdk],
+        [AS_HELP_STRING([--with-pmdk],
+           [support IO with PMDK backend @<:@default=no@:>@])],
+        [],
+        [with_pmdk=yes])
+AM_CONDITIONAL([USE_PMDK_AIORI], [test x$with_pmdk = xyes])
+AM_COND_IF([USE_PMDK_AIORI],[
+        AC_DEFINE([USE_PMDK_AIORI], [], [Build PMDK backend AIORI])
+	AC_SEARCH_LIBS([pmem_map_file], [pmdk],
+	[AC_MSG_ERROR([Library containing pmdk symbols not found])])
+])
+
+
 # RADOS support
 AC_ARG_WITH([rados],
         [AS_HELP_STRING([--with-rados],
