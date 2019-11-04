@@ -201,23 +201,22 @@ AM_COND_IF([USE_RADOS_AIORI],[
 AC_ARG_WITH([cart],
     [AS_HELP_STRING([--with-cart],
 	    [support IO with DAOS backends @<:@default=no@:>@])],
-	    [],
-    	    [with_daos=no])
+    [], [with_daos=no])
 
-AS_IF([test "x$with_cart" != xno],
+AS_IF([test "x$with_cart" != xno], [
     CART="yes"
     LDFLAGS="$LDFLAGS -L$with_cart/lib"
     CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
     AC_CHECK_HEADERS(gurt/common.h,, [unset CART])
-    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset CART]))
+    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset CART])
+])
 
 AC_ARG_WITH([daos],
     [AS_HELP_STRING([--with-daos],
 	    [support IO with DAOS backends @<:@default=no@:>@])],
-	    [],
-    	    [with_daos=no])
+    [], [with_daos=no])
 
-AS_IF([test "x$with_daos" != xno],
+AS_IF([test "x$with_daos" != xno], [
     DAOS="yes"
     LDFLAGS="$LDFLAGS -L$with_daos/lib"
     CPPFLAGS="$CPPFLAGS -I$with_daos/include"
@@ -225,7 +224,8 @@ AS_IF([test "x$with_daos" != xno],
     AC_CHECK_LIB([uuid], [uuid_generate],, [unset DAOS])
     AC_CHECK_LIB([daos_common], [daos_sgl_init],, [unset DAOS])
     AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
-    AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS]))
+    AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS])
+])
 
 AM_CONDITIONAL([USE_DAOS_AIORI], [test x$DAOS = xyes])
 AM_COND_IF([USE_DAOS_AIORI],[
