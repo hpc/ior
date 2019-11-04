@@ -345,7 +345,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
 
 static void create_file (const char *path, uint64_t itemNum) {
     char curr_item[MAX_PATHLEN];
-    void *aiori_fh;
+    void *aiori_fh = NULL;
 
     if ( (itemNum % ITEM_COUNT==0 && (itemNum != 0))) {
         VERBOSE(3,5,"create file: "LLU"", itemNum);
@@ -355,36 +355,36 @@ static void create_file (const char *path, uint64_t itemNum) {
     sprintf(curr_item, "%s/file.%s"LLU"", path, mk_name, itemNum);
     VERBOSE(3,5,"create_remove_items_helper (non-dirs create): curr_item is '%s'", curr_item);
 
-    if (collective_creates) {
-        param.openFlags = IOR_WRONLY;
+    param.openFlags = IOR_WRONLY;
 
+    if (make_node) {
+        int ret;
+        VERBOSE(3,5,"create_remove_items_helper : mknod..." );
+
+        ret = backend->mknod (curr_item);
+        if (ret != 0)
+            FAIL("unable to mknode file %s", curr_item);
+
+        return;
+    } else if (collective_creates) {
         VERBOSE(3,5,"create_remove_items_helper (collective): open..." );
 
-        if (make_node)
-            aiori_fh = backend->mknod (curr_item);
-	else
-            aiori_fh = backend->open (curr_item, &param);
-        if (NULL == aiori_fh) {
+        aiori_fh = backend->open (curr_item, &param);
+        if (NULL == aiori_fh)
             FAIL("unable to open file %s", curr_item);
-        }
 
         /*
          * !collective_creates
          */
     } else {
-        param.openFlags = IOR_CREAT | IOR_WRONLY;
+        param.openFlags |= IOR_CREAT;
         param.filePerProc = !shared_file;
-	param.mode = FILEMODE;
-
+        param.mode = FILEMODE;
         VERBOSE(3,5,"create_remove_items_helper (non-collective, shared): open..." );
 
-        if (make_node)
-            aiori_fh = backend->mknod (curr_item);
-	else
-            aiori_fh = backend->create (curr_item, &param);
-        if (NULL == aiori_fh) {
+        aiori_fh = backend->create (curr_item, &param);
+        if (NULL == aiori_fh)
             FAIL("unable to create file %s", curr_item);
-        }
     }
 
     if (write_bytes > 0) {
@@ -402,9 +402,7 @@ static void create_file (const char *path, uint64_t itemNum) {
     }
 
     VERBOSE(3,5,"create_remove_items_helper: close..." );
-
-    if (!make_node)
-        backend->close (aiori_fh, &param);
+    backend->close (aiori_fh, &param);
 }
 
 /* helper for creating/removing items */

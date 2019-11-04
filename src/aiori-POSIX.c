@@ -436,19 +436,15 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
 /*
  * Creat a file through mknod interface.
  */
-void *POSIX_Mknod(char *testFileName)
+int POSIX_Mknod(char *testFileName)
 {
-	int *fd;
+    int ret;
 
-	fd = (int *)malloc(sizeof(int));
-	if (fd == NULL)
-		ERR("Unable to malloc file descriptor");
+    ret = mknod(testFileName, S_IFREG | S_IRUSR, 0);
+    if (ret < 0)
+        ERR("mknod failed");
 
-	*fd = mknod(testFileName, S_IFREG | S_IRUSR, 0);
-	if (*fd < 0)
-		ERR("mknod failed");
-
-	return ((void *)fd);
+    return ret;
 }
 
 /*
