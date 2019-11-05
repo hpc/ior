@@ -601,14 +601,14 @@ DFS_Xfer(int access, void *file, IOR_size_t *buffer, IOR_offset_t length,
 
                 /* write/read file */
                 if (access == WRITE) {
-                        rc = dfs_write(dfs, obj, sgl, param->offset);
+                        rc = dfs_write(dfs, obj, &sgl, param->offset, NULL);
                         if (rc) {
                                 fprintf(stderr, "dfs_write() failed (%d)", rc);
                                 return -1;
                         }
                         ret = remaining;
                 } else {
-                        rc = dfs_read(dfs, obj, sgl, param->offset, &ret);
+                        rc = dfs_read(dfs, obj, &sgl, param->offset, &ret, NULL);
                         if (rc || ret == 0)
                                 fprintf(stderr, "dfs_read() failed(%d)", rc);
                 }

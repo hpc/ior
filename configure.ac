@@ -83,7 +83,7 @@ AC_ARG_WITH([lustre],
         [AS_HELP_STRING([--with-lustre],
                 [support configurable Lustre striping values @<:@default=check@:>@])],
         [], [with_lustre=check])
-AS_IF([test "x$with_lustre" != xno], [
+AS_IF([test "x$with_lustre" = xyes ], [
         AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], break, [
                 if test "x$with_lustre" != xcheck -a \
                         "x$ac_cv_header_linux_lustre_lustre_user_h" = "xno" -a \
@@ -91,6 +91,18 @@ AS_IF([test "x$with_lustre" != xno], [
                         AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
                 fi
         ])
+        AC_CHECK_HEADERS([linux/lustre/lustreapi.h lustre/lustreapi.h],
+		[AC_DEFINE([HAVE_LUSTRE_LUSTREAPI], [], [Lustre user API available in some shape or form])], [
+                if test "x$with_lustre" != xcheck -a \
+                        "x$ac_cv_header_linux_lustre_lustreapi_h" = "xno" -a \
+                        "x$ac_cv_header_lustre_lustreapi_h" = "xno" ; then
+                        AC_MSG_FAILURE([--with-lustre was given, <lustre/lustreapi.h> not found])
+                fi
+        ])
+])
+AM_CONDITIONAL([WITH_LUSTRE], [test x$with_lustre = xyes])
+AM_COND_IF([WITH_LUSTRE],[
+        AC_DEFINE([WITH_LUSTRE], [], [Build wth LUSTRE backend])
 ])
 
 # IME (DDN's Infinite Memory Engine) support
@@ -203,23 +215,22 @@ AM_COND_IF([USE_RADOS_AIORI],[
 AC_ARG_WITH([cart],
     [AS_HELP_STRING([--with-cart],
 	    [support IO with DAOS backends @<:@default=no@:>@])],
-	    [],
-    	    [with_daos=no])
+    [], [with_daos=no])
 
-AS_IF([test "x$with_cart" != xno],
+AS_IF([test "x$with_cart" != xno], [
     CART="yes"
     LDFLAGS="$LDFLAGS -L$with_cart/lib"
     CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
     AC_CHECK_HEADERS(gurt/common.h,, [unset CART])
-    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset CART]))
+    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset CART])
+])
 
 AC_ARG_WITH([daos],
     [AS_HELP_STRING([--with-daos],
 	    [support IO with DAOS backends @<:@default=no@:>@])],
-	    [],
-    	    [with_daos=no])
+    [], [with_daos=no])
 
-AS_IF([test "x$with_daos" != xno],
+AS_IF([test "x$with_daos" != xno], [
     DAOS="yes"
     LDFLAGS="$LDFLAGS -L$with_daos/lib"
     CPPFLAGS="$CPPFLAGS -I$with_daos/include"
@@ -227,7 +238,8 @@ AS_IF([test "x$with_daos" != xno],
     AC_CHECK_LIB([uuid], [uuid_generate],, [unset DAOS])
     AC_CHECK_LIB([daos_common], [daos_sgl_init],, [unset DAOS])
     AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
-    AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS]))
+    AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS])
+])
 
 AM_CONDITIONAL([USE_DAOS_AIORI], [test x$DAOS = xyes])
 AM_COND_IF([USE_DAOS_AIORI],[
