@@ -191,10 +191,11 @@ AC_ARG_WITH([pmdk],
         [AS_HELP_STRING([--with-pmdk],
            [support IO with PMDK backend @<:@default=no@:>@])],
         [],
-        [with_pmdk=yes])
+        [with_pmdk=no])
 AM_CONDITIONAL([USE_PMDK_AIORI], [test x$with_pmdk = xyes])
-AM_COND_IF([USE_PMDK_AIORI],[
+AS_IF([test "x$with_pmdk" != xno], [
         AC_DEFINE([USE_PMDK_AIORI], [], [Build PMDK backend AIORI])
+        AC_CHECK_HEADERS(libpmem.h,, [unset PMDK])
 	AC_SEARCH_LIBS([pmem_map_file], [pmdk],
 	[AC_MSG_ERROR([Library containing pmdk symbols not found])])
 ])
