@@ -745,10 +745,17 @@ void GetTestFileName(char *testFileName, IOR_param_t * test)
         char   initialTestFileName[MAX_PATHLEN];
         char   testFileNameRoot[MAX_STR];
         char   tmpString[MAX_STR];
-        int count;
+        int    count;
+        int    socket, core;
 
         /* parse filename for multiple file systems */
         strcpy(initialTestFileName, test->testFileName);
+        if(test->dualMount){
+                GetProcessorAndCore(&socket, &core);
+                sprintf(tmpString, "%s%d/%s",initialTestFileName, 
+                        socket, "data");
+                strcpy(initialTestFileName, tmpString);
+        }
         fileNames = ParseFileName(initialTestFileName, &count);
         if (count > 1 && test->uniqueDir == TRUE)
                 ERR("cannot use multiple file names with unique directories");

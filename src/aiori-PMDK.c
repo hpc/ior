@@ -99,10 +99,11 @@ static void *PMDK_Create(char * testFileName, IOR_param_t * param){
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
     }
 
-    if(!is_pmem){
+    /* if(!is_pmem){
+      fprintf(stdout, "\n is_pmem is %d\n",is_pmem);
       fprintf(stdout, "\npmem_map_file thinks the hardware being used is not pmem\n");
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
-    }
+      }*/
 
     
     return((void *)pmemaddr);
@@ -137,10 +138,11 @@ static void *PMDK_Open(char * testFileName, IOR_param_t * param){
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
     }
 
+    /*
     if(!is_pmem){
       fprintf(stdout, "pmem_map_file thinks the hardware being used is not pmem\n");
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
-    }
+      }*/
 
     return((void *)pmemaddr);
 } /* PMDK_Open() */
@@ -174,7 +176,7 @@ static IOR_offset_t PMDK_Xfer(int access, void *file, IOR_size_t * buffer,
       pmem_persist(&file[offset_size],length*sizeof(char));*/
     }else{
       memcpy(ptr, &file[offset_size], length);
-      /*for(i=0; i<length; i++){
+      /*      for(i=0; i<length; i++){
 	((char *)ptr)[i] = ((char *)file)[offset_size+i];
 	}*/
     }

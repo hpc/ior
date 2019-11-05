@@ -68,6 +68,7 @@ void StoreStoneWallingIterations(char * const filename, int64_t count);
 void init_clock(void);
 double GetTimeStamp(void);
 char * PrintTimestamp(); // TODO remove this function
+unsigned long GetProcessorAndCore(int *chip, int *core);
 
 extern double wall_clock_deviation;
 extern double wall_clock_delta;

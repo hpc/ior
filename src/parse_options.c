@@ -80,6 +80,10 @@ static void CheckRunSettings(IOR_test_t *tests)
                         else
                                 params->openFlags |= IOR_WRONLY;
                 }
+
+                if(params->dualMount && !params->filePerProc) {
+                        MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "Dual Mount can only be used with File Per Process");
+                }
         }
 }
 
@@ -137,6 +141,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->platform  = strdup(value);
         } else if (strcasecmp(option, "testfile") == 0) {
                 params->testFileName  = strdup(value);
+        } else if (strcasecmp(option, "dualmount") == 0){
+                params->dualMount = atoi(value);
         } else if (strcasecmp(option, "hintsfilename") == 0) {
                 params->hintsFileName  = strdup(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
@@ -521,6 +527,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'W', NULL,        "checkWrite -- check read after write", OPTION_FLAG, 'd', & params->checkWrite},
     {'x', NULL,        "singleXferAttempt -- do not retry transfer if incomplete", OPTION_FLAG, 'd', & params->singleXferAttempt},
     {'X', NULL,        "reorderTasksRandomSeed -- random seed for -Z option", OPTION_OPTIONAL_ARGUMENT, 'd', & params->reorderTasksRandomSeed},
+    {'y', NULL,        "dualMount -- use dual mount points for a filesystem", OPTION_FLAG, 'd', & params->dualMount},
     {'Y', NULL,        "fsyncPerWrite -- perform sync operation after every write operation", OPTION_FLAG, 'd', & params->fsyncPerWrite},
     {'z', NULL,        "randomOffset -- access is to random, not sequential, offsets within a file", OPTION_FLAG, 'd', & params->randomOffset},
     {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random ordering for readback", OPTION_FLAG, 'd', & params->reorderTasksRandom},
