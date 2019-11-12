@@ -239,6 +239,8 @@ void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, do
     PrintKeyValDouble("bwMiB", bw / MEBIBYTE);
     PrintKeyValDouble("blockKiB", (double)test->params.blockSize / KIBIBYTE);
     PrintKeyValDouble("xferKiB", (double)test->params.transferSize / KIBIBYTE);
+    PrintKeyValDouble("iops", iops);
+    PrintKeyValDouble("latency", latency);
     PrintKeyValDouble("openTime", diff_subset[0]);
     PrintKeyValDouble("wrRdTime", diff_subset[1]);
     PrintKeyValDouble("closeTime", diff_subset[2]);
