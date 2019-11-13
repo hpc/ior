@@ -218,7 +218,7 @@ AC_ARG_WITH([daos],
 
 AS_IF([test "x$with_daos" != xno], [
     DAOS="yes"
-    LDFLAGS="$LDFLAGS -L$with_daos/lib"
+    LDFLAGS="$LDFLAGS -L$with_daos/lib64 -L$with_daos/lib"
     CPPFLAGS="$CPPFLAGS -I$with_daos/include"
     AC_CHECK_HEADERS(daos_types.h,, [unset DAOS])
     AC_CHECK_LIB([uuid], [uuid_generate],, [unset DAOS])

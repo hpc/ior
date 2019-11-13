@@ -68,6 +68,7 @@ struct dfs_options{
         char	*cont;
 	int	chunk_size;
 	char	*oclass;
+	char	*prefix;
         int	destroy;
 };
 
@@ -78,6 +79,7 @@ static struct dfs_options o = {
         .cont		= NULL,
 	.chunk_size	= 1048576,
 	.oclass		= NULL,
+        .prefix		= NULL,
         .destroy        = 0,
 };
 
@@ -88,6 +90,7 @@ static option_help options [] = {
       {0, "dfs.cont", "DFS container uuid", OPTION_OPTIONAL_ARGUMENT, 's', & o.cont},
       {0, "dfs.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.chunk_size},
       {0, "dfs.oclass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.oclass},
+      {0, "dfs.prefix", "mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', & o.prefix},
       {0, "dfs.destroy", "Destroy DFS Container", OPTION_FLAG, 'd', &o.destroy},
       LAST_OPTION
 };
@@ -336,7 +339,7 @@ out:
 }
 
 static dfs_obj_t *
-lookup_insert_dir(const char *name)
+lookup_insert_dir(const char *name, mode_t *mode)
 {
         struct aiori_dir_hdl *hdl;
         d_list_t *rlink;
@@ -355,8 +358,11 @@ lookup_insert_dir(const char *name)
         strncpy(hdl->name, name, PATH_MAX-1);
         hdl->name[PATH_MAX-1] = '\0';
 
-        rc = dfs_lookup(dfs, name, O_RDWR, &hdl->oh, NULL, NULL);
-        DCHECK(rc, "dfs_lookup() of %s Failed", name);
+        rc = dfs_lookup(dfs, name, O_RDWR, &hdl->oh, mode, NULL);
+        if (rc)
+                return NULL;
+        if (mode && S_ISREG(*mode))
+                return hdl->oh;
 
         rc = d_hash_rec_insert(dir_hash, hdl->name, strlen(hdl->name),
                                &hdl->entry, true);
@@ -432,6 +438,11 @@ DFS_Init() {
 
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
         DCHECK(rc, "Failed to mount DFS namespace");
+
+        if (o.prefix) {
+                rc = dfs_set_prefix(dfs, o.prefix);
+                DCHECK(rc, "Failed to set DFS Prefix");
+        }
 }
 
 static void
@@ -506,7 +517,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 	assert(dir_name);
 	assert(name);
 
-        parent = lookup_insert_dir(dir_name);
+        parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
                 GERR("Failed to lookup parent dir");
 
@@ -557,7 +568,7 @@ DFS_Open(char *testFileName, IOR_param_t *param)
 	assert(dir_name);
 	assert(name);
 
-        parent = lookup_insert_dir(dir_name);
+        parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
                 GERR("Failed to lookup parent dir");
 
@@ -665,7 +676,7 @@ DFS_Delete(char *testFileName, IOR_param_t * param)
 	assert(dir_name);
 	assert(name);
 
-        parent = lookup_insert_dir(dir_name);
+        parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
                 GERR("Failed to lookup parent dir");
 
@@ -752,7 +763,7 @@ DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
         if (!name)
                 return 0;
 
-        parent = lookup_insert_dir(dir_name);
+        parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
                 GERR("Failed to lookup parent dir");
 
@@ -781,7 +792,7 @@ DFS_Rmdir(const char *path, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-        parent = lookup_insert_dir(dir_name);
+        parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
                 GERR("Failed to lookup parent dir");
 
@@ -800,33 +811,18 @@ DFS_Rmdir(const char *path, IOR_param_t * param)
 static int
 DFS_Access(const char *path, int mode, IOR_param_t * param)
 {
-        dfs_obj_t *parent = NULL;
-	char *name = NULL, *dir_name = NULL;
-        struct stat stbuf;
-	int rc;
+        dfs_obj_t *obj = NULL;
+        mode_t fmode;
 
-	rc = parse_filename(path, &name, &dir_name);
-        DCHECK(rc, "Failed to parse path %s", path);
-
-	assert(dir_name);
-
-        parent = lookup_insert_dir(dir_name);
-        if (parent == NULL)
-                GERR("Failed to lookup parent dir");
-
-        if (name && strcmp(name, ".") == 0) {
-                free(name);
-                name = NULL;
-        }
-	rc = dfs_stat(dfs, parent, name, &stbuf);
-
-	if (name)
-		free(name);
-	if (dir_name)
-		free(dir_name);
-        if (rc)
+        obj = lookup_insert_dir(path, &fmode);
+        if (obj == NULL)
                 return -1;
-	return rc;
+
+        /** just close if it's a file */
+        if (S_ISREG(fmode))
+                dfs_release(obj);
+
+        return 0;
 }
 
 static int
@@ -842,7 +838,7 @@ DFS_Stat(const char *path, struct stat *buf, IOR_param_t * param)
 	assert(dir_name);
         assert(name);
 
-        parent = lookup_insert_dir(dir_name);
+        parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
                 GERR("Failed to lookup parent dir");
 
