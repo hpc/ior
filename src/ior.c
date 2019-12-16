@@ -503,8 +503,6 @@ void AllocResults(IOR_test_t *test)
   if (test->results != NULL)
     return;
 
-  IOR_param_t * params = & test->params;
-
   reps = test->params.repetitions;
   test->results = (IOR_results_t *) safeMalloc(sizeof(IOR_results_t) * reps);
 }
@@ -886,7 +884,7 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
          * number of I/Os issued from that task; then reduce and display the
          * minimum (best) latency achieved. So what is reported is the average
          * latency of all ops from a single task, then taking the minimum of
-         * that between all tasks. */ 
+         * that between all tasks. */
         latency = (timer[3] - timer[2]) / (params->blockSize / params->transferSize);
         MPI_CHECK(MPI_Reduce(&latency, &minlatency, 1, MPI_DOUBLE,
                              MPI_MIN, 0, testComm), "MPI_Reduce()");
