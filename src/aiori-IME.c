@@ -51,6 +51,12 @@ static int          IME_StatFS(const char *, ior_aiori_statfs_t *,
 static int          IME_RmDir(const char *, IOR_param_t *);
 static int          IME_MkDir(const char *, mode_t, IOR_param_t *);
 static int          IME_Stat(const char *, struct stat *, IOR_param_t *);
+
+#if (IME_NATIVE_API_VERSION >= 132)
+static int          IME_Mknod(char *);
+static void         IME_Sync(IOR_param_t *);
+#endif
+
 static void         IME_Initialize();
 static void         IME_Finalize();
 
@@ -107,6 +113,10 @@ ior_aiori_t ime_aiori = {
         .initialize    = IME_Initialize,
         .finalize      = IME_Finalize,
         .get_options   = IME_options,
+#if (IME_NATIVE_API_VERSION >= 132)
+        .sync          = IME_Sync,
+        .mknod         = IME_Mknod,
+#endif
         .enable_mdtest = true,
 };
 
@@ -406,3 +416,27 @@ static IOR_offset_t IME_GetFileSize(IOR_param_t *test, MPI_Comm testComm,
 
         return(aggFileSizeFromStat);
 }
+
+#if (IME_NATIVE_API_VERSION >= 132)
+/*
+ * Create a file through mknod interface.
+ */
+static int IME_Mknod(char *testFileName)
+{
+    int ret = ime_native_mknod(testFileName, S_IFREG | S_IRUSR, 0);
+    if (ret < 0)
+        ERR("mknod failed");
+
+    return ret;
+}
+
+/*
+ * Use IME sync to flush page cache of all opened files.
+ */
+static void IME_Sync(IOR_param_t * param)
+{
+    int ret = ime_native_sync(0);
+    if (ret != 0)
+        FAIL("Error executing the sync command.");
+}
+#endif
