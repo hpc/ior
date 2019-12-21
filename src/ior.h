@@ -100,7 +100,7 @@ typedef struct
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */
     int numTasksOnNode0;             /* number of tasks on node 0 (usually all the same, but don't have to be, use with caution) */
-    int tasksBlockMapping;           /* are the tasks in contiguous blocks across nodes or round-robin */ 
+    int tasksBlockMapping;           /* are the tasks in contiguous blocks across nodes or round-robin */
     int repetitions;                 /* number of repetitions of test */
     int repCounter;                  /* rep counter */
     int multiFile;                   /* multiple files */

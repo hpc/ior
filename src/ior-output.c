@@ -262,7 +262,7 @@ void PrintHeader(int argc, char **argv)
         if (outputFormat != OUTPUT_DEFAULT){
           PrintKeyVal("Version", META_VERSION);
         }else{
-          printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
+          fprintf(out_resultfile, "IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
         }
         PrintKeyVal("Began", CurrentTimeString());
         PrintKeyValStart("Command line");
@@ -323,7 +323,7 @@ void ShowTestStart(IOR_param_t *test)
   PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
   /* if pvfs2:, then skip */
-  if (strcasecmp(test->api, "DFS") && 
+  if (strcasecmp(test->api, "DFS") &&
       Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
       DisplayFreespace(test);
   }

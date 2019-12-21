@@ -544,7 +544,7 @@ IOR_test_t *ParseCommandLine(int argc, char **argv)
 
     IOR_test_t *tests = NULL;
 
-    GetPlatformName(initialTestParams.platform);
+    initialTestParams.platform = GetPlatformName();
 
     option_help * options = createGlobalOptions( & initialTestParams);
     parameters = & initialTestParams;
