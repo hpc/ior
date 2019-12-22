@@ -74,7 +74,7 @@ typedef struct ior_aiori {
                              IOR_offset_t, IOR_param_t *);
         void (*close)(void *, IOR_param_t *);
         void (*delete)(char *, IOR_param_t *);
-        char* (*get_version)();
+        char* (*get_version)(void);
         void (*fsync)(void *, IOR_param_t *);
         IOR_offset_t (*get_file_size)(IOR_param_t *, MPI_Comm, char *);
         int (*statfs) (const char *, ior_aiori_statfs_t *, IOR_param_t * param);
@@ -82,8 +82,8 @@ typedef struct ior_aiori {
         int (*rmdir) (const char *path, IOR_param_t * param);
         int (*access) (const char *path, int mode, IOR_param_t * param);
         int (*stat) (const char *path, struct stat *buf, IOR_param_t * param);
-        void (*initialize)(); /* called once per program before MPI is started */
-        void (*finalize)(); /* called once per program after MPI is shutdown */
+        void (*initialize)(void); /* called once per program before MPI is started */
+        void (*finalize)(void); /* called once per program after MPI is shutdown */
         option_help * (*get_options)(void ** init_backend_options, void* init_values); /* initializes the backend options as well and returns the pointer to the option help structure */
         bool enable_mdtest;
         int (*check_params)(IOR_param_t *); /* check if the provided parameters for the given test and the module options are correct, if they aren't print a message and exit(1) or return 1*/
@@ -123,7 +123,7 @@ void * airoi_update_module_options(const ior_aiori_t * backend, options_all_t * 
 const char *aiori_default (void);
 
 /* some generic POSIX-based backend calls */
-char * aiori_get_version();
+char * aiori_get_version (void);
 int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param);
 int aiori_posix_mkdir (const char *path, mode_t mode, IOR_param_t * param);
 int aiori_posix_rmdir (const char *path, IOR_param_t * param);

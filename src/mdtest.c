@@ -2264,7 +2264,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     if (backend->finalize)
-            backend->finalize(NULL);
+            backend->finalize();
 
     return summary_table;
 }

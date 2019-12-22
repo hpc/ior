@@ -1268,7 +1268,7 @@ static void TestIoSys(IOR_test_t *test)
         /* IO Buffer Setup */
 
         if (params->setTimeStampSignature) { // initialize the buffer properly
-                params->timeStampSignatureValue = (unsigned int)params->setTimeStampSignature;
+                params->timeStampSignatureValue = (unsigned int) params->setTimeStampSignature;
         }
         XferBuffersSetup(&ioBuffers, params, pretendRank);
         reseed_incompressible_prng = TRUE; // reset pseudo random generator, necessary to guarantee the next call to FillBuffer produces the same value as it is right now
@@ -1289,7 +1289,7 @@ static void TestIoSys(IOR_test_t *test)
                                         ERR("cannot get current time");
                                 }
                                 params->timeStampSignatureValue =
-                                        (unsigned int)currentTime;
+                                        (unsigned int) currentTime;
                                 if (verbose >= VERBOSE_2) {
                                         fprintf(out_logfile,
                                                 "Using Time Stamp %u (0x%x) for Data Signature\n",
