@@ -1719,7 +1719,7 @@ static void ValidateTests(IOR_param_t * test)
         }
 }
 
-/**
+/*
  * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
  * They are sequential and the last element is set to -1 as end marker.
  * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
@@ -1744,33 +1744,50 @@ static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
         offsetArray[offsets] = -1;      /* set last offset with -1 */
 
         /* fill with offsets */
-        for (i = 0; i < test->segmentCount; i++) {
-                for (j = 0; j < (test->blockSize / test->transferSize); j++) {
-                        offsetArray[k] = j * test->transferSize;
-                        if (test->filePerProc) {
-                                offsetArray[k] += i * test->blockSize;
-                        } else {
-                                offsetArray[k] +=
-                                        (i * test->numTasks * test->blockSize)
-                                        + (pretendRank * test->blockSize);
+        IOR_offset_t next_offset, incrament, trips;
+        /* special cases for filePerProc and transferSize=blockSize */
+        if (test->filePerProc) {
+                next_offset = 0;
+                incrament = test->transferSize;
+                trips = test->segmentCount * (test->blockSize / test->transferSize);
+                for (i = 0; i < trips; i++) {
+                        offsetArray[i] = next_offset;
+                        next_offset += incrament;
+                }
+        } else {
+                if (test->transferSize == test->blockSize) {
+                        next_offset = pretendRank * test->blockSize;
+                        incrament = test->numTasks * test->blockSize;
+                        trips = test->segmentCount;
+                        for (i = 0; i < trips; i++) {
+                                offsetArray[i] = next_offset;
+                                next_offset += incrament;
                         }
-                        k++;
+                } else {        /* usual case is segmentCount=1 */
+                        next_offset = pretendRank * test->blockSize;
+                        incrament = test->transferSize;
+                        trips = test->blockSize / test->transferSize;
+                        for (i = 0; i < test->segmentCount; i++) {
+                                for (j = 0; j < trips; j++) {
+                                        offsetArray[k+j] = next_offset;
+                                        next_offset += incrament;
+                                }
+                                k += trips;
+                                next_offset += (test->numTasks * test->blockSize);
+                        }
                 }
         }
 
         return (offsetArray);
 }
 
-/**
+/*
  * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
  * They get created sequentially and mixed up in the end. The last array element
  * is set to -1 as end marker.
  * It should be noted that as the seeds get synchronised across all processes
- * every process computes the same random order if used with filePerProc.
- * For a shared file all transfers get randomly assigned to ranks. The processes
- * can also have differen't numbers of transfers. This might lead to a bigger
- * diversion in accesse as it dose with filePerProc. This is expected but
- * should be mined.
+ * every process computes the same random order.  The processes * also have the
+ * same number of transfers so load balance is uniform, if run * to completion.
  * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
  * @param pretendRank int pretended Rank for shifting the offsest corectly
  * @return IOR_offset_t
@@ -1780,11 +1797,11 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
                                           int access)
 {
         int seed;
-        IOR_offset_t i, value, tmp;
+        IOR_offset_t i, j, k, value, tmp;
         IOR_offset_t offsets = 0;
-        IOR_offset_t offsetCnt = 0;
-        IOR_offset_t fileSize;
         IOR_offset_t *offsetArray;
+        int vlen = 32, vecs = 256, start[vecs];
+        IOR_offset_t first = 4*1024L*1024L, seq;
 
         /* set up seed for random() */
         if (access == WRITE || access == READ) {
@@ -1794,53 +1811,39 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
         }
         srand(seed);
 
-        fileSize = test->blockSize * test->segmentCount;
-        if (test->filePerProc == FALSE) {
-                fileSize *= test->numTasks;
-        }
+        /* count needed offsets */
+        offsets = (test->blockSize / test->transferSize) * test->segmentCount;
 
-        /* count needed offsets (pass 1) */
-        for (i = 0; i < fileSize; i += test->transferSize) {
-                if (test->filePerProc == FALSE) {
-                        // this counts which process get how many transferes in
-                        // a shared file
-                        if ((rand() % test->numTasks) == pretendRank) {
-                                offsets++;
-                        }
-                } else {
-                        offsets++;
-                }
-        }
+        /* start with same array of offsets as in sequential case */
+        offsetArray = GetOffsetArraySequential(test, pretendRank);
 
-        /* setup empty array */
-        offsetArray =
-                (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
-        if (offsetArray == NULL)
-                ERR("malloc() failed");
-        offsetArray[offsets] = -1;      /* set last offset with -1 */
-
-        if (test->filePerProc) {
-                /* fill array */
-                for (i = 0; i < offsets; i++) {
-                        offsetArray[i] = i * test->transferSize;
-                }
-        } else {
-                /* fill with offsets (pass 2) */
-                srand(seed);  /* need same seed  to get same transfers as counted in the beginning*/
-                for (i = 0; i < fileSize; i += test->transferSize) {
-                        if ((rand() % test->numTasks) == pretendRank) {
-                                offsetArray[offsetCnt] = i;
-                                offsetCnt++;
-                        }
-                }
-        }
         /* reorder array */
-        for (i = 0; i < offsets; i++) {
-                value = rand() % offsets;
+        if (offsets < 2*first) first = offsets;
+        /* do first few million totally random */
+        for (i = 0; i < first; i++) {
+                value = random() % offsets;
                 tmp = offsetArray[value];
                 offsetArray[value] = offsetArray[i];
                 offsetArray[i] = tmp;
         }
+        /* do the rest in vecs chunks of vlen contiguous offsets
+           using L2 cache to reduce memory latency vs truely random */
+        for (i = first; i < offsets - 2*vecs*vlen; i += vecs*vlen) {
+                for (j = 0; j < vecs; j++) {
+                        start[j] = i + 8*(random() % (offsets - i - vlen)/8);  // align on a cache line
+                }
+                seq = 0;
+                for (k = 0; k < vlen; k++) {
+                        for (j = 0; j < vecs; j++) {
+                                value = start[j];
+                                tmp = offsetArray[value+k];
+                                offsetArray[value+k] = offsetArray[i+seq];
+                                offsetArray[i+seq] = tmp;
+                                seq++;
+                        }
+                }
+        }
+
         SeedRandGen(test->testComm);    /* synchronize seeds across tasks */
 
         return (offsetArray);
