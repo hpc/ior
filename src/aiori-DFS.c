@@ -2,14 +2,8 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 /*
- * Copyright (C) 2018-2019 Intel Corporation
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * Copyright (C) 2018-2020 Intel Corporation
+ * See the file COPYRIGHT for a complete copyright notice and license.
  */
 
 /*
@@ -46,6 +40,7 @@
 dfs_t *dfs;
 static daos_handle_t poh, coh;
 static daos_oclass_id_t objectClass = OC_SX;
+static daos_oclass_id_t dir_oclass = OC_SX;
 static struct d_hash_table *dir_hash;
 
 struct aiori_dir_hdl {
@@ -68,6 +63,7 @@ struct dfs_options{
         char	*cont;
 	int	chunk_size;
 	char	*oclass;
+	char	*dir_oclass;
 	char	*prefix;
         int	destroy;
 };
@@ -79,6 +75,7 @@ static struct dfs_options o = {
         .cont		= NULL,
 	.chunk_size	= 1048576,
 	.oclass		= NULL,
+	.dir_oclass	= NULL,
         .prefix		= NULL,
         .destroy        = 0,
 };
@@ -90,6 +87,7 @@ static option_help options [] = {
       {0, "dfs.cont", "DFS container uuid", OPTION_OPTIONAL_ARGUMENT, 's', & o.cont},
       {0, "dfs.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.chunk_size},
       {0, "dfs.oclass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.oclass},
+      {0, "dfs.dir_oclass", "directory object class", OPTION_OPTIONAL_ARGUMENT, 's', &o.dir_oclass},
       {0, "dfs.prefix", "mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', & o.prefix},
       {0, "dfs.destroy", "Destroy DFS Container", OPTION_FLAG, 'd', &o.destroy},
       LAST_OPTION
@@ -385,7 +383,13 @@ DFS_Init() {
         if (o.oclass) {
                 objectClass = daos_oclass_name2id(o.oclass);
 		if (objectClass == OC_UNKNOWN)
-			GERR("Invalid DAOS Object class %s\n", o.oclass);
+			GERR("Invalid DAOS object class %s\n", o.oclass);
+	}
+
+        if (o.dir_oclass) {
+                dir_oclass = daos_oclass_name2id(o.dir_oclass);
+		if (dir_oclass == OC_UNKNOWN)
+			GERR("Invalid DAOS directory object class %s\n", o.dir_oclass);
 	}
 
 	rc = daos_init();
@@ -506,7 +510,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *obj = NULL, *parent = NULL;
-	mode_t mode;
+	mode_t mode = 0644;
         int fd_oflag = 0;
 	int rc;
 
@@ -767,15 +771,13 @@ DFS_Mkdir(const char *path, mode_t mode, IOR_param_t * param)
         if (parent == NULL)
                 GERR("Failed to lookup parent dir");
 
-	rc = dfs_mkdir(dfs, parent, name, mode);
+        rc = dfs_mkdir(dfs, parent, name, mode, dir_oclass);
         DCHECK(rc, "dfs_mkdir() of %s Failed", name);
 
 	if (name)
 		free(name);
 	if (dir_name)
 		free(dir_name);
-        if (rc)
-                return -1;
 	return rc;
 }
 
