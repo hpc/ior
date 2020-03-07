@@ -78,6 +78,7 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
                 totalErrorCount = 0;
                 verbose = tptr->params.verbose;
+                backend = tptr->params.backend;
                 if (rank == 0 && verbose >= VERBOSE_0) {
                         ShowTestStart(&tptr->params);
                 }
@@ -129,6 +130,7 @@ int ior_main(int argc, char **argv)
     /* perform each test */
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
             verbose = tptr->params.verbose;
+            backend = tptr->params.backend;
             if (rank == 0 && verbose >= VERBOSE_0) {
                 backend = tptr->params.backend;
                 ShowTestStart(&tptr->params);
@@ -1256,7 +1258,6 @@ static void TestIoSys(IOR_test_t *test)
                         "Using reorderTasks '-C' (useful to avoid read cache in client)\n");
                 fflush(out_logfile);
         }
-        backend = params->backend;
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
