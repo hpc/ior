@@ -70,6 +70,12 @@ extraSOURCES += aiori-RADOS.c
 extraLDADD += -lrados
 endif
 
+if USE_CEPHFS_AIORI
+extraSOURCES += aiori-CEPHFS.c
+extraLDADD += -lcephfs
+endif
+
+
 if USE_DAOS_AIORI
 extraSOURCES += aiori-DAOS.c aiori-DFS.c
 endif

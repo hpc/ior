@@ -35,7 +35,6 @@
     typedef void *rados_t;
     typedef void *rados_ioctx_t;
 #endif
-
 #include "option.h"
 
 #include "iordef.h"

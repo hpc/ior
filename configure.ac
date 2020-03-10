@@ -197,6 +197,20 @@ AM_COND_IF([USE_RADOS_AIORI],[
         AC_DEFINE([USE_RADOS_AIORI], [], [Build RADOS backend AIORI])
 ])
 
+# CEPHFS support
+AC_ARG_WITH([cephfs],
+        [AS_HELP_STRING([--with-cephfs],
+           [support IO with libcephfs backend @<:@default=no@:>@])],
+        [],
+        [with_cephfs=no])
+AS_IF([test "x$with_cephfs" != xno], [
+       CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64 -std=gnu11"
+])
+AM_CONDITIONAL([USE_CEPHFS_AIORI], [test x$with_cephfs = xyes])
+AM_COND_IF([USE_CEPHFS_AIORI],[
+        AC_DEFINE([USE_CEPHFS_AIORI], [], [Build CEPHFS backend AIORI])
+])
+
 # DAOS Backends (DAOS and DFS) IO support require DAOS and CART/GURT
 AC_ARG_WITH([cart],
     [AS_HELP_STRING([--with-cart],
