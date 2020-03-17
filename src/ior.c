@@ -255,8 +255,13 @@ DisplayOutliers(int numTasks,
                 strcpy(accessString, "read");
         }
         if (fabs(timerVal - mean) > (double)outlierThreshold) {
-                fprintf(out_logfile, "WARNING: for task %d, %s %s is %f\n",
-                        rank, accessString, timeString, timerVal);
+                char hostname[MAX_STR];
+                int ret = gethostname(hostname, MAX_STR);
+                if (ret != 0)
+                        strcpy(hostname, "unknown");
+
+                fprintf(out_logfile, "WARNING: for %s, task %d, %s %s is %f\n",
+                        hostname, rank, accessString, timeString, timerVal);
                 fprintf(out_logfile, "         (mean=%f, stddev=%f)\n", mean, sd);
                 fflush(out_logfile);
         }
