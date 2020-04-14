@@ -219,6 +219,7 @@ AC_ARG_WITH([cart],
 
 AS_IF([test "x$with_cart" != xno], [
     CART="yes"
+    LDFLAGS="$LDFLAGS -L$with_cart/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cart/lib64"
     LDFLAGS="$LDFLAGS -L$with_cart/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_cart/lib"
     CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
     AC_CHECK_HEADERS(gurt/common.h,, [unset CART])

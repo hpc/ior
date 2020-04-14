@@ -52,7 +52,7 @@ struct aiori_dir_hdl {
 enum handleType {
         POOL_HANDLE,
         CONT_HANDLE,
-	ARRAY_HANDLE
+	DFS_HANDLE
 };
 
 /************************** O P T I O N S *****************************/
@@ -194,7 +194,7 @@ static d_hash_table_ops_t hdl_hash_ops = {
 
 /* Distribute process 0's pool or container handle to others. */
 static void
-HandleDistribute(daos_handle_t *handle, enum handleType type)
+HandleDistribute(enum handleType type)
 {
         d_iov_t global;
         int        rc;
@@ -203,13 +203,15 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
         global.iov_buf_len = 0;
         global.iov_len = 0;
 
-        assert(type == POOL_HANDLE || type == CONT_HANDLE);
+        assert(type == POOL_HANDLE || type == CONT_HANDLE || type == DFS_HANDLE);
         if (rank == 0) {
                 /* Get the global handle size. */
                 if (type == POOL_HANDLE)
-                        rc = daos_pool_local2global(*handle, &global);
+                        rc = daos_pool_local2global(poh, &global);
+                else if (type == CONT_HANDLE)
+                        rc = daos_cont_local2global(coh, &global);
                 else
-                        rc = daos_cont_local2global(*handle, &global);
+                        rc = dfs_local2global(dfs, &global);
                 DCHECK(rc, "Failed to get global handle size");
         }
 
@@ -224,9 +226,11 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
 
         if (rank == 0) {
                 if (type == POOL_HANDLE)
-                        rc = daos_pool_local2global(*handle, &global);
+                        rc = daos_pool_local2global(poh, &global);
+                else if (type == CONT_HANDLE)
+                        rc = daos_cont_local2global(coh, &global);
                 else
-                        rc = daos_cont_local2global(*handle, &global);
+                        rc = dfs_local2global(dfs, &global);
                 DCHECK(rc, "Failed to create global handle");
         }
 
@@ -236,9 +240,11 @@ HandleDistribute(daos_handle_t *handle, enum handleType type)
 
         if (rank != 0) {
                 if (type == POOL_HANDLE)
-                        rc = daos_pool_global2local(global, handle);
+                        rc = daos_pool_global2local(global, &poh);
+                else if (type == CONT_HANDLE)
+                        rc = daos_cont_global2local(poh, global, &coh);
                 else
-                        rc = daos_cont_global2local(poh, global, handle);
+                        rc = dfs_global2local(poh, coh, 0, global, &dfs);
                 DCHECK(rc, "Failed to get local handle");
         }
 
@@ -435,13 +441,14 @@ DFS_Init() {
                 } else if (rc) {
                         DCHECK(rc, "Failed to create container");
                 }
+
+                rc = dfs_mount(poh, coh, O_RDWR, &dfs);
+                DCHECK(rc, "Failed to mount DFS namespace");
         }
 
-        HandleDistribute(&poh, POOL_HANDLE);
-        HandleDistribute(&coh, CONT_HANDLE);
-
-	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
-        DCHECK(rc, "Failed to mount DFS namespace");
+        HandleDistribute(POOL_HANDLE);
+        HandleDistribute(CONT_HANDLE);
+        HandleDistribute(DFS_HANDLE);
 
         if (o.prefix) {
                 rc = dfs_set_prefix(dfs, o.prefix);
