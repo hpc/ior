@@ -272,6 +272,15 @@ int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
  * tasks on node rank 0.
  */
 int GetNumNodes(MPI_Comm comm) {
+    if (getenv("IOR_FAKE_NODES")){
+      int numNodes = atoi(getenv("IOR_FAKE_NODES"));
+      int rank;
+      MPI_Comm_rank(comm, & rank);
+      if(rank == 0){
+        printf("Fake number of node: using %d\n", numNodes);
+      }
+      return numNodes;
+    }
 #if MPI_VERSION >= 3
         MPI_Comm shared_comm;
         int shared_rank = 0;
@@ -338,6 +347,15 @@ int GetNumTasks(MPI_Comm comm) {
  * method will return the same value it always has.
  */
 int GetNumTasksOnNode0(MPI_Comm comm) {
+  if (getenv("IOR_FAKE_TASK_PER_NODES")){
+    int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
+    int rank;
+    MPI_Comm_rank(comm, & rank);
+    if(rank == 0){
+      printf("Fake tasks per node: using %d\n", tasksPerNode);
+    }
+    return tasksPerNode;
+  }
 #if MPI_VERSION >= 3
         MPI_Comm shared_comm;
         int shared_rank = 0;
@@ -368,15 +386,6 @@ int GetNumTasksOnNode0(MPI_Comm comm) {
     int size;
     MPI_Comm_size(comm, & size);
     /* for debugging and testing */
-    if (getenv("IOR_FAKE_TASK_PER_NODES")){
-      int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
-      int rank;
-      MPI_Comm_rank(comm, & rank);
-      if(rank == 0){
-        printf("Fake tasks per node: using %d\n", tasksPerNode);
-      }
-      return tasksPerNode;
-    }
     char       localhost[MAX_PATHLEN],
         hostname[MAX_PATHLEN];
     int        count               = 1,
