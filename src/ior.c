@@ -1731,8 +1731,7 @@ static void ValidateTests(IOR_param_t * test)
  * @param pretendRank int pretended Rank for shifting the offsest corectly
  * @return IOR_offset_t
  */
-static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
-                                              int pretendRank)
+IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank)
 {
         IOR_offset_t i, j, k = 0;
         IOR_offset_t offsets;
@@ -1781,8 +1780,7 @@ static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
  * @return IOR_offset_t
  * @return
  */
-static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
-                                          int access)
+IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, int access)
 {
         int seed;
         IOR_offset_t i, value, tmp;

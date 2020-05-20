@@ -1,4 +1,4 @@
-SUBDIRS = .
+SUBDIRS = . test
 
 bin_PROGRAMS = ior mdtest
 if USE_CAPS
@@ -123,11 +123,3 @@ MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
 
 libaiori_a_SOURCES += $(extraSOURCES)
 libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
-
-
-TESTS = testlib
-bin_PROGRAMS += testlib
-
-testlib_SOURCES  = ./test/lib.c
-testlib_LDFLAGS  = $(extraLDFLAGS)
-testlib_LDADD    = libaiori.a $(extraLDADD)
