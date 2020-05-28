@@ -1514,7 +1514,7 @@ void show_file_system_size(char *file_system) {
         * 100;
 
     if (realpath(file_system, real_path) == NULL) {
-        FAIL("unable to use realpath() on file system %s", file_system);
+        WARN("unable to use realpath() on file system");
     }
 
 

@@ -565,7 +565,7 @@ IOR_offset_t StringToBytes(char *size_str)
 /*
  * Displays size of file system and percent of data blocks and inodes used.
  */
-void ShowFileSystemSize(char *fileSystem)
+void ShowFileSystemSize(char *fileSystem) // this might be converted to an AIORI call
 {
 #ifndef _WIN32                  /* FIXME */
         char realPath[PATH_MAX];
@@ -585,11 +585,13 @@ void ShowFileSystemSize(char *fileSystem)
 
 #ifdef __sun
         if (statvfs(fileSystem, &statusBuffer) != 0) {
-                ERR("unable to statvfs() file system");
+                WARN("unable to statvfs() file system");
+                return;
         }
 #else                           /* !__sun */
         if (statfs(fileSystem, &statusBuffer) != 0) {
-                ERR("unable to statfs() file system");
+                WARN("unable to statfs() file system");
+                return;
         }
 #endif                          /* __sun */
 
@@ -620,7 +622,8 @@ void ShowFileSystemSize(char *fileSystem)
 
         /* show results */
         if (realpath(fileSystem, realPath) == NULL) {
-                ERR("unable to use realpath()");
+                WARN("unable to use realpath()");
+                return;
         }
 
         if(outputFormat == OUTPUT_DEFAULT){
