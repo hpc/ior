@@ -102,6 +102,7 @@ static void DFS_Close(void *, IOR_param_t *);
 static void DFS_Delete(char *, IOR_param_t *);
 static char* DFS_GetVersion();
 static void DFS_Fsync(void *, IOR_param_t *);
+static void DFS_Sync(IOR_param_t *);
 static IOR_offset_t DFS_GetFileSize(IOR_param_t *, MPI_Comm, char *);
 static int DFS_Statfs (const char *, ior_aiori_statfs_t *, IOR_param_t *);
 static int DFS_Stat (const char *, struct stat *, IOR_param_t *);
@@ -123,6 +124,7 @@ ior_aiori_t dfs_aiori = {
         .delete		= DFS_Delete,
         .get_version	= DFS_GetVersion,
         .fsync		= DFS_Fsync,
+        .sync		= DFS_Sync,
         .get_file_size	= DFS_GetFileSize,
         .statfs		= DFS_Statfs,
         .mkdir		= DFS_Mkdir,
@@ -132,6 +134,7 @@ ior_aiori_t dfs_aiori = {
         .initialize	= DFS_Init,
         .finalize	= DFS_Finalize,
         .get_options	= DFS_options,
+        .enable_mdtest	= true,
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -658,6 +661,18 @@ DFS_Xfer(int access, void *file, IOR_size_t *buffer, IOR_offset_t length,
 static void
 DFS_Fsync(void *fd, IOR_param_t * param)
 {
+        /* no cache in DFS, so this is a no-op currently */
+	dfs_sync(dfs);
+        return;
+}
+
+/*
+ * Perform sync() on the dfs mount.
+ */
+static void
+DFS_Sync(IOR_param_t * param)
+{
+        /* no cache in DFS, so this is a no-op currently */
 	dfs_sync(dfs);
         return;
 }
