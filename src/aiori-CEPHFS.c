@@ -76,6 +76,7 @@ static int CEPHFS_MkDir(const char *, mode_t, IOR_param_t *);
 static int CEPHFS_RmDir(const char *, IOR_param_t *);
 static int CEPHFS_Access(const char *, int, IOR_param_t *);
 static int CEPHFS_Stat(const char *, struct stat *, IOR_param_t *);
+static void CEPHFS_Sync(IOR_param_t *);
 static option_help * CEPHFS_options();
 
 /************************** D E C L A R A T I O N S ***************************/
@@ -97,6 +98,7 @@ ior_aiori_t cephfs_aiori = {
         .rmdir = CEPHFS_RmDir,
         .access = CEPHFS_Access,
         .stat = CEPHFS_Stat,
+        .sync = CEPHFS_Sync,
         .get_options = CEPHFS_options,
 };
 
@@ -358,4 +360,13 @@ static int CEPHFS_Access(const char *testFileName, int mode, IOR_param_t *param)
 static int CEPHFS_Stat(const char *testFileName, struct stat *buf, IOR_param_t *param)
 {
         return ceph_stat(cmount, pfix(testFileName), buf);
+}
+
+static void CEPHFS_Sync(IOR_param_t *param)
+{
+        int ret = ceph_sync_fs(cmount);
+        if (ret < 0) {
+                CEPHFS_ERR("ceph_sync_fs failed", ret);
+        }
+
 }
