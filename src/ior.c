@@ -76,6 +76,7 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
         /* perform each test */
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
+                aiori_initialize(tptr);
                 totalErrorCount = 0;
                 verbose = tptr->params.verbose;
                 backend = tptr->params.backend;
@@ -85,6 +86,7 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
                 TestIoSys(tptr);
                 tptr->results->errors = totalErrorCount;
                 ShowTestEnd(tptr);
+                aiori_finalize(tptr);
         }
 
         PrintLongSummaryAllTests(tests_head);
@@ -123,7 +125,7 @@ int ior_main(int argc, char **argv)
     InitTests(tests_head, mpi_comm_world);
     verbose = tests_head->params.verbose;
 
-    aiori_initialize(tests_head);
+    aiori_initialize(tests_head); // this is quite suspicious, likely an error when multiple tests need to be executed with different backends and options
 
     PrintHeader(argc, argv);
 
