@@ -38,9 +38,9 @@ typedef struct{
 
 int64_t string_to_bytes(char *size_str);
 void option_print_current(option_help * args);
-
 //@return the number of parsed arguments
 int option_parse(int argc, char ** argv, options_all_t * args);
+int option_parse_str(char*val, options_all_t * opt_all);
 
 /* Parse a single line */
 int option_parse_key_value(char * key, char * value, options_all_t * opt_all);
