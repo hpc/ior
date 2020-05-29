@@ -125,6 +125,12 @@ static option_help * CEPHFS_options(){
 
 static void CEPHFS_Init()
 {
+        /* Short circuit if the options haven't been filled yet. */
+        if (!o.user || !o.conf || !o.prefix) {
+                WARN("CEPHFS_Init() called before options have been populated!");
+                return;
+        }
+
         /* Short circuit if the mount handle already exists */ 
         if (cmount) {
                 return;
