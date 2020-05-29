@@ -125,6 +125,12 @@ static option_help * CEPHFS_options(){
 
 static void CEPHFS_Init()
 {
+        /* Short circuit if the options haven't been filled yet. */
+        if (!o.user || !o.conf || !o.prefix) {
+                WARN("CEPHFS_Init() called before options have been populated!");
+                return;
+        }
+
         /* Short circuit if the mount handle already exists */ 
         if (cmount) {
                 return;
@@ -167,7 +173,15 @@ static void CEPHFS_Init()
 static void CEPHFS_Final()
 {
         /* shutdown */
-        ceph_shutdown(cmount);
+        int ret = ceph_unmount(cmount);
+        if (ret < 0) {
+		CEPHFS_ERR("ceph_umount failed", ret);
+	}
+        ret = ceph_release(cmount);
+        if (ret < 0) {
+                CEPHFS_ERR("ceph_release failed", ret);
+        }
+	cmount = NULL;
 }
 
 static void *CEPHFS_Create(char *testFileName, IOR_param_t * param)
@@ -267,7 +281,6 @@ static void CEPHFS_Close(void *file, IOR_param_t * param)
                 CEPHFS_ERR("ceph_close failed", ret);
         }
         free(file);
-
         return;
 }
 
