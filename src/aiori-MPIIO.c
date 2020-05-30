@@ -52,7 +52,7 @@ typedef struct {
   int preallocate;                 /* preallocate file size */
   int useSharedFilePointer;        /* use shared file pointer */
   int useStridedDatatype;          /* put strided access into datatype */
-  char * hintsFileName;  /* full name for hints file */
+  char * hintsFileName;            /* full name for hints file */
 } mpiio_options_t;
 
 static option_help * MPIIO_options(void ** init_backend_options, void * init_values){

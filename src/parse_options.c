@@ -179,16 +179,10 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->blockSize = string_to_bytes(value);
         } else if (strcasecmp(option, "transfersize") == 0) {
                 params->transferSize = string_to_bytes(value);
-        } else if (strcasecmp(option, "setalignment") == 0) {
-                params->setAlignment = string_to_bytes(value);
         } else if (strcasecmp(option, "singlexferattempt") == 0) {
                 params->singleXferAttempt = atoi(value);
-        } else if (strcasecmp(option, "individualdatasets") == 0) {
-                params->individualDataSets = atoi(value);
         } else if (strcasecmp(option, "intraTestBarriers") == 0) {
                 params->intraTestBarriers = atoi(value);
-        } else if (strcasecmp(option, "nofill") == 0) {
-                params->noFill = atoi(value);
         } else if (strcasecmp(option, "verbose") == 0) {
                 params->verbose = atoi(value);
         } else if (strcasecmp(option, "settimestampsignature") == 0) {
@@ -458,15 +452,12 @@ option_help * createGlobalOptions(IOR_param_t * params){
      */
     {'G', NULL,        "setTimeStampSignature -- set value for time stamp signature/random seed", OPTION_OPTIONAL_ARGUMENT, 'd', & params->setTimeStampSignature},
     {'i', NULL,        "repetitions -- number of repetitions of test", OPTION_OPTIONAL_ARGUMENT, 'd', & params->repetitions},
-    {'I', NULL,        "individualDataSets -- datasets not shared by all procs [not working]", OPTION_FLAG, 'd', & params->individualDataSets},
     {'j', NULL,        "outlierThreshold -- warn on outlier N seconds from mean", OPTION_OPTIONAL_ARGUMENT, 'd', & params->outlierThreshold},
-    {'J', NULL,        "setAlignment -- HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->setAlignment},
     {'k', NULL,        "keepFile -- don't remove the test file(s) on program exit", OPTION_FLAG, 'd', & params->keepFile},
     {'K', NULL,        "keepFileWithError  -- keep error-filled file(s) after data-checking", OPTION_FLAG, 'd', & params->keepFileWithError},
     {'l', NULL,        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
     {'m', NULL,        "multiFile -- use number of reps (-i) for multiple file count", OPTION_FLAG, 'd', & params->multiFile},
     {'M', NULL,        "memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)", OPTION_OPTIONAL_ARGUMENT, 's', & params->memoryPerNodeStr},
-    {'n', NULL,        "noFill -- no fill in HDF5 file creation", OPTION_FLAG, 'd', & params->noFill},
     {'N', NULL,        "numTasks -- number of tasks that are participating in the test (overrides MPI)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},
     {'o', NULL,        "testFile -- full name for test", OPTION_OPTIONAL_ARGUMENT, 's', & params->testFileName},
     {'O', NULL,        "string of IOR directives (e.g. -O checkRead=1,lustreStripeCount=32)", OPTION_OPTIONAL_ARGUMENT, 'p', & decodeDirectiveWrapper},

@@ -159,11 +159,6 @@ typedef struct
     MPI_Datatype transferType;       /* datatype for transfer */
     MPI_Datatype fileType;           /* filetype for file view */
 
-    /* HDF5 variables */
-    int individualDataSets;          /* datasets not shared by all procs */
-    int noFill;                      /* no fill in file creation */
-    IOR_offset_t setAlignment;       /* alignment in bytes */
-
     /* HDFS variables */
     char      * hdfs_user;  /* copied from ENV, for now */
     const char* hdfs_name_node;

@@ -355,7 +355,6 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("fsyncperwrite", test->fsyncPerWrite);
     PrintKeyValInt("useExistingTestFile", test->useExistingTestFile);
     PrintKeyValInt("uniqueDir", test->uniqueDir);
-    PrintKeyValInt("individualDataSets", test->individualDataSets);
     PrintKeyValInt("singleXferAttempt", test->singleXferAttempt);
     PrintKeyValInt("readFile", test->readFile);
     PrintKeyValInt("writeFile", test->writeFile);
@@ -366,7 +365,6 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("randomOffset", test->randomOffset);
     PrintKeyValInt("checkWrite", test->checkWrite);
     PrintKeyValInt("checkRead", test->checkRead);
-    PrintKeyValInt("setAlignment", test->setAlignment);
     PrintKeyValInt("storeFileOffset", test->storeFileOffset);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);

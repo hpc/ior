@@ -68,7 +68,7 @@ static void test_initialize(IOR_test_t * test){
     backend->initialize(test->params.backend_options);
   }
   if(backend->init_xfer_options){
-    backend->init_xfer_options(test);
+    backend->init_xfer_options(& test->params);
   }
 }
 
@@ -214,7 +214,6 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->randomSeed = -1;
         p->incompressibleSeed = 573;
         p->testComm = mpi_comm_world;
-        p->setAlignment = 1;
         p->lustre_start_ost = -1;
 
         hdfs_user = getenv("USER");
@@ -1343,7 +1342,7 @@ static void TestIoSys(IOR_test_t *test)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = WRITE;
                         timer[0] = GetTimeStamp();
-                        fd = backend->create(testFileName, IOR_WRONLY | IOR_CREAT, params->backend_options);
+                        fd = backend->create(testFileName, IOR_WRONLY | IOR_CREAT | IOR_TRUNC, params->backend_options);
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1592,8 +1591,6 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("block size must be non-negative integer");
         if ((test->transferSize % sizeof(IOR_size_t)) != 0)
                 ERR("transfer size must be a multiple of access size");
-        if (test->setAlignment < 0)
-                ERR("alignment must be non-negative integer");
         if (test->transferSize < 0)
                 ERR("transfer size must be non-negative integer");
         if (test->transferSize == 0) {
@@ -1647,32 +1644,8 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("random offset not available with HDF5");
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->randomOffset)
                 ERR("random offset not available with NCMPI");
-        if ((strcasecmp(test->api, "HDF5") != 0) && test->individualDataSets)
-                WARN_RESET("individual datasets only available in HDF5",
-                           test, &defaults, individualDataSets);
-        if ((strcasecmp(test->api, "HDF5") == 0) && test->individualDataSets)
-                WARN_RESET("individual data sets not implemented",
-                           test, &defaults, individualDataSets);
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->filePerProc)
                 ERR("file-per-proc not available in current NCMPI");
-        if (test->noFill) {
-                if (strcasecmp(test->api, "HDF5") != 0) {
-                        ERR("'no fill' option only available in HDF5");
-                } else {
-                        /* check if hdf5 available */
-#if defined (H5_VERS_MAJOR) && defined (H5_VERS_MINOR)
-                        /* no-fill option not available until hdf5-1.6.x */
-#if (H5_VERS_MAJOR > 0 && H5_VERS_MINOR > 5)
-                        ;
-#else
-                        ERRF("'no fill' option not available in %s",
-                                test->apiVersion);
-#endif
-#else
-                        WARN("unable to determine HDF5 version for 'no fill' usage");
-#endif
-                }
-        }
         if (test->useExistingTestFile && test->lustre_set_striping)
                 ERR("Lustre stripe options are incompatible with useExistingTestFile");
 
