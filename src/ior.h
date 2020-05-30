@@ -36,8 +36,9 @@
     typedef void *rados_ioctx_t;
 #endif
 #include "option.h"
-
 #include "iordef.h"
+
+#define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
 /******************** DATA Packet Type ***************************************/
 /* Holds the types of data packets: generic, offset, timestamp, incompressible */
 
@@ -177,21 +178,6 @@ typedef struct
 
     /* NCMPI variables */
     int var_id;                      /* variable id handle for data set */
-
-    /* Lustre variables */
-    int lustre_stripe_count;
-    int lustre_stripe_size;
-    int lustre_start_ost;
-    int lustre_set_striping;         /* flag that we need to set lustre striping */
-    int lustre_ignore_locks;
-
-    /* gpfs variables */
-    int gpfs_hint_access;          /* use gpfs "access range" hint */
-    int gpfs_release_token;        /* immediately release GPFS tokens after
-                                      creating or opening a file */
-    /* beegfs variables */
-    int beegfs_numTargets;           /* number storage targets to use */
-    int beegfs_chunkSize;            /* srtipe pattern for new files */
 
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */

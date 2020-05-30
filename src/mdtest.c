@@ -1966,6 +1966,12 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (backend->initialize){
 	    backend->initialize(backend_options);
     }
+    if(backend->init_xfer_options){
+      backend->init_xfer_options(& param);
+    }
+    if(backend->check_params){
+      backend->check_params(backend_options);
+    }
 
     pid = getpid();
     uid = getuid();

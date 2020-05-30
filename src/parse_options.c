@@ -32,8 +32,6 @@
 #include "option.h"
 #include "aiori.h"
 
-#define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
-
 IOR_param_t initialTestParams;
 
 option_help * createGlobalOptions(IOR_param_t * params);
@@ -205,53 +203,6 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
         } else if (strcasecmp(option, "memoryPerNode") == 0) {
                 params->memoryPerNode = NodeMemoryStringToBytes(value);
                 params->memoryPerTask = 0;
-        } else if (strcasecmp(option, "lustrestripecount") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-                ERR("ior was not compiled with Lustre support");
-#endif
-                params->lustre_stripe_count = atoi(value);
-                params->lustre_set_striping = 1;
-        } else if (strcasecmp(option, "lustrestripesize") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-                ERR("ior was not compiled with Lustre support");
-#endif
-                params->lustre_stripe_size = string_to_bytes(value);
-                params->lustre_set_striping = 1;
-        } else if (strcasecmp(option, "lustrestartost") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-                ERR("ior was not compiled with Lustre support");
-#endif
-                params->lustre_start_ost = atoi(value);
-                params->lustre_set_striping = 1;
-        } else if (strcasecmp(option, "lustreignorelocks") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-                ERR("ior was not compiled with Lustre support");
-#endif
-                params->lustre_ignore_locks = atoi(value);
-        } else if (strcasecmp(option, "gpfshintaccess") == 0) {
-#ifndef HAVE_GPFS_FCNTL_H
-                ERR("ior was not compiled with GPFS hint support");
-#endif
-                params->gpfs_hint_access = atoi(value);
-        } else if (strcasecmp(option, "gpfsreleasetoken") == 0) {
-#ifndef HAVE_GPFS_FCNTL_H
-                ERR("ior was not compiled with GPFS hint support");
-#endif
-                params->gpfs_release_token = atoi(value);
-       } else if (strcasecmp(option, "beegfsNumTargets") == 0) {
-#ifndef HAVE_BEEGFS_BEEGFS_H
-                ERR("ior was not compiled with BeeGFS support");
-#endif
-                params->beegfs_numTargets = atoi(value);
-                if (params->beegfs_numTargets < 1)
-                        ERR("beegfsNumTargets must be >= 1");
-        } else if (strcasecmp(option, "beegfsChunkSize") == 0) {
- #ifndef HAVE_BEEGFS_BEEGFS_H
-                 ERR("ior was not compiled with BeeGFS support");
- #endif
-                 params->beegfs_chunkSize = string_to_bytes(value);
-                 if (!ISPOWEROFTWO(params->beegfs_chunkSize) || params->beegfs_chunkSize < (1<<16))
-                         ERR("beegfsChunkSize must be a power of two and >64k");
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
         } else {

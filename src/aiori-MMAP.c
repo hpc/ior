@@ -86,6 +86,7 @@ static IOR_param_t * ior_param = NULL;
 
 static void MMAP_init_xfer_options(IOR_param_t * params){
   ior_param = params;
+  aiori_posix_init_xfer_options(params);
 }
 
 static int MMAP_check_params(void * options){

@@ -146,7 +146,7 @@ void updateParsedOptions(IOR_param_t * options, options_all_t * global_options){
     }
     const ior_aiori_t * backend = aiori_select(options->api);
     if (backend == NULL)
-        ERR_SIMPLE("unrecognized I/O API");
+        ERR("Unrecognized I/O API");
 
     options->backend = backend;
     /* copy the actual module options into the test */

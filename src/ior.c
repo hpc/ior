@@ -214,7 +214,6 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->randomSeed = -1;
         p->incompressibleSeed = 573;
         p->testComm = mpi_comm_world;
-        p->lustre_start_ost = -1;
 
         hdfs_user = getenv("USER");
         if (!hdfs_user)
@@ -228,9 +227,6 @@ void init_IOR_Param_t(IOR_param_t * p)
 
         p->URI = NULL;
         p->part_number = 0;
-
-        p->beegfs_numTargets = -1;
-        p->beegfs_chunkSize = -1;
 }
 
 static void
@@ -1646,15 +1642,13 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("random offset not available with NCMPI");
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->filePerProc)
                 ERR("file-per-proc not available in current NCMPI");
-        if (test->useExistingTestFile && test->lustre_set_striping)
-                ERR("Lustre stripe options are incompatible with useExistingTestFile");
 
+        if(test->backend->init_xfer_options){
+          test->backend->init_xfer_options(test);
+        }
         /* allow the backend to validate the options */
         if(test->backend->check_params){
-          if(test->backend->init_xfer_options){
-              test->backend->init_xfer_options(test);
-          }
-          int check = test->backend->check_params(test);
+          int check = test->backend->check_params(test->backend_options);
           if (check){
             ERR("The backend returned that the test parameters are invalid.");
           }

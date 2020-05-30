@@ -132,6 +132,7 @@ int aiori_posix_mkdir (const char *path, mode_t mode, void * module_options);
 int aiori_posix_rmdir (const char *path, void * module_options);
 int aiori_posix_access (const char *path, int mode, void * module_options);
 int aiori_posix_stat (const char *path, struct stat *buf, void * module_options);
+void aiori_posix_init_xfer_options(IOR_param_t * params);
 
 void *POSIX_Create(char *testFileName, int flags, void * module_options);
 int POSIX_Mknod(char *testFileName);

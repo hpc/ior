@@ -444,14 +444,6 @@ void ShowSetup(IOR_param_t *params)
   if(params->dryRun){
     PrintKeyValInt("dryRun", params->dryRun);
   }
-
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
-  if (params->lustre_set_striping) {
-    PrintKeyVal("Lustre stripe size", ((params->lustre_stripe_size == 0) ? "Use default" :
-     HumanReadable(params->lustre_stripe_size, BASE_TWO)));
-    PrintKeyValInt("Lustre stripe count", params->lustre_stripe_count);
-  }
-#endif /* HAVE_LUSTRE_LUSTRE_USER_H */
   if (params->deadlineForStonewalling > 0) {
     PrintKeyValInt("stonewallingTime", params->deadlineForStonewalling);
     PrintKeyValInt("stoneWallingWearOut", params->stoneWallingWearOut );
