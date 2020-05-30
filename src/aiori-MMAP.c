@@ -26,14 +26,15 @@
 #include "utilities.h"
 
 /**************************** P R O T O T Y P E S *****************************/
-static void *MMAP_Create(char *, IOR_param_t *);
-static void *MMAP_Open(char *, IOR_param_t *);
+static void *MMAP_Create(char *, int flags, void *);
+static void *MMAP_Open(char *, int flags, void *);
 static IOR_offset_t MMAP_Xfer(int, void *, IOR_size_t *,
-                               IOR_offset_t, IOR_param_t *);
-static void MMAP_Close(void *, IOR_param_t *);
-static void MMAP_Fsync(void *, IOR_param_t *);
+                               IOR_offset_t, void *);
+static void MMAP_Close(void *, void *);
+static void MMAP_Fsync(void *, void *);
 static option_help * MMAP_options(void ** init_backend_options, void * init_values);
-
+static void MMAP_init_xfer_options(IOR_param_t * params);
+static int MMAP_check_params(void * options);
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t mmap_aiori = {
@@ -43,10 +44,12 @@ ior_aiori_t mmap_aiori = {
         .xfer = MMAP_Xfer,
         .close = MMAP_Close,
         .delete = POSIX_Delete,
+        .init_xfer_options = MMAP_init_xfer_options,
         .get_version = aiori_get_version,
         .fsync = MMAP_Fsync,
         .get_file_size = POSIX_GetFileSize,
         .get_options = MMAP_options,
+        .check_params = MMAP_check_params
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -79,25 +82,37 @@ static option_help * MMAP_options(void ** init_backend_options, void * init_valu
   return help;
 }
 
-static void ior_mmap_file(int *file, IOR_param_t *param)
+static IOR_param_t * ior_param = NULL;
+
+static void MMAP_init_xfer_options(IOR_param_t * params){
+  ior_param = params;
+}
+
+static int MMAP_check_params(void * options){
+  if (ior_param->fsyncPerWrite && (ior_param->transferSize & (sysconf(_SC_PAGESIZE) - 1)))
+    ERR("transfer size must be aligned with PAGESIZE for MMAP with fsyncPerWrite");
+  return 0;
+}
+
+static void ior_mmap_file(int *file, int mflags, void *param)
 {
         int flags = PROT_READ;
-        IOR_offset_t size = param->expectedAggFileSize;
+        IOR_offset_t size = ior_param->expectedAggFileSize;
 
-        if (param->open == WRITE)
+        if (mflags & IOR_WRONLY || mflags & IOR_RDWR)
                 flags |= PROT_WRITE;
-        mmap_options_t *o = (mmap_options_t*) param->backend_options;
+        mmap_options_t *o = (mmap_options_t*) param;
 
         o->mmap_ptr = mmap(NULL, size, flags, MAP_SHARED,
                                *file, 0);
         if (o->mmap_ptr == MAP_FAILED)
                 ERR("mmap() failed");
 
-        if (param->randomOffset)
+        if (ior_param->randomOffset)
                 flags = POSIX_MADV_RANDOM;
         else
                 flags = POSIX_MADV_SEQUENTIAL;
-        
+
         if(o->madv_pattern){
           if (posix_madvise(o->mmap_ptr, size, flags) != 0)
           ERR("madvise() failed");
@@ -114,26 +129,25 @@ static void ior_mmap_file(int *file, IOR_param_t *param)
 /*
  * Creat and open a file through the POSIX interface, then setup mmap.
  */
-static void *MMAP_Create(char *testFileName, IOR_param_t * param)
+static void *MMAP_Create(char *testFileName, int flags, void * param)
 {
         int *fd;
 
-        fd = POSIX_Create(testFileName, param);
-        if (ftruncate(*fd, param->expectedAggFileSize) != 0)
+        fd = POSIX_Create(testFileName, flags, param);
+        if (ftruncate(*fd, ior_param->expectedAggFileSize) != 0)
                 ERR("ftruncate() failed");
-        ior_mmap_file(fd, param);
+        ior_mmap_file(fd, flags, param);
         return ((void *)fd);
 }
 
 /*
  * Open a file through the POSIX interface and setup mmap.
  */
-static void *MMAP_Open(char *testFileName, IOR_param_t * param)
+static void *MMAP_Open(char *testFileName, int flags, void * param)
 {
         int *fd;
-
-        fd = POSIX_Open(testFileName, param);
-        ior_mmap_file(fd, param);
+        fd = POSIX_Open(testFileName, flags, param);
+        ior_mmap_file(fd, flags, param);
         return ((void *)fd);
 }
 
@@ -141,19 +155,19 @@ static void *MMAP_Open(char *testFileName, IOR_param_t * param)
  * Write or read access to file using mmap
  */
 static IOR_offset_t MMAP_Xfer(int access, void *file, IOR_size_t * buffer,
-                               IOR_offset_t length, IOR_param_t * param)
+                               IOR_offset_t length, void * param)
 {
-        mmap_options_t *o = (mmap_options_t*) param->backend_options;
+        mmap_options_t *o = (mmap_options_t*) param;
         if (access == WRITE) {
-                memcpy(o->mmap_ptr + param->offset, buffer, length);
+                memcpy(o->mmap_ptr + ior_param->offset, buffer, length);
         } else {
-                memcpy(buffer, o->mmap_ptr + param->offset, length);
+                memcpy(buffer, o->mmap_ptr + ior_param->offset, length);
         }
 
-        if (param->fsyncPerWrite == TRUE) {
-                if (msync(o->mmap_ptr + param->offset, length, MS_SYNC) != 0)
+        if (ior_param->fsyncPerWrite == TRUE) {
+                if (msync(o->mmap_ptr + ior_param->offset, length, MS_SYNC) != 0)
                         ERR("msync() failed");
-                if (posix_madvise(o->mmap_ptr + param->offset, length,
+                if (posix_madvise(o->mmap_ptr + ior_param->offset, length,
                                   POSIX_MADV_DONTNEED) != 0)
                         ERR("madvise() failed");
         }
@@ -163,20 +177,20 @@ static IOR_offset_t MMAP_Xfer(int access, void *file, IOR_size_t * buffer,
 /*
  * Perform msync().
  */
-static void MMAP_Fsync(void *fd, IOR_param_t * param)
+static void MMAP_Fsync(void *fd, void * param)
 {
-        mmap_options_t *o = (mmap_options_t*) param->backend_options;
-        if (msync(o->mmap_ptr, param->expectedAggFileSize, MS_SYNC) != 0)
+        mmap_options_t *o = (mmap_options_t*) param;
+        if (msync(o->mmap_ptr, ior_param->expectedAggFileSize, MS_SYNC) != 0)
                 EWARN("msync() failed");
 }
 
 /*
  * Close a file through the POSIX interface, after tear down the mmap.
  */
-static void MMAP_Close(void *fd, IOR_param_t * param)
+static void MMAP_Close(void *fd, void * param)
 {
-        mmap_options_t *o = (mmap_options_t*) param->backend_options;
-        if (munmap(o->mmap_ptr, param->expectedAggFileSize) != 0)
+        mmap_options_t *o = (mmap_options_t*) param;
+        if (munmap(o->mmap_ptr, ior_param->expectedAggFileSize) != 0)
                 ERR("munmap failed");
         o->mmap_ptr = NULL;
         POSIX_Close(fd, param);

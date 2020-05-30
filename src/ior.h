@@ -84,17 +84,15 @@ typedef struct
 {
     const struct ior_aiori * backend;
     char * debug;             /* debug info string */
-    unsigned int mode;               /* file permissions */
-    unsigned int openFlags;          /* open flags (see also <open>) */
     int referenceNumber;             /* user supplied reference number */
     char * api;               /* API for I/O */
     char * apiVersion;        /* API version */
     char * platform;          /* platform type */
     char * testFileName;   /* full name for test */
     char * testFileName_fppReadCheck;/* filename for fpp read check */
-    char * hintsFileName;  /* full name for hints file */
     char * options;        /* options string */
     // intermediate options
+    int collective;                  /* collective I/O */
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */
@@ -119,17 +117,12 @@ typedef struct
     int keepFileWithError;           /* don't delete the testfile with errors */
     int errorFound;                  /* error found in data check */
     int quitOnError;                 /* quit code when error in check */
-    int collective;                  /* collective I/O */
     IOR_offset_t segmentCount;       /* number of segments (or HDF5 datasets) */
     IOR_offset_t blockSize;          /* contiguous bytes to write per task */
     IOR_offset_t transferSize;       /* size of transfer in bytes */
     IOR_offset_t offset;             /* offset for read/write */
     IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
-    int preallocate;                 /* preallocate file size */
-    int useFileView;                 /* use MPI_File_set_view */
-    int useSharedFilePointer;        /* use shared file pointer */
-    int useStridedDatatype;          /* put strided access into datatype */
-    int showHints;                   /* show hints */
+
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
     int useExistingTestFile;         /* do not delete test file before access */
@@ -144,7 +137,6 @@ typedef struct
     int verbose;                     /* verbosity */
     int setTimeStampSignature;       /* set time stamp signature */
     unsigned int timeStampSignatureValue; /* value for time stamp signature */
-    void * fd_fppReadCheck;          /* additional fd for fpp read check */
     int randomSeed;                  /* random seed for write/read check */
     unsigned int incompressibleSeed; /* random seed for incompressible file creation */
     int randomOffset;                /* access is to random offsets */

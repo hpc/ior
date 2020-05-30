@@ -31,23 +31,61 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 
-static IOR_offset_t SeekOffset(MPI_File, IOR_offset_t, IOR_param_t *);
+static IOR_offset_t SeekOffset(MPI_File, IOR_offset_t, void *);
 
-static void *MPIIO_Create(char *, IOR_param_t *);
-static void *MPIIO_Open(char *, IOR_param_t *);
+static void *MPIIO_Create(char *, int iorflags, void *);
+static void *MPIIO_Open(char *, int flags, void *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
-                                   IOR_offset_t, IOR_param_t *);
-static void MPIIO_Close(void *, IOR_param_t *);
+                                   IOR_offset_t, void *);
+static void MPIIO_Close(void *, void *);
 static char* MPIIO_GetVersion();
-static void MPIIO_Fsync(void *, IOR_param_t *);
-
+static void MPIIO_Fsync(void *, void *);
+static void MPIIO_init_xfer_options(IOR_param_t * params);
+static int MPIIO_check_params(void * options);
 
 /************************** D E C L A R A T I O N S ***************************/
+
+typedef struct {
+  int dry_run;
+  int showHints;                   /* show hints */
+  int useFileView;                 /* use MPI_File_set_view */
+  int preallocate;                 /* preallocate file size */
+  int useSharedFilePointer;        /* use shared file pointer */
+  int useStridedDatatype;          /* put strided access into datatype */
+  char * hintsFileName;  /* full name for hints file */
+} mpiio_options_t;
+
+static option_help * MPIIO_options(void ** init_backend_options, void * init_values){
+  mpiio_options_t * o = malloc(sizeof(mpiio_options_t));
+  if (init_values != NULL){
+    memcpy(o, init_values, sizeof(mpiio_options_t));
+  }else{
+    memset(o, 0, sizeof(mpiio_options_t));
+  }
+  *init_backend_options = o;
+
+  option_help h [] = {
+    {0, "mpiio.dryRun",       "Dry run, disable actual IO", OPTION_FLAG, 'd', & o->dry_run},
+    {0, "mpiio.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->hintsFileName},
+    {0, "mpiio.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->showHints},
+    {0, "mpiio.preallocate",   "Preallocate file size", OPTION_FLAG, 'd', & o->preallocate},
+    {0, "mpiio.useStridedDatatype", "put strided access into datatype [not working]", OPTION_FLAG, 'd', & o->useStridedDatatype},
+    //{'P', NULL,        "useSharedFilePointer -- use shared file pointer [not working]", OPTION_FLAG, 'd', & params->useSharedFilePointer},
+    {0, "mpiio.useFileView",  "Use MPI_File_set_view", OPTION_FLAG, 'd', & o->useFileView},
+      LAST_OPTION
+  };
+  option_help * help = malloc(sizeof(h));
+  memcpy(help, h, sizeof(h));
+  return help;
+}
+
 
 ior_aiori_t mpiio_aiori = {
         .name = "MPIIO",
         .name_legacy = NULL,
         .create = MPIIO_Create,
+        .get_options = MPIIO_options,
+        .init_xfer_options = MPIIO_init_xfer_options,
         .open = MPIIO_Open,
         .xfer = MPIIO_Xfer,
         .close = MPIIO_Close,
@@ -60,16 +98,46 @@ ior_aiori_t mpiio_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = MPIIO_Access,
         .stat = aiori_posix_stat,
+        .check_params = MPIIO_check_params
 };
 
 /***************************** F U N C T I O N S ******************************/
+static IOR_param_t * ior_param = NULL;
+
+static void MPIIO_init_xfer_options(IOR_param_t * params){
+  ior_param = params;
+}
+
+static int MPIIO_check_params(void * module_options){
+  mpiio_options_t * param = (mpiio_options_t*) module_options;
+  if ((param->useFileView == TRUE)
+    && (sizeof(MPI_Aint) < 8)   /* used for 64-bit datatypes */
+    &&((ior_param->numTasks * ior_param->blockSize) >
+       (2 * (IOR_offset_t) GIBIBYTE)))
+        ERR("segment size must be < 2GiB");
+  if (param->useSharedFilePointer)
+        ERR("shared file pointer not implemented");
+  if (param->useStridedDatatype)
+        ERR("strided datatype not implemented");
+  if (param->useStridedDatatype && (ior_param->blockSize < sizeof(IOR_size_t)
+                                      || ior_param->transferSize <
+                                      sizeof(IOR_size_t)))
+          ERR("need larger file size for strided datatype in MPIIO");
+  if (ior_param->randomOffset && ior_param->collective)
+          ERR("random offset not available with collective MPIIO");
+  if (ior_param->randomOffset && param->useFileView)
+          ERR("random offset not available with MPIIO fileviews");
+
+  return 0;
+}
 
 /*
  * Try to access a file through the MPIIO interface.
  */
-int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
+int MPIIO_Access(const char *path, int mode, void *module_options)
 {
-    if(param->dryRun){
+    mpiio_options_t * param = (mpiio_options_t*) module_options;
+    if(param->dry_run){
       return MPI_SUCCESS;
     }
     MPI_File fd;
@@ -98,23 +166,21 @@ int MPIIO_Access(const char *path, int mode, IOR_param_t *param)
 /*
  * Create and open a file through the MPIIO interface.
  */
-static void *MPIIO_Create(char *testFileName, IOR_param_t * param)
+static void *MPIIO_Create(char *testFileName, int iorflags, void * module_options)
 {
-  if(param->dryRun){
-    return 0;
-  }
-  return MPIIO_Open(testFileName, param);
+  return MPIIO_Open(testFileName, iorflags, module_options);
 }
 
 /*
  * Open a file through the MPIIO interface.  Setup file view.
  */
-static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
+static void *MPIIO_Open(char *testFileName, int flags, void * module_options)
 {
+        mpiio_options_t * param = (mpiio_options_t*) module_options;
         int fd_mode = (int)0,
             offsetFactor,
             tasksPerFile,
-            transfersPerBlock = param->blockSize / param->transferSize;
+            transfersPerBlock = ior_param->blockSize / ior_param->transferSize;
         struct fileTypeStruct {
                 int globalSizes[2], localSizes[2], startIndices[2];
         } fileTypeStruct;
@@ -130,28 +196,28 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
 
         /* set IOR file flags to MPIIO flags */
         /* -- file open flags -- */
-        if (param->openFlags & IOR_RDONLY) {
+        if (flags & IOR_RDONLY) {
                 fd_mode |= MPI_MODE_RDONLY;
         }
-        if (param->openFlags & IOR_WRONLY) {
+        if (flags & IOR_WRONLY) {
                 fd_mode |= MPI_MODE_WRONLY;
         }
-        if (param->openFlags & IOR_RDWR) {
+        if (flags & IOR_RDWR) {
                 fd_mode |= MPI_MODE_RDWR;
         }
-        if (param->openFlags & IOR_APPEND) {
+        if (flags & IOR_APPEND) {
                 fd_mode |= MPI_MODE_APPEND;
         }
-        if (param->openFlags & IOR_CREAT) {
+        if (flags & IOR_CREAT) {
                 fd_mode |= MPI_MODE_CREATE;
         }
-        if (param->openFlags & IOR_EXCL) {
+        if (flags & IOR_EXCL) {
                 fd_mode |= MPI_MODE_EXCL;
         }
-        if (param->openFlags & IOR_TRUNC) {
+        if (flags & IOR_TRUNC) {
                 fprintf(stdout, "File truncation not implemented in MPIIO\n");
         }
-        if (param->openFlags & IOR_DIRECT) {
+        if (flags & IOR_DIRECT) {
                 fprintf(stdout, "O_DIRECT not implemented in MPIIO\n");
         }
 
@@ -162,7 +228,7 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
          */
         fd_mode |= MPI_MODE_UNIQUE_OPEN;
 
-        if (param->filePerProc) {
+        if (ior_param->filePerProc) {
                 comm = MPI_COMM_SELF;
         } else {
                 comm = testComm;
@@ -181,13 +247,13 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
                 ShowHints(&mpiHints);
                 fprintf(stdout, "}\n");
         }
-        if(! param->dryRun){
+        if(! param->dry_run){
             MPI_CHECKF(MPI_File_open(comm, testFileName, fd_mode, mpiHints, fd),
                        "cannot open file: %s", testFileName);
         }
 
         /* show hints actually attached to file handle */
-        if (rank == 0 && param->showHints && ! param->dryRun) {
+        if (rank == 0 && param->showHints && ! param->dry_run) {
                 if (mpiHints != MPI_INFO_NULL)
                         MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
                 MPI_CHECK(MPI_File_get_info(*fd, &mpiHints),
@@ -198,29 +264,29 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
         }
 
         /* preallocate space for file */
-        if (param->preallocate && param->open == WRITE && ! param->dryRun) {
+        if (param->preallocate && ior_param->open == WRITE && ! param->dry_run) {
                 MPI_CHECK(MPI_File_preallocate(*fd,
-                                               (MPI_Offset) (param->segmentCount
+                                               (MPI_Offset) (ior_param->segmentCount
                                                              *
-                                                             param->blockSize *
-                                                             param->numTasks)),
+                                                             ior_param->blockSize *
+                                                             ior_param->numTasks)),
                           "cannot preallocate file");
         }
         /* create file view */
         if (param->useFileView) {
                 /* create contiguous transfer datatype */
                 MPI_CHECK(MPI_Type_contiguous
-                          (param->transferSize / sizeof(IOR_size_t),
-                           MPI_LONG_LONG_INT, &param->transferType),
+                          (ior_param->transferSize / sizeof(IOR_size_t),
+                           MPI_LONG_LONG_INT, &ior_param->transferType),
                           "cannot create contiguous datatype");
-                MPI_CHECK(MPI_Type_commit(&param->transferType),
+                MPI_CHECK(MPI_Type_commit(&ior_param->transferType),
                           "cannot commit datatype");
-                if (param->filePerProc) {
+                if (ior_param->filePerProc) {
                         offsetFactor = 0;
                         tasksPerFile = 1;
                 } else {
-                        offsetFactor = (rank + rankOffset) % param->numTasks;
-                        tasksPerFile = param->numTasks;
+                        offsetFactor = (rank + rankOffset) % ior_param->numTasks;
+                        tasksPerFile = ior_param->numTasks;
                 }
 
                 /*
@@ -239,15 +305,15 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
                           (2, fileTypeStruct.globalSizes,
                            fileTypeStruct.localSizes,
                            fileTypeStruct.startIndices, MPI_ORDER_C,
-                           param->transferType, &param->fileType),
+                           ior_param->transferType, &ior_param->fileType),
                           "cannot create subarray");
-                MPI_CHECK(MPI_Type_commit(&param->fileType),
+                MPI_CHECK(MPI_Type_commit(&ior_param->fileType),
                           "cannot commit datatype");
 
-                if(! param->dryRun){
+                if(! param->dry_run){
                     MPI_CHECK(MPI_File_set_view(*fd, (MPI_Offset) 0,
-                                            param->transferType,
-                                            param->fileType, "native",
+                                            ior_param->transferType,
+                                            ior_param->fileType, "native",
                                             (MPI_Info) MPI_INFO_NULL),
                           "cannot set file view");
                 }
@@ -261,14 +327,14 @@ static void *MPIIO_Open(char *testFileName, IOR_param_t * param)
  * Write or read access to file using the MPIIO interface.
  */
 static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
-                               IOR_offset_t length, IOR_param_t * param)
+                               IOR_offset_t length, void * module_options)
 {
         /* NOTE: The second arg is (void *) for reads, and (const void *)
            for writes.  Therefore, one of the two sets of assignments below
            will get "assignment from incompatible pointer-type" warnings,
            if we only use this one set of signatures. */
-
-        if(param->dryRun)
+        mpiio_options_t * param = (mpiio_options_t*) module_options;
+        if(param->dry_run)
           return length;
 
         int (MPIAPI * Access) (MPI_File, void *, int,
@@ -319,7 +385,7 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
          */
         if (param->useFileView) {
                 /* find offset in file */
-                if (SeekOffset(*(MPI_File *) fd, param->offset, param) <
+                if (SeekOffset(*(MPI_File *) fd, ior_param->offset, param) <
                     0) {
                         /* if unsuccessful */
                         length = -1;
@@ -331,24 +397,24 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
                          * e.g.,  'IOR -s 2 -b 32K -t 32K -a MPIIO -S'
                          */
                         if (param->useStridedDatatype) {
-                                length = param->segmentCount;
+                                length = ior_param->segmentCount;
                         } else {
                                 length = 1;
                         }
-                        if (param->collective) {
+                        if (ior_param->collective) {
                                 /* individual, collective call */
                                 MPI_CHECK(Access_all
                                           (*(MPI_File *) fd, buffer, length,
-                                           param->transferType, &status),
+                                           ior_param->transferType, &status),
                                           "cannot access collective");
                         } else {
                                 /* individual, noncollective call */
                                 MPI_CHECK(Access
                                           (*(MPI_File *) fd, buffer, length,
-                                           param->transferType, &status),
+                                           ior_param->transferType, &status),
                                           "cannot access noncollective");
                         }
-                        length *= param->transferSize;  /* for return value in bytes */
+                        length *= ior_param->transferSize;  /* for return value in bytes */
                 }
         } else {
                 /*
@@ -358,7 +424,7 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
                 if (param->useSharedFilePointer) {
                         /* find offset in file */
                         if (SeekOffset
-                            (*(MPI_File *) fd, param->offset, param) < 0) {
+                            (*(MPI_File *) fd, ior_param->offset, param) < 0) {
                                 /* if unsuccessful */
                                 length = -1;
                         } else {
@@ -374,32 +440,31 @@ static IOR_offset_t MPIIO_Xfer(int access, void *fd, IOR_size_t * buffer,
                                         "useSharedFilePointer not implemented\n");
                         }
                 } else {
-                        if (param->collective) {
+                        if (ior_param->collective) {
                                 /* explicit, collective call */
                                 MPI_CHECK(Access_at_all
-                                          (*(MPI_File *) fd, param->offset,
+                                          (*(MPI_File *) fd, ior_param->offset,
                                            buffer, length, MPI_BYTE, &status),
                                           "cannot access explicit, collective");
                         } else {
                                 /* explicit, noncollective call */
                                 MPI_CHECK(Access_at
-                                          (*(MPI_File *) fd, param->offset,
+                                          (*(MPI_File *) fd, ior_param->offset,
                                            buffer, length, MPI_BYTE, &status),
                                           "cannot access explicit, noncollective");
                         }
                 }
         }
-        if((access == WRITE) && (param->fsyncPerWrite == TRUE))
-               MPIIO_Fsync(fd, param);
         return (length);
 }
 
 /*
  * Perform fsync().
  */
-static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
+static void MPIIO_Fsync(void *fdp, void * module_options)
 {
-  if(param->dryRun)
+  mpiio_options_t * param = (mpiio_options_t*) module_options;
+  if(param->dry_run)
     return;
   if (MPI_File_sync(*(MPI_File *)fdp) != MPI_SUCCESS)
       EWARN("fsync() failed");
@@ -408,29 +473,31 @@ static void MPIIO_Fsync(void *fdp, IOR_param_t * param)
 /*
  * Close a file through the MPIIO interface.
  */
-static void MPIIO_Close(void *fd, IOR_param_t * param)
+static void MPIIO_Close(void *fd, void * module_options)
 {
-        if(! param->dryRun){
+        mpiio_options_t * param = (mpiio_options_t*) module_options;
+        if(! param->dry_run){
               MPI_CHECK(MPI_File_close((MPI_File *) fd), "cannot close file");
         }
-        if ((param->useFileView == TRUE) && (param->fd_fppReadCheck == NULL)) {
-                /*
-                 * need to free the datatype, so done in the close process
-                 */
-                MPI_CHECK(MPI_Type_free(&param->fileType),
-                          "cannot free MPI file datatype");
-                MPI_CHECK(MPI_Type_free(&param->transferType),
-                          "cannot free MPI transfer datatype");
-        }
+        //if ((param->useFileView == TRUE) && (param->fd_fppReadCheck == NULL)) {
+        //        /*
+        //         * need to free the datatype, so done in the close process
+        //         */
+        //        MPI_CHECK(MPI_Type_free(&param->fileType),
+        //                  "cannot free MPI file datatype");
+        //        MPI_CHECK(MPI_Type_free(&param->transferType),
+        //                  "cannot free MPI transfer datatype");
+        //}
         free(fd);
 }
 
 /*
  * Delete a file through the MPIIO interface.
  */
-void MPIIO_Delete(char *testFileName, IOR_param_t * param)
+void MPIIO_Delete(char *testFileName, void * module_options)
 {
-  if(param->dryRun)
+  mpiio_options_t * param = (mpiio_options_t*) module_options;
+  if(param->dry_run)
     return;
   MPI_CHECKF(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
              "cannot delete file: %s", testFileName);
@@ -452,36 +519,37 @@ static char* MPIIO_GetVersion()
  * Seek to offset in file using the MPIIO interface.
  */
 static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
-                               IOR_param_t * param)
+                               void * module_options)
 {
+        mpiio_options_t * param = (mpiio_options_t*) module_options;
         int offsetFactor, tasksPerFile;
         IOR_offset_t tempOffset;
 
         tempOffset = offset;
 
-        if (param->filePerProc) {
+        if (ior_param->filePerProc) {
                 offsetFactor = 0;
                 tasksPerFile = 1;
         } else {
-                offsetFactor = (rank + rankOffset) % param->numTasks;
-                tasksPerFile = param->numTasks;
+                offsetFactor = (rank + rankOffset) % ior_param->numTasks;
+                tasksPerFile = ior_param->numTasks;
         }
         if (param->useFileView) {
                 /* recall that offsets in a file view are
                    counted in units of transfer size */
-                if (param->filePerProc) {
-                        tempOffset = tempOffset / param->transferSize;
+                if (ior_param->filePerProc) {
+                        tempOffset = tempOffset / ior_param->transferSize;
                 } else {
                         /*
                          * this formula finds a file view offset for a task
                          * from an absolute offset
                          */
-                        tempOffset = ((param->blockSize / param->transferSize)
+                        tempOffset = ((ior_param->blockSize / ior_param->transferSize)
                                       * (tempOffset /
-                                         (param->blockSize * tasksPerFile)))
-                            + (((tempOffset % (param->blockSize * tasksPerFile))
-                                - (offsetFactor * param->blockSize))
-                               / param->transferSize);
+                                         (ior_param->blockSize * tasksPerFile)))
+                            + (((tempOffset % (ior_param->blockSize * tasksPerFile))
+                                - (offsetFactor * ior_param->blockSize))
+                               / ior_param->transferSize);
                 }
         }
         MPI_CHECK(MPI_File_seek(fd, tempOffset, MPI_SEEK_SET),
@@ -493,17 +561,18 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
  * Use MPI_File_get_size() to return aggregate file size.
  * NOTE: This function is used by the HDF5 and NCMPI backends.
  */
-IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
+IOR_offset_t MPIIO_GetFileSize(void * module_options, MPI_Comm testComm,
                                char *testFileName)
 {
-        if(test->dryRun)
+        mpiio_options_t * test = (mpiio_options_t*) module_options;
+        if(test->dry_run)
           return 0;
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
         MPI_File fd;
         MPI_Comm comm;
         MPI_Info mpiHints = MPI_INFO_NULL;
 
-        if (test->filePerProc == TRUE) {
+        if (ior_param->filePerProc == TRUE) {
                 comm = MPI_COMM_SELF;
         } else {
                 comm = testComm;
@@ -519,7 +588,7 @@ IOR_offset_t MPIIO_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         if (mpiHints != MPI_INFO_NULL)
                 MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
 
-        if (test->filePerProc == TRUE) {
+        if (ior_param->filePerProc == TRUE) {
                 MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
                                         MPI_LONG_LONG_INT, MPI_SUM, testComm),
                           "cannot total data moved");

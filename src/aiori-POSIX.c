@@ -69,9 +69,11 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
-                               IOR_offset_t, IOR_param_t *);
-static void POSIX_Fsync(void *, IOR_param_t *);
-static void POSIX_Sync(IOR_param_t * );
+                               IOR_offset_t, void *);
+static void POSIX_Fsync(void *, void *);
+static void POSIX_Sync(void * );
+static void POSIX_init_xfer_options(IOR_param_t * params);
+
 
 /************************** O P T I O N S *****************************/
 typedef struct{
@@ -113,6 +115,7 @@ ior_aiori_t posix_aiori = {
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
         .delete = POSIX_Delete,
+        .init_xfer_options = POSIX_init_xfer_options,
         .get_version = aiori_get_version,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
@@ -128,6 +131,11 @@ ior_aiori_t posix_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 
+static IOR_param_t * ior_param = NULL;
+
+static void POSIX_init_xfer_options(IOR_param_t * params){
+  ior_param = params;
+}
 
 #ifdef HAVE_GPFS_FCNTL_H
 void gpfs_free_all_locks(int fd)
@@ -151,7 +159,7 @@ void gpfs_free_all_locks(int fd)
                 EWARNF("gpfs_fcntl(%d, ...) release all locks hint failed.", fd);
         }
 }
-void gpfs_access_start(int fd, IOR_offset_t length, IOR_param_t *param, int access)
+void gpfs_access_start(int fd, IOR_offset_t length, void *param, int access)
 {
         int rc;
         struct {
@@ -175,7 +183,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, IOR_param_t *param, int acce
         }
 }
 
-void gpfs_access_end(int fd, IOR_offset_t length, IOR_param_t *param, int access)
+void gpfs_access_end(int fd, IOR_offset_t length, void *param, int access)
 {
         int rc;
         struct {
@@ -318,7 +326,7 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 /*
  * Creat and open a file through the POSIX interface.
  */
-void *POSIX_Create(char *testFileName, IOR_param_t * param)
+void *POSIX_Create(char *testFileName, int flags, void * param)
 {
         int fd_oflag = O_BINARY;
         int mode = 0664;
@@ -327,12 +335,12 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         fd = (int *)malloc(sizeof(int));
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
-        posix_options_t * o = (posix_options_t*) param->backend_options;
+        posix_options_t * o = (posix_options_t*) param;
         if (o->direct_io == TRUE){
           set_o_direct_flag(&fd_oflag);
         }
 
-        if(param->dryRun)
+        if(ior_param->dryRun)
           return 0;
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
@@ -450,7 +458,7 @@ int POSIX_Mknod(char *testFileName)
 /*
  * Open a file through the POSIX interface.
  */
-void *POSIX_Open(char *testFileName, IOR_param_t * param)
+void *POSIX_Open(char *testFileName, int flags, void * param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
@@ -459,13 +467,13 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
 
-        posix_options_t * o = (posix_options_t*) param->backend_options;
+        posix_options_t * o = (posix_options_t*) param;
         if (o->direct_io == TRUE)
                 set_o_direct_flag(&fd_oflag);
 
         fd_oflag |= O_RDWR;
 
-        if(param->dryRun)
+        if(ior_param->dryRun)
           return 0;
 
         *fd = open64(testFileName, fd_oflag);
@@ -496,7 +504,7 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
  * Write or read access to file using the POSIX interface.
  */
 static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
-                               IOR_offset_t length, IOR_param_t * param)
+                               IOR_offset_t length, void * param)
 {
         int xferRetries = 0;
         long long remaining = (long long)length;
@@ -504,7 +512,7 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
         long long rc;
         int fd;
 
-        if(param->dryRun)
+        if(ior_param->dryRun)
           return length;
 
         fd = *(int *)file;
@@ -517,8 +525,8 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
 
 
         /* seek to offset */
-        if (lseek64(fd, param->offset, SEEK_SET) == -1)
-                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, param->offset);
+        if (lseek64(fd, ior_param->offset, SEEK_SET) == -1)
+                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, ior_param->offset);
 
         while (remaining > 0) {
                 /* write/read file */
@@ -527,20 +535,20 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                                 fprintf(stdout,
                                         "task %d writing to offset %lld\n",
                                         rank,
-                                        param->offset + length - remaining);
+                                        ior_param->offset + length - remaining);
                         }
                         rc = write(fd, ptr, remaining);
                         if (rc == -1)
                                 ERRF("write(%d, %p, %lld) failed",
                                         fd, (void*)ptr, remaining);
-                        if (param->fsyncPerWrite == TRUE)
+                        if (ior_param->fsyncPerWrite == TRUE)
                                 POSIX_Fsync(&fd, param);
                 } else {        /* READ or CHECK */
                         if (verbose >= VERBOSE_4) {
                                 fprintf(stdout,
                                         "task %d reading from offset %lld\n",
                                         rank,
-                                        param->offset + length - remaining);
+                                        ior_param->offset + length - remaining);
                         }
                         rc = read(fd, ptr, remaining);
                         if (rc == 0)
@@ -556,8 +564,8 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                                 rank,
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
-                                param->offset + length - remaining);
-                        if (param->singleXferAttempt == TRUE)
+                                ior_param->offset + length - remaining);
+                        if (ior_param->singleXferAttempt == TRUE)
                                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
                                           "barrier error");
                         if (xferRetries > MAX_RETRY)
@@ -580,14 +588,14 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void POSIX_Fsync(void *fd, IOR_param_t * param)
+static void POSIX_Fsync(void *fd, void * param)
 {
         if (fsync(*(int *)fd) != 0)
                 EWARNF("fsync(%d) failed", *(int *)fd);
 }
 
 
-static void POSIX_Sync(IOR_param_t * param)
+static void POSIX_Sync(void * param)
 {
   int ret = system("sync");
   if (ret != 0){
@@ -599,9 +607,9 @@ static void POSIX_Sync(IOR_param_t * param)
 /*
  * Close a file through the POSIX interface.
  */
-void POSIX_Close(void *fd, IOR_param_t * param)
+void POSIX_Close(void *fd, void * param)
 {
-        if(param->dryRun)
+        if(ior_param->dryRun)
           return;
         if (close(*(int *)fd) != 0)
                 ERRF("close(%d) failed", *(int *)fd);
@@ -611,9 +619,9 @@ void POSIX_Close(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the POSIX interface.
  */
-void POSIX_Delete(char *testFileName, IOR_param_t * param)
+void POSIX_Delete(char *testFileName, void * param)
 {
-        if(param->dryRun)
+        if(ior_param->dryRun)
           return;
         if (unlink(testFileName) != 0){
                 EWARNF("[RANK %03d]: unlink() of file \"%s\" failed\n",
@@ -624,10 +632,10 @@ void POSIX_Delete(char *testFileName, IOR_param_t * param)
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
+IOR_offset_t POSIX_GetFileSize(void * test, MPI_Comm testComm,
                                       char *testFileName)
 {
-        if(test->dryRun)
+        if(ior_param->dryRun)
           return 0;
         struct stat stat_buf;
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
@@ -637,7 +645,7 @@ IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         }
         aggFileSizeFromStat = stat_buf.st_size;
 
-        if (test->filePerProc == TRUE) {
+        if (ior_param->filePerProc == TRUE) {
                 MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
                                         MPI_LONG_LONG_INT, MPI_SUM, testComm),
                           "cannot total data moved");

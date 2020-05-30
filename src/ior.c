@@ -58,6 +58,28 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                                 void *fd, const int access,
                                 IOR_io_buffers *ioBuffers);
 
+static void test_initialize(IOR_test_t * test){
+  verbose = test->params.verbose;
+  backend = test->params.backend;
+  if (rank == 0 && verbose >= VERBOSE_0) {
+    ShowTestStart(& test->params);
+  }
+  if(backend->initialize){
+    backend->initialize(test->params.backend_options);
+  }
+  if(backend->init_xfer_options){
+    backend->init_xfer_options(test);
+  }
+}
+
+static void test_finalize(IOR_test_t * test){
+  backend = test->params.backend;
+  if(backend->finalize){
+    backend->finalize(test->params.backend_options);
+  }
+}
+
+
 IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out){
         IOR_test_t *tests_head;
         IOR_test_t *tptr;
@@ -76,17 +98,12 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
         /* perform each test */
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-                aiori_initialize(tptr);
+                test_initialize(tptr);
                 totalErrorCount = 0;
-                verbose = tptr->params.verbose;
-                backend = tptr->params.backend;
-                if (rank == 0 && verbose >= VERBOSE_0) {
-                        ShowTestStart(&tptr->params);
-                }
                 TestIoSys(tptr);
                 tptr->results->errors = totalErrorCount;
                 ShowTestEnd(tptr);
-                aiori_finalize(tptr);
+                test_finalize(tptr);
         }
 
         PrintLongSummaryAllTests(tests_head);
@@ -125,18 +142,11 @@ int ior_main(int argc, char **argv)
     InitTests(tests_head, mpi_comm_world);
     verbose = tests_head->params.verbose;
 
-    aiori_initialize(tests_head); // this is quite suspicious, likely an error when multiple tests need to be executed with different backends and options
-
     PrintHeader(argc, argv);
 
     /* perform each test */
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-            verbose = tptr->params.verbose;
-            backend = tptr->params.backend;
-            if (rank == 0 && verbose >= VERBOSE_0) {
-                backend = tptr->params.backend;
-                ShowTestStart(&tptr->params);
-            }
+            test_initialize(tptr);
 
             // This is useful for trapping a running MPI process.  While
             // this is sleeping, run the script 'testing/hdfs/gdb.attach'
@@ -148,6 +158,7 @@ int ior_main(int argc, char **argv)
 
             TestIoSys(tptr);
             ShowTestEnd(tptr);
+            test_finalize(tptr);
     }
 
     if (verbose < 0)
@@ -157,8 +168,6 @@ int ior_main(int argc, char **argv)
 
     /* display finish time */
     PrintTestEnds();
-
-    aiori_finalize(tests_head);
 
     MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
 
@@ -180,10 +189,6 @@ void init_IOR_Param_t(IOR_param_t * p)
         assert (NULL != default_aiori);
 
         memset(p, 0, sizeof(IOR_param_t));
-
-        p->mode = IOR_IRUSR | IOR_IWUSR | IOR_IRGRP | IOR_IWGRP;
-        p->openFlags = IOR_RDWR | IOR_CREAT;
-
         p->api = strdup(default_aiori);
         p->platform = strdup("HOST(OSTYPE)");
         p->testFileName = strdup("testFile");
@@ -1338,7 +1343,7 @@ static void TestIoSys(IOR_test_t *test)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = WRITE;
                         timer[0] = GetTimeStamp();
-                        fd = backend->create(testFileName, params);
+                        fd = backend->create(testFileName, IOR_WRONLY | IOR_CREAT, params->backend_options);
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1412,7 +1417,7 @@ static void TestIoSys(IOR_test_t *test)
 
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
-                        fd = backend->open(testFileName, params);
+                        fd = backend->open(testFileName, IOR_RDONLY, params);
                         dataMoved = WriteOrRead(params, &results[rep], fd, WRITECHECK, &ioBuffers);
                         backend->close(fd, params);
                         rankOffset = 0;
@@ -1484,7 +1489,7 @@ static void TestIoSys(IOR_test_t *test)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = READ;
                         timer[0] = GetTimeStamp();
-                        fd = backend->open(testFileName, params);
+                        fd = backend->open(testFileName, IOR_RDONLY, params);
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1613,11 +1618,6 @@ static void ValidateTests(IOR_param_t * test)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
                 ERR("block/transfer size may not be smaller than IOR_size_t for NCMPI");
-        if ((test->useFileView == TRUE)
-            && (sizeof(MPI_Aint) < 8)   /* used for 64-bit datatypes */
-            &&((test->numTasks * test->blockSize) >
-               (2 * (IOR_offset_t) GIBIBYTE)))
-                ERR("segment size must be < 2GiB");
         if ((strcasecmp(test->api, "POSIX") != 0) && test->singleXferAttempt)
                 WARN_RESET("retry only available in POSIX",
                            test, &defaults, singleXferAttempt);
@@ -1630,39 +1630,6 @@ static void ValidateTests(IOR_param_t * test)
             && (strcasecmp(test->api, "CEPHFS") != 0)) && test->fsync)
                 WARN_RESET("fsync() not supported in selected backend",
                            test, &defaults, fsync);
-        if ((strcasecmp(test->api, "MPIIO") != 0) && test->preallocate)
-                WARN_RESET("preallocation only available in MPIIO",
-                           test, &defaults, preallocate);
-        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useFileView)
-                WARN_RESET("file view only available in MPIIO",
-                           test, &defaults, useFileView);
-        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useSharedFilePointer)
-                WARN_RESET("shared file pointer only available in MPIIO",
-                           test, &defaults, useSharedFilePointer);
-        if ((strcasecmp(test->api, "MPIIO") == 0) && test->useSharedFilePointer)
-                WARN_RESET("shared file pointer not implemented",
-                           test, &defaults, useSharedFilePointer);
-        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useStridedDatatype)
-                WARN_RESET("strided datatype only available in MPIIO",
-                           test, &defaults, useStridedDatatype);
-        if ((strcasecmp(test->api, "MPIIO") == 0) && test->useStridedDatatype)
-                WARN_RESET("strided datatype not implemented",
-                           test, &defaults, useStridedDatatype);
-        if ((strcasecmp(test->api, "MPIIO") == 0)
-            && test->useStridedDatatype && (test->blockSize < sizeof(IOR_size_t)
-                                            || test->transferSize <
-                                            sizeof(IOR_size_t)))
-                ERR("need larger file size for strided datatype in MPIIO");
-        if ((strcasecmp(test->api, "POSIX") == 0) && test->showHints)
-                WARN_RESET("hints not available in POSIX",
-                           test, &defaults, showHints);
-        if ((strcasecmp(test->api, "POSIX") == 0) && test->collective)
-                WARN_RESET("collective not available in POSIX",
-                           test, &defaults, collective);
-        if ((strcasecmp(test->api, "MMAP") == 0) && test->fsyncPerWrite
-            && (test->transferSize & (sysconf(_SC_PAGESIZE) - 1)))
-                ERR("transfer size must be aligned with PAGESIZE for MMAP with fsyncPerWrite");
-
         /* parameter consitency */
         if (test->reorderTasks == TRUE && test->reorderTasksRandom == TRUE)
                 ERR("Both Constant and Random task re-ordering specified. Choose one and resubmit");
@@ -1676,14 +1643,6 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("random offset not available with read check option (use write check)");
         if (test->randomOffset && test->storeFileOffset)
                 ERR("random offset not available with store file offset option)");
-
-
-        if ((strcasecmp(test->api, "MPIIO") == 0) && test->randomOffset
-            && test->collective)
-                ERR("random offset not available with collective MPIIO");
-        if ((strcasecmp(test->api, "MPIIO") == 0) && test->randomOffset
-            && test->useFileView)
-                ERR("random offset not available with MPIIO fileviews");
         if ((strcasecmp(test->api, "HDF5") == 0) && test->randomOffset)
                 ERR("random offset not available with HDF5");
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->randomOffset)
@@ -1719,8 +1678,11 @@ static void ValidateTests(IOR_param_t * test)
 
         /* allow the backend to validate the options */
         if(test->backend->check_params){
+          if(test->backend->init_xfer_options){
+              test->backend->init_xfer_options(test);
+          }
           int check = test->backend->check_params(test);
-          if (check == 0){
+          if (check){
             ERR("The backend returned that the test parameters are invalid.");
           }
         }
@@ -1870,9 +1832,11 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
                   FillBuffer(buffer, test, test->offset, pretendRank);
           }
           amtXferred =
-                  backend->xfer(access, fd, buffer, transfer, test);
+                  backend->xfer(access, fd, buffer, transfer, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot write to file");
+          if (test->fsyncPerWrite)
+                backend->fsync(fd, test->backend_options);
           if (test->interIODelay > 0){
             struct timespec wait = {test->interIODelay / 1000 / 1000, 1000l * (test->interIODelay % 1000000)};
             nanosleep( & wait, NULL);

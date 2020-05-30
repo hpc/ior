@@ -355,8 +355,6 @@ static void create_file (const char *path, uint64_t itemNum) {
     sprintf(curr_item, "%s/file.%s"LLU"", path, mk_name, itemNum);
     VERBOSE(3,5,"create_remove_items_helper (non-dirs create): curr_item is '%s'", curr_item);
 
-    param.openFlags = IOR_WRONLY;
-
     if (make_node) {
         int ret;
         VERBOSE(3,5,"create_remove_items_helper : mknod..." );
@@ -369,7 +367,7 @@ static void create_file (const char *path, uint64_t itemNum) {
     } else if (collective_creates) {
         VERBOSE(3,5,"create_remove_items_helper (collective): open..." );
 
-        aiori_fh = backend->open (curr_item, &param);
+        aiori_fh = backend->open (curr_item, IOR_WRONLY | IOR_CREAT, &param);
         if (NULL == aiori_fh)
             FAIL("unable to open file %s", curr_item);
 
@@ -377,12 +375,10 @@ static void create_file (const char *path, uint64_t itemNum) {
          * !collective_creates
          */
     } else {
-        param.openFlags |= IOR_CREAT;
         param.filePerProc = !shared_file;
-        param.mode = FILEMODE;
         VERBOSE(3,5,"create_remove_items_helper (non-collective, shared): open..." );
 
-        aiori_fh = backend->create (curr_item, &param);
+        aiori_fh = backend->create (curr_item, IOR_WRONLY | IOR_CREAT, &param.backend_options);
         if (NULL == aiori_fh)
             FAIL("unable to create file %s", curr_item);
     }
@@ -449,9 +445,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
             void *aiori_fh;
 
             //create files
-            param.openFlags = IOR_WRONLY | IOR_CREAT;
-	    param.mode = FILEMODE;
-            aiori_fh = backend->create (curr_item, &param);
+            aiori_fh = backend->create (curr_item, IOR_WRONLY | IOR_CREAT, &param);
             if (NULL == aiori_fh) {
                 FAIL("unable to create file %s", curr_item);
             }
@@ -713,8 +707,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         VERBOSE(3,5,"mdtest_read file: %s", item);
 
         /* open file for reading */
-        param.openFlags = O_RDONLY;
-        aiori_fh = backend->open (item, &param);
+        aiori_fh = backend->open (item, O_RDONLY, &param);
         if (NULL == aiori_fh) {
             FAIL("unable to open file %s", item);
         }
@@ -1972,7 +1965,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     MPI_Comm_size(testComm, &size);
 
     if (backend->initialize)
-	    backend->initialize();
+	    backend->initialize(param.backend_options);
 
     pid = getpid();
     uid = getuid();
@@ -2264,7 +2257,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     if (backend->finalize)
-            backend->finalize();
+            backend->finalize(param.backend_options);
 
     return summary_table;
 }

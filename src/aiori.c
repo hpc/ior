@@ -152,7 +152,7 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
  * This function provides a AIORI statfs for POSIX-compliant filesystems. It
  * uses statvfs is available and falls back on statfs.
  */
-int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param)
+int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, void * module_options)
 {
         int ret;
 #if defined(HAVE_STATVFS)
@@ -177,22 +177,22 @@ int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_para
         return 0;
 }
 
-int aiori_posix_mkdir (const char *path, mode_t mode, IOR_param_t * param)
+int aiori_posix_mkdir (const char *path, mode_t mode, void * module_options)
 {
         return mkdir (path, mode);
 }
 
-int aiori_posix_rmdir (const char *path, IOR_param_t * param)
+int aiori_posix_rmdir (const char *path, void * module_options)
 {
         return rmdir (path);
 }
 
-int aiori_posix_access (const char *path, int mode, IOR_param_t * param)
+int aiori_posix_access (const char *path, int mode, void * module_options)
 {
         return access (path, mode);
 }
 
-int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param)
+int aiori_posix_stat (const char *path, struct stat *buf, void * module_options)
 {
         return stat (path, buf);
 }
@@ -200,92 +200,6 @@ int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param)
 char* aiori_get_version()
 {
   return "";
-}
-
-static bool is_initialized = false;
-
-static void init_or_fini_internal(const ior_aiori_t *test_backend,
-                                  const bool init)
-{
-        if (init)
-        {
-                if (test_backend->initialize)
-                        test_backend->initialize();
-        }
-        else
-        {
-                if (test_backend->finalize)
-                        test_backend->finalize();
-        }
-}
-
-static void init_or_fini(IOR_test_t *tests, const bool init)
-{
-        /* Sanity check, we were compiled with SOME backend, right? */
-        if (0 == aiori_count ()) {
-                ERR("No IO backends compiled into aiori.  "
-                    "Run 'configure --with-<backend>', and recompile.");
-        }
-
-        /* Pointer to the initialize of finalize function */
-
-
-        /* if tests is NULL, initialize or finalize all available backends */
-        if (tests == NULL)
-        {
-                for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp)
-                        init_or_fini_internal(*tmp, init);
-
-                return;
-        }
-
-        for (IOR_test_t *t = tests; t != NULL; t = t->next)
-        {
-                IOR_param_t *params = &t->params;
-                assert(params != NULL);
-
-                const ior_aiori_t *test_backend = params->backend;
-                assert(test_backend != NULL);
-
-                init_or_fini_internal(test_backend, init);
-        }
-}
-
-
-/**
- * Initialize IO backends.
- *
- * @param[in]  tests      Pointers to the first test
- *
- * This function initializes all backends which will be used. If tests is NULL
- * all available backends are initialized.
- */
-void aiori_initialize(IOR_test_t *tests)
-{
-        if (is_initialized)
-            return;
-
-        init_or_fini(tests, true);
-
-        is_initialized = true;
-}
-
-/**
- * Finalize IO backends.
- *
- * @param[in]  tests      Pointers to the first test
- *
- * This function finalizes all backends which were used. If tests is NULL
- * all available backends are finialized.
- */
-void aiori_finalize(IOR_test_t *tests)
-{
-        if (!is_initialized)
-            return;
-
-        is_initialized = false;
-
-        init_or_fini(tests, false);
 }
 
 const ior_aiori_t *aiori_select (const char *api)

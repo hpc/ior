@@ -337,7 +337,6 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyVal("api", test->api);
     PrintKeyVal("platform", test->platform);
     PrintKeyVal("testFileName", test->testFileName);
-    PrintKeyVal("hintsFileName", test->hintsFileName);
     PrintKeyValInt("deadlineForStonewall", test->deadlineForStonewalling);
     PrintKeyValInt("stoneWallingWearOut", test->stoneWallingWearOut);
     PrintKeyValInt("maxTimeDuration", test->maxTimeDuration);
@@ -355,7 +354,6 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("fsync", test->fsync);
     PrintKeyValInt("fsyncperwrite", test->fsyncPerWrite);
     PrintKeyValInt("useExistingTestFile", test->useExistingTestFile);
-    PrintKeyValInt("showHints", test->showHints);
     PrintKeyValInt("uniqueDir", test->uniqueDir);
     PrintKeyValInt("individualDataSets", test->individualDataSets);
     PrintKeyValInt("singleXferAttempt", test->singleXferAttempt);
@@ -368,12 +366,8 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("randomOffset", test->randomOffset);
     PrintKeyValInt("checkWrite", test->checkWrite);
     PrintKeyValInt("checkRead", test->checkRead);
-    PrintKeyValInt("preallocate", test->preallocate);
-    PrintKeyValInt("useFileView", test->useFileView);
     PrintKeyValInt("setAlignment", test->setAlignment);
     PrintKeyValInt("storeFileOffset", test->storeFileOffset);
-    PrintKeyValInt("useSharedFilePointer", test->useSharedFilePointer);
-    PrintKeyValInt("useStridedDatatype", test->useStridedDatatype);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);
     PrintKeyValInt("quitOnError", test->quitOnError);
