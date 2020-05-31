@@ -2143,8 +2143,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     /*   if directory does not exist, create it */
-    if ((rank < path_count) && backend->access(testdirpath, F_OK, &param) != 0) {
-        if (backend->mkdir(testdirpath, DIRMODE, &param) != 0) {
+    if ((rank < path_count) && backend->access(testdirpath, F_OK, backend_options) != 0) {
+        if (backend->mkdir(testdirpath, DIRMODE, backend_options) != 0) {
             FAIL("Unable to create test directory path %s", testdirpath);
         }
     }

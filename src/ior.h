@@ -94,6 +94,7 @@ typedef struct
     char * options;        /* options string */
     // intermediate options
     int collective;                  /* collective I/O */
+    MPI_Comm     testComm;           /* MPI communicator */
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */
@@ -154,11 +155,6 @@ typedef struct
     int singleXferAttempt;           /* do not retry transfer if incomplete */
     int fsyncPerWrite;               /* fsync() after each write */
     int fsync;                       /* fsync() after write */
-
-    /* MPI variables */
-    MPI_Comm     testComm;           /* MPI communicator */
-    MPI_Datatype transferType;       /* datatype for transfer */
-    MPI_Datatype fileType;           /* filetype for file view */
 
     /* HDFS variables */
     char      * hdfs_user;  /* copied from ENV, for now */

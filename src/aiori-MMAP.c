@@ -26,15 +26,15 @@
 #include "utilities.h"
 
 /**************************** P R O T O T Y P E S *****************************/
-static void *MMAP_Create(char *, int flags, void *);
-static void *MMAP_Open(char *, int flags, void *);
+static void *MMAP_Create(char *, int flags, airori_mod_opt_t *);
+static void *MMAP_Open(char *, int flags, airori_mod_opt_t *);
 static IOR_offset_t MMAP_Xfer(int, void *, IOR_size_t *,
-                               IOR_offset_t, void *);
-static void MMAP_Close(void *, void *);
-static void MMAP_Fsync(void *, void *);
-static option_help * MMAP_options(void ** init_backend_options, void * init_values);
+                               IOR_offset_t, airori_mod_opt_t *);
+static void MMAP_Close(void *, airori_mod_opt_t *);
+static void MMAP_Fsync(void *, airori_mod_opt_t *);
+static option_help * MMAP_options(airori_mod_opt_t ** init_backend_options, airori_mod_opt_t * init_values);
 static void MMAP_init_xfer_options(IOR_param_t * params);
-static int MMAP_check_params(void * options);
+static int MMAP_check_params(airori_mod_opt_t * options);
 /************************** D E C L A R A T I O N S ***************************/
 
 ior_aiori_t mmap_aiori = {
@@ -61,7 +61,7 @@ typedef struct{
   int madv_pattern;
 } mmap_options_t;
 
-static option_help * MMAP_options(void ** init_backend_options, void * init_values){
+static option_help * MMAP_options(airori_mod_opt_t ** init_backend_options, airori_mod_opt_t * init_values){
   mmap_options_t * o = malloc(sizeof(mmap_options_t));
 
   if (init_values != NULL){
@@ -70,7 +70,7 @@ static option_help * MMAP_options(void ** init_backend_options, void * init_valu
     memset(o, 0, sizeof(mmap_options_t));
   }
 
-  *init_backend_options = o;
+  *init_backend_options = (airori_mod_opt_t*) o;
 
   option_help h [] = {
     {0, "mmap.madv_dont_need", "Use advise don't need", OPTION_FLAG, 'd', & o->madv_dont_need},
@@ -89,7 +89,7 @@ static void MMAP_init_xfer_options(IOR_param_t * params){
   aiori_posix_init_xfer_options(params);
 }
 
-static int MMAP_check_params(void * options){
+static int MMAP_check_params(airori_mod_opt_t * options){
   if (ior_param->fsyncPerWrite && (ior_param->transferSize & (sysconf(_SC_PAGESIZE) - 1)))
     ERR("transfer size must be aligned with PAGESIZE for MMAP with fsyncPerWrite");
   return 0;
@@ -130,7 +130,7 @@ static void ior_mmap_file(int *file, int mflags, void *param)
 /*
  * Creat and open a file through the POSIX interface, then setup mmap.
  */
-static void *MMAP_Create(char *testFileName, int flags, void * param)
+static void *MMAP_Create(char *testFileName, int flags, airori_mod_opt_t * param)
 {
         int *fd;
 
@@ -144,7 +144,7 @@ static void *MMAP_Create(char *testFileName, int flags, void * param)
 /*
  * Open a file through the POSIX interface and setup mmap.
  */
-static void *MMAP_Open(char *testFileName, int flags, void * param)
+static void *MMAP_Open(char *testFileName, int flags, airori_mod_opt_t * param)
 {
         int *fd;
         fd = POSIX_Open(testFileName, flags, param);
@@ -156,7 +156,7 @@ static void *MMAP_Open(char *testFileName, int flags, void * param)
  * Write or read access to file using mmap
  */
 static IOR_offset_t MMAP_Xfer(int access, void *file, IOR_size_t * buffer,
-                               IOR_offset_t length, void * param)
+                               IOR_offset_t length, airori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
         if (access == WRITE) {
@@ -178,7 +178,7 @@ static IOR_offset_t MMAP_Xfer(int access, void *file, IOR_size_t * buffer,
 /*
  * Perform msync().
  */
-static void MMAP_Fsync(void *fd, void * param)
+static void MMAP_Fsync(void *fd, airori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
         if (msync(o->mmap_ptr, ior_param->expectedAggFileSize, MS_SYNC) != 0)
@@ -188,7 +188,7 @@ static void MMAP_Fsync(void *fd, void * param)
 /*
  * Close a file through the POSIX interface, after tear down the mmap.
  */
-static void MMAP_Close(void *fd, void * param)
+static void MMAP_Close(void *fd, airori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
         if (munmap(o->mmap_ptr, ior_param->expectedAggFileSize) != 0)

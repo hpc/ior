@@ -824,15 +824,15 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
         sprintf(dir + i + 1, "%d", (rank + rankOffset) % test->numTasks);
 
         /* dir doesn't exist, so create */
-        if (backend->access(dir, F_OK, test) != 0) {
-                if (backend->mkdir(dir, S_IRWXU, test) < 0) {
+        if (backend->access(dir, F_OK, test->backend_options) != 0) {
+                if (backend->mkdir(dir, S_IRWXU, test->backend_options) < 0) {
                         ERRF("cannot create directory: %s", dir);
                 }
 
                 /* check if correct permissions */
-        } else if (backend->access(dir, R_OK, test) != 0 ||
-                   backend->access(dir, W_OK, test) != 0 ||
-                   backend->access(dir, X_OK, test) != 0) {
+        } else if (backend->access(dir, R_OK, test->backend_options) != 0 ||
+                   backend->access(dir, W_OK, test->backend_options) != 0 ||
+                   backend->access(dir, X_OK, test->backend_options) != 0) {
                 ERRF("invalid directory permissions: %s", dir);
         }
 
@@ -919,24 +919,24 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         rankOffset = 0;
                         GetTestFileName(testFileName, test);
                 }
-                if (backend->access(testFileName, F_OK, test) == 0) {
+                if (backend->access(testFileName, F_OK, test->backend_options) == 0) {
                         if (verbose >= VERBOSE_3) {
                                 fprintf(out_logfile, "task %d removing %s\n", rank,
                                         testFileName);
                         }
-                        backend->delete(testFileName, test);
+                        backend->delete(testFileName, test->backend_options);
                 }
                 if (test->reorderTasksRandom == TRUE) {
                         rankOffset = tmpRankOffset;
                         GetTestFileName(testFileName, test);
                 }
         } else {
-                if ((rank == 0) && (backend->access(testFileName, F_OK, test) == 0)) {
+                if ((rank == 0) && (backend->access(testFileName, F_OK, test->backend_options) == 0)) {
                         if (verbose >= VERBOSE_3) {
                                 fprintf(out_logfile, "task %d removing %s\n", rank,
                                         testFileName);
                         }
-                        backend->delete(testFileName, test);
+                        backend->delete(testFileName, test->backend_options);
                 }
         }
 }
@@ -1359,14 +1359,14 @@ static void TestIoSys(IOR_test_t *test)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                         timer[4] = GetTimeStamp();
-                        backend->close(fd, params);
+                        backend->close(fd, params->backend_options);
 
                         timer[5] = GetTimeStamp();
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
                         /* get the size of the file just written */
                         results[rep].write.aggFileSizeFromStat =
-                                backend->get_file_size(params, testComm, testFileName);
+                                backend->get_file_size(params->backend_options, testComm, testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
@@ -1412,9 +1412,9 @@ static void TestIoSys(IOR_test_t *test)
 
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
-                        fd = backend->open(testFileName, IOR_RDONLY, params);
+                        fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
                         dataMoved = WriteOrRead(params, &results[rep], fd, WRITECHECK, &ioBuffers);
-                        backend->close(fd, params);
+                        backend->close(fd, params->backend_options);
                         rankOffset = 0;
                 }
                 /*
@@ -1484,7 +1484,7 @@ static void TestIoSys(IOR_test_t *test)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = READ;
                         timer[0] = GetTimeStamp();
-                        fd = backend->open(testFileName, IOR_RDONLY, params);
+                        fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1501,12 +1501,12 @@ static void TestIoSys(IOR_test_t *test)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                         timer[4] = GetTimeStamp();
-                        backend->close(fd, params);
+                        backend->close(fd, params->backend_options);
                         timer[5] = GetTimeStamp();
 
                         /* get the size of the file just read */
                         results[rep].read.aggFileSizeFromStat =
-                                backend->get_file_size(params, testComm,
+                                backend->get_file_size(params->backend_options, testComm,
                                                        testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
@@ -1809,8 +1809,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
             nanosleep( & wait, NULL);
           }
   } else if (access == READ) {
-          amtXferred =
-                  backend->xfer(access, fd, buffer, transfer, test);
+          amtXferred = backend->xfer(access, fd, buffer, transfer, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file");
           if (test->interIODelay > 0){
@@ -1824,7 +1823,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
                   FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
           }
 
-          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
           (*transferCount)++;
@@ -1834,7 +1833,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
   } else if (access == READCHECK) {
           memset(checkBuffer, 'a', transfer);
 
-          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test->backend_options);
           if (amtXferred != transfer){
             ERR("cannot read from file");
           }
@@ -1931,7 +1930,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
         free(offsetArray);
 
         if (access == WRITE && test->fsync == TRUE) {
-                backend->fsync(fd, test);       /*fsync after all accesses */
+                backend->fsync(fd, test->backend_options);       /*fsync after all accesses */
         }
         return (dataMoved);
 }

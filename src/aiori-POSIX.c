@@ -69,10 +69,10 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
-                               IOR_offset_t, void *);
-static void POSIX_Fsync(void *, void *);
-static void POSIX_Sync(void * );
-static int POSIX_check_params(void * options);
+                               IOR_offset_t, airori_mod_opt_t *);
+static void POSIX_Fsync(void *, airori_mod_opt_t *);
+static void POSIX_Sync(airori_mod_opt_t * );
+static int POSIX_check_params(airori_mod_opt_t * options);
 
 /************************** O P T I O N S *****************************/
 typedef struct{
@@ -97,7 +97,7 @@ typedef struct{
 } posix_options_t;
 
 
-option_help * POSIX_options(void ** init_backend_options, void * init_values){
+option_help * POSIX_options(airori_mod_opt_t ** init_backend_options, airori_mod_opt_t * init_values){
   posix_options_t * o = malloc(sizeof(posix_options_t));
 
   if (init_values != NULL){
@@ -110,7 +110,7 @@ option_help * POSIX_options(void ** init_backend_options, void * init_values){
     o->beegfs_chunkSize = -1;
   }
 
-  *init_backend_options = o;
+  *init_backend_options = (airori_mod_opt_t*) o;
 
   option_help h [] = {
     {0, "posix.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
@@ -172,7 +172,7 @@ void aiori_posix_init_xfer_options(IOR_param_t * params){
   ior_param = params;
 }
 
-static int POSIX_check_params(void * param){
+static int POSIX_check_params(airori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
   if (ior_param->useExistingTestFile && o->lustre_set_striping)
         ERR("Lustre stripe options are incompatible with useExistingTestFile");
@@ -372,7 +372,7 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 /*
  * Creat and open a file through the POSIX interface.
  */
-void *POSIX_Create(char *testFileName, int flags, void * param)
+void *POSIX_Create(char *testFileName, int flags, airori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
         int mode = 0664;
@@ -503,7 +503,7 @@ int POSIX_Mknod(char *testFileName)
 /*
  * Open a file through the POSIX interface.
  */
-void *POSIX_Open(char *testFileName, int flags, void * param)
+void *POSIX_Open(char *testFileName, int flags, airori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
@@ -549,7 +549,7 @@ void *POSIX_Open(char *testFileName, int flags, void * param)
  * Write or read access to file using the POSIX interface.
  */
 static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
-                               IOR_offset_t length, void * param)
+                               IOR_offset_t length, airori_mod_opt_t * param)
 {
         int xferRetries = 0;
         long long remaining = (long long)length;
@@ -634,14 +634,14 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void POSIX_Fsync(void *fd, void * param)
+static void POSIX_Fsync(void *fd, airori_mod_opt_t * param)
 {
         if (fsync(*(int *)fd) != 0)
                 EWARNF("fsync(%d) failed", *(int *)fd);
 }
 
 
-static void POSIX_Sync(void * param)
+static void POSIX_Sync(airori_mod_opt_t * param)
 {
   int ret = system("sync");
   if (ret != 0){
@@ -653,7 +653,7 @@ static void POSIX_Sync(void * param)
 /*
  * Close a file through the POSIX interface.
  */
-void POSIX_Close(void *fd, void * param)
+void POSIX_Close(void *fd, airori_mod_opt_t * param)
 {
         if(ior_param->dryRun)
           return;
@@ -665,7 +665,7 @@ void POSIX_Close(void *fd, void * param)
 /*
  * Delete a file through the POSIX interface.
  */
-void POSIX_Delete(char *testFileName, void * param)
+void POSIX_Delete(char *testFileName, airori_mod_opt_t * param)
 {
         if(ior_param->dryRun)
           return;
@@ -678,7 +678,7 @@ void POSIX_Delete(char *testFileName, void * param)
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-IOR_offset_t POSIX_GetFileSize(void * test, MPI_Comm testComm,
+IOR_offset_t POSIX_GetFileSize(airori_mod_opt_t * test, MPI_Comm testComm,
                                       char *testFileName)
 {
         if(ior_param->dryRun)

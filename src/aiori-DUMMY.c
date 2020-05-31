@@ -25,7 +25,7 @@ typedef struct {
 
 static char * current = (char*) 1;
 
-static option_help * DUMMY_options(void ** init_backend_options, void * init_values){
+static option_help * DUMMY_options(airori_mod_opt_t ** init_backend_options, airori_mod_opt_t * init_values){
   dummy_options_t * o = malloc(sizeof(dummy_options_t));
   if (init_values != NULL){
     memcpy(o, init_values, sizeof(dummy_options_t));
@@ -33,7 +33,7 @@ static option_help * DUMMY_options(void ** init_backend_options, void * init_val
     memset(o, 0, sizeof(dummy_options_t));
   }
 
-  *init_backend_options = o;
+  *init_backend_options = (airori_mod_opt_t*) o;
 
   option_help h [] = {
       {0, "dummy.delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o->delay_creates},
@@ -48,7 +48,7 @@ static option_help * DUMMY_options(void ** init_backend_options, void * init_val
 
 static int count_init = 0;
 
-static void *DUMMY_Create(char *testFileName, int iorflags, void * param)
+static void *DUMMY_Create(char *testFileName, int iorflags, airori_mod_opt_t * options)
 {
   if(count_init <= 0){
     ERR("DUMMY missing initialization in create\n");
@@ -56,7 +56,7 @@ static void *DUMMY_Create(char *testFileName, int iorflags, void * param)
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY create: %s = %p\n", testFileName, current);
   }
-  dummy_options_t * o = (dummy_options_t*) param;
+  dummy_options_t * o = (dummy_options_t*) options;
   if (o->delay_creates){
     if (! o->delay_rank_0_only || (o->delay_rank_0_only && rank == 0)){
       struct timespec wait = { o->delay_creates / 1000 / 1000, 1000l * (o->delay_creates % 1000000)};
@@ -66,7 +66,7 @@ static void *DUMMY_Create(char *testFileName, int iorflags, void * param)
   return current++;
 }
 
-static void *DUMMY_Open(char *testFileName, int flags, void * param)
+static void *DUMMY_Open(char *testFileName, int flags, airori_mod_opt_t * options)
 {
   if(count_init <= 0){
     ERR("DUMMY missing initialization in open\n");
@@ -77,7 +77,7 @@ static void *DUMMY_Open(char *testFileName, int flags, void * param)
   return current++;
 }
 
-static void DUMMY_Fsync(void *fd, void * param)
+static void DUMMY_Fsync(void *fd, airori_mod_opt_t * options)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY fsync %p\n", fd);
@@ -85,18 +85,18 @@ static void DUMMY_Fsync(void *fd, void * param)
 }
 
 
-static void DUMMY_Sync(void * param)
+static void DUMMY_Sync(airori_mod_opt_t * options)
 {
 }
 
-static void DUMMY_Close(void *fd, void * param)
+static void DUMMY_Close(void *fd, airori_mod_opt_t * options)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY close %p\n", fd);
   }
 }
 
-static void DUMMY_Delete(char *testFileName, void * param)
+static void DUMMY_Delete(char *testFileName, airori_mod_opt_t * options)
 {
     if(verbose > 4){
       fprintf(out_logfile, "DUMMY delete: %s\n", testFileName);
@@ -108,7 +108,7 @@ static char * DUMMY_getVersion()
   return "0.5";
 }
 
-static IOR_offset_t DUMMY_GetFileSize(void * test, MPI_Comm testComm, char *testFileName)
+static IOR_offset_t DUMMY_GetFileSize(airori_mod_opt_t * options, MPI_Comm testComm, char *testFileName)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY getFileSize: %s\n", testFileName);
@@ -116,11 +116,11 @@ static IOR_offset_t DUMMY_GetFileSize(void * test, MPI_Comm testComm, char *test
   return 0;
 }
 
-static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_offset_t length, void * param){
+static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_offset_t length, airori_mod_opt_t * options){
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY xfer: %p\n", file);
   }
-  dummy_options_t * o = (dummy_options_t*) param;
+  dummy_options_t * o = (dummy_options_t*) options;
   if (o->delay_xfer){
     if (! o->delay_rank_0_only || (o->delay_rank_0_only && rank == 0)){
       struct timespec wait = {o->delay_xfer / 1000 / 1000, 1000l * (o->delay_xfer % 1000000)};
@@ -130,7 +130,7 @@ static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_
   return length;
 }
 
-static int DUMMY_statfs (const char * path, ior_aiori_statfs_t * stat, void * param){
+static int DUMMY_statfs (const char * path, ior_aiori_statfs_t * stat, airori_mod_opt_t * options){
   stat->f_bsize = 1;
   stat->f_blocks = 1;
   stat->f_bfree = 1;
@@ -140,32 +140,32 @@ static int DUMMY_statfs (const char * path, ior_aiori_statfs_t * stat, void * pa
   return 0;
 }
 
-static int DUMMY_mkdir (const char *path, mode_t mode, void * param){
+static int DUMMY_mkdir (const char *path, mode_t mode, airori_mod_opt_t * options){
   return 0;
 }
 
-static int DUMMY_rmdir (const char *path, void * param){
+static int DUMMY_rmdir (const char *path, airori_mod_opt_t * options){
   return 0;
 }
 
-static int DUMMY_access (const char *path, int mode, void * param){
+static int DUMMY_access (const char *path, int mode, airori_mod_opt_t * options){
   return 0;
 }
 
-static int DUMMY_stat (const char *path, struct stat *buf, void * param){
+static int DUMMY_stat (const char *path, struct stat *buf, airori_mod_opt_t * options){
   return 0;
 }
 
-static int DUMMY_check_params(void * test){
+static int DUMMY_check_params(airori_mod_opt_t * options){
   return 0;
 }
 
-static void DUMMY_init(void * options){
+static void DUMMY_init(airori_mod_opt_t * options){
   WARN("DUMMY initialized");
   count_init++;
 }
 
-static void DUMMY_final(void * options){
+static void DUMMY_final(airori_mod_opt_t * options){
   WARN("DUMMY finalized");
   if(count_init <= 0){
     ERR("DUMMY invalid finalization\n");
