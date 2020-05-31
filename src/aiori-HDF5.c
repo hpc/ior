@@ -81,20 +81,20 @@
 #endif                          /* H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6 */
 /**************************** P R O T O T Y P E S *****************************/
 
-static IOR_offset_t SeekOffset(void *, IOR_offset_t, airori_mod_opt_t *);
-static void SetupDataSet(void *, airori_mod_opt_t *);
-static void *HDF5_Create(char *, int flags, airori_mod_opt_t *);
-static void *HDF5_Open(char *, int flags, airori_mod_opt_t *);
+static IOR_offset_t SeekOffset(void *, IOR_offset_t, aiori_mod_opt_t *);
+static void SetupDataSet(void *, aiori_mod_opt_t *);
+static void *HDF5_Create(char *, int flags, aiori_mod_opt_t *);
+static void *HDF5_Open(char *, int flags, aiori_mod_opt_t *);
 static IOR_offset_t HDF5_Xfer(int, void *, IOR_size_t *,
-                           IOR_offset_t, airori_mod_opt_t *);
-static void HDF5_Close(void *, airori_mod_opt_t *);
-static void HDF5_Delete(char *, airori_mod_opt_t *);
+                           IOR_offset_t, aiori_mod_opt_t *);
+static void HDF5_Close(void *, aiori_mod_opt_t *);
+static void HDF5_Delete(char *, aiori_mod_opt_t *);
 static char* HDF5_GetVersion();
-static void HDF5_Fsync(void *, airori_mod_opt_t *);
-static IOR_offset_t HDF5_GetFileSize(airori_mod_opt_t *, MPI_Comm, char *);
-static int HDF5_Access(const char *, int, airori_mod_opt_t *);
+static void HDF5_Fsync(void *, aiori_mod_opt_t *);
+static IOR_offset_t HDF5_GetFileSize(aiori_mod_opt_t *, MPI_Comm, char *);
+static int HDF5_Access(const char *, int, aiori_mod_opt_t *);
 static void HDF5_init_xfer_options(IOR_param_t * params);
-static int HDF5_check_params(airori_mod_opt_t * options);
+static int HDF5_check_params(aiori_mod_opt_t * options);
 
 /************************** O P T I O N S *****************************/
 typedef struct{
@@ -107,7 +107,7 @@ typedef struct{
 } HDF5_options_t;
 /***************************** F U N C T I O N S ******************************/
 
-static option_help * HDF5_options(airori_mod_opt_t ** init_backend_options, airori_mod_opt_t * init_values){
+static option_help * HDF5_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   HDF5_options_t * o = malloc(sizeof(HDF5_options_t));
 
   if (init_values != NULL){
@@ -119,7 +119,7 @@ static option_help * HDF5_options(airori_mod_opt_t ** init_backend_options, airo
     o->setAlignment = 1;
   }
 
-  *init_backend_options = (airori_mod_opt_t*) o;
+  *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
     {0, "hdf5.collectiveMetadata", "Use collectiveMetadata (available since HDF5-1.10.0)", OPTION_FLAG, 'd', & o->collective_md},
@@ -173,7 +173,7 @@ static void HDF5_init_xfer_options(IOR_param_t * params){
   ior_param = params;
 }
 
-static int HDF5_check_params(airori_mod_opt_t * options){
+static int HDF5_check_params(aiori_mod_opt_t * options){
   HDF5_options_t *o = (HDF5_options_t*) options;
   if (o->setAlignment < 0)
       ERR("alignment must be non-negative integer");
@@ -197,7 +197,7 @@ static int HDF5_check_params(airori_mod_opt_t * options){
 /*
  * Create and open a file through the HDF5 interface.
  */
-static void *HDF5_Create(char *testFileName, int flags, airori_mod_opt_t * param)
+static void *HDF5_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         return HDF5_Open(testFileName, flags, param);
 }
@@ -205,7 +205,7 @@ static void *HDF5_Create(char *testFileName, int flags, airori_mod_opt_t * param
 /*
  * Open a file through the HDF5 interface.
  */
-static void *HDF5_Open(char *testFileName, int flags, airori_mod_opt_t * param)
+static void *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         HDF5_options_t *o = (HDF5_options_t*) param;
         hid_t accessPropList, createPropList;
@@ -417,7 +417,7 @@ static void *HDF5_Open(char *testFileName, int flags, airori_mod_opt_t * param)
  * Write or read access to file using the HDF5 interface.
  */
 static IOR_offset_t HDF5_Xfer(int access, void *fd, IOR_size_t * buffer,
-                              IOR_offset_t length, airori_mod_opt_t * param)
+                              IOR_offset_t length, aiori_mod_opt_t * param)
 {
         static int firstReadCheck = FALSE, startNewDataSet;
         IOR_offset_t segmentPosition, segmentSize;
@@ -495,7 +495,7 @@ static IOR_offset_t HDF5_Xfer(int access, void *fd, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void HDF5_Fsync(void *fd, airori_mod_opt_t * param)
+static void HDF5_Fsync(void *fd, aiori_mod_opt_t * param)
 {
         ;
 }
@@ -503,7 +503,7 @@ static void HDF5_Fsync(void *fd, airori_mod_opt_t * param)
 /*
  * Close a file through the HDF5 interface.
  */
-static void HDF5_Close(void *fd, airori_mod_opt_t * param)
+static void HDF5_Close(void *fd, aiori_mod_opt_t * param)
 {
         if(ior_param->dryRun)
           return;
@@ -524,7 +524,7 @@ static void HDF5_Close(void *fd, airori_mod_opt_t * param)
 /*
  * Delete a file through the HDF5 interface.
  */
-static void HDF5_Delete(char *testFileName, airori_mod_opt_t * param)
+static void HDF5_Delete(char *testFileName, aiori_mod_opt_t * param)
 {
   if(ior_param->dryRun)
     return
@@ -558,7 +558,7 @@ static char * HDF5_GetVersion()
  * Seek to offset in file using the HDF5 interface and set up hyperslab.
  */
 static IOR_offset_t SeekOffset(void *fd, IOR_offset_t offset,
-                                            airori_mod_opt_t * param)
+                                            aiori_mod_opt_t * param)
 {
         HDF5_options_t *o = (HDF5_options_t*) param;
         IOR_offset_t segmentSize;
@@ -598,7 +598,7 @@ static IOR_offset_t SeekOffset(void *fd, IOR_offset_t offset,
 /*
  * Create HDF5 data set.
  */
-static void SetupDataSet(void *fd, airori_mod_opt_t * param)
+static void SetupDataSet(void *fd, aiori_mod_opt_t * param)
 {
         HDF5_options_t *o = (HDF5_options_t*) param;
         char dataSetName[MAX_STR];
@@ -661,7 +661,7 @@ static void SetupDataSet(void *fd, airori_mod_opt_t * param)
  * Use MPIIO call to get file size.
  */
 static IOR_offset_t
-HDF5_GetFileSize(airori_mod_opt_t * test, MPI_Comm testComm, char *testFileName)
+HDF5_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm, char *testFileName)
 {
   if(ior_param->dryRun)
     return 0;
@@ -671,7 +671,7 @@ HDF5_GetFileSize(airori_mod_opt_t * test, MPI_Comm testComm, char *testFileName)
 /*
  * Use MPIIO call to check for access.
  */
-static int HDF5_Access(const char *path, int mode, airori_mod_opt_t *param)
+static int HDF5_Access(const char *path, int mode, aiori_mod_opt_t *param)
 {
   if(ior_param->dryRun)
     return 0;

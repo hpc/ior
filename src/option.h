@@ -23,12 +23,12 @@ typedef struct{
   void * variable;
 } option_help;
 
-typedef struct airori_mod_opt_t airori_mod_opt_t;
+typedef struct aiori_mod_opt_t aiori_mod_opt_t;
 
 typedef struct{
   char * prefix; // may be NULL to include it in the standard name
   option_help * options;
-  airori_mod_opt_t * defaults; // these default values are taken from the command line
+  aiori_mod_opt_t * defaults; // these default values are taken from the command line
 } option_module;
 
 typedef struct{

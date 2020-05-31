@@ -31,17 +31,17 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 
-static IOR_offset_t SeekOffset(MPI_File, IOR_offset_t, airori_mod_opt_t *);
+static IOR_offset_t SeekOffset(MPI_File, IOR_offset_t, aiori_mod_opt_t *);
 
-static void *MPIIO_Create(char *, int iorflags, airori_mod_opt_t *);
-static void *MPIIO_Open(char *, int flags, airori_mod_opt_t *);
+static void *MPIIO_Create(char *, int iorflags, aiori_mod_opt_t *);
+static void *MPIIO_Open(char *, int flags, aiori_mod_opt_t *);
 static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
-                                   IOR_offset_t, airori_mod_opt_t *);
-static void MPIIO_Close(void *, airori_mod_opt_t *);
+                                   IOR_offset_t, aiori_mod_opt_t *);
+static void MPIIO_Close(void *, aiori_mod_opt_t *);
 static char* MPIIO_GetVersion();
-static void MPIIO_Fsync(void *, airori_mod_opt_t *);
+static void MPIIO_Fsync(void *, aiori_mod_opt_t *);
 static void MPIIO_init_xfer_options(IOR_param_t * params);
-static int MPIIO_check_params(airori_mod_opt_t * options);
+static int MPIIO_check_params(aiori_mod_opt_t * options);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -61,14 +61,14 @@ typedef struct {
   char * hintsFileName;            /* full name for hints file */
 } mpiio_options_t;
 
-static option_help * MPIIO_options(airori_mod_opt_t ** init_backend_options, airori_mod_opt_t * init_values){
+static option_help * MPIIO_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   mpiio_options_t * o = malloc(sizeof(mpiio_options_t));
   if (init_values != NULL){
     memcpy(o, init_values, sizeof(mpiio_options_t));
   }else{
     memset(o, 0, sizeof(mpiio_options_t));
   }
-  *init_backend_options = (airori_mod_opt_t*) o;
+  *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
     {0, "mpiio.dryRun",       "Dry run, disable actual IO", OPTION_FLAG, 'd', & o->dry_run},
@@ -114,7 +114,7 @@ static void MPIIO_init_xfer_options(IOR_param_t * params){
   ior_param = params;
 }
 
-static int MPIIO_check_params(airori_mod_opt_t * module_options){
+static int MPIIO_check_params(aiori_mod_opt_t * module_options){
   mpiio_options_t * param = (mpiio_options_t*) module_options;
   if ((param->useFileView == TRUE)
     && (sizeof(MPI_Aint) < 8)   /* used for 64-bit datatypes */
@@ -140,7 +140,7 @@ static int MPIIO_check_params(airori_mod_opt_t * module_options){
 /*
  * Try to access a file through the MPIIO interface.
  */
-int MPIIO_Access(const char *path, int mode, airori_mod_opt_t *module_options)
+int MPIIO_Access(const char *path, int mode, aiori_mod_opt_t *module_options)
 {
     mpiio_options_t * param = (mpiio_options_t*) module_options;
     if(param->dry_run){
@@ -172,7 +172,7 @@ int MPIIO_Access(const char *path, int mode, airori_mod_opt_t *module_options)
 /*
  * Create and open a file through the MPIIO interface.
  */
-static void *MPIIO_Create(char *testFileName, int iorflags, airori_mod_opt_t * module_options)
+static void *MPIIO_Create(char *testFileName, int iorflags, aiori_mod_opt_t * module_options)
 {
   return MPIIO_Open(testFileName, iorflags, module_options);
 }
@@ -180,7 +180,7 @@ static void *MPIIO_Create(char *testFileName, int iorflags, airori_mod_opt_t * m
 /*
  * Open a file through the MPIIO interface.  Setup file view.
  */
-static void *MPIIO_Open(char *testFileName, int flags, airori_mod_opt_t * module_options)
+static void *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * module_options)
 {
         mpiio_options_t * param = (mpiio_options_t*) module_options;
         int fd_mode = (int)0,
@@ -329,7 +329,7 @@ static void *MPIIO_Open(char *testFileName, int flags, airori_mod_opt_t * module
  * Write or read access to file using the MPIIO interface.
  */
 static IOR_offset_t MPIIO_Xfer(int access, void * fdp, IOR_size_t * buffer,
-                               IOR_offset_t length, airori_mod_opt_t * module_options)
+                               IOR_offset_t length, aiori_mod_opt_t * module_options)
 {
         /* NOTE: The second arg is (void *) for reads, and (const void *)
            for writes.  Therefore, one of the two sets of assignments below
@@ -464,7 +464,7 @@ static IOR_offset_t MPIIO_Xfer(int access, void * fdp, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void MPIIO_Fsync(void *fdp, airori_mod_opt_t * module_options)
+static void MPIIO_Fsync(void *fdp, aiori_mod_opt_t * module_options)
 {
   mpiio_options_t * param = (mpiio_options_t*) module_options;
   if(param->dry_run)
@@ -477,7 +477,7 @@ static void MPIIO_Fsync(void *fdp, airori_mod_opt_t * module_options)
 /*
  * Close a file through the MPIIO interface.
  */
-static void MPIIO_Close(void *fdp, airori_mod_opt_t * module_options)
+static void MPIIO_Close(void *fdp, aiori_mod_opt_t * module_options)
 {
         mpiio_options_t * param = (mpiio_options_t*) module_options;
         mpiio_fd_t * mfd = (mpiio_fd_t*) fdp;
@@ -497,7 +497,7 @@ static void MPIIO_Close(void *fdp, airori_mod_opt_t * module_options)
 /*
  * Delete a file through the MPIIO interface.
  */
-void MPIIO_Delete(char *testFileName, airori_mod_opt_t * module_options)
+void MPIIO_Delete(char *testFileName, aiori_mod_opt_t * module_options)
 {
   mpiio_options_t * param = (mpiio_options_t*) module_options;
   if(param->dry_run)
@@ -522,7 +522,7 @@ static char* MPIIO_GetVersion()
  * Seek to offset in file using the MPIIO interface.
  */
 static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
-                               airori_mod_opt_t * module_options)
+                               aiori_mod_opt_t * module_options)
 {
         mpiio_options_t * param = (mpiio_options_t*) module_options;
         int offsetFactor, tasksPerFile;
@@ -564,7 +564,7 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
  * Use MPI_File_get_size() to return aggregate file size.
  * NOTE: This function is used by the HDF5 and NCMPI backends.
  */
-IOR_offset_t MPIIO_GetFileSize(airori_mod_opt_t * module_options, MPI_Comm testComm,
+IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * module_options, MPI_Comm testComm,
                                char *testFileName)
 {
         mpiio_options_t * test = (mpiio_options_t*) module_options;

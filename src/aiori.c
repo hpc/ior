@@ -152,7 +152,7 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
  * This function provides a AIORI statfs for POSIX-compliant filesystems. It
  * uses statvfs is available and falls back on statfs.
  */
-int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, airori_mod_opt_t * module_options)
+int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, aiori_mod_opt_t * module_options)
 {
         int ret;
 #if defined(HAVE_STATVFS)
@@ -177,22 +177,22 @@ int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, airori_m
         return 0;
 }
 
-int aiori_posix_mkdir (const char *path, mode_t mode, airori_mod_opt_t * module_options)
+int aiori_posix_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * module_options)
 {
         return mkdir (path, mode);
 }
 
-int aiori_posix_rmdir (const char *path, airori_mod_opt_t * module_options)
+int aiori_posix_rmdir (const char *path, aiori_mod_opt_t * module_options)
 {
         return rmdir (path);
 }
 
-int aiori_posix_access (const char *path, int mode, airori_mod_opt_t * module_options)
+int aiori_posix_access (const char *path, int mode, aiori_mod_opt_t * module_options)
 {
         return access (path, mode);
 }
 
-int aiori_posix_stat (const char *path, struct stat *buf, airori_mod_opt_t * module_options)
+int aiori_posix_stat (const char *path, struct stat *buf, aiori_mod_opt_t * module_options)
 {
         return stat (path, buf);
 }
