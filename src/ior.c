@@ -55,7 +55,7 @@ static void InitTests(IOR_test_t * , MPI_Comm);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t *);
 static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
-                                void *fd, const int access,
+                                aiori_fd_t *fd, const int access,
                                 IOR_io_buffers *ioBuffers);
 
 static void test_initialize(IOR_test_t * test){
@@ -1231,7 +1231,7 @@ static void TestIoSys(IOR_test_t *test)
         double startTime;
         int pretendRank;
         int rep;
-        void *fd;
+        aiori_fd_t *fd;
         MPI_Group orig_group, new_group;
         int range[3];
         IOR_offset_t dataMoved; /* for data rate calculation */
@@ -1781,7 +1781,7 @@ IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, int acce
 }
 
 static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offsetArray, int pretendRank,
-  IOR_offset_t * transferCount, int * errors, IOR_param_t * test, int * fd, IOR_io_buffers* ioBuffers, int access){
+  IOR_offset_t * transferCount, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
   IOR_offset_t amtXferred = 0;
   IOR_offset_t transfer;
 
@@ -1850,7 +1850,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
  * out the data to each block in transfer sizes, until the remainder left is 0.
  */
 static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
-                                void *fd, const int access, IOR_io_buffers *ioBuffers)
+                                aiori_fd_t *fd, const int access, IOR_io_buffers *ioBuffers)
 {
         int errors = 0;
         IOR_offset_t transferCount = 0;

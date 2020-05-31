@@ -72,22 +72,26 @@ typedef struct aiori_mod_opt_t{
   void * dummy;
 } aiori_mod_opt_t;
 
+typedef struct aiori_fd_t{
+  void * dummy;
+} aiori_fd_t;
+
 typedef struct ior_aiori {
         char *name;
         char *name_legacy;
-        void *(*create)(char *, int iorflags, aiori_mod_opt_t *);
+        aiori_fd_t *(*create)(char *, int iorflags, aiori_mod_opt_t *);
         int (*mknod)(char *);
-        void *(*open)(char *, int iorflags, aiori_mod_opt_t *);
+        aiori_fd_t *(*open)(char *, int iorflags, aiori_mod_opt_t *);
         /*
          Allow to set generic transfer options that shall be applied to any subsequent IO call.
         */
         void (*init_xfer_options)(IOR_param_t * params);
-        IOR_offset_t (*xfer)(int, void *, IOR_size_t *,
+        IOR_offset_t (*xfer)(int, aiori_fd_t *, IOR_size_t *,
                              IOR_offset_t, aiori_mod_opt_t *);
-        void (*close)(void *, aiori_mod_opt_t *);
+        void (*close)(aiori_fd_t *, aiori_mod_opt_t *);
         void (*delete)(char *, aiori_mod_opt_t *);
         char* (*get_version)(void);
-        void (*fsync)(void *, aiori_mod_opt_t *);
+        void (*fsync)(aiori_fd_t *, aiori_mod_opt_t *);
         IOR_offset_t (*get_file_size)(aiori_mod_opt_t * module_options, MPI_Comm, char *);
         int (*statfs) (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t * module_options);
         int (*mkdir) (const char *path, mode_t mode, aiori_mod_opt_t * module_options);
@@ -142,12 +146,12 @@ int aiori_posix_access (const char *path, int mode, aiori_mod_opt_t * module_opt
 int aiori_posix_stat (const char *path, struct stat *buf, aiori_mod_opt_t * module_options);
 void aiori_posix_init_xfer_options(IOR_param_t * params);
 
-void *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * module_options);
+aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * module_options);
 int POSIX_Mknod(char *testFileName);
-void *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * module_options);
+aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * module_options);
 IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm, char *testFileName);
 void POSIX_Delete(char *testFileName, aiori_mod_opt_t * module_options);
-void POSIX_Close(void *fd, aiori_mod_opt_t * module_options);
+void POSIX_Close(aiori_fd_t *fd, aiori_mod_opt_t * module_options);
 option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values);
 
 

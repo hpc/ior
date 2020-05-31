@@ -346,7 +346,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
 
 static void create_file (const char *path, uint64_t itemNum) {
     char curr_item[MAX_PATHLEN];
-    void *aiori_fh = NULL;
+    aiori_fd_t *aiori_fh = NULL;
 
     if ( (itemNum % ITEM_COUNT==0 && (itemNum != 0))) {
         VERBOSE(3,5,"create file: "LLU"", itemNum);
@@ -443,7 +443,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
         VERBOSE(3,5,"create file: %s", curr_item);
 
         if (create) {
-            void *aiori_fh;
+            aiori_fd_t *aiori_fh;
 
             //create files
             aiori_fh = backend->create (curr_item, IOR_WRONLY | IOR_CREAT, backend_options);
@@ -622,7 +622,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     uint64_t parent_dir, item_num = 0;
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
-    void *aiori_fh;
+    aiori_fd_t *aiori_fh;
 
     VERBOSE(1,-1,"Entering mdtest_read on %s", path );
 

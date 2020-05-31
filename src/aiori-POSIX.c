@@ -68,9 +68,9 @@
 #endif
 
 /**************************** P R O T O T Y P E S *****************************/
-static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
+static IOR_offset_t POSIX_Xfer(int, aiori_fd_t *, IOR_size_t *,
                                IOR_offset_t, aiori_mod_opt_t *);
-static void POSIX_Fsync(void *, aiori_mod_opt_t *);
+static void POSIX_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static void POSIX_Sync(aiori_mod_opt_t * );
 static int POSIX_check_params(aiori_mod_opt_t * options);
 
@@ -372,7 +372,7 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 /*
  * Creat and open a file through the POSIX interface.
  */
-void *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
+aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
         int mode = 0664;
@@ -387,7 +387,7 @@ void *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
         }
 
         if(ior_param->dryRun)
-          return 0;
+          return (aiori_fd_t*) 0;
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
 /* Add a #define for FASYNC if not available, as it forms part of
@@ -483,7 +483,7 @@ void *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                 gpfs_free_all_locks(*fd);
         }
 #endif
-        return ((void *)fd);
+        return (aiori_fd_t*) fd;
 }
 
 /*
@@ -503,7 +503,7 @@ int POSIX_Mknod(char *testFileName)
 /*
  * Open a file through the POSIX interface.
  */
-void *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
+aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
@@ -519,7 +519,7 @@ void *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
         fd_oflag |= O_RDWR;
 
         if(ior_param->dryRun)
-          return 0;
+          return (aiori_fd_t*) 0;
 
         *fd = open64(testFileName, fd_oflag);
         if (*fd < 0)
@@ -542,13 +542,13 @@ void *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
                 gpfs_free_all_locks(*fd);
         }
 #endif
-        return ((void *)fd);
+        return (aiori_fd_t*) fd;
 }
 
 /*
  * Write or read access to file using the POSIX interface.
  */
-static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
+static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
                                IOR_offset_t length, aiori_mod_opt_t * param)
 {
         int xferRetries = 0;
@@ -587,8 +587,9 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                         if (rc == -1)
                                 ERRF("write(%d, %p, %lld) failed",
                                         fd, (void*)ptr, remaining);
-                        if (ior_param->fsyncPerWrite == TRUE)
-                                POSIX_Fsync(&fd, param);
+                        if (ior_param->fsyncPerWrite == TRUE){
+                          POSIX_Fsync((aiori_fd_t*) &fd, param);
+                        }
                 } else {        /* READ or CHECK */
                         if (verbose >= VERBOSE_4) {
                                 fprintf(stdout,
@@ -634,7 +635,7 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void POSIX_Fsync(void *fd, aiori_mod_opt_t * param)
+static void POSIX_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         if (fsync(*(int *)fd) != 0)
                 EWARNF("fsync(%d) failed", *(int *)fd);
@@ -653,7 +654,7 @@ static void POSIX_Sync(aiori_mod_opt_t * param)
 /*
  * Close a file through the POSIX interface.
  */
-void POSIX_Close(void *fd, aiori_mod_opt_t * param)
+void POSIX_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         if(ior_param->dryRun)
           return;

@@ -33,13 +33,13 @@
 
 static IOR_offset_t SeekOffset(MPI_File, IOR_offset_t, aiori_mod_opt_t *);
 
-static void *MPIIO_Create(char *, int iorflags, aiori_mod_opt_t *);
-static void *MPIIO_Open(char *, int flags, aiori_mod_opt_t *);
-static IOR_offset_t MPIIO_Xfer(int, void *, IOR_size_t *,
+static aiori_fd_t *MPIIO_Create(char *, int iorflags, aiori_mod_opt_t *);
+static aiori_fd_t *MPIIO_Open(char *, int flags, aiori_mod_opt_t *);
+static IOR_offset_t MPIIO_Xfer(int, aiori_fd_t *, IOR_size_t *,
                                    IOR_offset_t, aiori_mod_opt_t *);
-static void MPIIO_Close(void *, aiori_mod_opt_t *);
+static void MPIIO_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static char* MPIIO_GetVersion();
-static void MPIIO_Fsync(void *, aiori_mod_opt_t *);
+static void MPIIO_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static void MPIIO_init_xfer_options(IOR_param_t * params);
 static int MPIIO_check_params(aiori_mod_opt_t * options);
 
@@ -172,7 +172,7 @@ int MPIIO_Access(const char *path, int mode, aiori_mod_opt_t *module_options)
 /*
  * Create and open a file through the MPIIO interface.
  */
-static void *MPIIO_Create(char *testFileName, int iorflags, aiori_mod_opt_t * module_options)
+static aiori_fd_t *MPIIO_Create(char *testFileName, int iorflags, aiori_mod_opt_t * module_options)
 {
   return MPIIO_Open(testFileName, iorflags, module_options);
 }
@@ -180,7 +180,7 @@ static void *MPIIO_Create(char *testFileName, int iorflags, aiori_mod_opt_t * mo
 /*
  * Open a file through the MPIIO interface.  Setup file view.
  */
-static void *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * module_options)
+static aiori_fd_t *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * module_options)
 {
         mpiio_options_t * param = (mpiio_options_t*) module_options;
         int fd_mode = (int)0,
@@ -328,7 +328,7 @@ static void *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * module_
 /*
  * Write or read access to file using the MPIIO interface.
  */
-static IOR_offset_t MPIIO_Xfer(int access, void * fdp, IOR_size_t * buffer,
+static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer,
                                IOR_offset_t length, aiori_mod_opt_t * module_options)
 {
         /* NOTE: The second arg is (void *) for reads, and (const void *)
@@ -464,7 +464,7 @@ static IOR_offset_t MPIIO_Xfer(int access, void * fdp, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void MPIIO_Fsync(void *fdp, aiori_mod_opt_t * module_options)
+static void MPIIO_Fsync(aiori_fd_t *fdp, aiori_mod_opt_t * module_options)
 {
   mpiio_options_t * param = (mpiio_options_t*) module_options;
   if(param->dry_run)
@@ -477,7 +477,7 @@ static void MPIIO_Fsync(void *fdp, aiori_mod_opt_t * module_options)
 /*
  * Close a file through the MPIIO interface.
  */
-static void MPIIO_Close(void *fdp, aiori_mod_opt_t * module_options)
+static void MPIIO_Close(aiori_fd_t *fdp, aiori_mod_opt_t * module_options)
 {
         mpiio_options_t * param = (mpiio_options_t*) module_options;
         mpiio_fd_t * mfd = (mpiio_fd_t*) fdp;

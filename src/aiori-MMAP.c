@@ -26,12 +26,12 @@
 #include "utilities.h"
 
 /**************************** P R O T O T Y P E S *****************************/
-static void *MMAP_Create(char *, int flags, aiori_mod_opt_t *);
-static void *MMAP_Open(char *, int flags, aiori_mod_opt_t *);
-static IOR_offset_t MMAP_Xfer(int, void *, IOR_size_t *,
+static aiori_fd_t *MMAP_Create(char *, int flags, aiori_mod_opt_t *);
+static aiori_fd_t *MMAP_Open(char *, int flags, aiori_mod_opt_t *);
+static IOR_offset_t MMAP_Xfer(int, aiori_fd_t *, IOR_size_t *,
                                IOR_offset_t, aiori_mod_opt_t *);
-static void MMAP_Close(void *, aiori_mod_opt_t *);
-static void MMAP_Fsync(void *, aiori_mod_opt_t *);
+static void MMAP_Close(aiori_fd_t *, aiori_mod_opt_t *);
+static void MMAP_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static option_help * MMAP_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values);
 static void MMAP_init_xfer_options(IOR_param_t * params);
 static int MMAP_check_params(aiori_mod_opt_t * options);
@@ -130,32 +130,32 @@ static void ior_mmap_file(int *file, int mflags, void *param)
 /*
  * Creat and open a file through the POSIX interface, then setup mmap.
  */
-static void *MMAP_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
+static aiori_fd_t *MMAP_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int *fd;
 
-        fd = POSIX_Create(testFileName, flags, param);
+        fd = (int*) POSIX_Create(testFileName, flags, param);
         if (ftruncate(*fd, ior_param->expectedAggFileSize) != 0)
                 ERR("ftruncate() failed");
         ior_mmap_file(fd, flags, param);
-        return ((void *)fd);
+        return ((aiori_fd_t *)fd);
 }
 
 /*
  * Open a file through the POSIX interface and setup mmap.
  */
-static void *MMAP_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
+static aiori_fd_t *MMAP_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int *fd;
-        fd = POSIX_Open(testFileName, flags, param);
+        fd = (int*) POSIX_Open(testFileName, flags, param);
         ior_mmap_file(fd, flags, param);
-        return ((void *)fd);
+        return ((aiori_fd_t *)fd);
 }
 
 /*
  * Write or read access to file using mmap
  */
-static IOR_offset_t MMAP_Xfer(int access, void *file, IOR_size_t * buffer,
+static IOR_offset_t MMAP_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
                                IOR_offset_t length, aiori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
@@ -178,7 +178,7 @@ static IOR_offset_t MMAP_Xfer(int access, void *file, IOR_size_t * buffer,
 /*
  * Perform msync().
  */
-static void MMAP_Fsync(void *fd, aiori_mod_opt_t * param)
+static void MMAP_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
         if (msync(o->mmap_ptr, ior_param->expectedAggFileSize, MS_SYNC) != 0)
@@ -188,7 +188,7 @@ static void MMAP_Fsync(void *fd, aiori_mod_opt_t * param)
 /*
  * Close a file through the POSIX interface, after tear down the mmap.
  */
-static void MMAP_Close(void *fd, aiori_mod_opt_t * param)
+static void MMAP_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
         if (munmap(o->mmap_ptr, ior_param->expectedAggFileSize) != 0)

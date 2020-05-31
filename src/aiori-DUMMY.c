@@ -48,7 +48,7 @@ static option_help * DUMMY_options(aiori_mod_opt_t ** init_backend_options, aior
 
 static int count_init = 0;
 
-static void *DUMMY_Create(char *testFileName, int iorflags, aiori_mod_opt_t * options)
+static aiori_fd_t *DUMMY_Create(char *testFileName, int iorflags, aiori_mod_opt_t * options)
 {
   if(count_init <= 0){
     ERR("DUMMY missing initialization in create\n");
@@ -63,10 +63,10 @@ static void *DUMMY_Create(char *testFileName, int iorflags, aiori_mod_opt_t * op
       nanosleep( & wait, NULL);
     }
   }
-  return current++;
+  return (aiori_fd_t*) current++;
 }
 
-static void *DUMMY_Open(char *testFileName, int flags, aiori_mod_opt_t * options)
+static aiori_fd_t *DUMMY_Open(char *testFileName, int flags, aiori_mod_opt_t * options)
 {
   if(count_init <= 0){
     ERR("DUMMY missing initialization in open\n");
@@ -74,10 +74,10 @@ static void *DUMMY_Open(char *testFileName, int flags, aiori_mod_opt_t * options
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY open: %s = %p\n", testFileName, current);
   }
-  return current++;
+  return (aiori_fd_t*) current++;
 }
 
-static void DUMMY_Fsync(void *fd, aiori_mod_opt_t * options)
+static void DUMMY_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * options)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY fsync %p\n", fd);
@@ -89,7 +89,7 @@ static void DUMMY_Sync(aiori_mod_opt_t * options)
 {
 }
 
-static void DUMMY_Close(void *fd, aiori_mod_opt_t * options)
+static void DUMMY_Close(aiori_fd_t *fd, aiori_mod_opt_t * options)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY close %p\n", fd);
@@ -116,7 +116,7 @@ static IOR_offset_t DUMMY_GetFileSize(aiori_mod_opt_t * options, MPI_Comm testCo
   return 0;
 }
 
-static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_offset_t length, aiori_mod_opt_t * options){
+static IOR_offset_t DUMMY_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer, IOR_offset_t length, aiori_mod_opt_t * options){
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY xfer: %p\n", file);
   }
