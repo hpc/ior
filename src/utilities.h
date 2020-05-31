@@ -47,7 +47,7 @@ void set_o_direct_flag(int *fd);
 
 char *CurrentTimeString(void);
 int Regex(char *, char *);
-void ShowFileSystemSize(char *);
+void ShowFileSystemSize(IOR_param_t * test);
 void DumpBuffer(void *, size_t);
 void SeedRandGen(MPI_Comm);
 void SetHints (MPI_Info *, char *);

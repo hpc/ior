@@ -322,11 +322,8 @@ void ShowTestStart(IOR_param_t *test)
   PrintStartSection();
   PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
-  /* if pvfs2:, then skip */
-  if (strcasecmp(test->api, "DFS") &&
-      Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
-      DisplayFreespace(test);
-  }
+
+  ShowFileSystemSize(test);
 
   if (verbose >= VERBOSE_3 || outputFormat == OUTPUT_JSON) {
     char* data_packets[] = {"g","t","o","i"};
@@ -723,38 +720,6 @@ void PrintShortSummary(IOR_test_t * test)
           PrintEndSection();
         }
 }
-
-
-/*
- * Display freespace (df).
- */
-void DisplayFreespace(IOR_param_t * test)
-{
-        char fileName[MAX_STR] = { 0 };
-        int i;
-        int directoryFound = FALSE;
-
-        /* get outfile name */
-        GetTestFileName(fileName, test);
-
-        /* get directory for outfile */
-        i = strlen(fileName);
-        while (i-- > 0) {
-                if (fileName[i] == '/') {
-                        fileName[i] = '\0';
-                        directoryFound = TRUE;
-                        break;
-                }
-        }
-
-        /* if no directory/, use '.' */
-        if (directoryFound == FALSE) {
-                strcpy(fileName, ".");
-        }
-
-        ShowFileSystemSize(fileName);
-}
-
 
 void PrintRemoveTiming(double start, double finish, int rep)
 {

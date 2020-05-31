@@ -89,7 +89,6 @@ typedef struct
     char * apiVersion;        /* API version */
     char * platform;          /* platform type */
     char * testFileName;   /* full name for test */
-    char * testFileName_fppReadCheck;/* filename for fpp read check */
     char * options;        /* options string */
     // intermediate options
     int collective;                  /* collective I/O */

@@ -82,13 +82,14 @@ static void ior_set_xfer_hints(IOR_param_t * p){
 static void test_initialize(IOR_test_t * test){
   verbose = test->params.verbose;
   backend = test->params.backend;
-  if (rank == 0 && verbose >= VERBOSE_0) {
-    ShowTestStart(& test->params);
-  }
   if(backend->initialize){
     backend->initialize(test->params.backend_options);
   }
   ior_set_xfer_hints(& test->params);
+
+  if (rank == 0 && verbose >= VERBOSE_0) {
+    ShowTestStart(& test->params);
+  }
 }
 
 static void test_finalize(IOR_test_t * test){
@@ -1807,7 +1808,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
   void *checkBuffer = ioBuffers->checkBuffer;
   void *readCheckBuffer = ioBuffers->readCheckBuffer;
 
-  test->offset = offsetArray[pairCnt];
+  test->hints.offset = offsetArray[pairCnt]; // this looks inappropriate
 
   transfer = test->transferSize;
   if (access == WRITE) {
@@ -1816,8 +1817,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
           if (test->storeFileOffset == TRUE) {
                   FillBuffer(buffer, test, test->offset, pretendRank);
           }
-          amtXferred =
-                  backend->xfer(access, fd, buffer, transfer, test->backend_options);
+          amtXferred = backend->xfer(access, fd, buffer, transfer, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot write to file");
           if (test->fsyncPerWrite)

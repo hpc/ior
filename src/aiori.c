@@ -154,27 +154,48 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
  */
 int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, aiori_mod_opt_t * module_options)
 {
-        int ret;
+  // find the parent directory
+  char * fileName = strdup(path);
+  int i;
+  int directoryFound = FALSE;
+
+  /* get directory for outfile */
+  i = strlen(fileName);
+  while (i-- > 0) {
+          if (fileName[i] == '/') {
+                  fileName[i] = '\0';
+                  directoryFound = TRUE;
+                  break;
+          }
+  }
+  /* if no directory/, use '.' */
+  if (directoryFound == FALSE) {
+    strcpy(fileName, ".");
+  }
+
+  int ret;
 #if defined(HAVE_STATVFS)
-        struct statvfs statfs_buf;
+  struct statvfs statfs_buf;
 
-        ret = statvfs (path, &statfs_buf);
+  ret = statvfs (fileName, &statfs_buf);
 #else
-        struct statfs statfs_buf;
+  struct statfs statfs_buf;
 
-        ret = statfs (path, &statfs_buf);
+  ret = statfs (fileName, &statfs_buf);
 #endif
-        if (-1 == ret) {
-                return -1;
-        }
+  if (-1 == ret) {
+    perror("POSIX couldn't call statvfs");
+    return -1;
+  }
 
-        stat_buf->f_bsize = statfs_buf.f_bsize;
-        stat_buf->f_blocks = statfs_buf.f_blocks;
-        stat_buf->f_bfree = statfs_buf.f_bfree;
-        stat_buf->f_files = statfs_buf.f_files;
-        stat_buf->f_ffree = statfs_buf.f_ffree;
+  stat_buf->f_bsize = statfs_buf.f_bsize;
+  stat_buf->f_blocks = statfs_buf.f_blocks;
+  stat_buf->f_bfree = statfs_buf.f_bfree;
+  stat_buf->f_files = statfs_buf.f_files;
+  stat_buf->f_ffree = statfs_buf.f_ffree;
 
-        return 0;
+  free(fileName);
+  return 0;
 }
 
 int aiori_posix_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * module_options)
