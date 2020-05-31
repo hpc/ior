@@ -24,7 +24,6 @@
 #include <sys/stat.h>
 #include <stdbool.h>
 
-#include "ior.h"
 #include "iordef.h"                                     /* IOR Definitions */
 #include "option.h"
 
@@ -63,8 +62,23 @@ typedef struct ior_aiori_statfs {
         uint64_t f_ffree;
 } ior_aiori_statfs_t;
 
+/*
+ This structure contains information about the expected IO pattern that may be used to optimize data access. Optimally, it should be stored for each file descriptor, at the moment it can only be set globally per aiori backend module.
+ */
 typedef struct aiori_xfer_hint_t{
-
+  int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
+  int filePerProc;                 /* single file or file-per-process */
+  int collective;                  /* collective I/O */
+  int numTasks;                    /* number of tasks for test */
+  int numNodes;                    /* number of nodes for test */
+  int randomOffset;                /* access is to random offsets */
+  int fsyncPerWrite;               /* fsync() after each write */
+  IOR_offset_t segmentCount;       /* number of segments (or HDF5 datasets) */
+  IOR_offset_t blockSize;          /* contiguous bytes to write per task */
+  IOR_offset_t transferSize;       /* size of transfer in bytes */
+  IOR_offset_t offset;             /* offset for read/write */
+  IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
+  int singleXferAttempt;           /* do not retry transfer if incomplete */
 } aiori_xfer_hint_t;
 
 /* this is a dummy structure to create some type safety */
@@ -85,7 +99,7 @@ typedef struct ior_aiori {
         /*
          Allow to set generic transfer options that shall be applied to any subsequent IO call.
         */
-        void (*init_xfer_options)(IOR_param_t * params);
+        void (*xfer_hints)(aiori_xfer_hint_t * params);
         IOR_offset_t (*xfer)(int, aiori_fd_t *, IOR_size_t *,
                              IOR_offset_t, aiori_mod_opt_t *);
         void (*close)(aiori_fd_t *, aiori_mod_opt_t *);
@@ -144,7 +158,7 @@ int aiori_posix_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * module_o
 int aiori_posix_rmdir (const char *path, aiori_mod_opt_t * module_options);
 int aiori_posix_access (const char *path, int mode, aiori_mod_opt_t * module_options);
 int aiori_posix_stat (const char *path, struct stat *buf, aiori_mod_opt_t * module_options);
-void aiori_posix_init_xfer_options(IOR_param_t * params);
+void aiori_posix_xfer_hints(aiori_xfer_hint_t * params);
 
 aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * module_options);
 int POSIX_Mknod(char *testFileName);

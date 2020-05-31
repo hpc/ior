@@ -167,8 +167,8 @@ static uid_t uid;
 /* Use the POSIX backend by default */
 static const ior_aiori_t *backend;
 static void * backend_options;
-
-static IOR_param_t param;
+static aiori_xfer_hint_t hints;
+static char * api = NULL;
 
 /* This structure describes the processing status for stonewalling */
 typedef struct{
@@ -376,7 +376,7 @@ static void create_file (const char *path, uint64_t itemNum) {
          * !collective_creates
          */
     } else {
-        param.filePerProc = !shared_file;
+        hints.filePerProc = !shared_file;
         VERBOSE(3,5,"create_remove_items_helper (non-collective, shared): open..." );
 
         aiori_fh = backend->create (curr_item, IOR_WRONLY | IOR_CREAT, backend_options);
@@ -391,8 +391,8 @@ static void create_file (const char *path, uint64_t itemNum) {
          * According to Bill Loewe, writes are only done one time, so they are always at
          * offset 0 (zero).
          */
-        param.offset = 0;
-        param.fsyncPerWrite = sync_file;
+        hints.offset = 0;
+        hints.fsyncPerWrite = sync_file;
         if ( write_bytes != (size_t) backend->xfer (WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, backend_options)) {
             FAIL("unable to write file %s", curr_item);
         }
@@ -1906,9 +1906,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     aiori_supported_apis(APIs, APIs_legacy, MDTEST);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
+    memset(& hints, 0, sizeof(hints));
 
     option_help options [] = {
-      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & param.api},
+      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & api},
       {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & branch_factor},
       {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
@@ -1953,12 +1954,13 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
     option_parse(argc, argv, global_options);
-    updateParsedOptions(& param, global_options);
-    backend_options = param.backend_options;
+    backend = aiori_select(api);
+    if (backend == NULL)
+        ERR("Unrecognized I/O API");
+    backend_options = airoi_update_module_options(backend, global_options);
 
     free(global_options->modules);
     free(global_options);
-    backend = param.backend;
 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
@@ -1966,8 +1968,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (backend->initialize){
 	    backend->initialize(backend_options);
     }
-    if(backend->init_xfer_options){
-      backend->init_xfer_options(& param);
+    if(backend->xfer_hints){
+      backend->xfer_hints(& hints);
     }
     if(backend->check_params){
       backend->check_params(backend_options);
@@ -2011,7 +2013,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     valid_tests();
 
     // option_print_current(options);
-    VERBOSE(1,-1, "api                     : %s", param.api);
+    VERBOSE(1,-1, "api                     : %s", api);
     VERBOSE(1,-1, "barriers                : %s", ( barriers ? "True" : "False" ));
     VERBOSE(1,-1, "collective_creates      : %s", ( collective_creates ? "True" : "False" ));
     VERBOSE(1,-1, "create_only             : %s", ( create_only ? "True" : "False" ));

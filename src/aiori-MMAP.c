@@ -33,7 +33,7 @@ static IOR_offset_t MMAP_Xfer(int, aiori_fd_t *, IOR_size_t *,
 static void MMAP_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static void MMAP_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static option_help * MMAP_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values);
-static void MMAP_init_xfer_options(IOR_param_t * params);
+static void MMAP_xfer_hints(aiori_xfer_hint_t * params);
 static int MMAP_check_params(aiori_mod_opt_t * options);
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -44,7 +44,7 @@ ior_aiori_t mmap_aiori = {
         .xfer = MMAP_Xfer,
         .close = MMAP_Close,
         .delete = POSIX_Delete,
-        .init_xfer_options = MMAP_init_xfer_options,
+        .xfer_hints = MMAP_xfer_hints,
         .get_version = aiori_get_version,
         .fsync = MMAP_Fsync,
         .get_file_size = POSIX_GetFileSize,
@@ -82,15 +82,15 @@ static option_help * MMAP_options(aiori_mod_opt_t ** init_backend_options, aiori
   return help;
 }
 
-static IOR_param_t * ior_param = NULL;
+static aiori_xfer_hint_t * hints = NULL;
 
-static void MMAP_init_xfer_options(IOR_param_t * params){
-  ior_param = params;
-  aiori_posix_init_xfer_options(params);
+static void MMAP_xfer_hints(aiori_xfer_hint_t * params){
+  hints = params;
+  aiori_posix_xfer_hints(params);
 }
 
 static int MMAP_check_params(aiori_mod_opt_t * options){
-  if (ior_param->fsyncPerWrite && (ior_param->transferSize & (sysconf(_SC_PAGESIZE) - 1)))
+  if (hints->fsyncPerWrite && (hints->transferSize & (sysconf(_SC_PAGESIZE) - 1)))
     ERR("transfer size must be aligned with PAGESIZE for MMAP with fsyncPerWrite");
   return 0;
 }
@@ -98,7 +98,7 @@ static int MMAP_check_params(aiori_mod_opt_t * options){
 static void ior_mmap_file(int *file, int mflags, void *param)
 {
         int flags = PROT_READ;
-        IOR_offset_t size = ior_param->expectedAggFileSize;
+        IOR_offset_t size = hints->expectedAggFileSize;
 
         if (mflags & IOR_WRONLY || mflags & IOR_RDWR)
                 flags |= PROT_WRITE;
@@ -109,7 +109,7 @@ static void ior_mmap_file(int *file, int mflags, void *param)
         if (o->mmap_ptr == MAP_FAILED)
                 ERR("mmap() failed");
 
-        if (ior_param->randomOffset)
+        if (hints->randomOffset)
                 flags = POSIX_MADV_RANDOM;
         else
                 flags = POSIX_MADV_SEQUENTIAL;
@@ -135,7 +135,7 @@ static aiori_fd_t *MMAP_Create(char *testFileName, int flags, aiori_mod_opt_t * 
         int *fd;
 
         fd = (int*) POSIX_Create(testFileName, flags, param);
-        if (ftruncate(*fd, ior_param->expectedAggFileSize) != 0)
+        if (ftruncate(*fd, hints->expectedAggFileSize) != 0)
                 ERR("ftruncate() failed");
         ior_mmap_file(fd, flags, param);
         return ((aiori_fd_t *)fd);
@@ -160,15 +160,15 @@ static IOR_offset_t MMAP_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
 {
         mmap_options_t *o = (mmap_options_t*) param;
         if (access == WRITE) {
-                memcpy(o->mmap_ptr + ior_param->offset, buffer, length);
+                memcpy(o->mmap_ptr + hints->offset, buffer, length);
         } else {
-                memcpy(buffer, o->mmap_ptr + ior_param->offset, length);
+                memcpy(buffer, o->mmap_ptr + hints->offset, length);
         }
 
-        if (ior_param->fsyncPerWrite == TRUE) {
-                if (msync(o->mmap_ptr + ior_param->offset, length, MS_SYNC) != 0)
+        if (hints->fsyncPerWrite == TRUE) {
+                if (msync(o->mmap_ptr + hints->offset, length, MS_SYNC) != 0)
                         ERR("msync() failed");
-                if (posix_madvise(o->mmap_ptr + ior_param->offset, length,
+                if (posix_madvise(o->mmap_ptr + hints->offset, length,
                                   POSIX_MADV_DONTNEED) != 0)
                         ERR("madvise() failed");
         }
@@ -181,7 +181,7 @@ static IOR_offset_t MMAP_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
 static void MMAP_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
-        if (msync(o->mmap_ptr, ior_param->expectedAggFileSize, MS_SYNC) != 0)
+        if (msync(o->mmap_ptr, hints->expectedAggFileSize, MS_SYNC) != 0)
                 EWARN("msync() failed");
 }
 
@@ -191,7 +191,7 @@ static void MMAP_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 static void MMAP_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
-        if (munmap(o->mmap_ptr, ior_param->expectedAggFileSize) != 0)
+        if (munmap(o->mmap_ptr, hints->expectedAggFileSize) != 0)
                 ERR("munmap failed");
         o->mmap_ptr = NULL;
         POSIX_Close(fd, param);

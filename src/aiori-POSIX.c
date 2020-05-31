@@ -149,7 +149,7 @@ ior_aiori_t posix_aiori = {
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
         .delete = POSIX_Delete,
-        .init_xfer_options = aiori_posix_init_xfer_options,
+        .xfer_hints = aiori_posix_xfer_hints,
         .get_version = aiori_get_version,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
@@ -166,16 +166,14 @@ ior_aiori_t posix_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 
-static IOR_param_t * ior_param = NULL;
+static aiori_xfer_hint_t * hints = NULL;
 
-void aiori_posix_init_xfer_options(IOR_param_t * params){
-  ior_param = params;
+void aiori_posix_xfer_hints(aiori_xfer_hint_t * params){
+  hints = params;
 }
 
 static int POSIX_check_params(aiori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
-  if (ior_param->useExistingTestFile && o->lustre_set_striping)
-        ERR("Lustre stripe options are incompatible with useExistingTestFile");
   if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
         ERR("beegfsChunkSize must be a power of two and >64k");
   if(o->lustre_stripe_count != -1 || o->lustre_stripe_size != 0)
@@ -219,7 +217,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, int access)
 
         take_locks.access.structLen = sizeof(take_locks.access);
         take_locks.access.structType = GPFS_ACCESS_RANGE;
-        take_locks.access.start = ior_param->offset;
+        take_locks.access.start = hints->offset;
         take_locks.access.length = length;
         take_locks.access.isWrite = (access == WRITE);
 
@@ -244,7 +242,7 @@ void gpfs_access_end(int fd, IOR_offset_t length, int access)
 
         free_locks.free.structLen = sizeof(free_locks.free);
         free_locks.free.structType = GPFS_FREE_RANGE;
-        free_locks.free.start = ior_param->offset;
+        free_locks.free.start = hints->offset;
         free_locks.free.length = length;
 
         rc = gpfs_fcntl(fd, &free_locks);
@@ -386,7 +384,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
           set_o_direct_flag(&fd_oflag);
         }
 
-        if(ior_param->dryRun)
+        if(hints->dryRun)
           return (aiori_fd_t*) 0;
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
@@ -399,7 +397,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                 /* In the single-shared-file case, task 0 has to creat the
                    file with the Lustre striping options before any other processes
                    open the file */
-                if (!ior_param->filePerProc && rank != 0) {
+                if (!hints->filePerProc && rank != 0) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         fd_oflag |= O_RDWR;
                         *fd = open64(testFileName, fd_oflag, mode);
@@ -436,7 +434,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
                                           "MPI_Abort() error");
                         }
-                        if (!ior_param->filePerProc)
+                        if (!hints->filePerProc)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                 }
@@ -518,7 +516,7 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 
         fd_oflag |= O_RDWR;
 
-        if(ior_param->dryRun)
+        if(hints->dryRun)
           return (aiori_fd_t*) 0;
 
         *fd = open64(testFileName, fd_oflag);
@@ -558,7 +556,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
         int fd;
         posix_options_t * o = (posix_options_t*) param;
 
-        if(ior_param->dryRun)
+        if(hints->dryRun)
           return length;
 
         fd = *(int *)file;
@@ -571,8 +569,8 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
 
 
         /* seek to offset */
-        if (lseek64(fd, ior_param->offset, SEEK_SET) == -1)
-                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, ior_param->offset);
+        if (lseek64(fd, hints->offset, SEEK_SET) == -1)
+                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, hints->offset);
 
         while (remaining > 0) {
                 /* write/read file */
@@ -581,13 +579,13 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                 fprintf(stdout,
                                         "task %d writing to offset %lld\n",
                                         rank,
-                                        ior_param->offset + length - remaining);
+                                        hints->offset + length - remaining);
                         }
                         rc = write(fd, ptr, remaining);
                         if (rc == -1)
                                 ERRF("write(%d, %p, %lld) failed",
                                         fd, (void*)ptr, remaining);
-                        if (ior_param->fsyncPerWrite == TRUE){
+                        if (hints->fsyncPerWrite == TRUE){
                           POSIX_Fsync((aiori_fd_t*) &fd, param);
                         }
                 } else {        /* READ or CHECK */
@@ -595,7 +593,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                 fprintf(stdout,
                                         "task %d reading from offset %lld\n",
                                         rank,
-                                        ior_param->offset + length - remaining);
+                                        hints->offset + length - remaining);
                         }
                         rc = read(fd, ptr, remaining);
                         if (rc == 0)
@@ -611,8 +609,8 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                 rank,
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
-                                ior_param->offset + length - remaining);
-                        if (ior_param->singleXferAttempt == TRUE)
+                                hints->offset + length - remaining);
+                        if (hints->singleXferAttempt == TRUE)
                                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
                                           "barrier error");
                         if (xferRetries > MAX_RETRY)
@@ -656,7 +654,7 @@ static void POSIX_Sync(aiori_mod_opt_t * param)
  */
 void POSIX_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
-        if(ior_param->dryRun)
+        if(hints->dryRun)
           return;
         if (close(*(int *)fd) != 0)
                 ERRF("close(%d) failed", *(int *)fd);
@@ -668,7 +666,7 @@ void POSIX_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
  */
 void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
 {
-        if(ior_param->dryRun)
+        if(hints->dryRun)
           return;
         if (unlink(testFileName) != 0){
                 EWARNF("[RANK %03d]: unlink() of file \"%s\" failed\n",
@@ -682,7 +680,7 @@ void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
 IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
                                       char *testFileName)
 {
-        if(ior_param->dryRun)
+        if(hints->dryRun)
           return 0;
         struct stat stat_buf;
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
@@ -692,7 +690,7 @@ IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
         }
         aggFileSizeFromStat = stat_buf.st_size;
 
-        if (ior_param->filePerProc == TRUE) {
+        if (hints->filePerProc == TRUE) {
                 MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
                                         MPI_LONG_LONG_INT, MPI_SUM, testComm),
                           "cannot total data moved");

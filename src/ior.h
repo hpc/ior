@@ -37,6 +37,7 @@
 #endif
 #include "option.h"
 #include "iordef.h"
+#include "aiori.h"
 
 #define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
 /******************** DATA Packet Type ***************************************/
@@ -78,8 +79,6 @@ typedef struct IO_BUFFERS
  *         ParseCommandLine() [parse_options.c]
  *         USER_GUIDE
  */
-
-struct ior_aiori;
 
 typedef struct
 {
@@ -177,6 +176,8 @@ typedef struct
 
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
+
+    aiori_xfer_hint_t hints;
 } IOR_param_t;
 
 /* each pointer for a single test */

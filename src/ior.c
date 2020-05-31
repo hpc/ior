@@ -58,6 +58,27 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                                 aiori_fd_t *fd, const int access,
                                 IOR_io_buffers *ioBuffers);
 
+static void ior_set_xfer_hints(IOR_param_t * p){
+  aiori_xfer_hint_t * hints = & p->hints;
+  hints->dryRun = p->dryRun;
+  hints->filePerProc = p->filePerProc;
+  hints->collective = p->collective;
+  hints->numTasks = p->numTasks;
+  hints->numNodes = p->numNodes;
+  hints->randomOffset = p->randomOffset;
+  hints->fsyncPerWrite = p->fsyncPerWrite;
+  hints->segmentCount = p->segmentCount;
+  hints->blockSize = p->blockSize;
+  hints->transferSize = p->transferSize;
+  hints->offset = p->offset;
+  hints->expectedAggFileSize = p->expectedAggFileSize;
+  hints->singleXferAttempt = p->singleXferAttempt;
+
+  if(backend->xfer_hints){
+    backend->xfer_hints(hints);
+  }
+}
+
 static void test_initialize(IOR_test_t * test){
   verbose = test->params.verbose;
   backend = test->params.backend;
@@ -67,9 +88,7 @@ static void test_initialize(IOR_test_t * test){
   if(backend->initialize){
     backend->initialize(test->params.backend_options);
   }
-  if(backend->init_xfer_options){
-    backend->init_xfer_options(& test->params);
-  }
+  ior_set_xfer_hints(& test->params);
 }
 
 static void test_finalize(IOR_test_t * test){
@@ -1643,9 +1662,8 @@ static void ValidateTests(IOR_param_t * test)
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->filePerProc)
                 ERR("file-per-proc not available in current NCMPI");
 
-        if(test->backend->init_xfer_options){
-          test->backend->init_xfer_options(test);
-        }
+        backend = test->backend;
+        ior_set_xfer_hints(test);
         /* allow the backend to validate the options */
         if(test->backend->check_params){
           int check = test->backend->check_params(test->backend_options);
