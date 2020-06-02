@@ -633,7 +633,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
     /* allocate read buffer */
     if (read_bytes > 0) {
-        int alloc_res = posix_memalign((void**)&read_buffer, sysconf(_SC_PAGESIZE), write_bytes);
+        int alloc_res = posix_memalign((void**)&read_buffer, sysconf(_SC_PAGESIZE), read_bytes);
         if (alloc_res) {
             FAIL("out of memory");
         }
