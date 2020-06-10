@@ -70,7 +70,6 @@ static void ior_set_xfer_hints(IOR_param_t * p){
   hints->segmentCount = p->segmentCount;
   hints->blockSize = p->blockSize;
   hints->transferSize = p->transferSize;
-  hints->offset = p->offset;
   hints->expectedAggFileSize = p->expectedAggFileSize;
   hints->singleXferAttempt = p->singleXferAttempt;
 
@@ -385,7 +384,7 @@ CompareBuffers(void *expectedBuffer,
         if (verbose >= VERBOSE_3) {
                 fprintf(out_logfile,
                         "[%d] At file byte offset %lld, comparing %llu-byte transfer\n",
-                        rank, test->offset, (long long)size);
+                        rank, (long long) offset, (long long)size);
         }
         for (i = 0; i < length; i++) {
                 if (testbuf[i] != goodbuf[i]) {
@@ -394,7 +393,7 @@ CompareBuffers(void *expectedBuffer,
                                 fprintf(out_logfile,
                                         "[%d] At transfer buffer #%lld, index #%lld (file byte offset %lld):\n",
                                         rank, transferCount - 1, (long long)i,
-                                        test->offset +
+                                        (long long) offset +
                                         (IOR_size_t) (i * sizeof(IOR_size_t)));
                                 fprintf(out_logfile, "[%d] %s0x", rank, bufferLabel1);
                                 fprintf(out_logfile, "%016llx\n", goodbuf[i]);
@@ -410,10 +409,10 @@ CompareBuffers(void *expectedBuffer,
                         }
                 } else if (verbose >= VERBOSE_5 && i % 4 == 0) {
                         fprintf(out_logfile,
-                                "[%d] PASSED offset = %lld bytes, transfer %lld\n",
+                                "[%d] PASSED offset = %lu bytes, transfer %lld\n",
                                 rank,
                                 ((i * sizeof(unsigned long long)) +
-                                 test->offset), transferCount);
+                                 offset), transferCount);
                         fprintf(out_logfile, "[%d] GOOD %s0x", rank, bufferLabel1);
                         for (j = 0; j < 4; j++)
                                 fprintf(out_logfile, "%016llx ", goodbuf[i + j]);
@@ -436,8 +435,8 @@ CompareBuffers(void *expectedBuffer,
                         "%lld errors between buffer indices %lld and %lld.\n",
                         (long long)errorCount, (long long)first,
                         (long long)last);
-                fprintf(out_logfile, "[%d]   File byte offset = %lld:\n", rank,
-                        ((first * sizeof(unsigned long long)) + test->offset));
+                fprintf(out_logfile, "[%d]   File byte offset = %lu:\n", rank,
+                        ((first * sizeof(unsigned long long)) + offset));
 
                 fprintf(out_logfile, "[%d]     %s0x", rank, bufferLabel1);
                 for (j = first; j < length && j < first + 4; j++)
@@ -1808,16 +1807,16 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
   void *checkBuffer = ioBuffers->checkBuffer;
   void *readCheckBuffer = ioBuffers->readCheckBuffer;
 
-  test->hints.offset = offsetArray[pairCnt]; // this looks inappropriate
+  IOR_offset_t offset = offsetArray[pairCnt]; // this looks inappropriate
 
   transfer = test->transferSize;
   if (access == WRITE) {
           /* fills each transfer with a unique pattern
            * containing the offset into the file */
           if (test->storeFileOffset == TRUE) {
-                  FillBuffer(buffer, test, test->offset, pretendRank);
+                  FillBuffer(buffer, test, offset, pretendRank);
           }
-          amtXferred = backend->xfer(access, fd, buffer, transfer, test->backend_options);
+          amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot write to file");
           if (test->fsyncPerWrite)
@@ -1827,7 +1826,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
             nanosleep( & wait, NULL);
           }
   } else if (access == READ) {
-          amtXferred = backend->xfer(access, fd, buffer, transfer, test->backend_options);
+          amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file");
           if (test->interIODelay > 0){
@@ -1838,10 +1837,10 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
           memset(checkBuffer, 'a', transfer);
 
           if (test->storeFileOffset == TRUE) {
-                  FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
+                  FillBuffer(readCheckBuffer, test, offset, pretendRank);
           }
 
-          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test->backend_options);
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
           (*transferCount)++;
@@ -1851,12 +1850,12 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
   } else if (access == READCHECK) {
           memset(checkBuffer, 'a', transfer);
 
-          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test->backend_options);
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer){
             ERR("cannot read from file");
           }
           if (test->storeFileOffset == TRUE) {
-                  FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
+                  FillBuffer(readCheckBuffer, test, offset, pretendRank);
           }
           *errors += CompareBuffers(readCheckBuffer, checkBuffer, transfer, *transferCount, test, READCHECK);
   }

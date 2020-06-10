@@ -76,7 +76,6 @@ typedef struct aiori_xfer_hint_t{
   IOR_offset_t segmentCount;       /* number of segments (or HDF5 datasets) */
   IOR_offset_t blockSize;          /* contiguous bytes to write per task */
   IOR_offset_t transferSize;       /* size of transfer in bytes */
-  IOR_offset_t offset;             /* offset for read/write */
   IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
   int singleXferAttempt;           /* do not retry transfer if incomplete */
 } aiori_xfer_hint_t;
@@ -100,8 +99,8 @@ typedef struct ior_aiori {
          Allow to set generic transfer options that shall be applied to any subsequent IO call.
         */
         void (*xfer_hints)(aiori_xfer_hint_t * params);
-        IOR_offset_t (*xfer)(int, aiori_fd_t *, IOR_size_t *,
-                             IOR_offset_t, aiori_mod_opt_t *);
+        IOR_offset_t (*xfer)(int access, aiori_fd_t *, IOR_size_t *,
+                             IOR_offset_t size, IOR_offset_t offset, aiori_mod_opt_t *);
         void (*close)(aiori_fd_t *, aiori_mod_opt_t *);
         void (*delete)(char *, aiori_mod_opt_t *);
         char* (*get_version)(void);

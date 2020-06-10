@@ -29,7 +29,7 @@
 static aiori_fd_t *MMAP_Create(char *, int flags, aiori_mod_opt_t *);
 static aiori_fd_t *MMAP_Open(char *, int flags, aiori_mod_opt_t *);
 static IOR_offset_t MMAP_Xfer(int, aiori_fd_t *, IOR_size_t *,
-                               IOR_offset_t, aiori_mod_opt_t *);
+                               IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
 static void MMAP_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static void MMAP_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static option_help * MMAP_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values);
@@ -156,19 +156,19 @@ static aiori_fd_t *MMAP_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
  * Write or read access to file using mmap
  */
 static IOR_offset_t MMAP_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
-                               IOR_offset_t length, aiori_mod_opt_t * param)
+                               IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
         if (access == WRITE) {
-                memcpy(o->mmap_ptr + hints->offset, buffer, length);
+                memcpy(o->mmap_ptr + offset, buffer, length);
         } else {
-                memcpy(buffer, o->mmap_ptr + hints->offset, length);
+                memcpy(buffer, o->mmap_ptr + offset, length);
         }
 
         if (hints->fsyncPerWrite == TRUE) {
-                if (msync(o->mmap_ptr + hints->offset, length, MS_SYNC) != 0)
+                if (msync(o->mmap_ptr + offset, length, MS_SYNC) != 0)
                         ERR("msync() failed");
-                if (posix_madvise(o->mmap_ptr + hints->offset, length,
+                if (posix_madvise(o->mmap_ptr + offset, length,
                                   POSIX_MADV_DONTNEED) != 0)
                         ERR("madvise() failed");
         }

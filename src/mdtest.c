@@ -391,9 +391,8 @@ static void create_file (const char *path, uint64_t itemNum) {
          * According to Bill Loewe, writes are only done one time, so they are always at
          * offset 0 (zero).
          */
-        hints.offset = 0;
         hints.fsyncPerWrite = sync_file;
-        if ( write_bytes != (size_t) backend->xfer (WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, backend_options)) {
+        if ( write_bytes != (size_t) backend->xfer (WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, 0, backend_options)) {
             FAIL("unable to write file %s", curr_item);
         }
     }
@@ -716,7 +715,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         /* read file */
         if (read_bytes > 0) {
             read_buffer[0] = 42; /* use a random value to ensure that the read_buffer is now different from the expected buffer and read isn't sometimes NOOP */
-            if (read_bytes != (size_t) backend->xfer (READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, backend_options)) {
+            if (read_bytes != (size_t) backend->xfer (READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, 0, backend_options)) {
                 FAIL("unable to read file %s", item);
             }
             if(verify_read){

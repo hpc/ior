@@ -86,7 +86,7 @@ static void SetupDataSet(void *, int flags, aiori_mod_opt_t *);
 static aiori_fd_t *HDF5_Create(char *, int flags, aiori_mod_opt_t *);
 static aiori_fd_t *HDF5_Open(char *, int flags, aiori_mod_opt_t *);
 static IOR_offset_t HDF5_Xfer(int, aiori_fd_t *, IOR_size_t *,
-                           IOR_offset_t, aiori_mod_opt_t *);
+                           IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
 static void HDF5_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static void HDF5_Delete(char *, aiori_mod_opt_t *);
 static char* HDF5_GetVersion();
@@ -417,7 +417,7 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
  * Write or read access to file using the HDF5 interface.
  */
 static IOR_offset_t HDF5_Xfer(int access, aiori_fd_t *fd, IOR_size_t * buffer,
-                              IOR_offset_t length, aiori_mod_opt_t * param)
+                              IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * param)
 {
         static int firstReadCheck = FALSE, startNewDataSet;
         IOR_offset_t segmentPosition, segmentSize;
@@ -445,7 +445,7 @@ static IOR_offset_t HDF5_Xfer(int access, aiori_fd_t *fd, IOR_size_t * buffer,
                     * hints->blockSize;
                 segmentSize = (IOR_offset_t) (hints->numTasks) * hints->blockSize;
         }
-        if ((IOR_offset_t) ((hints->offset - segmentPosition) % segmentSize) ==
+        if ((IOR_offset_t) ((offset - segmentPosition) % segmentSize) ==
             0) {
                 /*
                  * ordinarily start a new data set, unless this is the
@@ -471,7 +471,7 @@ static IOR_offset_t HDF5_Xfer(int access, aiori_fd_t *fd, IOR_size_t * buffer,
                 SetupDataSet(fd, access == WRITE ? IOR_CREAT : IOR_RDWR, param);
         }
 
-        SeekOffset(fd, hints->offset, param);
+        SeekOffset(fd, offset, param);
 
         /* this is necessary to reset variables for reaccessing file */
         startNewDataSet = FALSE;

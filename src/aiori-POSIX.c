@@ -69,7 +69,7 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 static IOR_offset_t POSIX_Xfer(int, aiori_fd_t *, IOR_size_t *,
-                               IOR_offset_t, aiori_mod_opt_t *);
+                               IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
 static void POSIX_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static void POSIX_Sync(aiori_mod_opt_t * );
 static int POSIX_check_params(aiori_mod_opt_t * options);
@@ -547,7 +547,7 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
  * Write or read access to file using the POSIX interface.
  */
 static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
-                               IOR_offset_t length, aiori_mod_opt_t * param)
+                               IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * param)
 {
         int xferRetries = 0;
         long long remaining = (long long)length;
@@ -569,8 +569,8 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
 
 
         /* seek to offset */
-        if (lseek64(fd, hints->offset, SEEK_SET) == -1)
-                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, hints->offset);
+        if (lseek64(fd, offset, SEEK_SET) == -1)
+                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, offset);
 
         while (remaining > 0) {
                 /* write/read file */
@@ -579,7 +579,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                 fprintf(stdout,
                                         "task %d writing to offset %lld\n",
                                         rank,
-                                        hints->offset + length - remaining);
+                                        offset + length - remaining);
                         }
                         rc = write(fd, ptr, remaining);
                         if (rc == -1)
@@ -593,7 +593,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                 fprintf(stdout,
                                         "task %d reading from offset %lld\n",
                                         rank,
-                                        hints->offset + length - remaining);
+                                        offset + length - remaining);
                         }
                         rc = read(fd, ptr, remaining);
                         if (rc == 0)
@@ -609,7 +609,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                 rank,
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
-                                hints->offset + length - remaining);
+                                offset + length - remaining);
                         if (hints->singleXferAttempt == TRUE)
                                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
                                           "barrier error");

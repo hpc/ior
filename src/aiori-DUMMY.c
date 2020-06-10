@@ -116,7 +116,7 @@ static IOR_offset_t DUMMY_GetFileSize(aiori_mod_opt_t * options, MPI_Comm testCo
   return 0;
 }
 
-static IOR_offset_t DUMMY_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer, IOR_offset_t length, aiori_mod_opt_t * options){
+static IOR_offset_t DUMMY_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer, IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * options){
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY xfer: %p\n", file);
   }

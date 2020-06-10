@@ -120,7 +120,6 @@ typedef struct
     IOR_offset_t segmentCount;       /* number of segments (or HDF5 datasets) */
     IOR_offset_t blockSize;          /* contiguous bytes to write per task */
     IOR_offset_t transferSize;       /* size of transfer in bytes */
-    IOR_offset_t offset;             /* offset for read/write */
     IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
 
     int summary_every_test;          /* flag to print summary every test, not just at end */

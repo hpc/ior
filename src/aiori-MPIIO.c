@@ -36,7 +36,7 @@ static IOR_offset_t SeekOffset(MPI_File, IOR_offset_t, aiori_mod_opt_t *);
 static aiori_fd_t *MPIIO_Create(char *, int iorflags, aiori_mod_opt_t *);
 static aiori_fd_t *MPIIO_Open(char *, int flags, aiori_mod_opt_t *);
 static IOR_offset_t MPIIO_Xfer(int, aiori_fd_t *, IOR_size_t *,
-                                   IOR_offset_t, aiori_mod_opt_t *);
+                                   IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
 static void MPIIO_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static char* MPIIO_GetVersion();
 static void MPIIO_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
@@ -327,7 +327,7 @@ static aiori_fd_t *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * m
  * Write or read access to file using the MPIIO interface.
  */
 static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer,
-                               IOR_offset_t length, aiori_mod_opt_t * module_options)
+                               IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * module_options)
 {
         /* NOTE: The second arg is (void *) for reads, and (const void *)
            for writes.  Therefore, one of the two sets of assignments below
@@ -386,7 +386,7 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
          */
         if (param->useFileView) {
                 /* find offset in file */
-                if (SeekOffset(mfd->fd, hints->offset, module_options) <
+                if (SeekOffset(mfd->fd, offset, module_options) <
                     0) {
                         /* if unsuccessful */
                         length = -1;
@@ -425,7 +425,7 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                 if (param->useSharedFilePointer) {
                         /* find offset in file */
                         if (SeekOffset
-                            (mfd->fd, hints->offset, module_options) < 0) {
+                            (mfd->fd, offset, module_options) < 0) {
                                 /* if unsuccessful */
                                 length = -1;
                         } else {
@@ -444,13 +444,13 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                         if (hints->collective) {
                                 /* explicit, collective call */
                                 MPI_CHECK(Access_at_all
-                                          (mfd->fd, hints->offset,
+                                          (mfd->fd, offset,
                                            buffer, length, MPI_BYTE, &status),
                                           "cannot access explicit, collective");
                         } else {
                                 /* explicit, noncollective call */
                                 MPI_CHECK(Access_at
-                                          (mfd->fd, hints->offset,
+                                          (mfd->fd, offset,
                                            buffer, length, MPI_BYTE, &status),
                                           "cannot access explicit, noncollective");
                         }
