@@ -627,8 +627,8 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
     /* allocate read buffer */
     if (read_bytes > 0) {
-        read_buffer = (char *)malloc(read_bytes);
-        if (read_buffer == NULL) {
+        int alloc_res = posix_memalign((void**)&read_buffer, sysconf(_SC_PAGESIZE), read_bytes);
+        if (alloc_res) {
             FAIL("out of memory");
         }
 
@@ -2125,8 +2125,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* allocate and initialize write buffer with # */
     if (write_bytes > 0) {
-        write_buffer = (char *)malloc(write_bytes);
-        if (write_buffer == NULL) {
+        int alloc_res = posix_memalign((void**)&write_buffer, sysconf(_SC_PAGESIZE), write_bytes);
+        if (alloc_res) {
             FAIL("out of memory");
         }
         generate_memory_pattern(write_buffer, write_bytes);

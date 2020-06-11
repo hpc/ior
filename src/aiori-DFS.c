@@ -42,6 +42,7 @@ static daos_handle_t poh, coh;
 static daos_oclass_id_t objectClass = OC_SX;
 static daos_oclass_id_t dir_oclass = OC_SX;
 static struct d_hash_table *dir_hash;
+static bool dfs_init;
 
 struct aiori_dir_hdl {
         d_list_t	entry;
@@ -412,8 +413,16 @@ DFS_Init(aiori_mod_opt_t * options)
         DFS_options_t *o = (DFS_options_t *)options;
 	int rc;
 
+        /** in case we are already initialized, return */
+        if (dfs_init)
+                return;
+
+        /** shouldn't be fatal since it can be called with POSIX backend selection */
         if (o->pool == NULL || o->svcl == NULL || o->cont == NULL)
-                ERR("Invalid pool or container options\n");
+                return;
+
+	rc = daos_init();
+        DCHECK(rc, "Failed to initialize daos");
 
         if (o->oclass) {
                 objectClass = daos_oclass_name2id(o->oclass);
@@ -426,9 +435,6 @@ DFS_Init(aiori_mod_opt_t * options)
 		if (dir_oclass == OC_UNKNOWN)
 			GERR("Invalid DAOS directory object class %s\n", o->dir_oclass);
 	}
-
-	rc = daos_init();
-        DCHECK(rc, "Failed to initialize daos");
 
         rc = d_hash_table_create(0, 16, NULL, &hdl_hash_ops, &dir_hash);
         DCHECK(rc, "Failed to initialize dir hashtable");
@@ -483,6 +489,7 @@ DFS_Init(aiori_mod_opt_t * options)
                 rc = dfs_set_prefix(dfs, o->prefix);
                 DCHECK(rc, "Failed to set DFS Prefix");
         }
+        dfs_init = true;
 }
 
 static void
@@ -537,6 +544,20 @@ DFS_Finalize(aiori_mod_opt_t *options)
 
 	rc = daos_fini();
         DCHECK(rc, "Failed to finalize DAOS");
+
+        /** reset tunables */
+	o->pool		= NULL;
+	o->svcl		= NULL;
+	o->group		= NULL;
+	o->cont		= NULL;
+	o->chunk_size	= 1048576;
+	o->oclass	= NULL;
+	o->dir_oclass	= NULL;
+	o->prefix	= NULL;
+	o->destroy	= 0;
+	objectClass	= OC_SX;
+	dir_oclass	= OC_SX;
+	dfs_init	= false;
 }
 
 /*

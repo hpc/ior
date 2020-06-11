@@ -243,10 +243,8 @@ DAOS_Init(aiori_mod_opt_t * options)
 	if (daos_initialized)
 		return;
 
-	if (o->pool == NULL || o->svcl == NULL || o->cont == NULL) {
-		GERR("Invalid DAOS pool/cont\n");
+	if (o->pool == NULL || o->svcl == NULL || o->cont == NULL)
 		return;
-	}
 
         if (o->oclass) {
                 objectClass = daos_oclass_name2id(o->oclass);
