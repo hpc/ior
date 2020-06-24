@@ -23,10 +23,12 @@ typedef struct{
   void * variable;
 } option_help;
 
+typedef struct aiori_mod_opt_t aiori_mod_opt_t;
+
 typedef struct{
   char * prefix; // may be NULL to include it in the standard name
   option_help * options;
-  void * defaults; // these default values are taken from the command line
+  aiori_mod_opt_t * defaults; // these default values are taken from the command line
 } option_module;
 
 typedef struct{
@@ -38,9 +40,9 @@ typedef struct{
 
 int64_t string_to_bytes(char *size_str);
 void option_print_current(option_help * args);
-
 //@return the number of parsed arguments
 int option_parse(int argc, char ** argv, options_all_t * args);
+int option_parse_str(char*val, options_all_t * opt_all);
 
 /* Parse a single line */
 int option_parse_key_value(char * key, char * value, options_all_t * opt_all);

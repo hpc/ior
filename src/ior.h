@@ -35,10 +35,11 @@
     typedef void *rados_t;
     typedef void *rados_ioctx_t;
 #endif
-
 #include "option.h"
-
 #include "iordef.h"
+#include "aiori.h"
+
+#define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
 /******************** DATA Packet Type ***************************************/
 /* Holds the types of data packets: generic, offset, timestamp, incompressible */
 
@@ -79,28 +80,24 @@ typedef struct IO_BUFFERS
  *         USER_GUIDE
  */
 
-struct ior_aiori;
-
 typedef struct
 {
     const struct ior_aiori * backend;
     char * debug;             /* debug info string */
-    unsigned int mode;               /* file permissions */
-    unsigned int openFlags;          /* open flags (see also <open>) */
     int referenceNumber;             /* user supplied reference number */
     char * api;               /* API for I/O */
     char * apiVersion;        /* API version */
     char * platform;          /* platform type */
     char * testFileName;   /* full name for test */
-    char * testFileName_fppReadCheck;/* filename for fpp read check */
-    char * hintsFileName;  /* full name for hints file */
     char * options;        /* options string */
     // intermediate options
+    int collective;                  /* collective I/O */
+    MPI_Comm     testComm;           /* MPI communicator */
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */
     int numTasksOnNode0;             /* number of tasks on node 0 (usually all the same, but don't have to be, use with caution) */
-    int tasksBlockMapping;           /* are the tasks in contiguous blocks across nodes or round-robin */ 
+    int tasksBlockMapping;           /* are the tasks in contiguous blocks across nodes or round-robin */
     int repetitions;                 /* number of repetitions of test */
     int repCounter;                  /* rep counter */
     int multiFile;                   /* multiple files */
@@ -120,17 +117,11 @@ typedef struct
     int keepFileWithError;           /* don't delete the testfile with errors */
     int errorFound;                  /* error found in data check */
     int quitOnError;                 /* quit code when error in check */
-    int collective;                  /* collective I/O */
     IOR_offset_t segmentCount;       /* number of segments (or HDF5 datasets) */
     IOR_offset_t blockSize;          /* contiguous bytes to write per task */
     IOR_offset_t transferSize;       /* size of transfer in bytes */
-    IOR_offset_t offset;             /* offset for read/write */
     IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
-    int preallocate;                 /* preallocate file size */
-    int useFileView;                 /* use MPI_File_set_view */
-    int useSharedFilePointer;        /* use shared file pointer */
-    int useStridedDatatype;          /* put strided access into datatype */
-    int showHints;                   /* show hints */
+
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
     int useExistingTestFile;         /* do not delete test file before access */
@@ -145,7 +136,6 @@ typedef struct
     int verbose;                     /* verbosity */
     int setTimeStampSignature;       /* set time stamp signature */
     unsigned int timeStampSignatureValue; /* value for time stamp signature */
-    void * fd_fppReadCheck;          /* additional fd for fpp read check */
     int randomSeed;                  /* random seed for write/read check */
     unsigned int incompressibleSeed; /* random seed for incompressible file creation */
     int randomOffset;                /* access is to random offsets */
@@ -162,16 +152,6 @@ typedef struct
     int singleXferAttempt;           /* do not retry transfer if incomplete */
     int fsyncPerWrite;               /* fsync() after each write */
     int fsync;                       /* fsync() after write */
-
-    /* MPI variables */
-    MPI_Comm     testComm;           /* MPI communicator */
-    MPI_Datatype transferType;       /* datatype for transfer */
-    MPI_Datatype fileType;           /* filetype for file view */
-
-    /* HDF5 variables */
-    int individualDataSets;          /* datasets not shared by all procs */
-    int noFill;                      /* no fill in file creation */
-    IOR_offset_t setAlignment;       /* alignment in bytes */
 
     /* HDFS variables */
     char      * hdfs_user;  /* copied from ENV, for now */
@@ -192,23 +172,10 @@ typedef struct
     /* NCMPI variables */
     int var_id;                      /* variable id handle for data set */
 
-    /* Lustre variables */
-    int lustre_stripe_count;
-    int lustre_stripe_size;
-    int lustre_start_ost;
-    int lustre_set_striping;         /* flag that we need to set lustre striping */
-    int lustre_ignore_locks;
-
-    /* gpfs variables */
-    int gpfs_hint_access;          /* use gpfs "access range" hint */
-    int gpfs_release_token;        /* immediately release GPFS tokens after
-                                      creating or opening a file */
-    /* beegfs variables */
-    int beegfs_numTargets;           /* number storage targets to use */
-    int beegfs_chunkSize;            /* srtipe pattern for new files */
-
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
+
+    aiori_xfer_hint_t hints;
 } IOR_param_t;
 
 /* each pointer for a single test */
@@ -241,7 +208,7 @@ typedef struct IOR_test_t {
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
 void AllocResults(IOR_test_t *test);
 
-char * GetPlatformName();
+char * GetPlatformName(void);
 void init_IOR_Param_t(IOR_param_t *p);
 
 /*

@@ -181,13 +181,13 @@ typedef long long int      IOR_size_t;
 
 
 /* display error message and terminate execution */
-#define ERR(MSG) do {                                                    \
+#define ERR_ERRNO(MSG) do {                                                    \
         ERRF("%s", MSG);                                                 \
 } while (0)
 
 
 /* display a simple error message (i.e. errno is not set) and terminate execution */
-#define ERR_SIMPLE(MSG) do {                                            \
+#define ERR(MSG) do {                                            \
         fprintf(stdout, "ior ERROR: %s, (%s:%d)\n",                     \
                 MSG, __FILE__, __LINE__);                               \
         fflush(stdout);                                                 \

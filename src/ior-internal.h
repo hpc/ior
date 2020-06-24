@@ -17,7 +17,6 @@ void PrintShortSummary(IOR_test_t * test);
 void PrintLongSummaryAllTests(IOR_test_t *tests_head);
 void PrintLongSummaryHeader();
 void PrintLongSummaryOneTest(IOR_test_t *test);
-void DisplayFreespace(IOR_param_t * test);
 void GetTestFileName(char *, IOR_param_t *);
 void PrintRemoveTiming(double start, double finish, int rep);
 void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, double latency,
@@ -25,6 +24,9 @@ void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, do
 void PrintTestEnds();
 void PrintTableHeader();
 /* End of ior-output */
+
+IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank);
+IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, int access);
 
 struct results {
   double min;

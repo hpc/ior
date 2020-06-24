@@ -68,31 +68,67 @@
 #endif
 
 /**************************** P R O T O T Y P E S *****************************/
-static IOR_offset_t POSIX_Xfer(int, void *, IOR_size_t *,
-                               IOR_offset_t, IOR_param_t *);
-static void POSIX_Fsync(void *, IOR_param_t *);
-static void POSIX_Sync(IOR_param_t * );
+static IOR_offset_t POSIX_Xfer(int, aiori_fd_t *, IOR_size_t *,
+                               IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
+static void POSIX_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
+static void POSIX_Sync(aiori_mod_opt_t * );
+static int POSIX_check_params(aiori_mod_opt_t * options);
 
 /************************** O P T I O N S *****************************/
 typedef struct{
   /* in case of a change, please update depending MMAP module too */
   int direct_io;
+
+  /* Lustre variables */
+  int lustre_set_striping;         /* flag that we need to set lustre striping */
+  int lustre_stripe_count;
+  int lustre_stripe_size;
+  int lustre_start_ost;
+  int lustre_ignore_locks;
+
+  /* gpfs variables */
+  int gpfs_hint_access;          /* use gpfs "access range" hint */
+  int gpfs_release_token;        /* immediately release GPFS tokens after
+                                    creating or opening a file */
+  /* beegfs variables */
+  int beegfs_numTargets;           /* number storage targets to use */
+  int beegfs_chunkSize;            /* srtipe pattern for new files */
+
 } posix_options_t;
 
 
-option_help * POSIX_options(void ** init_backend_options, void * init_values){
+option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   posix_options_t * o = malloc(sizeof(posix_options_t));
 
   if (init_values != NULL){
     memcpy(o, init_values, sizeof(posix_options_t));
   }else{
+    memset(o, 0, sizeof(posix_options_t));
     o->direct_io = 0;
+    o->lustre_start_ost = -1;
+    o->beegfs_numTargets = -1;
+    o->beegfs_chunkSize = -1;
   }
 
-  *init_backend_options = o;
+  *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
     {0, "posix.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
+#ifdef HAVE_BEEGFS_BEEGFS_H
+    {0, "posix.beegfs.NumTargets", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->beegfs_numTargets},
+    {0, "posix.beegfs.ChunkSize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->beegfs_chunkSize},
+#endif
+#ifdef HAVE_GPFS_FCNTL_H
+    {0, "posix.gpfs.hintaccess", "", OPTION_FLAG, 'd', & o->gpfs_hint_access},
+    {0, "posix.gpfs.releasetoken", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->gpfs_release_token},
+
+#endif
+#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+    {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
+    {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
+    {0, "posix.lustre.startost", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_start_ost},
+    {0, "posix.lustre.ignorelocks", "", OPTION_FLAG, 'd', & o->lustre_ignore_locks},
+#endif
     LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
@@ -113,6 +149,7 @@ ior_aiori_t posix_aiori = {
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
         .delete = POSIX_Delete,
+        .xfer_hints = aiori_posix_xfer_hints,
         .get_version = aiori_get_version,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
@@ -123,11 +160,26 @@ ior_aiori_t posix_aiori = {
         .stat = aiori_posix_stat,
         .get_options = POSIX_options,
         .enable_mdtest = true,
-        .sync = POSIX_Sync
+        .sync = POSIX_Sync,
+        .check_params = POSIX_check_params
 };
 
 /***************************** F U N C T I O N S ******************************/
 
+static aiori_xfer_hint_t * hints = NULL;
+
+void aiori_posix_xfer_hints(aiori_xfer_hint_t * params){
+  hints = params;
+}
+
+static int POSIX_check_params(aiori_mod_opt_t * param){
+  posix_options_t * o = (posix_options_t*) param;
+  if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
+        ERR("beegfsChunkSize must be a power of two and >64k");
+  if(o->lustre_stripe_count != -1 || o->lustre_stripe_size != 0)
+    o->lustre_set_striping = 1;
+  return 0;
+}
 
 #ifdef HAVE_GPFS_FCNTL_H
 void gpfs_free_all_locks(int fd)
@@ -151,7 +203,7 @@ void gpfs_free_all_locks(int fd)
                 EWARNF("gpfs_fcntl(%d, ...) release all locks hint failed.", fd);
         }
 }
-void gpfs_access_start(int fd, IOR_offset_t length, IOR_param_t *param, int access)
+void gpfs_access_start(int fd, IOR_offset_t length, int access)
 {
         int rc;
         struct {
@@ -165,17 +217,17 @@ void gpfs_access_start(int fd, IOR_offset_t length, IOR_param_t *param, int acce
 
         take_locks.access.structLen = sizeof(take_locks.access);
         take_locks.access.structType = GPFS_ACCESS_RANGE;
-        take_locks.access.start = param->offset;
+        take_locks.access.start = hints->offset;
         take_locks.access.length = length;
         take_locks.access.isWrite = (access == WRITE);
 
         rc = gpfs_fcntl(fd, &take_locks);
         if (verbose >= VERBOSE_2 && rc != 0) {
-                EWARNF("gpfs_fcntl(fd, ...) access range hint failed.", fd);
+                EWARNF("gpfs_fcntl(%d, ...) access range hint failed.", fd);
         }
 }
 
-void gpfs_access_end(int fd, IOR_offset_t length, IOR_param_t *param, int access)
+void gpfs_access_end(int fd, IOR_offset_t length, int access)
 {
         int rc;
         struct {
@@ -190,12 +242,12 @@ void gpfs_access_end(int fd, IOR_offset_t length, IOR_param_t *param, int access
 
         free_locks.free.structLen = sizeof(free_locks.free);
         free_locks.free.structType = GPFS_FREE_RANGE;
-        free_locks.free.start = param->offset;
+        free_locks.free.start = hints->offset;
         free_locks.free.length = length;
 
         rc = gpfs_fcntl(fd, &free_locks);
         if (verbose >= VERBOSE_2 && rc != 0) {
-                EWARNF("gpfs_fcntl(fd, ...) free range hint failed.", fd);
+                EWARNF("gpfs_fcntl(%d, ...) free range hint failed.", fd);
         }
 }
 
@@ -318,7 +370,7 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 /*
  * Creat and open a file through the POSIX interface.
  */
-void *POSIX_Create(char *testFileName, IOR_param_t * param)
+aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
         int mode = 0664;
@@ -327,13 +379,13 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         fd = (int *)malloc(sizeof(int));
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
-        posix_options_t * o = (posix_options_t*) param->backend_options;
+        posix_options_t * o = (posix_options_t*) param;
         if (o->direct_io == TRUE){
           set_o_direct_flag(&fd_oflag);
         }
 
-        if(param->dryRun)
-          return 0;
+        if(hints->dryRun)
+          return (aiori_fd_t*) 0;
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
 /* Add a #define for FASYNC if not available, as it forms part of
@@ -341,12 +393,11 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
 #ifndef FASYNC
 #define FASYNC          00020000   /* fcntl, for BSD compatibility */
 #endif
-
-        if (param->lustre_set_striping) {
+        if (o->lustre_set_striping) {
                 /* In the single-shared-file case, task 0 has to creat the
                    file with the Lustre striping options before any other processes
                    open the file */
-                if (!param->filePerProc && rank != 0) {
+                if (!hints->filePerProc && rank != 0) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         fd_oflag |= O_RDWR;
                         *fd = open64(testFileName, fd_oflag, mode);
@@ -358,9 +409,9 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
 
                         /* Setup Lustre IOCTL striping pattern structure */
                         opts.lmm_magic = LOV_USER_MAGIC;
-                        opts.lmm_stripe_size = param->lustre_stripe_size;
-                        opts.lmm_stripe_offset = param->lustre_start_ost;
-                        opts.lmm_stripe_count = param->lustre_stripe_count;
+                        opts.lmm_stripe_size = o->lustre_stripe_size;
+                        opts.lmm_stripe_offset = o->lustre_start_ost;
+                        opts.lmm_stripe_count = o->lustre_stripe_count;
 
                         /* File needs to be opened O_EXCL because we cannot set
                          * Lustre striping information on a pre-existing file.*/
@@ -383,7 +434,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
                                           "MPI_Abort() error");
                         }
-                        if (!param->filePerProc)
+                        if (!hints->filePerProc)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                 }
@@ -393,12 +444,12 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
                 fd_oflag |= O_CREAT | O_RDWR;
 
 #ifdef HAVE_BEEGFS_BEEGFS_H
-                if (beegfs_isOptionSet(param->beegfs_chunkSize)
-                    || beegfs_isOptionSet(param->beegfs_numTargets)) {
+                if (beegfs_isOptionSet(o->beegfs_chunkSize)
+                    || beegfs_isOptionSet(o->beegfs_numTargets)) {
                     bool result = beegfs_createFilePath(testFileName,
                                                         mode,
-                                                        param->beegfs_numTargets,
-                                                        param->beegfs_chunkSize);
+                                                        o->beegfs_numTargets,
+                                                        o->beegfs_chunkSize);
                     if (result) {
                        fd_oflag &= ~O_CREAT;
                     } else {
@@ -415,7 +466,7 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
         }
 
-        if (param->lustre_ignore_locks) {
+        if (o->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
                         ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
@@ -426,35 +477,31 @@ void *POSIX_Create(char *testFileName, IOR_param_t * param)
         /* in the single shared file case, immediately release all locks, with
          * the intent that we can avoid some byte range lock revocation:
          * everyone will be writing/reading from individual regions */
-        if (param->gpfs_release_token ) {
+        if (o->gpfs_release_token ) {
                 gpfs_free_all_locks(*fd);
         }
 #endif
-        return ((void *)fd);
+        return (aiori_fd_t*) fd;
 }
 
 /*
  * Creat a file through mknod interface.
  */
-void *POSIX_Mknod(char *testFileName)
+int POSIX_Mknod(char *testFileName)
 {
-	int *fd;
+    int ret;
 
-	fd = (int *)malloc(sizeof(int));
-	if (fd == NULL)
-		ERR("Unable to malloc file descriptor");
+    ret = mknod(testFileName, S_IFREG | S_IRUSR, 0);
+    if (ret < 0)
+        ERR("mknod failed");
 
-	*fd = mknod(testFileName, S_IFREG | S_IRUSR, 0);
-	if (*fd < 0)
-		ERR("mknod failed");
-
-	return ((void *)fd);
+    return ret;
 }
 
 /*
  * Open a file through the POSIX interface.
  */
-void *POSIX_Open(char *testFileName, IOR_param_t * param)
+aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
@@ -463,21 +510,21 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
 
-        posix_options_t * o = (posix_options_t*) param->backend_options;
+        posix_options_t * o = (posix_options_t*) param;
         if (o->direct_io == TRUE)
                 set_o_direct_flag(&fd_oflag);
 
         fd_oflag |= O_RDWR;
 
-        if(param->dryRun)
-          return 0;
+        if(hints->dryRun)
+          return (aiori_fd_t*) 0;
 
         *fd = open64(testFileName, fd_oflag);
         if (*fd < 0)
                 ERRF("open64(\"%s\", %d) failed", testFileName, fd_oflag);
 
 #ifdef HAVE_LUSTRE_LUSTRE_USER_H
-        if (param->lustre_ignore_locks) {
+        if (o->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
                 if (verbose >= VERBOSE_1) {
                         fprintf(stdout,
@@ -489,40 +536,41 @@ void *POSIX_Open(char *testFileName, IOR_param_t * param)
 #endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
 
 #ifdef HAVE_GPFS_FCNTL_H
-        if(param->gpfs_release_token) {
+        if(o->gpfs_release_token) {
                 gpfs_free_all_locks(*fd);
         }
 #endif
-        return ((void *)fd);
+        return (aiori_fd_t*) fd;
 }
 
 /*
  * Write or read access to file using the POSIX interface.
  */
-static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
-                               IOR_offset_t length, IOR_param_t * param)
+static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
+                               IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * param)
 {
         int xferRetries = 0;
         long long remaining = (long long)length;
         char *ptr = (char *)buffer;
         long long rc;
         int fd;
+        posix_options_t * o = (posix_options_t*) param;
 
-        if(param->dryRun)
+        if(hints->dryRun)
           return length;
 
         fd = *(int *)file;
 
 #ifdef HAVE_GPFS_FCNTL_H
-        if (param->gpfs_hint_access) {
-                gpfs_access_start(fd, length, param, access);
+        if (o->gpfs_hint_access) {
+                gpfs_access_start(fd, length, access);
         }
 #endif
 
 
         /* seek to offset */
-        if (lseek64(fd, param->offset, SEEK_SET) == -1)
-                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, param->offset);
+        if (lseek64(fd, offset, SEEK_SET) == -1)
+                ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, offset);
 
         while (remaining > 0) {
                 /* write/read file */
@@ -531,20 +579,21 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                                 fprintf(stdout,
                                         "task %d writing to offset %lld\n",
                                         rank,
-                                        param->offset + length - remaining);
+                                        offset + length - remaining);
                         }
                         rc = write(fd, ptr, remaining);
                         if (rc == -1)
                                 ERRF("write(%d, %p, %lld) failed",
                                         fd, (void*)ptr, remaining);
-                        if (param->fsyncPerWrite == TRUE)
-                                POSIX_Fsync(&fd, param);
+                        if (hints->fsyncPerWrite == TRUE){
+                          POSIX_Fsync((aiori_fd_t*) &fd, param);
+                        }
                 } else {        /* READ or CHECK */
                         if (verbose >= VERBOSE_4) {
                                 fprintf(stdout,
                                         "task %d reading from offset %lld\n",
                                         rank,
-                                        param->offset + length - remaining);
+                                        offset + length - remaining);
                         }
                         rc = read(fd, ptr, remaining);
                         if (rc == 0)
@@ -560,8 +609,8 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                                 rank,
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
-                                param->offset + length - remaining);
-                        if (param->singleXferAttempt == TRUE)
+                                offset + length - remaining);
+                        if (hints->singleXferAttempt == TRUE)
                                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
                                           "barrier error");
                         if (xferRetries > MAX_RETRY)
@@ -574,7 +623,7 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
                 xferRetries++;
         }
 #ifdef HAVE_GPFS_FCNTL_H
-        if (param->gpfs_hint_access) {
+        if (o->gpfs_hint_access) {
                 gpfs_access_end(fd, length, param, access);
         }
 #endif
@@ -584,14 +633,14 @@ static IOR_offset_t POSIX_Xfer(int access, void *file, IOR_size_t * buffer,
 /*
  * Perform fsync().
  */
-static void POSIX_Fsync(void *fd, IOR_param_t * param)
+static void POSIX_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         if (fsync(*(int *)fd) != 0)
                 EWARNF("fsync(%d) failed", *(int *)fd);
 }
 
 
-static void POSIX_Sync(IOR_param_t * param)
+static void POSIX_Sync(aiori_mod_opt_t * param)
 {
   int ret = system("sync");
   if (ret != 0){
@@ -603,9 +652,9 @@ static void POSIX_Sync(IOR_param_t * param)
 /*
  * Close a file through the POSIX interface.
  */
-void POSIX_Close(void *fd, IOR_param_t * param)
+void POSIX_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
-        if(param->dryRun)
+        if(hints->dryRun)
           return;
         if (close(*(int *)fd) != 0)
                 ERRF("close(%d) failed", *(int *)fd);
@@ -615,9 +664,9 @@ void POSIX_Close(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the POSIX interface.
  */
-void POSIX_Delete(char *testFileName, IOR_param_t * param)
+void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
 {
-        if(param->dryRun)
+        if(hints->dryRun)
           return;
         if (unlink(testFileName) != 0){
                 EWARNF("[RANK %03d]: unlink() of file \"%s\" failed\n",
@@ -628,10 +677,10 @@ void POSIX_Delete(char *testFileName, IOR_param_t * param)
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
+IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
                                       char *testFileName)
 {
-        if(test->dryRun)
+        if(hints->dryRun)
           return 0;
         struct stat stat_buf;
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
@@ -641,7 +690,7 @@ IOR_offset_t POSIX_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
         }
         aggFileSizeFromStat = stat_buf.st_size;
 
-        if (test->filePerProc == TRUE) {
+        if (hints->filePerProc == TRUE) {
                 MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
                                         MPI_LONG_LONG_INT, MPI_SUM, testComm),
                           "cannot total data moved");

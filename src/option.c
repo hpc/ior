@@ -366,6 +366,16 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
   }
 }
 
+int option_parse_str(char*val, options_all_t * opt_all){
+    int flag_parsed_next;
+    int error = 0;
+    int requiredArgsSeen = 0;
+    int print_help = 0;
+    char * argv[2] = {val, NULL};
+    option_parse_token(argv, & flag_parsed_next, & requiredArgsSeen, opt_all, & error, & print_help);
+    return error;
+}
+
 int option_parse_key_value(char * key, char *val, options_all_t * opt_all){
   int flag_parsed_next;
   int error = 0;
