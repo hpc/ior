@@ -115,15 +115,12 @@ enum OutputFormat_t{
 #define DELIMITERS         " \t\r\n="          /* ReadScript() */
 #define FILENAME_DELIMITER '@'                 /* ParseFileName() */
 
-/* MACROs for debugging */
-#define HERE               fprintf(stdout, "** LINE %d (TASK=%d) **\n", \
-                                   __LINE__, rank);
-
 typedef long long int      IOR_offset_t;
 typedef long long int      IOR_size_t;
 
 #define                    IOR_format "%016llx"
 
+extern FILE * out_logfile;
 
 /******************************** M A C R O S *********************************/
 
@@ -134,34 +131,37 @@ typedef long long int      IOR_size_t;
 #define WARN_RESET(MSG, TO_STRUCT_PTR, FROM_STRUCT_PTR, MEMBER) do {     \
         (TO_STRUCT_PTR)->MEMBER = (FROM_STRUCT_PTR)->MEMBER;             \
         if (rank == 0) {                                                 \
-            fprintf(stdout, "ior WARNING: %s.  Using value of %d.\n",    \
+            fprintf(out_logfile, "ior WARNING: %s.  Using value of %d.\n",    \
                     MSG, (TO_STRUCT_PTR)->MEMBER);                       \
         }                                                                \
-        fflush(stdout);                                                  \
+        fflush(out_logfile);                                                  \
 } while (0)
 
+extern int aiori_warning_as_errors;
 
 #define WARN(MSG) do {                                                   \
+        if(aiori_warning_as_errors){ ERR(MSG); }                           \
         if (verbose > VERBOSE_2) {                                       \
-            fprintf(stdout, "ior WARNING: %s, (%s:%d).\n",               \
+            fprintf(out_logfile, "ior WARNING: %s, (%s:%d).\n",               \
                     MSG, __FILE__, __LINE__);                            \
         } else {                                                         \
-            fprintf(stdout, "ior WARNING: %s.\n", MSG);                  \
+            fprintf(out_logfile, "ior WARNING: %s.\n", MSG);                  \
         }                                                                \
-        fflush(stdout);                                                  \
+        fflush(out_logfile);                                                  \
 } while (0)
 
 
 /* warning with format string and errno printed */
 #define EWARNF(FORMAT, ...) do {                                         \
+        if(aiori_warning_as_errors){ ERRF(FORMAT, __VA_ARGS__); }          \
         if (verbose > VERBOSE_2) {                                       \
-            fprintf(stdout, "ior WARNING: " FORMAT ", errno %d, %s (%s:%d).\n", \
-                    __VA_ARGS__, errno, strerror(errno), __FILE__, __LINE__); \
+            fprintf(out_logfile, "ior WARNING: " FORMAT ", (%s:%d).\n", \
+                    __VA_ARGS__,  __FILE__, __LINE__); \
         } else {                                                         \
-            fprintf(stdout, "ior WARNING: " FORMAT ", errno %d, %s \n",  \
-                    __VA_ARGS__, errno, strerror(errno));                \
+            fprintf(out_logfile, "ior WARNING: " FORMAT "\n",  \
+                    __VA_ARGS__);                \
         }                                                                \
-        fflush(stdout);                                                  \
+        fflush(out_logfile);                                                  \
 } while (0)
 
 
@@ -173,9 +173,9 @@ typedef long long int      IOR_size_t;
 
 /* display error message with format string and terminate execution */
 #define ERRF(FORMAT, ...) do {                                           \
-        fprintf(stdout, "ior ERROR: " FORMAT ", errno %d, %s (%s:%d)\n", \
-                __VA_ARGS__, errno, strerror(errno), __FILE__, __LINE__); \
-        fflush(stdout);                                                  \
+        fprintf(out_logfile, "ior ERROR: " FORMAT ", (%s:%d)\n", \
+                __VA_ARGS__, __FILE__, __LINE__); \
+        fflush(out_logfile);                                                  \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
 } while (0)
 
@@ -188,9 +188,9 @@ typedef long long int      IOR_size_t;
 
 /* display a simple error message (i.e. errno is not set) and terminate execution */
 #define ERR(MSG) do {                                            \
-        fprintf(stdout, "ior ERROR: %s, (%s:%d)\n",                     \
+        fprintf(out_logfile, "ior ERROR: %s, (%s:%d)\n",                     \
                 MSG, __FILE__, __LINE__);                               \
-        fflush(stdout);                                                 \
+        fflush(out_logfile);                                                 \
         MPI_Abort(MPI_COMM_WORLD, -1);                                  \
 } while (0)
 
@@ -207,9 +207,9 @@ typedef long long int      IOR_size_t;
                                                                          \
     if (MPI_STATUS != MPI_SUCCESS) {                                     \
         MPI_Error_string(MPI_STATUS, resultString, &resultLength);       \
-        fprintf(stdout, "ior ERROR: " FORMAT ", MPI %s, (%s:%d)\n",      \
+        fprintf(out_logfile, "ior ERROR: " FORMAT ", MPI %s, (%s:%d)\n",      \
                 __VA_ARGS__, resultString, __FILE__, __LINE__);          \
-        fflush(stdout);                                                  \
+        fflush(out_logfile);                                                  \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
     }                                                                    \
 } while(0)

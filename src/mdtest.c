@@ -1079,7 +1079,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         }
         if (rank == 0) {
           if(expected_items == -1){
-            fprintf(out_logfile, "WARNING: could not read stonewall status file\n");
+            WARN("Could not read stonewall status file");
           }else {
             VERBOSE(1,1, "Read stonewall status; items: "LLU"\n", items);
           }
@@ -1949,6 +1949,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
+      {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);

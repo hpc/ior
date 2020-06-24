@@ -365,7 +365,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("storeFileOffset", test->storeFileOffset);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);
-    PrintKeyValInt("quitOnError", test->quitOnError);
+    PrintKeyValInt("warningAsErrors", test->warningAsErrors);
     PrintKeyValInt("verbose", verbose);
     PrintKeyVal("data packet type", data_packets[test->dataPacketType]);
     PrintKeyValInt("setTimeStampSignature/incompressibleSeed", test->setTimeStampSignature); /* Seed value was copied into setTimeStampSignature as well */

@@ -669,8 +669,7 @@ void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
         if(hints->dryRun)
           return;
         if (unlink(testFileName) != 0){
-                EWARNF("[RANK %03d]: unlink() of file \"%s\" failed\n",
-                       rank, testFileName);
+                EWARNF("[RANK %03d]: unlink() of file \"%s\" failed", rank, testFileName);
         }
 }
 

@@ -117,7 +117,6 @@ typedef struct
     int keepFile;                    /* don't delete the testfile on exit */
     int keepFileWithError;           /* don't delete the testfile with errors */
     int errorFound;                  /* error found in data check */
-    int quitOnError;                 /* quit code when error in check */
     IOR_offset_t segmentCount;       /* number of segments (or HDF5 datasets) */
     IOR_offset_t blockSize;          /* contiguous bytes to write per task */
     IOR_offset_t transferSize;       /* size of transfer in bytes */
@@ -175,6 +174,7 @@ typedef struct
 
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
+    int warningAsErrors;             /* treat any warning as an error */
 
     aiori_xfer_hint_t hints;
 } IOR_param_t;

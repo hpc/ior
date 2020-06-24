@@ -78,6 +78,8 @@ static void ior_set_xfer_hints(IOR_param_t * p){
   }
 }
 
+int aiori_warning_as_errors = 0;
+
 static void test_initialize(IOR_test_t * test){
   verbose = test->params.verbose;
   backend = test->params.backend;
@@ -85,6 +87,7 @@ static void test_initialize(IOR_test_t * test){
     backend->initialize(test->params.backend_options);
   }
   ior_set_xfer_hints(& test->params);
+  aiori_warning_as_errors = test->params.warningAsErrors;
 
   if (rank == 0 && verbose >= VERBOSE_0) {
     ShowTestStart(& test->params);
@@ -111,7 +114,6 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         /* setup tests, and validate parameters */
         tests_head = ParseCommandLine(argc, argv);
         InitTests(tests_head, world_com);
-        verbose = tests_head->params.verbose;
 
         PrintHeader(argc, argv);
 
@@ -159,7 +161,6 @@ int ior_main(int argc, char **argv)
 
     /* setup tests, and validate parameters */
     InitTests(tests_head, mpi_comm_world);
-    verbose = tests_head->params.verbose;
 
     PrintHeader(argc, argv);
 
@@ -281,10 +282,8 @@ DisplayOutliers(int numTasks,
                 if (ret != 0)
                         strcpy(hostname, "unknown");
 
-                fprintf(out_logfile, "WARNING: for %s, task %d, %s %s is %f\n",
-                        hostname, rank, accessString, timeString, timerVal);
-                fprintf(out_logfile, "         (mean=%f, stddev=%f)\n", mean, sd);
-                fflush(out_logfile);
+                EWARNF("for %s, task %d, %s %s is %f (mean=%f, stddev=%f)\n",
+                        hostname, rank, accessString, timeString, timerVal,  mean, sd);
         }
 }
 
@@ -333,18 +332,11 @@ static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep,
                              != point->aggFileSizeFromXfer)
                             || (point->aggFileSizeFromStat
                                 != point->aggFileSizeFromXfer)) {
-                                fprintf(out_logfile,
-                                        "WARNING: Expected aggregate file size       = %lld.\n",
-                                        (long long) params->expectedAggFileSize);
-                                fprintf(out_logfile,
-                                        "WARNING: Stat() of aggregate file size      = %lld.\n",
-                                        (long long) point->aggFileSizeFromStat);
-                                fprintf(out_logfile,
-                                        "WARNING: Using actual aggregate bytes moved = %lld.\n",
-                                        (long long) point->aggFileSizeFromXfer);
+                                EWARNF("Expected aggregate file size       = %lld", (long long) params->expectedAggFileSize);
+                                EWARNF("Stat() of aggregate file size      = %lld", (long long) point->aggFileSizeFromStat);
+                                EWARNF("Using actual aggregate bytes moved = %lld", (long long) point->aggFileSizeFromXfer);
                                 if(params->deadlineForStonewalling){
-                                  fprintf(out_logfile,
-                                        "WARNING: maybe caused by deadlineForStonewalling\n");
+                                  EWARN("Maybe caused by deadlineForStonewalling");
                                 }
                         }
                 }
@@ -425,8 +417,7 @@ CompareBuffers(void *expectedBuffer,
         if (inError) {
                 inError = 0;
                 GetTestFileName(testFileName, test);
-                fprintf(out_logfile,
-                        "[%d] FAILED comparison of buffer containing %d-byte ints:\n",
+                EWARNF("[%d] FAILED comparison of buffer containing %d-byte ints:\n",
                         rank, (int)sizeof(unsigned long long int));
                 fprintf(out_logfile, "[%d]   File name = %s\n", rank, testFileName);
                 fprintf(out_logfile, "[%d]   In transfer %lld, ", rank,
@@ -449,8 +440,6 @@ CompareBuffers(void *expectedBuffer,
                 if (j == length)
                         fprintf(out_logfile, "[end of buffer]");
                 fprintf(out_logfile, "\n");
-                if (test->quitOnError == TRUE)
-                        ERR("data check error, aborting execution");
         }
         return (errorCount);
 }
@@ -476,7 +465,7 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
                                 WARN("overflow in errors counted");
                                 allErrors = -1;
                         }
-                        fprintf(out_logfile, "WARNING: incorrect data on %s (%d errors found).\n",
+                        EWARNF("Incorrect data on %s (%d errors found).\n",
                                 access == WRITECHECK ? "write" : "read", allErrors);
                         fprintf(out_logfile,
                                 "Used Time Stamp %u (0x%x) for Data Signature\n",
@@ -778,7 +767,7 @@ void GetTestFileName(char *testFileName, IOR_param_t * test)
         strcpy(initialTestFileName, test->testFileName);
         if(test->dualMount){
                 GetProcessorAndCore(&socket, &core);
-                sprintf(tmpString, "%s%d/%s",initialTestFileName, 
+                sprintf(tmpString, "%s%d/%s",initialTestFileName,
                         socket, "data");
                 strcpy(initialTestFileName, tmpString);
         }
@@ -977,6 +966,9 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
         int mpiNumTasks = 0;
         int mpiNumTasksOnNode0 = 0;
 
+        verbose = tests->params.verbose;
+        aiori_warning_as_errors = tests->params.warningAsErrors;
+
         /*
          * These default values are the same for every test and expensive to
          * retrieve so just do it once.
@@ -1005,11 +997,9 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
                         params->numTasks = mpiNumTasks;
                 } else if (params->numTasks > mpiNumTasks) {
                         if (rank == 0) {
-                                fprintf(out_logfile,
-                                        "WARNING: More tasks requested (%d) than available (%d),",
+                                EWARNF("More tasks requested (%d) than available (%d),",
                                         params->numTasks, mpiNumTasks);
-                                fprintf(out_logfile, "         running with %d tasks.\n",
-                                        mpiNumTasks);
+                                EWARNF("         running with %d tasks.\n", mpiNumTasks);
                         }
                         params->numTasks = mpiNumTasks;
                 }
@@ -1451,7 +1441,7 @@ static void TestIoSys(IOR_test_t *test)
                         if(params->stoneWallingStatusFile){
                           params->stoneWallingWearOutIterations = ReadStoneWallingIterations(params->stoneWallingStatusFile);
                           if(params->stoneWallingWearOutIterations == -1 && rank == 0){
-                            fprintf(out_logfile, "WARNING: Could not read back the stonewalling status from the file!\n");
+                            WARN("Could not read back the stonewalling status from the file!");
                             params->stoneWallingWearOutIterations = 0;
                           }
                         }
@@ -1637,9 +1627,6 @@ static void ValidateTests(IOR_param_t * test)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
                 ERR("block/transfer size may not be smaller than IOR_size_t for NCMPI");
-        if ((strcasecmp(test->api, "POSIX") != 0) && test->singleXferAttempt)
-                WARN_RESET("retry only available in POSIX",
-                           test, &defaults, singleXferAttempt);
         if (((strcasecmp(test->api, "POSIX") != 0)
             && (strcasecmp(test->api, "MPIIO") != 0)
             && (strcasecmp(test->api, "MMAP") != 0)
