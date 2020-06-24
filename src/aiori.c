@@ -76,6 +76,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_RADOS_AIORI
         &rados_aiori,
 #endif
+#ifdef USE_CEPHFS_AIORI
+        &cephfs_aiori,
+#endif
 #ifdef USE_GFARM_AIORI
         &gfarm_aiori,
 #endif
@@ -152,47 +155,68 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
  * This function provides a AIORI statfs for POSIX-compliant filesystems. It
  * uses statvfs is available and falls back on statfs.
  */
-int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, IOR_param_t * param)
+int aiori_posix_statfs (const char *path, ior_aiori_statfs_t *stat_buf, aiori_mod_opt_t * module_options)
 {
-        int ret;
+  // find the parent directory
+  char * fileName = strdup(path);
+  int i;
+  int directoryFound = FALSE;
+
+  /* get directory for outfile */
+  i = strlen(fileName);
+  while (i-- > 0) {
+          if (fileName[i] == '/') {
+                  fileName[i] = '\0';
+                  directoryFound = TRUE;
+                  break;
+          }
+  }
+  /* if no directory/, use '.' */
+  if (directoryFound == FALSE) {
+    strcpy(fileName, ".");
+  }
+
+  int ret;
 #if defined(HAVE_STATVFS)
-        struct statvfs statfs_buf;
+  struct statvfs statfs_buf;
 
-        ret = statvfs (path, &statfs_buf);
+  ret = statvfs (fileName, &statfs_buf);
 #else
-        struct statfs statfs_buf;
+  struct statfs statfs_buf;
 
-        ret = statfs (path, &statfs_buf);
+  ret = statfs (fileName, &statfs_buf);
 #endif
-        if (-1 == ret) {
-                return -1;
-        }
+  if (-1 == ret) {
+    perror("POSIX couldn't call statvfs");
+    return -1;
+  }
 
-        stat_buf->f_bsize = statfs_buf.f_bsize;
-        stat_buf->f_blocks = statfs_buf.f_blocks;
-        stat_buf->f_bfree = statfs_buf.f_bfree;
-        stat_buf->f_files = statfs_buf.f_files;
-        stat_buf->f_ffree = statfs_buf.f_ffree;
+  stat_buf->f_bsize = statfs_buf.f_bsize;
+  stat_buf->f_blocks = statfs_buf.f_blocks;
+  stat_buf->f_bfree = statfs_buf.f_bfree;
+  stat_buf->f_files = statfs_buf.f_files;
+  stat_buf->f_ffree = statfs_buf.f_ffree;
 
-        return 0;
+  free(fileName);
+  return 0;
 }
 
-int aiori_posix_mkdir (const char *path, mode_t mode, IOR_param_t * param)
+int aiori_posix_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * module_options)
 {
         return mkdir (path, mode);
 }
 
-int aiori_posix_rmdir (const char *path, IOR_param_t * param)
+int aiori_posix_rmdir (const char *path, aiori_mod_opt_t * module_options)
 {
         return rmdir (path);
 }
 
-int aiori_posix_access (const char *path, int mode, IOR_param_t * param)
+int aiori_posix_access (const char *path, int mode, aiori_mod_opt_t * module_options)
 {
         return access (path, mode);
 }
 
-int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param)
+int aiori_posix_stat (const char *path, struct stat *buf, aiori_mod_opt_t * module_options)
 {
         return stat (path, buf);
 }
@@ -200,92 +224,6 @@ int aiori_posix_stat (const char *path, struct stat *buf, IOR_param_t * param)
 char* aiori_get_version()
 {
   return "";
-}
-
-static bool is_initialized = false;
-
-static void init_or_fini_internal(const ior_aiori_t *test_backend,
-                                  const bool init)
-{
-        if (init)
-        {
-                if (test_backend->initialize)
-                        test_backend->initialize();
-        }
-        else
-        {
-                if (test_backend->finalize)
-                        test_backend->finalize();
-        }
-}
-
-static void init_or_fini(IOR_test_t *tests, const bool init)
-{
-        /* Sanity check, we were compiled with SOME backend, right? */
-        if (0 == aiori_count ()) {
-                ERR("No IO backends compiled into aiori.  "
-                    "Run 'configure --with-<backend>', and recompile.");
-        }
-
-        /* Pointer to the initialize of finalize function */
-
-
-        /* if tests is NULL, initialize or finalize all available backends */
-        if (tests == NULL)
-        {
-                for (ior_aiori_t **tmp = available_aiori ; *tmp != NULL; ++tmp)
-                        init_or_fini_internal(*tmp, init);
-
-                return;
-        }
-
-        for (IOR_test_t *t = tests; t != NULL; t = t->next)
-        {
-                IOR_param_t *params = &t->params;
-                assert(params != NULL);
-
-                const ior_aiori_t *test_backend = params->backend;
-                assert(test_backend != NULL);
-
-                init_or_fini_internal(test_backend, init);
-        }
-}
-
-
-/**
- * Initialize IO backends.
- *
- * @param[in]  tests      Pointers to the first test
- *
- * This function initializes all backends which will be used. If tests is NULL
- * all available backends are initialized.
- */
-void aiori_initialize(IOR_test_t *tests)
-{
-        if (is_initialized)
-            return;
-
-        init_or_fini(tests, true);
-
-        is_initialized = true;
-}
-
-/**
- * Finalize IO backends.
- *
- * @param[in]  tests      Pointers to the first test
- *
- * This function finalizes all backends which were used. If tests is NULL
- * all available backends are finialized.
- */
-void aiori_finalize(IOR_test_t *tests)
-{
-        if (!is_initialized)
-            return;
-
-        is_initialized = false;
-
-        init_or_fini(tests, false);
 }
 
 const ior_aiori_t *aiori_select (const char *api)

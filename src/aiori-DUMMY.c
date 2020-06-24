@@ -25,7 +25,7 @@ typedef struct {
 
 static char * current = (char*) 1;
 
-static option_help * DUMMY_options(void ** init_backend_options, void * init_values){
+static option_help * DUMMY_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   dummy_options_t * o = malloc(sizeof(dummy_options_t));
   if (init_values != NULL){
     memcpy(o, init_values, sizeof(dummy_options_t));
@@ -33,7 +33,7 @@ static option_help * DUMMY_options(void ** init_backend_options, void * init_val
     memset(o, 0, sizeof(dummy_options_t));
   }
 
-  *init_backend_options = o;
+  *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
       {0, "dummy.delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o->delay_creates},
@@ -46,44 +46,57 @@ static option_help * DUMMY_options(void ** init_backend_options, void * init_val
   return help;
 }
 
-static void *DUMMY_Create(char *testFileName, IOR_param_t * param)
+static int count_init = 0;
+
+static aiori_fd_t *DUMMY_Create(char *testFileName, int iorflags, aiori_mod_opt_t * options)
 {
+  if(count_init <= 0){
+    ERR("DUMMY missing initialization in create\n");
+  }
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY create: %s = %p\n", testFileName, current);
   }
-  dummy_options_t * o = (dummy_options_t*) param->backend_options;
+  dummy_options_t * o = (dummy_options_t*) options;
   if (o->delay_creates){
     if (! o->delay_rank_0_only || (o->delay_rank_0_only && rank == 0)){
       struct timespec wait = { o->delay_creates / 1000 / 1000, 1000l * (o->delay_creates % 1000000)};
       nanosleep( & wait, NULL);
     }
   }
-  return current++;
+  return (aiori_fd_t*) current++;
 }
 
-static void *DUMMY_Open(char *testFileName, IOR_param_t * param)
+static aiori_fd_t *DUMMY_Open(char *testFileName, int flags, aiori_mod_opt_t * options)
 {
+  if(count_init <= 0){
+    ERR("DUMMY missing initialization in open\n");
+  }
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY open: %s = %p\n", testFileName, current);
   }
-  return current++;
+  return (aiori_fd_t*) current++;
 }
 
-static void DUMMY_Fsync(void *fd, IOR_param_t * param)
+static void DUMMY_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * options)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY fsync %p\n", fd);
   }
 }
 
-static void DUMMY_Close(void *fd, IOR_param_t * param)
+
+static void DUMMY_Sync(aiori_mod_opt_t * options)
+{
+}
+
+static void DUMMY_Close(aiori_fd_t *fd, aiori_mod_opt_t * options)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY close %p\n", fd);
   }
 }
 
-static void DUMMY_Delete(char *testFileName, IOR_param_t * param)
+static void DUMMY_Delete(char *testFileName, aiori_mod_opt_t * options)
 {
     if(verbose > 4){
       fprintf(out_logfile, "DUMMY delete: %s\n", testFileName);
@@ -95,7 +108,7 @@ static char * DUMMY_getVersion()
   return "0.5";
 }
 
-static IOR_offset_t DUMMY_GetFileSize(IOR_param_t * test, MPI_Comm testComm, char *testFileName)
+static IOR_offset_t DUMMY_GetFileSize(aiori_mod_opt_t * options, MPI_Comm testComm, char *testFileName)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY getFileSize: %s\n", testFileName);
@@ -103,11 +116,11 @@ static IOR_offset_t DUMMY_GetFileSize(IOR_param_t * test, MPI_Comm testComm, cha
   return 0;
 }
 
-static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_offset_t length, IOR_param_t * param){
+static IOR_offset_t DUMMY_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer, IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * options){
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY xfer: %p\n", file);
   }
-  dummy_options_t * o = (dummy_options_t*) param->backend_options;
+  dummy_options_t * o = (dummy_options_t*) options;
   if (o->delay_xfer){
     if (! o->delay_rank_0_only || (o->delay_rank_0_only && rank == 0)){
       struct timespec wait = {o->delay_xfer / 1000 / 1000, 1000l * (o->delay_xfer % 1000000)};
@@ -117,7 +130,7 @@ static IOR_offset_t DUMMY_Xfer(int access, void *file, IOR_size_t * buffer, IOR_
   return length;
 }
 
-static int DUMMY_statfs (const char * path, ior_aiori_statfs_t * stat, IOR_param_t * param){
+static int DUMMY_statfs (const char * path, ior_aiori_statfs_t * stat, aiori_mod_opt_t * options){
   stat->f_bsize = 1;
   stat->f_blocks = 1;
   stat->f_bfree = 1;
@@ -127,25 +140,39 @@ static int DUMMY_statfs (const char * path, ior_aiori_statfs_t * stat, IOR_param
   return 0;
 }
 
-static int DUMMY_mkdir (const char *path, mode_t mode, IOR_param_t * param){
+static int DUMMY_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * options){
   return 0;
 }
 
-static int DUMMY_rmdir (const char *path, IOR_param_t * param){
+static int DUMMY_rmdir (const char *path, aiori_mod_opt_t * options){
   return 0;
 }
 
-static int DUMMY_access (const char *path, int mode, IOR_param_t * param){
+static int DUMMY_access (const char *path, int mode, aiori_mod_opt_t * options){
   return 0;
 }
 
-static int DUMMY_stat (const char *path, struct stat *buf, IOR_param_t * param){
+static int DUMMY_stat (const char *path, struct stat *buf, aiori_mod_opt_t * options){
   return 0;
 }
 
-static int DUMMY_check_params(IOR_param_t * test){  
-  return 1;
+static int DUMMY_check_params(aiori_mod_opt_t * options){
+  return 0;
 }
+
+static void DUMMY_init(aiori_mod_opt_t * options){
+  WARN("DUMMY initialized");
+  count_init++;
+}
+
+static void DUMMY_final(aiori_mod_opt_t * options){
+  WARN("DUMMY finalized");
+  if(count_init <= 0){
+    ERR("DUMMY invalid finalization\n");
+  }
+  count_init--;
+}
+
 
 ior_aiori_t dummy_aiori = {
         .name = "DUMMY",
@@ -163,9 +190,10 @@ ior_aiori_t dummy_aiori = {
         .rmdir = DUMMY_rmdir,
         .access = DUMMY_access,
         .stat = DUMMY_stat,
-        .initialize = NULL,
-        .finalize = NULL,
+        .initialize = DUMMY_init,
+        .finalize = DUMMY_final,
         .get_options = DUMMY_options,
-        .enable_mdtest = true,
-        .check_params = DUMMY_check_params
+        .check_params = DUMMY_check_params,
+        .sync = DUMMY_Sync,
+        .enable_mdtest = true
 };

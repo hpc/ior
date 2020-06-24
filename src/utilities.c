@@ -47,6 +47,7 @@
 #include "utilities.h"
 #include "aiori.h"
 #include "ior.h"
+#include "ior-internal.h"
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -146,7 +147,7 @@ void updateParsedOptions(IOR_param_t * options, options_all_t * global_options){
     }
     const ior_aiori_t * backend = aiori_select(options->api);
     if (backend == NULL)
-        ERR_SIMPLE("unrecognized I/O API");
+        ERR("Unrecognized I/O API");
 
     options->backend = backend;
     /* copy the actual module options into the test */
@@ -272,6 +273,15 @@ int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
  * tasks on node rank 0.
  */
 int GetNumNodes(MPI_Comm comm) {
+    if (getenv("IOR_FAKE_NODES")){
+      int numNodes = atoi(getenv("IOR_FAKE_NODES"));
+      int rank;
+      MPI_Comm_rank(comm, & rank);
+      if(rank == 0){
+        printf("Fake number of node: using %d\n", numNodes);
+      }
+      return numNodes;
+    }
 #if MPI_VERSION >= 3
         MPI_Comm shared_comm;
         int shared_rank = 0;
@@ -338,6 +348,15 @@ int GetNumTasks(MPI_Comm comm) {
  * method will return the same value it always has.
  */
 int GetNumTasksOnNode0(MPI_Comm comm) {
+  if (getenv("IOR_FAKE_TASK_PER_NODES")){
+    int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
+    int rank;
+    MPI_Comm_rank(comm, & rank);
+    if(rank == 0){
+      printf("Fake tasks per node: using %d\n", tasksPerNode);
+    }
+    return tasksPerNode;
+  }
 #if MPI_VERSION >= 3
         MPI_Comm shared_comm;
         int shared_rank = 0;
@@ -368,15 +387,6 @@ int GetNumTasksOnNode0(MPI_Comm comm) {
     int size;
     MPI_Comm_size(comm, & size);
     /* for debugging and testing */
-    if (getenv("IOR_FAKE_TASK_PER_NODES")){
-      int tasksPerNode = atoi(getenv("IOR_FAKE_TASK_PER_NODES"));
-      int rank;
-      MPI_Comm_rank(comm, & rank);
-      if(rank == 0){
-        printf("Fake tasks per node: using %d\n", tasksPerNode);
-      }
-      return tasksPerNode;
-    }
     char       localhost[MAX_PATHLEN],
         hostname[MAX_PATHLEN];
     int        count               = 1,
@@ -556,88 +566,66 @@ IOR_offset_t StringToBytes(char *size_str)
 /*
  * Displays size of file system and percent of data blocks and inodes used.
  */
-void ShowFileSystemSize(char *fileSystem)
+void ShowFileSystemSize(IOR_param_t * test) // this might be converted to an AIORI call
 {
-#ifndef _WIN32                  /* FIXME */
-        char realPath[PATH_MAX];
-        char *fileSystemUnitStr;
-        long long int totalFileSystemSize;
-        long long int freeFileSystemSize;
-        long long int totalInodes;
-        long long int freeInodes;
-        double totalFileSystemSizeHR;
-        double usedFileSystemPercentage;
-        double usedInodePercentage;
-#ifdef __sun                    /* SunOS does not support statfs(), instead uses statvfs() */
-        struct statvfs statusBuffer;
-#else                           /* !__sun */
-        struct statfs statusBuffer;
-#endif                          /* __sun */
+  ior_aiori_statfs_t stat;
+  if(! test->backend->statfs){
+    WARN("Backend doesn't implement statfs");
+    return;
+  }
+  char filename[MAX_PATHLEN];
+  GetTestFileName(filename, test);
+  int ret = test->backend->statfs(filename, & stat, test->backend_options);
+  if( ret != 0 ){
+    WARN("Backend returned error during statfs");
+    return;
+  }
+  long long int totalFileSystemSize;
+  long long int freeFileSystemSize;
+  long long int totalInodes;
+  long long int freeInodes;
+  double totalFileSystemSizeHR;
+  double usedFileSystemPercentage;
+  double usedInodePercentage;
+  char *fileSystemUnitStr;
 
-#ifdef __sun
-        if (statvfs(fileSystem, &statusBuffer) != 0) {
-                ERR("unable to statvfs() file system");
-        }
-#else                           /* !__sun */
-        if (statfs(fileSystem, &statusBuffer) != 0) {
-                ERR("unable to statfs() file system");
-        }
-#endif                          /* __sun */
+  totalFileSystemSize = stat.f_blocks * stat.f_bsize;
+  freeFileSystemSize = stat.f_bfree * stat.f_bsize;
+  usedFileSystemPercentage = (1 - ((double)freeFileSystemSize / (double)totalFileSystemSize)) * 100;
+  totalFileSystemSizeHR = (double)totalFileSystemSize / (double)(1<<30);
 
-        /* data blocks */
-#ifdef __sun
-        totalFileSystemSize = statusBuffer.f_blocks * statusBuffer.f_frsize;
-        freeFileSystemSize = statusBuffer.f_bfree * statusBuffer.f_frsize;
-#else                           /* !__sun */
-        totalFileSystemSize = statusBuffer.f_blocks * statusBuffer.f_bsize;
-        freeFileSystemSize = statusBuffer.f_bfree * statusBuffer.f_bsize;
-#endif                          /* __sun */
+  /* inodes */
+  totalInodes = stat.f_files;
+  freeInodes = stat.f_ffree;
+  usedInodePercentage = (1 - ((double)freeInodes / (double)totalInodes)) * 100;
 
-        usedFileSystemPercentage = (1 - ((double)freeFileSystemSize
-                                         / (double)totalFileSystemSize)) * 100;
-        totalFileSystemSizeHR =
-                (double)totalFileSystemSize / (double)(1<<30);
-        fileSystemUnitStr = "GiB";
-        if (totalFileSystemSizeHR > 1024) {
-                totalFileSystemSizeHR = (double)totalFileSystemSize / (double)((long long)1<<40);
-                fileSystemUnitStr = "TiB";
-        }
+  fileSystemUnitStr = "GiB";
+  if (totalFileSystemSizeHR > 1024) {
+          totalFileSystemSizeHR = (double)totalFileSystemSize / (double)((long long)1<<40);
+          fileSystemUnitStr = "TiB";
+  }
+  if(outputFormat == OUTPUT_DEFAULT){
+    fprintf(out_resultfile, "%-20s: %s\n", "Path", filename);
+    fprintf(out_resultfile, "%-20s: %.1f %s   Used FS: %2.1f%%   ",
+            "FS", totalFileSystemSizeHR, fileSystemUnitStr,
+            usedFileSystemPercentage);
+    fprintf(out_resultfile, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
+            (double)totalInodes / (double)(1<<20),
+            usedInodePercentage);
+    fflush(out_logfile);
+  }else if(outputFormat == OUTPUT_JSON){
+    fprintf(out_resultfile, "    , \"Path\": \"%s\",", filename);
+    fprintf(out_resultfile, "\"Capacity\": \"%.1f %s\", \"Used Capacity\": \"%2.1f%%\",",
+            totalFileSystemSizeHR, fileSystemUnitStr,
+            usedFileSystemPercentage);
+    fprintf(out_resultfile, "\"Inodes\": \"%.1f Mi\", \"Used Inodes\" : \"%2.1f%%\"\n",
+            (double)totalInodes / (double)(1<<20),
+            usedInodePercentage);
+  }else if(outputFormat == OUTPUT_CSV){
 
-        /* inodes */
-        totalInodes = statusBuffer.f_files;
-        freeInodes = statusBuffer.f_ffree;
-        usedInodePercentage =
-            (1 - ((double)freeInodes / (double)totalInodes)) * 100;
+  }
 
-        /* show results */
-        if (realpath(fileSystem, realPath) == NULL) {
-                ERR("unable to use realpath()");
-        }
-
-        if(outputFormat == OUTPUT_DEFAULT){
-          fprintf(out_resultfile, "%-20s: %s\n", "Path", realPath);
-          fprintf(out_resultfile, "%-20s: %.1f %s   Used FS: %2.1f%%   ",
-                  "FS", totalFileSystemSizeHR, fileSystemUnitStr,
-                  usedFileSystemPercentage);
-          fprintf(out_resultfile, "Inodes: %.1f Mi   Used Inodes: %2.1f%%\n",
-                  (double)totalInodes / (double)(1<<20),
-                  usedInodePercentage);
-          fflush(out_logfile);
-        }else if(outputFormat == OUTPUT_JSON){
-          fprintf(out_resultfile, "    , \"Path\": \"%s\",", realPath);
-          fprintf(out_resultfile, "\"Capacity\": \"%.1f %s\", \"Used Capacity\": \"%2.1f%%\",",
-                  totalFileSystemSizeHR, fileSystemUnitStr,
-                  usedFileSystemPercentage);
-          fprintf(out_resultfile, "\"Inodes\": \"%.1f Mi\", \"Used Inodes\" : \"%2.1f%%\"\n",
-                  (double)totalInodes / (double)(1<<20),
-                  usedInodePercentage);
-        }else if(outputFormat == OUTPUT_CSV){
-
-        }
-
-#endif /* !_WIN32 */
-
-        return;
+  return;
 }
 
 /*

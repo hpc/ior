@@ -157,8 +157,8 @@ static void         EMC_Close(void*, IOR_param_t*);
 static void         S3_Delete(char*, IOR_param_t*);
 static void         S3_Fsync(void*, IOR_param_t*);
 static IOR_offset_t S3_GetFileSize(IOR_param_t*, MPI_Comm, char*);
-static void S3_init();
-static void S3_finalize();
+static void S3_init(void * options);
+static void S3_finalize(void * options);
 static int S3_check_params(IOR_param_t *);
 
 
@@ -218,14 +218,14 @@ ior_aiori_t s3_emc_aiori = {
 };
 
 
-static void S3_init(){
+static void S3_init(void * options){
   /* This is supposed to be done before *any* threads are created.
    * Could MPI_Init() create threads (or call multi-threaded
    * libraries)?  We'll assume so. */
   AWS4C_CHECK( aws_init() );
 }
 
-static void S3_finalize(){
+static void S3_finalize(void * options){
   /* done once per program, after exiting all threads.
  	* NOTE: This fn doesn't return a value that can be checked for success. */
   aws_cleanup();
@@ -241,10 +241,10 @@ static int S3_check_params(IOR_param_t * test){
 
   if (Nto1 && (s != 1) && (b != t)) {
     ERR("N:1 (strided) requires xfer-size == block-size");
-    return 0;
+    return 1;
   }
 
-  return 1;
+  return 0;
 }
 
 /* modelled on similar macros in iordef.h */

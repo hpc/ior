@@ -55,8 +55,49 @@ static void InitTests(IOR_test_t * , MPI_Comm);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t *);
 static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
-                                void *fd, const int access,
+                                aiori_fd_t *fd, const int access,
                                 IOR_io_buffers *ioBuffers);
+
+static void ior_set_xfer_hints(IOR_param_t * p){
+  aiori_xfer_hint_t * hints = & p->hints;
+  hints->dryRun = p->dryRun;
+  hints->filePerProc = p->filePerProc;
+  hints->collective = p->collective;
+  hints->numTasks = p->numTasks;
+  hints->numNodes = p->numNodes;
+  hints->randomOffset = p->randomOffset;
+  hints->fsyncPerWrite = p->fsyncPerWrite;
+  hints->segmentCount = p->segmentCount;
+  hints->blockSize = p->blockSize;
+  hints->transferSize = p->transferSize;
+  hints->expectedAggFileSize = p->expectedAggFileSize;
+  hints->singleXferAttempt = p->singleXferAttempt;
+
+  if(backend->xfer_hints){
+    backend->xfer_hints(hints);
+  }
+}
+
+static void test_initialize(IOR_test_t * test){
+  verbose = test->params.verbose;
+  backend = test->params.backend;
+  if(backend->initialize){
+    backend->initialize(test->params.backend_options);
+  }
+  ior_set_xfer_hints(& test->params);
+
+  if (rank == 0 && verbose >= VERBOSE_0) {
+    ShowTestStart(& test->params);
+  }
+}
+
+static void test_finalize(IOR_test_t * test){
+  backend = test->params.backend;
+  if(backend->finalize){
+    backend->finalize(test->params.backend_options);
+  }
+}
+
 
 IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out){
         IOR_test_t *tests_head;
@@ -76,14 +117,12 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
         /* perform each test */
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
+                test_initialize(tptr);
                 totalErrorCount = 0;
-                verbose = tptr->params.verbose;
-                if (rank == 0 && verbose >= VERBOSE_0) {
-                        ShowTestStart(&tptr->params);
-                }
                 TestIoSys(tptr);
                 tptr->results->errors = totalErrorCount;
                 ShowTestEnd(tptr);
+                test_finalize(tptr);
         }
 
         PrintLongSummaryAllTests(tests_head);
@@ -122,17 +161,11 @@ int ior_main(int argc, char **argv)
     InitTests(tests_head, mpi_comm_world);
     verbose = tests_head->params.verbose;
 
-    aiori_initialize(tests_head);
-
     PrintHeader(argc, argv);
 
     /* perform each test */
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-            verbose = tptr->params.verbose;
-            if (rank == 0 && verbose >= VERBOSE_0) {
-                backend = tptr->params.backend;
-                ShowTestStart(&tptr->params);
-            }
+            test_initialize(tptr);
 
             // This is useful for trapping a running MPI process.  While
             // this is sleeping, run the script 'testing/hdfs/gdb.attach'
@@ -144,17 +177,16 @@ int ior_main(int argc, char **argv)
 
             TestIoSys(tptr);
             ShowTestEnd(tptr);
+            test_finalize(tptr);
     }
 
-    if (verbose < 0)
+    if (verbose <= VERBOSE_0)
             /* always print final summary */
-            verbose = 0;
+            verbose = VERBOSE_1;
     PrintLongSummaryAllTests(tests_head);
 
     /* display finish time */
     PrintTestEnds();
-
-    aiori_finalize(tests_head);
 
     MPI_CHECK(MPI_Finalize(), "cannot finalize MPI");
 
@@ -176,10 +208,6 @@ void init_IOR_Param_t(IOR_param_t * p)
         assert (NULL != default_aiori);
 
         memset(p, 0, sizeof(IOR_param_t));
-
-        p->mode = IOR_IRUSR | IOR_IWUSR | IOR_IRGRP | IOR_IWGRP;
-        p->openFlags = IOR_RDWR | IOR_CREAT;
-
         p->api = strdup(default_aiori);
         p->platform = strdup("HOST(OSTYPE)");
         p->testFileName = strdup("testFile");
@@ -205,8 +233,6 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->randomSeed = -1;
         p->incompressibleSeed = 573;
         p->testComm = mpi_comm_world;
-        p->setAlignment = 1;
-        p->lustre_start_ost = -1;
 
         hdfs_user = getenv("USER");
         if (!hdfs_user)
@@ -220,9 +246,6 @@ void init_IOR_Param_t(IOR_param_t * p)
 
         p->URI = NULL;
         p->part_number = 0;
-
-        p->beegfs_numTargets = -1;
-        p->beegfs_chunkSize = -1;
 }
 
 static void
@@ -253,8 +276,13 @@ DisplayOutliers(int numTasks,
                 strcpy(accessString, "read");
         }
         if (fabs(timerVal - mean) > (double)outlierThreshold) {
-                fprintf(out_logfile, "WARNING: for task %d, %s %s is %f\n",
-                        rank, accessString, timeString, timerVal);
+                char hostname[MAX_STR];
+                int ret = gethostname(hostname, MAX_STR);
+                if (ret != 0)
+                        strcpy(hostname, "unknown");
+
+                fprintf(out_logfile, "WARNING: for %s, task %d, %s %s is %f\n",
+                        hostname, rank, accessString, timeString, timerVal);
                 fprintf(out_logfile, "         (mean=%f, stddev=%f)\n", mean, sd);
                 fflush(out_logfile);
         }
@@ -356,7 +384,7 @@ CompareBuffers(void *expectedBuffer,
         if (verbose >= VERBOSE_3) {
                 fprintf(out_logfile,
                         "[%d] At file byte offset %lld, comparing %llu-byte transfer\n",
-                        rank, test->offset, (long long)size);
+                        rank, (long long) offset, (long long)size);
         }
         for (i = 0; i < length; i++) {
                 if (testbuf[i] != goodbuf[i]) {
@@ -365,7 +393,7 @@ CompareBuffers(void *expectedBuffer,
                                 fprintf(out_logfile,
                                         "[%d] At transfer buffer #%lld, index #%lld (file byte offset %lld):\n",
                                         rank, transferCount - 1, (long long)i,
-                                        test->offset +
+                                        (long long) offset +
                                         (IOR_size_t) (i * sizeof(IOR_size_t)));
                                 fprintf(out_logfile, "[%d] %s0x", rank, bufferLabel1);
                                 fprintf(out_logfile, "%016llx\n", goodbuf[i]);
@@ -381,10 +409,10 @@ CompareBuffers(void *expectedBuffer,
                         }
                 } else if (verbose >= VERBOSE_5 && i % 4 == 0) {
                         fprintf(out_logfile,
-                                "[%d] PASSED offset = %lld bytes, transfer %lld\n",
+                                "[%d] PASSED offset = %lu bytes, transfer %lld\n",
                                 rank,
                                 ((i * sizeof(unsigned long long)) +
-                                 test->offset), transferCount);
+                                 offset), transferCount);
                         fprintf(out_logfile, "[%d] GOOD %s0x", rank, bufferLabel1);
                         for (j = 0; j < 4; j++)
                                 fprintf(out_logfile, "%016llx ", goodbuf[i + j]);
@@ -407,8 +435,8 @@ CompareBuffers(void *expectedBuffer,
                         "%lld errors between buffer indices %lld and %lld.\n",
                         (long long)errorCount, (long long)first,
                         (long long)last);
-                fprintf(out_logfile, "[%d]   File byte offset = %lld:\n", rank,
-                        ((first * sizeof(unsigned long long)) + test->offset));
+                fprintf(out_logfile, "[%d]   File byte offset = %lu:\n", rank,
+                        ((first * sizeof(unsigned long long)) + offset));
 
                 fprintf(out_logfile, "[%d]     %s0x", rank, bufferLabel1);
                 for (j = first; j < length && j < first + 4; j++)
@@ -502,8 +530,6 @@ void AllocResults(IOR_test_t *test)
   int reps;
   if (test->results != NULL)
     return;
-
-  IOR_param_t * params = & test->params;
 
   reps = test->params.repetitions;
   test->results = (IOR_results_t *) safeMalloc(sizeof(IOR_results_t) * reps);
@@ -824,15 +850,15 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
         sprintf(dir + i + 1, "%d", (rank + rankOffset) % test->numTasks);
 
         /* dir doesn't exist, so create */
-        if (backend->access(dir, F_OK, test) != 0) {
-                if (backend->mkdir(dir, S_IRWXU, test) < 0) {
+        if (backend->access(dir, F_OK, test->backend_options) != 0) {
+                if (backend->mkdir(dir, S_IRWXU, test->backend_options) < 0) {
                         ERRF("cannot create directory: %s", dir);
                 }
 
                 /* check if correct permissions */
-        } else if (backend->access(dir, R_OK, test) != 0 ||
-                   backend->access(dir, W_OK, test) != 0 ||
-                   backend->access(dir, X_OK, test) != 0) {
+        } else if (backend->access(dir, R_OK, test->backend_options) != 0 ||
+                   backend->access(dir, W_OK, test->backend_options) != 0 ||
+                   backend->access(dir, X_OK, test->backend_options) != 0) {
                 ERRF("invalid directory permissions: %s", dir);
         }
 
@@ -893,7 +919,7 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
          * number of I/Os issued from that task; then reduce and display the
          * minimum (best) latency achieved. So what is reported is the average
          * latency of all ops from a single task, then taking the minimum of
-         * that between all tasks. */ 
+         * that between all tasks. */
         latency = (timer[3] - timer[2]) / (params->blockSize / params->transferSize);
         MPI_CHECK(MPI_Reduce(&latency, &minlatency, 1, MPI_DOUBLE,
                              MPI_MIN, 0, testComm), "MPI_Reduce()");
@@ -919,24 +945,24 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                         rankOffset = 0;
                         GetTestFileName(testFileName, test);
                 }
-                if (backend->access(testFileName, F_OK, test) == 0) {
+                if (backend->access(testFileName, F_OK, test->backend_options) == 0) {
                         if (verbose >= VERBOSE_3) {
                                 fprintf(out_logfile, "task %d removing %s\n", rank,
                                         testFileName);
                         }
-                        backend->delete(testFileName, test);
+                        backend->delete(testFileName, test->backend_options);
                 }
                 if (test->reorderTasksRandom == TRUE) {
                         rankOffset = tmpRankOffset;
                         GetTestFileName(testFileName, test);
                 }
         } else {
-                if ((rank == 0) && (backend->access(testFileName, F_OK, test) == 0)) {
+                if ((rank == 0) && (backend->access(testFileName, F_OK, test->backend_options) == 0)) {
                         if (verbose >= VERBOSE_3) {
                                 fprintf(out_logfile, "task %d removing %s\n", rank,
                                         testFileName);
                         }
-                        backend->delete(testFileName, test);
+                        backend->delete(testFileName, test->backend_options);
                 }
         }
 }
@@ -1231,7 +1257,7 @@ static void TestIoSys(IOR_test_t *test)
         double startTime;
         int pretendRank;
         int rep;
-        void *fd;
+        aiori_fd_t *fd;
         MPI_Group orig_group, new_group;
         int range[3];
         IOR_offset_t dataMoved; /* for data rate calculation */
@@ -1257,7 +1283,7 @@ static void TestIoSys(IOR_test_t *test)
                 return;
         }
         if (rank == 0 && verbose >= VERBOSE_1) {
-                fprintf(out_logfile, "Participating tasks: %d\n", params->numTasks);
+                fprintf(out_logfile, "Participating tasks : %d\n", params->numTasks);
                 fflush(out_logfile);
         }
         if (rank == 0 && params->reorderTasks == TRUE && verbose >= VERBOSE_1) {
@@ -1265,7 +1291,6 @@ static void TestIoSys(IOR_test_t *test)
                         "Using reorderTasks '-C' (useful to avoid read cache in client)\n");
                 fflush(out_logfile);
         }
-        backend = params->backend;
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
@@ -1277,7 +1302,7 @@ static void TestIoSys(IOR_test_t *test)
         /* IO Buffer Setup */
 
         if (params->setTimeStampSignature) { // initialize the buffer properly
-                params->timeStampSignatureValue = (unsigned int)params->setTimeStampSignature;
+                params->timeStampSignatureValue = (unsigned int) params->setTimeStampSignature;
         }
         XferBuffersSetup(&ioBuffers, params, pretendRank);
         reseed_incompressible_prng = TRUE; // reset pseudo random generator, necessary to guarantee the next call to FillBuffer produces the same value as it is right now
@@ -1299,12 +1324,12 @@ static void TestIoSys(IOR_test_t *test)
                                 }
                                 params->timeStampSignatureValue =
                                         (unsigned int)currentTime;
-                                if (verbose >= VERBOSE_2) {
-                                        fprintf(out_logfile,
-                                                "Using Time Stamp %u (0x%x) for Data Signature\n",
-                                                params->timeStampSignatureValue,
-                                                params->timeStampSignatureValue);
-                                }
+                        }
+                        if (verbose >= VERBOSE_2) {
+                                fprintf(out_logfile,
+                                        "Using Time Stamp %u (0x%x) for Data Signature\n",
+                                        params->timeStampSignatureValue,
+                                        params->timeStampSignatureValue);
                         }
                         if (rep == 0 && verbose >= VERBOSE_0) {
                                 PrintTableHeader();
@@ -1339,7 +1364,7 @@ static void TestIoSys(IOR_test_t *test)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = WRITE;
                         timer[0] = GetTimeStamp();
-                        fd = backend->create(testFileName, params);
+                        fd = backend->create(testFileName, IOR_WRONLY | IOR_CREAT | IOR_TRUNC, params->backend_options);
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1360,14 +1385,14 @@ static void TestIoSys(IOR_test_t *test)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                         timer[4] = GetTimeStamp();
-                        backend->close(fd, params);
+                        backend->close(fd, params->backend_options);
 
                         timer[5] = GetTimeStamp();
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
                         /* get the size of the file just written */
                         results[rep].write.aggFileSizeFromStat =
-                                backend->get_file_size(params, testComm, testFileName);
+                                backend->get_file_size(params->backend_options, testComm, testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
@@ -1413,9 +1438,9 @@ static void TestIoSys(IOR_test_t *test)
 
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
-                        fd = backend->open(testFileName, params);
+                        fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
                         dataMoved = WriteOrRead(params, &results[rep], fd, WRITECHECK, &ioBuffers);
-                        backend->close(fd, params);
+                        backend->close(fd, params->backend_options);
                         rankOffset = 0;
                 }
                 /*
@@ -1485,7 +1510,7 @@ static void TestIoSys(IOR_test_t *test)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = READ;
                         timer[0] = GetTimeStamp();
-                        fd = backend->open(testFileName, params);
+                        fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1502,12 +1527,12 @@ static void TestIoSys(IOR_test_t *test)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                         timer[4] = GetTimeStamp();
-                        backend->close(fd, params);
+                        backend->close(fd, params->backend_options);
                         timer[5] = GetTimeStamp();
 
                         /* get the size of the file just read */
                         results[rep].read.aggFileSizeFromStat =
-                                backend->get_file_size(params, testComm,
+                                backend->get_file_size(params->backend_options, testComm,
                                                        testFileName);
 
                         /* check if stat() of file doesn't equal expected file size,
@@ -1588,8 +1613,6 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("block size must be non-negative integer");
         if ((test->transferSize % sizeof(IOR_size_t)) != 0)
                 ERR("transfer size must be a multiple of access size");
-        if (test->setAlignment < 0)
-                ERR("alignment must be non-negative integer");
         if (test->transferSize < 0)
                 ERR("transfer size must be non-negative integer");
         if (test->transferSize == 0) {
@@ -1614,11 +1637,6 @@ static void ValidateTests(IOR_param_t * test)
             && (test->blockSize < sizeof(IOR_size_t)
                 || test->transferSize < sizeof(IOR_size_t)))
                 ERR("block/transfer size may not be smaller than IOR_size_t for NCMPI");
-        if ((test->useFileView == TRUE)
-            && (sizeof(MPI_Aint) < 8)   /* used for 64-bit datatypes */
-            &&((test->numTasks * test->blockSize) >
-               (2 * (IOR_offset_t) GIBIBYTE)))
-                ERR("segment size must be < 2GiB");
         if ((strcasecmp(test->api, "POSIX") != 0) && test->singleXferAttempt)
                 WARN_RESET("retry only available in POSIX",
                            test, &defaults, singleXferAttempt);
@@ -1626,43 +1644,13 @@ static void ValidateTests(IOR_param_t * test)
             && (strcasecmp(test->api, "MPIIO") != 0)
             && (strcasecmp(test->api, "MMAP") != 0)
             && (strcasecmp(test->api, "HDFS") != 0)
+            && (strcasecmp(test->api, "DFS") != 0)
+            && (strcasecmp(test->api, "DAOS") != 0)
             && (strcasecmp(test->api, "Gfarm") != 0)
-            && (strcasecmp(test->api, "RADOS") != 0)) && test->fsync)
+            && (strcasecmp(test->api, "RADOS") != 0)
+            && (strcasecmp(test->api, "CEPHFS") != 0)) && test->fsync)
                 WARN_RESET("fsync() not supported in selected backend",
                            test, &defaults, fsync);
-        if ((strcasecmp(test->api, "MPIIO") != 0) && test->preallocate)
-                WARN_RESET("preallocation only available in MPIIO",
-                           test, &defaults, preallocate);
-        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useFileView)
-                WARN_RESET("file view only available in MPIIO",
-                           test, &defaults, useFileView);
-        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useSharedFilePointer)
-                WARN_RESET("shared file pointer only available in MPIIO",
-                           test, &defaults, useSharedFilePointer);
-        if ((strcasecmp(test->api, "MPIIO") == 0) && test->useSharedFilePointer)
-                WARN_RESET("shared file pointer not implemented",
-                           test, &defaults, useSharedFilePointer);
-        if ((strcasecmp(test->api, "MPIIO") != 0) && test->useStridedDatatype)
-                WARN_RESET("strided datatype only available in MPIIO",
-                           test, &defaults, useStridedDatatype);
-        if ((strcasecmp(test->api, "MPIIO") == 0) && test->useStridedDatatype)
-                WARN_RESET("strided datatype not implemented",
-                           test, &defaults, useStridedDatatype);
-        if ((strcasecmp(test->api, "MPIIO") == 0)
-            && test->useStridedDatatype && (test->blockSize < sizeof(IOR_size_t)
-                                            || test->transferSize <
-                                            sizeof(IOR_size_t)))
-                ERR("need larger file size for strided datatype in MPIIO");
-        if ((strcasecmp(test->api, "POSIX") == 0) && test->showHints)
-                WARN_RESET("hints not available in POSIX",
-                           test, &defaults, showHints);
-        if ((strcasecmp(test->api, "POSIX") == 0) && test->collective)
-                WARN_RESET("collective not available in POSIX",
-                           test, &defaults, collective);
-        if ((strcasecmp(test->api, "MMAP") == 0) && test->fsyncPerWrite
-            && (test->transferSize & (sysconf(_SC_PAGESIZE) - 1)))
-                ERR("transfer size must be aligned with PAGESIZE for MMAP with fsyncPerWrite");
-
         /* parameter consitency */
         if (test->reorderTasks == TRUE && test->reorderTasksRandom == TRUE)
                 ERR("Both Constant and Random task re-ordering specified. Choose one and resubmit");
@@ -1676,51 +1664,19 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("random offset not available with read check option (use write check)");
         if (test->randomOffset && test->storeFileOffset)
                 ERR("random offset not available with store file offset option)");
-
-
-        if ((strcasecmp(test->api, "MPIIO") == 0) && test->randomOffset
-            && test->collective)
-                ERR("random offset not available with collective MPIIO");
-        if ((strcasecmp(test->api, "MPIIO") == 0) && test->randomOffset
-            && test->useFileView)
-                ERR("random offset not available with MPIIO fileviews");
         if ((strcasecmp(test->api, "HDF5") == 0) && test->randomOffset)
                 ERR("random offset not available with HDF5");
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->randomOffset)
                 ERR("random offset not available with NCMPI");
-        if ((strcasecmp(test->api, "HDF5") != 0) && test->individualDataSets)
-                WARN_RESET("individual datasets only available in HDF5",
-                           test, &defaults, individualDataSets);
-        if ((strcasecmp(test->api, "HDF5") == 0) && test->individualDataSets)
-                WARN_RESET("individual data sets not implemented",
-                           test, &defaults, individualDataSets);
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->filePerProc)
                 ERR("file-per-proc not available in current NCMPI");
-        if (test->noFill) {
-                if (strcasecmp(test->api, "HDF5") != 0) {
-                        ERR("'no fill' option only available in HDF5");
-                } else {
-                        /* check if hdf5 available */
-#if defined (H5_VERS_MAJOR) && defined (H5_VERS_MINOR)
-                        /* no-fill option not available until hdf5-1.6.x */
-#if (H5_VERS_MAJOR > 0 && H5_VERS_MINOR > 5)
-                        ;
-#else
-                        ERRF("'no fill' option not available in %s",
-                                test->apiVersion);
-#endif
-#else
-                        WARN("unable to determine HDF5 version for 'no fill' usage");
-#endif
-                }
-        }
-        if (test->useExistingTestFile && test->lustre_set_striping)
-                ERR("Lustre stripe options are incompatible with useExistingTestFile");
 
+        backend = test->backend;
+        ior_set_xfer_hints(test);
         /* allow the backend to validate the options */
         if(test->backend->check_params){
-          int check = test->backend->check_params(test);
-          if (check == 0){
+          int check = test->backend->check_params(test->backend_options);
+          if (check){
             ERR("The backend returned that the test parameters are invalid.");
           }
         }
@@ -1733,8 +1689,7 @@ static void ValidateTests(IOR_param_t * test)
  * @param pretendRank int pretended Rank for shifting the offsest corectly
  * @return IOR_offset_t
  */
-static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
-                                              int pretendRank)
+IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank)
 {
         IOR_offset_t i, j, k = 0;
         IOR_offset_t offsets;
@@ -1783,8 +1738,7 @@ static IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test,
  * @return IOR_offset_t
  * @return
  */
-static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
-                                          int access)
+IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, int access)
 {
         int seed;
         IOR_offset_t i, value, tmp;
@@ -1854,7 +1808,7 @@ static IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank,
 }
 
 static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offsetArray, int pretendRank,
-  IOR_offset_t * transferCount, int * errors, IOR_param_t * test, int * fd, IOR_io_buffers* ioBuffers, int access){
+  IOR_offset_t * transferCount, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
   IOR_offset_t amtXferred = 0;
   IOR_offset_t transfer;
 
@@ -1862,26 +1816,26 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
   void *checkBuffer = ioBuffers->checkBuffer;
   void *readCheckBuffer = ioBuffers->readCheckBuffer;
 
-  test->offset = offsetArray[pairCnt];
+  IOR_offset_t offset = offsetArray[pairCnt]; // this looks inappropriate
 
   transfer = test->transferSize;
   if (access == WRITE) {
           /* fills each transfer with a unique pattern
            * containing the offset into the file */
           if (test->storeFileOffset == TRUE) {
-                  FillBuffer(buffer, test, test->offset, pretendRank);
+                  FillBuffer(buffer, test, offset, pretendRank);
           }
-          amtXferred =
-                  backend->xfer(access, fd, buffer, transfer, test);
+          amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot write to file");
+          if (test->fsyncPerWrite)
+                backend->fsync(fd, test->backend_options);
           if (test->interIODelay > 0){
             struct timespec wait = {test->interIODelay / 1000 / 1000, 1000l * (test->interIODelay % 1000000)};
             nanosleep( & wait, NULL);
           }
   } else if (access == READ) {
-          amtXferred =
-                  backend->xfer(access, fd, buffer, transfer, test);
+          amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file");
           if (test->interIODelay > 0){
@@ -1892,10 +1846,10 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
           memset(checkBuffer, 'a', transfer);
 
           if (test->storeFileOffset == TRUE) {
-                  FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
+                  FillBuffer(readCheckBuffer, test, offset, pretendRank);
           }
 
-          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
           (*transferCount)++;
@@ -1905,12 +1859,12 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
   } else if (access == READCHECK) {
           memset(checkBuffer, 'a', transfer);
 
-          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, test);
+          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer){
             ERR("cannot read from file");
           }
           if (test->storeFileOffset == TRUE) {
-                  FillBuffer(readCheckBuffer, test, test->offset, pretendRank);
+                  FillBuffer(readCheckBuffer, test, offset, pretendRank);
           }
           *errors += CompareBuffers(readCheckBuffer, checkBuffer, transfer, *transferCount, test, READCHECK);
   }
@@ -1922,7 +1876,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
  * out the data to each block in transfer sizes, until the remainder left is 0.
  */
 static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
-                                void *fd, const int access, IOR_io_buffers *ioBuffers)
+                                aiori_fd_t *fd, const int access, IOR_io_buffers *ioBuffers)
 {
         int errors = 0;
         IOR_offset_t transferCount = 0;
@@ -1955,6 +1909,13 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                 hitStonewall = ((test->deadlineForStonewalling != 0
                                 && (GetTimeStamp() - startForStonewall)
                                     > test->deadlineForStonewalling)) || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
+
+                if ( test->collective && test->deadlineForStonewalling ) {
+                        // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
+                        // it absolutely must be an 'all or none':
+                        MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, MPI_COMM_WORLD), "hitStonewall broadcast failed");
+               }
+
         }
         if (test->stoneWallingWearOut){
           if (verbose >= VERBOSE_1){
@@ -1995,7 +1956,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
         free(offsetArray);
 
         if (access == WRITE && test->fsync == TRUE) {
-                backend->fsync(fd, test);       /*fsync after all accesses */
+                backend->fsync(fd, test->backend_options);       /*fsync after all accesses */
         }
         return (dataMoved);
 }

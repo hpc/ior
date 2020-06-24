@@ -210,7 +210,7 @@ void PrintRepeatStart(){
 }
 
 void PrintTestEnds(){
-  if (rank != 0 ||  verbose < VERBOSE_0) {
+  if (rank != 0 ||  verbose <= VERBOSE_0) {
     PrintEndSection();
     return;
   }
@@ -262,7 +262,7 @@ void PrintHeader(int argc, char **argv)
         if (outputFormat != OUTPUT_DEFAULT){
           PrintKeyVal("Version", META_VERSION);
         }else{
-          printf("IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
+          fprintf(out_resultfile, "IOR-" META_VERSION ": MPI Coordinated Test of Parallel I/O\n");
         }
         PrintKeyVal("Began", CurrentTimeString());
         PrintKeyValStart("Command line");
@@ -322,11 +322,8 @@ void ShowTestStart(IOR_param_t *test)
   PrintStartSection();
   PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
-  /* if pvfs2:, then skip */
-  if (strcasecmp(test->api, "DFS") && 
-      Regex(test->testFileName, "^[a-z][a-z].*:") == 0) {
-      DisplayFreespace(test);
-  }
+
+  ShowFileSystemSize(test);
 
   if (verbose >= VERBOSE_3 || outputFormat == OUTPUT_JSON) {
     char* data_packets[] = {"g","t","o","i"};
@@ -337,7 +334,6 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyVal("api", test->api);
     PrintKeyVal("platform", test->platform);
     PrintKeyVal("testFileName", test->testFileName);
-    PrintKeyVal("hintsFileName", test->hintsFileName);
     PrintKeyValInt("deadlineForStonewall", test->deadlineForStonewalling);
     PrintKeyValInt("stoneWallingWearOut", test->stoneWallingWearOut);
     PrintKeyValInt("maxTimeDuration", test->maxTimeDuration);
@@ -355,9 +351,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("fsync", test->fsync);
     PrintKeyValInt("fsyncperwrite", test->fsyncPerWrite);
     PrintKeyValInt("useExistingTestFile", test->useExistingTestFile);
-    PrintKeyValInt("showHints", test->showHints);
     PrintKeyValInt("uniqueDir", test->uniqueDir);
-    PrintKeyValInt("individualDataSets", test->individualDataSets);
     PrintKeyValInt("singleXferAttempt", test->singleXferAttempt);
     PrintKeyValInt("readFile", test->readFile);
     PrintKeyValInt("writeFile", test->writeFile);
@@ -368,12 +362,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("randomOffset", test->randomOffset);
     PrintKeyValInt("checkWrite", test->checkWrite);
     PrintKeyValInt("checkRead", test->checkRead);
-    PrintKeyValInt("preallocate", test->preallocate);
-    PrintKeyValInt("useFileView", test->useFileView);
-    PrintKeyValInt("setAlignment", test->setAlignment);
     PrintKeyValInt("storeFileOffset", test->storeFileOffset);
-    PrintKeyValInt("useSharedFilePointer", test->useSharedFilePointer);
-    PrintKeyValInt("useStridedDatatype", test->useStridedDatatype);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);
     PrintKeyValInt("quitOnError", test->quitOnError);
@@ -452,14 +441,10 @@ void ShowSetup(IOR_param_t *params)
   if(params->dryRun){
     PrintKeyValInt("dryRun", params->dryRun);
   }
-
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
-  if (params->lustre_set_striping) {
-    PrintKeyVal("Lustre stripe size", ((params->lustre_stripe_size == 0) ? "Use default" :
-     HumanReadable(params->lustre_stripe_size, BASE_TWO)));
-    PrintKeyValInt("Lustre stripe count", params->lustre_stripe_count);
+  if(params->verbose) {
+    PrintKeyValInt("verbose", params->verbose);
   }
-#endif /* HAVE_LUSTRE_LUSTRE_USER_H */
+
   if (params->deadlineForStonewalling > 0) {
     PrintKeyValInt("stonewallingTime", params->deadlineForStonewalling);
     PrintKeyValInt("stoneWallingWearOut", params->stoneWallingWearOut );
@@ -535,7 +520,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
         struct results *ops;
 
         int reps;
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
         reps = params->repetitions;
@@ -650,7 +635,7 @@ void PrintLongSummaryOneTest(IOR_test_t *test)
 
 void PrintLongSummaryHeader()
 {
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
         if(outputFormat != OUTPUT_DEFAULT){
           return;
@@ -670,7 +655,7 @@ void PrintLongSummaryHeader()
 void PrintLongSummaryAllTests(IOR_test_t *tests_head)
 {
   IOR_test_t *tptr;
-  if (rank != 0 || verbose < VERBOSE_0)
+  if (rank != 0 || verbose <= VERBOSE_0)
           return;
 
   PrintArrayEnd();
@@ -703,7 +688,7 @@ void PrintShortSummary(IOR_test_t * test)
         int reps;
         int i;
 
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
         PrintArrayEnd();
@@ -740,41 +725,9 @@ void PrintShortSummary(IOR_test_t * test)
         }
 }
 
-
-/*
- * Display freespace (df).
- */
-void DisplayFreespace(IOR_param_t * test)
-{
-        char fileName[MAX_STR] = { 0 };
-        int i;
-        int directoryFound = FALSE;
-
-        /* get outfile name */
-        GetTestFileName(fileName, test);
-
-        /* get directory for outfile */
-        i = strlen(fileName);
-        while (i-- > 0) {
-                if (fileName[i] == '/') {
-                        fileName[i] = '\0';
-                        directoryFound = TRUE;
-                        break;
-                }
-        }
-
-        /* if no directory/, use '.' */
-        if (directoryFound == FALSE) {
-                strcpy(fileName, ".");
-        }
-
-        ShowFileSystemSize(fileName);
-}
-
-
 void PrintRemoveTiming(double start, double finish, int rep)
 {
-  if (rank != 0 || verbose < VERBOSE_0)
+  if (rank != 0 || verbose <= VERBOSE_0)
     return;
 
   if (outputFormat == OUTPUT_DEFAULT){

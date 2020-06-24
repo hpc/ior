@@ -1,4 +1,4 @@
-SUBDIRS = .
+SUBDIRS = . test
 
 bin_PROGRAMS = ior mdtest
 if USE_CAPS
@@ -75,6 +75,12 @@ extraSOURCES += aiori-RADOS.c
 extraLDADD += -lrados
 endif
 
+if USE_CEPHFS_AIORI
+extraSOURCES += aiori-CEPHFS.c
+extraLDADD += -lcephfs
+endif
+
+
 if USE_DAOS_AIORI
 extraSOURCES += aiori-DAOS.c aiori-DFS.c
 endif
@@ -122,11 +128,3 @@ MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
 
 libaiori_a_SOURCES += $(extraSOURCES)
 libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
-
-
-TESTS = testlib
-bin_PROGRAMS += testlib
-
-testlib_SOURCES  = ./test/lib.c
-testlib_LDFLAGS  = $(extraLDFLAGS)
-testlib_LDADD    = libaiori.a $(extraLDADD)

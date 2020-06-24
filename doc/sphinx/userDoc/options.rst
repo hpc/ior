@@ -22,7 +22,6 @@ These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``
   -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]
   -A N  refNum -- user reference number to include in long summary
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
-  -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers
   -c    collective -- collective I/O
   -C    reorderTasksConstant -- changes task ordering to n+1 ordering for readback
   -d N  interTestDelay -- delay between reps in seconds
@@ -75,6 +74,9 @@ These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``
 
 * For transfer and block sizes, the case-insensitive K, M, and G
   suffices are recognized.  I.e., '4k' or '4K' is accepted as 4096.
+
+Various options are only valid for specific modules, you can see details when running $ ./ior -h
+These options are typically prefixed with the module name, an example is: --posix.odirect
 
 
 Directive Options
