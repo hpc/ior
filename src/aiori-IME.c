@@ -51,8 +51,41 @@ static int          IME_StatFS(const char *, ior_aiori_statfs_t *,
 static int          IME_RmDir(const char *, IOR_param_t *);
 static int          IME_MkDir(const char *, mode_t, IOR_param_t *);
 static int          IME_Stat(const char *, struct stat *, IOR_param_t *);
+
+#if (IME_NATIVE_API_VERSION >= 132)
+static int          IME_Mknod(char *);
+static void         IME_Sync(IOR_param_t *);
+#endif
+
 static void         IME_Initialize();
 static void         IME_Finalize();
+
+
+/************************** O P T I O N S *****************************/
+typedef struct{
+  int direct_io;
+} ime_options_t;
+
+
+option_help * IME_options(void ** init_backend_options, void * init_values){
+  ime_options_t * o = malloc(sizeof(ime_options_t));
+
+  if (init_values != NULL){
+    memcpy(o, init_values, sizeof(ime_options_t));
+  }else{
+    o->direct_io = 0;
+  }
+
+  *init_backend_options = o;
+
+  option_help h [] = {
+    {0, "ime.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
+    LAST_OPTION
+  };
+  option_help * help = malloc(sizeof(h));
+  memcpy(help, h, sizeof(h));
+  return help;
+}
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -63,6 +96,7 @@ extern MPI_Comm testComm;
 
 ior_aiori_t ime_aiori = {
         .name          = "IME",
+        .name_legacy   = "IM",
         .create        = IME_Create,
         .open          = IME_Open,
         .xfer          = IME_Xfer,
@@ -78,6 +112,12 @@ ior_aiori_t ime_aiori = {
         .stat          = IME_Stat,
         .initialize    = IME_Initialize,
         .finalize      = IME_Finalize,
+        .get_options   = IME_options,
+#if (IME_NATIVE_API_VERSION >= 132)
+        .sync          = IME_Sync,
+        .mknod         = IME_Mknod,
+#endif
+        .enable_mdtest = true,
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -128,8 +168,10 @@ static void *IME_Open(char *testFileName, IOR_param_t *param)
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
 
-        if (param->useO_DIRECT)
-                set_o_direct_flag(&fd_oflag);
+        ime_options_t * o = (ime_options_t*) param->backend_options;
+        if (o->direct_io == TRUE){
+          set_o_direct_flag(&fd_oflag);
+        }
 
         if (param->openFlags & IOR_RDONLY)
                 fd_oflag |= O_RDONLY;
@@ -268,43 +310,62 @@ static char *IME_GetVersion()
         return ver;
 }
 
-/*
- * XXX: statfs call is currently not exposed by IME native interface.
- */
-static int IME_StatFS(const char *oid, ior_aiori_statfs_t *stat_buf,
+static int IME_StatFS(const char *path, ior_aiori_statfs_t *stat_buf,
                       IOR_param_t *param)
 {
-        (void)oid;
-        (void)stat_buf;
         (void)param;
+
+#if (IME_NATIVE_API_VERSION >= 130)
+        struct statvfs statfs_buf;
+
+        int ret = ime_native_statvfs(path, &statfs_buf);
+        if (ret)
+            return ret;
+
+        stat_buf->f_bsize = statfs_buf.f_bsize;
+        stat_buf->f_blocks = statfs_buf.f_blocks;
+        stat_buf->f_bfree = statfs_buf.f_bfree;
+        stat_buf->f_files = statfs_buf.f_files;
+        stat_buf->f_ffree = statfs_buf.f_ffree;
+
+        return 0;
+#else
+        (void)path;
+        (void)stat_buf;
 
         WARN("statfs is currently not supported in IME backend!");
         return -1;
+#endif
 }
 
-/*
- * XXX: mkdir call is currently not exposed by IME native interface.
- */
-static int IME_MkDir(const char *oid, mode_t mode, IOR_param_t *param)
+
+static int IME_MkDir(const char *path, mode_t mode, IOR_param_t *param)
 {
-        (void)oid;
+        (void)param;
+
+#if (IME_NATIVE_API_VERSION >= 130)
+        return ime_native_mkdir(path, mode);
+#else
+        (void)path;
         (void)mode;
-        (void)param;
 
-        WARN("mkdir is currently not supported in IME backend!");
+        WARN("mkdir not supported in IME backend!");
         return -1;
+#endif
 }
 
-/*
- * XXX: rmdir call is curretly not exposed by IME native interface.
- */
-static int IME_RmDir(const char *oid, IOR_param_t *param)
+static int IME_RmDir(const char *path, IOR_param_t *param)
 {
-        (void)oid;
         (void)param;
 
-        WARN("rmdir is currently not supported in IME backend!");
+#if (IME_NATIVE_API_VERSION >= 130)
+        return ime_native_rmdir(path);
+#else
+        (void)path;
+
+        WARN("rmdir not supported in IME backend!");
         return -1;
+#endif
 }
 
 /*
@@ -355,3 +416,27 @@ static IOR_offset_t IME_GetFileSize(IOR_param_t *test, MPI_Comm testComm,
 
         return(aggFileSizeFromStat);
 }
+
+#if (IME_NATIVE_API_VERSION >= 132)
+/*
+ * Create a file through mknod interface.
+ */
+static int IME_Mknod(char *testFileName)
+{
+    int ret = ime_native_mknod(testFileName, S_IFREG | S_IRUSR, 0);
+    if (ret < 0)
+        ERR("mknod failed");
+
+    return ret;
+}
+
+/*
+ * Use IME sync to flush page cache of all opened files.
+ */
+static void IME_Sync(IOR_param_t * param)
+{
+    int ret = ime_native_sync(0);
+    if (ret != 0)
+        FAIL("Error executing the sync command.");
+}
+#endif

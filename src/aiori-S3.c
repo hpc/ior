@@ -159,6 +159,8 @@ static void         S3_Fsync(void*, IOR_param_t*);
 static IOR_offset_t S3_GetFileSize(IOR_param_t*, MPI_Comm, char*);
 static void S3_init();
 static void S3_finalize();
+static int S3_check_params(IOR_param_t *);
+
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -167,6 +169,7 @@ static void S3_finalize();
 //     N:N fails if "transfer-size" != "block-size" (because that requires "append")
 ior_aiori_t s3_aiori = {
 	.name = "S3",
+	.name_legacy = NULL,
 	.create = S3_Create,
 	.open = S3_Open,
 	.xfer = S3_Xfer,
@@ -176,7 +179,8 @@ ior_aiori_t s3_aiori = {
 	.fsync = S3_Fsync,
 	.get_file_size = S3_GetFileSize,
 	.initialize = S3_init,
-	.finalize = S3_finalize
+	.finalize = S3_finalize,
+  .check_params = S3_check_params
 };
 
 // "S3", plus EMC-extensions enabled
@@ -225,6 +229,22 @@ static void S3_finalize(){
   /* done once per program, after exiting all threads.
  	* NOTE: This fn doesn't return a value that can be checked for success. */
   aws_cleanup();
+}
+
+static int S3_check_params(IOR_param_t * test){
+  /* N:1 and N:N */
+  IOR_offset_t  NtoN = test->filePerProc;
+  IOR_offset_t  Nto1 = ! NtoN;
+  IOR_offset_t  s    = test->segmentCount;
+  IOR_offset_t  t    = test->transferSize;
+  IOR_offset_t  b    = test->blockSize;
+
+  if (Nto1 && (s != 1) && (b != t)) {
+    ERR("N:1 (strided) requires xfer-size == block-size");
+    return 0;
+  }
+
+  return 1;
 }
 
 /* modelled on similar macros in iordef.h */

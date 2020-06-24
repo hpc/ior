@@ -65,7 +65,6 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -a S  api --  API for I/O, e.g., POSIX
   -A N  refNum -- user reference number to include in long summary
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
-  -B    useO_DIRECT -- uses O_DIRECT for POSIX, bypassing I/O buffers
   -c    collective -- collective I/O
   -C    reorderTasksConstant -- changes task ordering to n+1 ordering for readback
   -d N  interTestDelay -- delay between reps in seconds
@@ -118,6 +117,8 @@ NOTES: * S is a string, N is an integer number.
        * For transfer and block sizes, the case-insensitive K, M, and G
          suffices are recognized.  I.e., '4k' or '4K' is accepted as 4096.
 
+Various options are only valid for specific modules, you can see details when running $ ./ior -h
+These options are typically prefixed with the module name, an example is: --posix.odirect
 
 *********************
 * 4. OPTION DETAILS *
@@ -169,6 +170,8 @@ GENERAL:
                            beginning a write or read in a series of tests [0]
                            NOTE: it does not delay before a check write or
                                  check read
+
+  * interIODelay         - this time in us (microseconds) after each I/O simulates computing time.
 
   * outlierThreshold     - gives warning if any task is more than this number
                            of seconds from the mean of all participating tasks.
@@ -340,7 +343,7 @@ MPIIO-, HDF5-, AND NCMPI-ONLY:
   * collective           - uses collective operations for access [0=FALSE]
 
   * showHints            - show hint/value pairs attached to open file [0=FALSE]
-                           NOTE: not available in NCMPI
+                           NOTE: available in NCMPI only if PnetCDF is 1.2.0 or later
 
 LUSTRE-SPECIFIC:
 ================
@@ -548,6 +551,17 @@ HOW DOES IOR CALCULATE PERFORMANCE?
   operations (-g), the sum of the open, transfer, and close times may not equal
   the elapsed time from the first open to the last close.
 
+  After each iteration (-i) IOR reports performance for that iteration, and
+  those numbers include:
+
+  - Bandwidth (described above)
+
+  - IOPS: I/O rate (operations per second) achieved by all tasks given the total
+    time spent in reading and writing the data.
+
+  - Latency: computed by taking the average latency of all I/O operations from a
+    single task. If ior is run with multiple tasks, then the latency reported is
+    the minimum that was computed between all tasks.
 
 HOW DO I ACCESS MULTIPLE FILE SYSTEMS IN IOR?
 

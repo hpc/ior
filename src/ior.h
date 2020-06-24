@@ -35,6 +35,7 @@
     typedef void *rados_t;
     typedef void *rados_ioctx_t;
 #endif
+#include "option.h"
 
 #include "iordef.h"
 /******************** DATA Packet Type ***************************************/
@@ -77,9 +78,11 @@ typedef struct IO_BUFFERS
  *         USER_GUIDE
  */
 
+struct ior_aiori;
+
 typedef struct
 {
-    const void * backend;
+    const struct ior_aiori * backend;
     char * debug;             /* debug info string */
     unsigned int mode;               /* file permissions */
     unsigned int openFlags;          /* open flags (see also <open>) */
@@ -91,13 +94,17 @@ typedef struct
     char * testFileName_fppReadCheck;/* filename for fpp read check */
     char * hintsFileName;  /* full name for hints file */
     char * options;        /* options string */
+    // intermediate options
+    int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
     int numTasks;                    /* number of tasks for test */
-    int nodes;                       /* number of nodes for test */
-    int tasksPerNode;                /* number of tasks per node */
+    int numNodes;                    /* number of nodes for test */
+    int numTasksOnNode0;             /* number of tasks on node 0 (usually all the same, but don't have to be, use with caution) */
+    int tasksBlockMapping;           /* are the tasks in contiguous blocks across nodes or round-robin */
     int repetitions;                 /* number of repetitions of test */
     int repCounter;                  /* rep counter */
     int multiFile;                   /* multiple files */
     int interTestDelay;              /* delay between reps in seconds */
+    int interIODelay;                /* delay after each I/O in us */
     int open;                        /* flag for writing or reading */
     int readFile;                    /* read of existing file */
     int writeFile;                   /* write of file */
@@ -122,7 +129,6 @@ typedef struct
     int useFileView;                 /* use MPI_File_set_view */
     int useSharedFilePointer;        /* use shared file pointer */
     int useStridedDatatype;          /* put strided access into datatype */
-    int useO_DIRECT;                 /* use O_DIRECT, bypassing I/O buffers */
     int showHints;                   /* show hints */
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
@@ -144,15 +150,17 @@ typedef struct
     int randomOffset;                /* access is to random offsets */
     size_t memoryPerTask;            /* additional memory used per task */
     size_t memoryPerNode;            /* additional memory used per node */
-    enum PACKET_TYPE dataPacketType;             /* The type of data packet.  */
+    char * memoryPerNodeStr;         /* for parsing */
+    char * testscripts;              /* for parsing */
+    char * buffer_type;              /* for parsing */
+    enum PACKET_TYPE dataPacketType; /* The type of data packet.  */
 
+    void * backend_options;          /* Backend-specific options */
 
     /* POSIX variables */
     int singleXferAttempt;           /* do not retry transfer if incomplete */
     int fsyncPerWrite;               /* fsync() after each write */
     int fsync;                       /* fsync() after write */
-
-    void* mmap_ptr;
 
     /* MPI variables */
     MPI_Comm     testComm;           /* MPI communicator */
@@ -202,12 +210,9 @@ typedef struct
     int intraTestBarriers;           /* barriers between open/op and op/close */
 } IOR_param_t;
 
-/* each pointer is to an array, each of length equal to the number of
-   repetitions in the test */
+/* each pointer for a single test */
 typedef struct {
-   double writeTime;
-   double readTime;
-   int    errors;
+   double time;
    size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
 
    double     stonewall_time;
@@ -217,20 +222,25 @@ typedef struct {
    IOR_offset_t aggFileSizeFromStat;
    IOR_offset_t aggFileSizeFromXfer;
    IOR_offset_t aggFileSizeForBW;
+} IOR_point_t;
+
+typedef struct {
+   int          errors;
+   IOR_point_t  write;
+   IOR_point_t  read;
 } IOR_results_t;
 
 /* define the queuing structure for the test parameters */
 typedef struct IOR_test_t {
    IOR_param_t        params;
-   IOR_results_t     *results; /* This is an array of reps times IOR_results_t */
+   IOR_results_t     *results;
    struct IOR_test_t *next;
 } IOR_test_t;
-
 
 IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
 void AllocResults(IOR_test_t *test);
 
-char * GetPlatformName();
+char * GetPlatformName(void);
 void init_IOR_Param_t(IOR_param_t *p);
 
 /*

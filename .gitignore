@@ -1,8 +1,11 @@
+tags
 Makefile
 Makefile.in
 aclocal.m4
 config.log
 config.status
+COPYING
+INSTALL
 config/compile
 config/config.guess
 config/config.sub
@@ -12,16 +15,20 @@ config/missing
 config/test-driver
 configure
 contrib/.deps/
+contrib/cbif
 contrib/Makefile
 contrib/Makefile.in
+contrib/cbif
 doc/Makefile
 doc/Makefile.in
 src/.deps/
+src/mdtest
 src/Makefile
 src/Makefile.in
 src/config.h
 src/config.h.in
 src/stamp-h1
+*[-.]mod
 *~
 NOTES.txt
 autom4te.cache
@@ -29,7 +36,14 @@ contrib/cbif.o
 src/*.o
 src/*.i
 src/*.s
+src/*.a
 src/ior
+src/mdtest
+src/testlib
+src/test/.deps/
+src/test/.dirstamp
+src/test/lib.o
+build/
 
 doc/doxygen/build
 doc/sphinx/_*/

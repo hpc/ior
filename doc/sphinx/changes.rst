@@ -1,4 +1,4 @@
 Changes in IOR
-*****************
+**************
 
-.. .. include:: ../../ChangeLog
+.. include:: ../../NEWS

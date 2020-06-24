@@ -45,7 +45,7 @@
 #   define srandom srand
 #   define random() (rand() * (RAND_MAX+1) + rand())    /* Note: only 30 bits */
 #   define sleep(X) Sleep((X)*1000)
-#   define getpagesize() 4096
+#   define sysconf(X) 4096
 #else
 #   include <sys/param.h>                               /* MAXPATHLEN */
 #   include <unistd.h>
@@ -96,7 +96,6 @@ enum OutputFormat_t{
 #define WRITECHECK         1
 #define READ               2
 #define READCHECK          3
-#define CHECK              4
 
 /* verbosity settings */
 #define VERBOSE_0          0
@@ -152,25 +151,38 @@ typedef long long int      IOR_size_t;
         fflush(stdout);                                                  \
 } while (0)
 
-/* warning with errno printed */
-#define EWARN(MSG) do {                                                  \
+
+/* warning with format string and errno printed */
+#define EWARNF(FORMAT, ...) do {                                         \
         if (verbose > VERBOSE_2) {                                       \
-            fprintf(stdout, "ior WARNING: %s, errno %d, %s (%s:%d).\n",  \
-                    MSG, errno, strerror(errno), __FILE__, __LINE__);    \
+            fprintf(stdout, "ior WARNING: " FORMAT ", errno %d, %s (%s:%d).\n", \
+                    __VA_ARGS__, errno, strerror(errno), __FILE__, __LINE__); \
         } else {                                                         \
-            fprintf(stdout, "ior WARNING: %s, errno %d, %s \n",          \
-                    MSG, errno, strerror(errno));                        \
+            fprintf(stdout, "ior WARNING: " FORMAT ", errno %d, %s \n",  \
+                    __VA_ARGS__, errno, strerror(errno));                \
         }                                                                \
         fflush(stdout);                                                  \
 } while (0)
 
 
-/* display error message and terminate execution */
-#define ERR(MSG) do {                                                    \
-        fprintf(stdout, "ior ERROR: %s, errno %d, %s (%s:%d)\n",         \
-                MSG, errno, strerror(errno), __FILE__, __LINE__);        \
+/* warning with errno printed */
+#define EWARN(MSG) do {                                                  \
+        EWARNF("%s", MSG);                                               \
+} while (0)
+
+
+/* display error message with format string and terminate execution */
+#define ERRF(FORMAT, ...) do {                                           \
+        fprintf(stdout, "ior ERROR: " FORMAT ", errno %d, %s (%s:%d)\n", \
+                __VA_ARGS__, errno, strerror(errno), __FILE__, __LINE__); \
         fflush(stdout);                                                  \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
+} while (0)
+
+
+/* display error message and terminate execution */
+#define ERR(MSG) do {                                                    \
+        ERRF("%s", MSG);                                                 \
 } while (0)
 
 
@@ -185,21 +197,32 @@ typedef long long int      IOR_size_t;
 
 /******************************************************************************/
 /*
- * MPI_CHECK will display a custom error message as well as an error string
+ * MPI_CHECKF will display a custom format string as well as an error string
  * from the MPI_STATUS and then exit the program
  */
 
-#define MPI_CHECK(MPI_STATUS, MSG) do {                                  \
+#define MPI_CHECKF(MPI_STATUS, FORMAT, ...) do {                         \
     char resultString[MPI_MAX_ERROR_STRING];                             \
     int resultLength;                                                    \
                                                                          \
     if (MPI_STATUS != MPI_SUCCESS) {                                     \
         MPI_Error_string(MPI_STATUS, resultString, &resultLength);       \
-        fprintf(stdout, "ior ERROR: %s, MPI %s, (%s:%d)\n",              \
-                MSG, resultString, __FILE__, __LINE__);                  \
+        fprintf(stdout, "ior ERROR: " FORMAT ", MPI %s, (%s:%d)\n",      \
+                __VA_ARGS__, resultString, __FILE__, __LINE__);          \
         fflush(stdout);                                                  \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
     }                                                                    \
+} while(0)
+
+
+/******************************************************************************/
+/*
+ * MPI_CHECK will display a custom error message as well as an error string
+ * from the MPI_STATUS and then exit the program
+ */
+
+#define MPI_CHECK(MPI_STATUS, MSG) do {                                  \
+    MPI_CHECKF(MPI_STATUS, "%s", MSG);                                   \
 } while(0)
 
 

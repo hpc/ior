@@ -1,26 +1,22 @@
 Introduction
 ============
 
-Welcome to the IOR documentation.
+IOR is a parallel IO benchmark that can be used to test the performance of
+parallel storage systems using various interfaces and access patterns.  The
+IOR repository also includes the mdtest benchmark which specifically tests
+the peak metadata rates of storage systems under different directory
+structures.  Both benchmarks use a common parallel I/O abstraction backend
+and rely on MPI for synchronization.
 
-**I**\ nterleaved **o**\ r **R**\ andom is a parallel IO benchmark.
-IOR can be used for testing performance of parallel file systems using various
-interfaces and access patterns. IOR uses MPI for process synchronization.
-This documentation provides information for versions 3 and higher, for other
-versions check :ref:`compatibility`
+This documentation consists of two parts.
 
-This documentation consists of tow parts.
+**User documentation** includes installation instructions (:ref:`install`), a
+beginner's tutorial (:ref:`first-steps`), and information about IOR's
+runtime :ref:`options`.
 
-The first part is a user documentation were you find instructions on compilation, a
-beginners tutorial (:ref:`first-steps`) as well as information about all
-available :ref:`options`.
+**Developer documentation** consists of code documentation generated with
+Doxygen and some notes about the contiguous integration with Travis.
 
-The second part is the developer documentation. It currently only consists of a
-auto generated Doxygen and some notes about the contiguous integration with travis.
-As there are quite some people how needs to modify or extend IOR to there needs
-it would be great to have documentation on what and how to alter IOR without
-breaking other stuff. Currently there is neither a documentation on the overall
-concept of the code nor on implementation details. If you are getting your
-hands dirty in code anyways or have deeper understanding of IOR, you are more
-then welcome to comment the code directly, which will result in better Doxygen
-output or add your insight to this sphinx documentation.
+Many aspects of both IOR/mdtest user and developer documentation are incomplete,
+and contributors are encouraged to comment the code directly or expand upon this
+documentation.

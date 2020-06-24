@@ -13,7 +13,7 @@
     userDoc/install
     First Steps <userDoc/tutorial>
     userDoc/options
-    userDoc/skripts
+    userDoc/scripts
     userDoc/compatibility
     FAQ <userDoc/faq>
 
@@ -24,6 +24,7 @@
 
     devDoc/doxygen
     devDoc/CI
+    devDoc/release
 
 .. toctree::
     :hidden:

@@ -6,7 +6,6 @@
 #define _IOR_INTERNAL_H
 
 /* Part of ior-output.c */
-void PrintEarlyHeader();
 void PrintHeader(int argc, char **argv);
 void ShowTestStart(IOR_param_t *params);
 void ShowTestEnd(IOR_test_t *tptr);
@@ -21,10 +20,14 @@ void PrintLongSummaryOneTest(IOR_test_t *test);
 void DisplayFreespace(IOR_param_t * test);
 void GetTestFileName(char *, IOR_param_t *);
 void PrintRemoveTiming(double start, double finish, int rep);
-void PrintReducedResult(IOR_test_t *test, int access, double bw, double *diff_subset, double totalTime, int rep);
+void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, double latency,
+			double *diff_subset, double totalTime, int rep);
 void PrintTestEnds();
 void PrintTableHeader();
 /* End of ior-output */
+
+IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank);
+IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, int access);
 
 struct results {
   double min;

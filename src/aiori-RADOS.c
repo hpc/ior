@@ -67,6 +67,7 @@ static option_help * RADOS_options();
 /************************** D E C L A R A T I O N S ***************************/
 ior_aiori_t rados_aiori = {
         .name = "RADOS",
+        .name_legacy = NULL,
         .create = RADOS_Create,
         .open = RADOS_Open,
         .xfer = RADOS_Xfer,
@@ -135,9 +136,6 @@ static void *RADOS_Create_Or_Open(char *testFileName, IOR_param_t * param, int c
         char *oid;
 
         RADOS_Cluster_Init(param);
-
-        if (param->useO_DIRECT == TRUE)
-                WARN("direct I/O mode is not implemented in RADOS\n");
 
         oid = strdup(testFileName);
         if (!oid)

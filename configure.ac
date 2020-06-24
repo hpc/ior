@@ -19,6 +19,17 @@ AM_INIT_AUTOMAKE([check-news dist-bzip2 gnu no-define foreign subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AM_MAINTAINER_MODE
 
+# Check for system-specific stuff
+case "${host_os}" in
+  *linux*)
+    ;;
+  *darwin*)
+    CPPFLAGS="${CPPFLAGS} -D_DARWIN_C_SOURCE"
+    ;;
+  *)
+    ;;
+esac
+
 # Checks for programs
 
 # We can't do anything without a working MPI
@@ -39,7 +50,7 @@ AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/
 AC_TYPE_SIZE_T
 
 # Checks for library functions.
-AC_CHECK_FUNCS([getpagesize gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname statfs statvfs])
+AC_CHECK_FUNCS([sysconf gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname statfs statvfs])
 AC_SEARCH_LIBS([sqrt], [m], [],
         [AC_MSG_ERROR([Math library not found])])
 
@@ -65,12 +76,14 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
 # Check for system capabilities
 AC_SYS_LARGEFILE
 
+AC_DEFINE([_XOPEN_SOURCE], [700], [C99 compatibility])
+
 # Check for lustre availability
 AC_ARG_WITH([lustre],
         [AS_HELP_STRING([--with-lustre],
                 [support configurable Lustre striping values @<:@default=check@:>@])],
         [], [with_lustre=check])
-AS_IF([test "x$with_lustre" != xno], [
+AS_IF([test "x$with_lustre" = xyes ], [
         AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], break, [
                 if test "x$with_lustre" != xcheck -a \
                         "x$ac_cv_header_linux_lustre_lustre_user_h" = "xno" -a \
@@ -78,6 +91,18 @@ AS_IF([test "x$with_lustre" != xno], [
                         AC_MSG_FAILURE([--with-lustre was given, <lustre/lustre_user.h> not found])
                 fi
         ])
+        AC_CHECK_HEADERS([linux/lustre/lustreapi.h lustre/lustreapi.h],
+		[AC_DEFINE([HAVE_LUSTRE_LUSTREAPI], [], [Lustre user API available in some shape or form])], [
+                if test "x$with_lustre" != xcheck -a \
+                        "x$ac_cv_header_linux_lustre_lustreapi_h" = "xno" -a \
+                        "x$ac_cv_header_lustre_lustreapi_h" = "xno" ; then
+                        AC_MSG_FAILURE([--with-lustre was given, <lustre/lustreapi.h> not found])
+                fi
+        ])
+])
+AM_CONDITIONAL([WITH_LUSTRE], [test x$with_lustre = xyes])
+AM_COND_IF([WITH_LUSTRE],[
+        AC_DEFINE([WITH_LUSTRE], [], [Build wth LUSTRE backend])
 ])
 
 # IME (DDN's Infinite Memory Engine) support
@@ -172,7 +197,75 @@ AM_COND_IF([USE_RADOS_AIORI],[
         AC_DEFINE([USE_RADOS_AIORI], [], [Build RADOS backend AIORI])
 ])
 
+# CEPHFS support
+AC_ARG_WITH([cephfs],
+        [AS_HELP_STRING([--with-cephfs],
+           [support IO with libcephfs backend @<:@default=no@:>@])],
+        [],
+        [with_cephfs=no])
+AS_IF([test "x$with_cephfs" != xno], [
+       CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64 -std=gnu11"
+])
+AM_CONDITIONAL([USE_CEPHFS_AIORI], [test x$with_cephfs = xyes])
+AM_COND_IF([USE_CEPHFS_AIORI],[
+        AC_DEFINE([USE_CEPHFS_AIORI], [], [Build CEPHFS backend AIORI])
+])
 
+# DAOS Backends (DAOS and DFS) IO support require DAOS and CART/GURT
+AC_ARG_WITH([cart],
+    [AS_HELP_STRING([--with-cart],
+	    [support IO with DAOS backends @<:@default=no@:>@])],
+    [], [with_daos=no])
+
+AS_IF([test "x$with_cart" != xno], [
+    CART="yes"
+    LDFLAGS="$LDFLAGS -L$with_cart/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cart/lib64"
+    LDFLAGS="$LDFLAGS -L$with_cart/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_cart/lib"
+    CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
+    AC_CHECK_HEADERS(gurt/common.h,, [unset CART])
+    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset CART])
+])
+
+AC_ARG_WITH([daos],
+    [AS_HELP_STRING([--with-daos],
+	    [support IO with DAOS backends @<:@default=no@:>@])],
+    [], [with_daos=no])
+
+AS_IF([test "x$with_daos" != xno], [
+    DAOS="yes"
+    LDFLAGS="$LDFLAGS -L$with_daos/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_daos/lib64"
+    CPPFLAGS="$CPPFLAGS -I$with_daos/include"
+    AC_CHECK_HEADERS(daos_types.h,, [unset DAOS])
+    AC_CHECK_LIB([uuid], [uuid_generate],, [unset DAOS])
+    AC_CHECK_LIB([daos_common], [daos_sgl_init],, [unset DAOS])
+    AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
+    AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS])
+])
+
+AM_CONDITIONAL([USE_DAOS_AIORI], [test x$DAOS = xyes])
+AM_COND_IF([USE_DAOS_AIORI],[
+        AC_DEFINE([USE_DAOS_AIORI], [], [Build DAOS backends AIORI])
+])
+
+# Gfarm support
+AC_MSG_CHECKING([for Gfarm file system])
+AC_ARG_WITH([gfarm],
+  [AS_HELP_STRING([--with-gfarm=GFARM_ROOT],
+    [support IO with Gfarm backend @<:@default=no@:>@])],
+  [], [with_gfarm=no])
+AC_MSG_RESULT([$with_gfarm])
+AM_CONDITIONAL([USE_GFARM_AIORI], [test x$with_gfarm != xno])
+if test x$with_gfarm != xno; then
+  AC_DEFINE([USE_GFARM_AIORI], [], [Build Gfarm backend AIORI])
+  case x$with_gfarm in
+    xyes) ;;
+    *)
+    CPPFLAGS="$CPPFLAGS -I$with_gfarm/include"
+    LDFLAGS="$LDFLAGS -L$with_gfarm/lib" ;;
+  esac
+  AC_CHECK_LIB([gfarm], [gfarm_initialize],, [AC_MSG_ERROR([libgfarm not found])])
+  AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec])
+fi
 
 # aws4c is needed for the S3 backend (see --with-S3, below).
 # Version 0.5.2 of aws4c is available at https://github.com/jti-lanl/aws4c.git
@@ -245,12 +338,6 @@ Consider --with-aws4c=, CPPFLAGS, LDFLAGS, etc])
 ])
 
 
-
-
-
-
-
-
 # Enable building "IOR", in all capitals
 AC_ARG_ENABLE([caps],
         [AS_HELP_STRING([--enable-caps],
@@ -261,6 +348,7 @@ AM_CONDITIONAL([USE_CAPS], [test x$enable_caps = xyes])
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile
+                 src/test/Makefile
                  contrib/Makefile
                  doc/Makefile])
 AC_OUTPUT
