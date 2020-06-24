@@ -32,8 +32,6 @@
 #include "option.h"
 #include "aiori.h"
 
-#define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
-
 IOR_param_t initialTestParams;
 
 option_help * createGlobalOptions(IOR_param_t * params);
@@ -61,24 +59,6 @@ static void CheckRunSettings(IOR_test_t *tests)
                     && params->checkRead == FALSE) {
                         params->readFile = TRUE;
                         params->writeFile = TRUE;
-                }
-
-                /* If only read or write is requested, then fix the default
-                 * openFlags to not be open RDWR.  It matters in the case
-                 * of HDFS, which doesn't support opening RDWR.
-                 * (We assume int-valued params are exclusively 0 or 1.)
-                 */
-                if ((params->openFlags & IOR_RDWR)
-                    && ((params->readFile | params->checkRead | params->checkWrite)
-                        ^ params->writeFile)) {
-
-                        params->openFlags &= ~(IOR_RDWR);
-                        if (params->readFile | params->checkRead) {
-                                params->openFlags |= IOR_RDONLY;
-                                params->openFlags &= ~(IOR_CREAT|IOR_EXCL);
-                        }
-                        else
-                                params->openFlags |= IOR_WRONLY;
                 }
         }
 }
@@ -137,8 +117,6 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->platform  = strdup(value);
         } else if (strcasecmp(option, "testfile") == 0) {
                 params->testFileName  = strdup(value);
-        } else if (strcasecmp(option, "hintsfilename") == 0) {
-                params->hintsFileName  = strdup(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
                 params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
@@ -199,34 +177,16 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->blockSize = string_to_bytes(value);
         } else if (strcasecmp(option, "transfersize") == 0) {
                 params->transferSize = string_to_bytes(value);
-        } else if (strcasecmp(option, "setalignment") == 0) {
-                params->setAlignment = string_to_bytes(value);
         } else if (strcasecmp(option, "singlexferattempt") == 0) {
                 params->singleXferAttempt = atoi(value);
-        } else if (strcasecmp(option, "individualdatasets") == 0) {
-                params->individualDataSets = atoi(value);
         } else if (strcasecmp(option, "intraTestBarriers") == 0) {
                 params->intraTestBarriers = atoi(value);
-        } else if (strcasecmp(option, "nofill") == 0) {
-                params->noFill = atoi(value);
         } else if (strcasecmp(option, "verbose") == 0) {
                 params->verbose = atoi(value);
         } else if (strcasecmp(option, "settimestampsignature") == 0) {
                 params->setTimeStampSignature = atoi(value);
-        } else if (strcasecmp(option, "collective") == 0) {
-                params->collective = atoi(value);
-        } else if (strcasecmp(option, "preallocate") == 0) {
-                params->preallocate = atoi(value);
         } else if (strcasecmp(option, "storefileoffset") == 0) {
                 params->storeFileOffset = atoi(value);
-        } else if (strcasecmp(option, "usefileview") == 0) {
-                params->useFileView = atoi(value);
-        } else if (strcasecmp(option, "usesharedfilepointer") == 0) {
-                params->useSharedFilePointer = atoi(value);
-        } else if (strcasecmp(option, "usestrideddatatype") == 0) {
-                params->useStridedDatatype = atoi(value);
-        } else if (strcasecmp(option, "showhints") == 0) {
-                params->showHints = atoi(value);
         } else if (strcasecmp(option, "uniqueDir") == 0) {
                 params->uniqueDir = atoi(value);
         } else if (strcasecmp(option, "useexistingtestfile") == 0) {
@@ -243,53 +203,6 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
         } else if (strcasecmp(option, "memoryPerNode") == 0) {
                 params->memoryPerNode = NodeMemoryStringToBytes(value);
                 params->memoryPerTask = 0;
-        } else if (strcasecmp(option, "lustrestripecount") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-                ERR("ior was not compiled with Lustre support");
-#endif
-                params->lustre_stripe_count = atoi(value);
-                params->lustre_set_striping = 1;
-        } else if (strcasecmp(option, "lustrestripesize") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-                ERR("ior was not compiled with Lustre support");
-#endif
-                params->lustre_stripe_size = string_to_bytes(value);
-                params->lustre_set_striping = 1;
-        } else if (strcasecmp(option, "lustrestartost") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-                ERR("ior was not compiled with Lustre support");
-#endif
-                params->lustre_start_ost = atoi(value);
-                params->lustre_set_striping = 1;
-        } else if (strcasecmp(option, "lustreignorelocks") == 0) {
-#ifndef HAVE_LUSTRE_LUSTRE_USER_H
-                ERR("ior was not compiled with Lustre support");
-#endif
-                params->lustre_ignore_locks = atoi(value);
-        } else if (strcasecmp(option, "gpfshintaccess") == 0) {
-#ifndef HAVE_GPFS_FCNTL_H
-                ERR("ior was not compiled with GPFS hint support");
-#endif
-                params->gpfs_hint_access = atoi(value);
-        } else if (strcasecmp(option, "gpfsreleasetoken") == 0) {
-#ifndef HAVE_GPFS_FCNTL_H
-                ERR("ior was not compiled with GPFS hint support");
-#endif
-                params->gpfs_release_token = atoi(value);
-       } else if (strcasecmp(option, "beegfsNumTargets") == 0) {
-#ifndef HAVE_BEEGFS_BEEGFS_H
-                ERR("ior was not compiled with BeeGFS support");
-#endif
-                params->beegfs_numTargets = atoi(value);
-                if (params->beegfs_numTargets < 1)
-                        ERR("beegfsNumTargets must be >= 1");
-        } else if (strcasecmp(option, "beegfsChunkSize") == 0) {
- #ifndef HAVE_BEEGFS_BEEGFS_H
-                 ERR("ior was not compiled with BeeGFS support");
- #endif
-                 params->beegfs_chunkSize = string_to_bytes(value);
-                 if (!ISPOWEROFTWO(params->beegfs_chunkSize) || params->beegfs_chunkSize < (1<<16))
-                         ERR("beegfsChunkSize must be a power of two and >64k");
         } else if (strcasecmp(option, "summaryalways") == 0) {
                 params->summary_every_test = atoi(value);
         } else {
@@ -472,7 +385,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & params->api},
     {'A', NULL,        "refNum -- user supplied reference number to include in the summary", OPTION_OPTIONAL_ARGUMENT, 'd', & params->referenceNumber},
     {'b', NULL,        "blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'l', & params->blockSize},
-    {'c', NULL,        "collective -- collective I/O", OPTION_FLAG, 'd', & params->collective},
+    {'c', "collective",    "Use collective I/O", OPTION_FLAG, 'd', & params->collective},
     {'C', NULL,        "reorderTasks -- changes task ordering for readback (useful to avoid client cache)", OPTION_FLAG, 'd', & params->reorderTasks},
     {'d', NULL,        "interTestDelay -- delay between reps in seconds", OPTION_OPTIONAL_ARGUMENT, 'd', & params->interTestDelay},
     {'D', NULL,        "deadlineForStonewalling -- seconds before stopping write or read phase", OPTION_OPTIONAL_ARGUMENT, 'd', & params->deadlineForStonewalling},
@@ -489,34 +402,25 @@ option_help * createGlobalOptions(IOR_param_t * params){
      * after all the arguments are in and we know which it keep.
      */
     {'G', NULL,        "setTimeStampSignature -- set value for time stamp signature/random seed", OPTION_OPTIONAL_ARGUMENT, 'd', & params->setTimeStampSignature},
-    {'H', NULL,        "showHints -- show hints", OPTION_FLAG, 'd', & params->showHints},
     {'i', NULL,        "repetitions -- number of repetitions of test", OPTION_OPTIONAL_ARGUMENT, 'd', & params->repetitions},
-    {'I', NULL,        "individualDataSets -- datasets not shared by all procs [not working]", OPTION_FLAG, 'd', & params->individualDataSets},
     {'j', NULL,        "outlierThreshold -- warn on outlier N seconds from mean", OPTION_OPTIONAL_ARGUMENT, 'd', & params->outlierThreshold},
-    {'J', NULL,        "setAlignment -- HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->setAlignment},
     {'k', NULL,        "keepFile -- don't remove the test file(s) on program exit", OPTION_FLAG, 'd', & params->keepFile},
     {'K', NULL,        "keepFileWithError  -- keep error-filled file(s) after data-checking", OPTION_FLAG, 'd', & params->keepFileWithError},
     {'l', NULL,        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
     {'m', NULL,        "multiFile -- use number of reps (-i) for multiple file count", OPTION_FLAG, 'd', & params->multiFile},
     {'M', NULL,        "memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)", OPTION_OPTIONAL_ARGUMENT, 's', & params->memoryPerNodeStr},
-    {'n', NULL,        "noFill -- no fill in HDF5 file creation", OPTION_FLAG, 'd', & params->noFill},
     {'N', NULL,        "numTasks -- number of tasks that are participating in the test (overrides MPI)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},
     {'o', NULL,        "testFile -- full name for test", OPTION_OPTIONAL_ARGUMENT, 's', & params->testFileName},
     {'O', NULL,        "string of IOR directives (e.g. -O checkRead=1,lustreStripeCount=32)", OPTION_OPTIONAL_ARGUMENT, 'p', & decodeDirectiveWrapper},
-    {'p', NULL,        "preallocate -- preallocate file size", OPTION_FLAG, 'd', & params->preallocate},
-    {'P', NULL,        "useSharedFilePointer -- use shared file pointer [not working]", OPTION_FLAG, 'd', & params->useSharedFilePointer},
     {'q', NULL,        "quitOnError -- during file error-checking, abort on error", OPTION_FLAG, 'd', & params->quitOnError},
     {'Q', NULL,        "taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->taskPerNodeOffset},
     {'r', NULL,        "readFile -- read existing file", OPTION_FLAG, 'd', & params->readFile},
     {'R', NULL,        "checkRead -- verify that the output of read matches the expected signature (used with -G)", OPTION_FLAG, 'd', & params->checkRead},
     {'s', NULL,        "segmentCount -- number of segments", OPTION_OPTIONAL_ARGUMENT, 'd', & params->segmentCount},
-    {'S', NULL,        "useStridedDatatype -- put strided access into datatype [not working]", OPTION_FLAG, 'd', & params->useStridedDatatype},
     {'t', NULL,        "transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'l', & params->transferSize},
     {'T', NULL,        "maxTimeDuration -- max time in minutes executing repeated test; it aborts only between iterations and not within a test!", OPTION_OPTIONAL_ARGUMENT, 'd', & params->maxTimeDuration},
     {'u', NULL,        "uniqueDir -- use unique directory name for each file-per-process", OPTION_FLAG, 'd', & params->uniqueDir},
-    {'U', NULL,        "hintsFileName -- full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & params->hintsFileName},
     {'v', NULL,        "verbose -- output information (repeating flag increases level)", OPTION_FLAG, 'd', & params->verbose},
-    {'V', NULL,        "useFileView -- use MPI_File_set_view", OPTION_FLAG, 'd', & params->useFileView},
     {'w', NULL,        "writeFile -- write file", OPTION_FLAG, 'd', & params->writeFile},
     {'W', NULL,        "checkWrite -- check read after write", OPTION_FLAG, 'd', & params->checkWrite},
     {'x', NULL,        "singleXferAttempt -- do not retry transfer if incomplete", OPTION_FLAG, 'd', & params->singleXferAttempt},

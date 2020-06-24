@@ -166,8 +166,9 @@ static uid_t uid;
 
 /* Use the POSIX backend by default */
 static const ior_aiori_t *backend;
-
-static IOR_param_t param;
+static void * backend_options;
+static aiori_xfer_hint_t hints;
+static char * api = NULL;
 
 /* This structure describes the processing status for stonewalling */
 typedef struct{
@@ -276,7 +277,7 @@ static void phase_end(){
     if(! backend->sync){
       FAIL("Error, backend does not provide the sync method, but you requested to use sync.\n");
     }
-    backend->sync(& param);
+    backend->sync(backend_options);
   }
 
   if (barriers) {
@@ -318,11 +319,11 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
     VERBOSE(3,5,"create_remove_items_helper (dirs %s): curr_item is '%s'", operation, curr_item);
 
     if (create) {
-        if (backend->mkdir(curr_item, DIRMODE, &param) == -1) {
+        if (backend->mkdir(curr_item, DIRMODE, backend_options) == -1) {
             FAIL("unable to create directory %s", curr_item);
         }
     } else {
-        if (backend->rmdir(curr_item, &param) == -1) {
+        if (backend->rmdir(curr_item, backend_options) == -1) {
             FAIL("unable to remove directory %s", curr_item);
         }
     }
@@ -339,13 +340,13 @@ static void remove_file (const char *path, uint64_t itemNum) {
     sprintf(curr_item, "%s/file.%s"LLU"", path, rm_name, itemNum);
     VERBOSE(3,5,"create_remove_items_helper (non-dirs remove): curr_item is '%s'", curr_item);
     if (!(shared_file && rank != 0)) {
-        backend->delete (curr_item, &param);
+        backend->delete (curr_item, backend_options);
     }
 }
 
 static void create_file (const char *path, uint64_t itemNum) {
     char curr_item[MAX_PATHLEN];
-    void *aiori_fh = NULL;
+    aiori_fd_t *aiori_fh = NULL;
 
     if ( (itemNum % ITEM_COUNT==0 && (itemNum != 0))) {
         VERBOSE(3,5,"create file: "LLU"", itemNum);
@@ -354,8 +355,6 @@ static void create_file (const char *path, uint64_t itemNum) {
     //create files
     sprintf(curr_item, "%s/file.%s"LLU"", path, mk_name, itemNum);
     VERBOSE(3,5,"create_remove_items_helper (non-dirs create): curr_item is '%s'", curr_item);
-
-    param.openFlags = IOR_WRONLY;
 
     if (make_node) {
         int ret;
@@ -369,7 +368,7 @@ static void create_file (const char *path, uint64_t itemNum) {
     } else if (collective_creates) {
         VERBOSE(3,5,"create_remove_items_helper (collective): open..." );
 
-        aiori_fh = backend->open (curr_item, &param);
+        aiori_fh = backend->open (curr_item, IOR_WRONLY | IOR_CREAT, backend_options);
         if (NULL == aiori_fh)
             FAIL("unable to open file %s", curr_item);
 
@@ -377,12 +376,10 @@ static void create_file (const char *path, uint64_t itemNum) {
          * !collective_creates
          */
     } else {
-        param.openFlags |= IOR_CREAT;
-        param.filePerProc = !shared_file;
-        param.mode = FILEMODE;
+        hints.filePerProc = !shared_file;
         VERBOSE(3,5,"create_remove_items_helper (non-collective, shared): open..." );
 
-        aiori_fh = backend->create (curr_item, &param);
+        aiori_fh = backend->create (curr_item, IOR_WRONLY | IOR_CREAT, backend_options);
         if (NULL == aiori_fh)
             FAIL("unable to create file %s", curr_item);
     }
@@ -394,15 +391,14 @@ static void create_file (const char *path, uint64_t itemNum) {
          * According to Bill Loewe, writes are only done one time, so they are always at
          * offset 0 (zero).
          */
-        param.offset = 0;
-        param.fsyncPerWrite = sync_file;
-        if ( write_bytes != (size_t) backend->xfer (WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, &param)) {
+        hints.fsyncPerWrite = sync_file;
+        if ( write_bytes != (size_t) backend->xfer (WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, 0, backend_options)) {
             FAIL("unable to write file %s", curr_item);
         }
     }
 
     VERBOSE(3,5,"create_remove_items_helper: close..." );
-    backend->close (aiori_fh, &param);
+    backend->close (aiori_fh, backend_options);
 }
 
 /* helper for creating/removing items */
@@ -446,20 +442,18 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
         VERBOSE(3,5,"create file: %s", curr_item);
 
         if (create) {
-            void *aiori_fh;
+            aiori_fd_t *aiori_fh;
 
             //create files
-            param.openFlags = IOR_WRONLY | IOR_CREAT;
-	    param.mode = FILEMODE;
-            aiori_fh = backend->create (curr_item, &param);
+            aiori_fh = backend->create (curr_item, IOR_WRONLY | IOR_CREAT, backend_options);
             if (NULL == aiori_fh) {
                 FAIL("unable to create file %s", curr_item);
             }
 
-            backend->close (aiori_fh, &param);
+            backend->close (aiori_fh, backend_options);
         } else if (!(shared_file && rank != 0)) {
             //remove files
-            backend->delete (curr_item, &param);
+            backend->delete (curr_item, backend_options);
         }
         if(CHECK_STONE_WALL(progress)){
           progress->items_done = i + 1;
@@ -616,7 +610,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
         /* below temp used to be hiername */
         VERBOSE(3,5,"mdtest_stat %4s: %s", (dirs ? "dir" : "file"), item);
-        if (-1 == backend->stat (item, &buf, &param)) {
+        if (-1 == backend->stat (item, &buf, backend_options)) {
             FAIL("unable to stat %s %s", dirs ? "directory" : "file", item);
         }
     }
@@ -627,7 +621,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     uint64_t parent_dir, item_num = 0;
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
-    void *aiori_fh;
+    aiori_fd_t *aiori_fh;
 
     VERBOSE(1,-1,"Entering mdtest_read on %s", path );
 
@@ -713,8 +707,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         VERBOSE(3,5,"mdtest_read file: %s", item);
 
         /* open file for reading */
-        param.openFlags = O_RDONLY;
-        aiori_fh = backend->open (item, &param);
+        aiori_fh = backend->open (item, O_RDONLY, backend_options);
         if (NULL == aiori_fh) {
             FAIL("unable to open file %s", item);
         }
@@ -722,7 +715,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         /* read file */
         if (read_bytes > 0) {
             read_buffer[0] = 42; /* use a random value to ensure that the read_buffer is now different from the expected buffer and read isn't sometimes NOOP */
-            if (read_bytes != (size_t) backend->xfer (READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, &param)) {
+            if (read_bytes != (size_t) backend->xfer (READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, 0, backend_options)) {
                 FAIL("unable to read file %s", item);
             }
             if(verify_read){
@@ -734,7 +727,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         }
 
         /* close file */
-        backend->close (aiori_fh, &param);
+        backend->close (aiori_fh, backend_options);
     }
 }
 
@@ -1489,7 +1482,7 @@ void show_file_system_size(char *file_system) {
 
     VERBOSE(1,-1,"Entering show_file_system_size on %s", file_system );
 
-    ret = backend->statfs (file_system, &stat_buf, &param);
+    ret = backend->statfs (file_system, &stat_buf, backend_options);
     if (0 != ret) {
         FAIL("unable to stat file system %s", file_system);
     }
@@ -1553,9 +1546,6 @@ void display_freespace(char *testdirpath)
         strcpy(dirpath, ".");
     }
 
-    if (param.api && strcasecmp(param.api, "DFS") == 0)
-	    return;
-
     VERBOSE(3,5,"Before show_file_system_size, dirpath is '%s'", dirpath );
     show_file_system_size(dirpath);
     VERBOSE(3,5, "After show_file_system_size, dirpath is '%s'\n", dirpath );
@@ -1577,7 +1567,7 @@ void create_remove_directory_tree(int create,
 
         if (create) {
             VERBOSE(2,5,"Making directory '%s'", dir);
-            if (-1 == backend->mkdir (dir, DIRMODE, &param)) {
+            if (-1 == backend->mkdir (dir, DIRMODE, backend_options)) {
                 fprintf(out_logfile, "error could not create directory '%s'\n", dir);
             }
 #ifdef HAVE_LUSTRE_LUSTREAPI
@@ -1595,7 +1585,7 @@ void create_remove_directory_tree(int create,
 
         if (!create) {
             VERBOSE(2,5,"Remove directory '%s'", dir);
-            if (-1 == backend->rmdir(dir, &param)) {
+            if (-1 == backend->rmdir(dir, backend_options)) {
                 FAIL("Unable to remove directory %s", dir);
             }
         }
@@ -1611,7 +1601,7 @@ void create_remove_directory_tree(int create,
 
             if (create) {
                 VERBOSE(2,5,"Making directory '%s'", temp_path);
-                if (-1 == backend->mkdir(temp_path, DIRMODE, &param)) {
+                if (-1 == backend->mkdir(temp_path, DIRMODE, backend_options)) {
                     FAIL("Unable to create directory %s", temp_path);
                 }
             }
@@ -1622,7 +1612,7 @@ void create_remove_directory_tree(int create,
 
             if (!create) {
                 VERBOSE(2,5,"Remove directory '%s'", temp_path);
-                if (-1 == backend->rmdir(temp_path, &param)) {
+                if (-1 == backend->rmdir(temp_path, backend_options)) {
                     FAIL("Unable to remove directory %s", temp_path);
                 }
             }
@@ -1651,8 +1641,8 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
     prep_testdir(j, dir_iter);
 
     VERBOSE(2,5,"main (for j loop): making testdir, '%s'", testdir );
-    if ((rank < path_count) && backend->access(testdir, F_OK, &param) != 0) {
-        if (backend->mkdir(testdir, DIRMODE, &param) != 0) {
+    if ((rank < path_count) && backend->access(testdir, F_OK, backend_options) != 0) {
+        if (backend->mkdir(testdir, DIRMODE, backend_options) != 0) {
             FAIL("Unable to create test directory %s", testdir);
         }
 #ifdef HAVE_LUSTRE_LUSTREAPI
@@ -1832,9 +1822,9 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
       for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
-        if ((rank < path_count) && backend->access(testdir, F_OK, &param) == 0) {
+        if ((rank < path_count) && backend->access(testdir, F_OK, backend_options) == 0) {
             //if (( rank == 0 ) && access(testdir, F_OK) == 0) {
-            if (backend->rmdir(testdir, &param) == -1) {
+            if (backend->rmdir(testdir, backend_options) == -1) {
                 FAIL("unable to remove directory %s", testdir);
             }
         }
@@ -1915,9 +1905,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     aiori_supported_apis(APIs, APIs_legacy, MDTEST);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
+    memset(& hints, 0, sizeof(hints));
 
     option_help options [] = {
-      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & param.api},
+      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & api},
       {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & branch_factor},
       {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
@@ -1962,17 +1953,26 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
     option_parse(argc, argv, global_options);
-    updateParsedOptions(& param, global_options);
+    backend = aiori_select(api);
+    if (backend == NULL)
+        ERR("Unrecognized I/O API");
+    backend_options = airoi_update_module_options(backend, global_options);
 
     free(global_options->modules);
     free(global_options);
-    backend = param.backend;
 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
 
-    if (backend->initialize)
-	    backend->initialize();
+    if (backend->initialize){
+	    backend->initialize(backend_options);
+    }
+    if(backend->xfer_hints){
+      backend->xfer_hints(& hints);
+    }
+    if(backend->check_params){
+      backend->check_params(backend_options);
+    }
 
     pid = getpid();
     uid = getuid();
@@ -2012,7 +2012,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     valid_tests();
 
     // option_print_current(options);
-    VERBOSE(1,-1, "api                     : %s", param.api);
+    VERBOSE(1,-1, "api                     : %s", api);
     VERBOSE(1,-1, "barriers                : %s", ( barriers ? "True" : "False" ));
     VERBOSE(1,-1, "collective_creates      : %s", ( collective_creates ? "True" : "False" ));
     VERBOSE(1,-1, "create_only             : %s", ( create_only ? "True" : "False" ));
@@ -2144,8 +2144,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     /*   if directory does not exist, create it */
-    if ((rank < path_count) && backend->access(testdirpath, F_OK, &param) != 0) {
-        if (backend->mkdir(testdirpath, DIRMODE, &param) != 0) {
+    if ((rank < path_count) && backend->access(testdirpath, F_OK, backend_options) != 0) {
+        if (backend->mkdir(testdirpath, DIRMODE, backend_options) != 0) {
             FAIL("Unable to create test directory path %s", testdirpath);
         }
     }
@@ -2263,8 +2263,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         free(rand_array);
     }
 
-    if (backend->finalize)
-            backend->finalize();
+    if (backend->finalize){
+      backend->finalize(backend_options);
+    }
 
     return summary_table;
 }
