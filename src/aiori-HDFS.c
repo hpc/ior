@@ -77,7 +77,7 @@
 #include <sys/stat.h>
 #include <assert.h>
 /*
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
 #include <lustre/lustre_user.h>
 #endif
 */

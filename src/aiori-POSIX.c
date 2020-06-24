@@ -34,7 +34,7 @@
 
 #ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
 #  include <linux/lustre/lustre_user.h>
-#elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
+#elif defined(HAVE_LUSTRE_USER)
 #  include <lustre/lustre_user.h>
 #endif
 #ifdef HAVE_GPFS_H
@@ -123,7 +123,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     {0, "posix.gpfs.releasetoken", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->gpfs_release_token},
 
 #endif
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
     {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
     {0, "posix.lustre.startost", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_start_ost},
@@ -387,7 +387,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
         if(hints->dryRun)
           return (aiori_fd_t*) 0;
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
 /* Add a #define for FASYNC if not available, as it forms part of
  * the Lustre O_LOV_DELAY_CREATE definition. */
 #ifndef FASYNC
@@ -439,7 +439,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                                           "barrier error");
                 }
         } else {
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
                 fd_oflag |= O_CREAT | O_RDWR;
 
@@ -463,7 +463,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         ERRF("open64(\"%s\", %d, %#o) failed",
                                 testFileName, fd_oflag, mode);
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
         }
 
         if (o->lustre_ignore_locks) {
@@ -471,7 +471,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
                         ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         /* in the single shared file case, immediately release all locks, with
@@ -523,7 +523,7 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
         if (*fd < 0)
                 ERRF("open64(\"%s\", %d) failed", testFileName, fd_oflag);
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
         if (o->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
                 if (verbose >= VERBOSE_1) {
@@ -533,7 +533,7 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
                         ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         if(o->gpfs_release_token) {
