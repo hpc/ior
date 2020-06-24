@@ -133,6 +133,7 @@ extern ior_aiori_t ime_aiori;
 extern ior_aiori_t mpiio_aiori;
 extern ior_aiori_t ncmpi_aiori;
 extern ior_aiori_t posix_aiori;
+extern ior_aiori_t pmdk_aiori;
 extern ior_aiori_t mmap_aiori;
 extern ior_aiori_t s3_aiori;
 extern ior_aiori_t s3_plus_aiori;

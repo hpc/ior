@@ -94,6 +94,7 @@ typedef struct
     int collective;                  /* collective I/O */
     MPI_Comm     testComm;           /* MPI communicator */
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
+  int dualMount;                   /* dual mount points */
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */
     int numTasksOnNode0;             /* number of tasks on node 0 (usually all the same, but don't have to be, use with caution) */
