@@ -1,11 +1,46 @@
-Version 3.3.0+dev
+Version 3.3.0rc1
 --------------------------------------------------------------------------------
 
 New major features:
 
+- Add CephFS AIORI (Mark Nelson)
+- Add Gfarm AIORI (Osamu Tatebe)
+- Add DAOS AIORI (Mohamad Chaarawi)
+- Add DAOS DFS AIORI (Mohamad Chaarawi)
+
 New minor features:
 
-Bugfixes:
+- Display outlier host names (Jean-Yves Vet)
+- Enable global default dir layout for subdirs in Lustre (Petros Koutoupis)
+- Removed pound signs (#) from mdtest output file names (Julian Kunkel)
+- Print I/O hints from NCMPI (Wei-keng Liao)
+- Add mknod support to mdtest (Gu Zheng)
+- Refactor AIORI-specific options (Julian Kunkel)
+- Enable IME native backend for mdtest (Jean-Yves Vet)
+- Enable mkdir/rmdir to IME AIORI (Jean-Yves Vet)
+- Add HDF5 collective metadata option (Rob Latham)
+- Add support for sync to AIORIs (Julian Kunkel)
+
+General user improvements and bug fixes:
+
+- Allocate aligned buffers to support DirectIO for BeeGFS (Sven Breuner)
+- Added IOPS and latency results to json output (Robert LeBlanc)
+- Fixed case where numTasks is not evenly divisible by tasksPerNode (J. Schwartz)
+- Fix several memory leaks and buffer alignment problems (J. Schwartz, Axel Huebl, Sylvain Didelot)
+- Add mdtest data verification (Julian Kunkel)
+- Clean up functionality of stonewall (Julian Kunkel)
+- Fix checks for lustre_user.h (Andreas Dilger)
+- Make write verification work without read test (Jean-Yves Vet)
+- Documentation updates (Vaclav Hapla, Glenn Lockwood)
+- Add more debugging support (J. Schwartz)
+
+General developer improvements:
+- Fix type casting errors (Vaclav Hapla)
+- Add basic test infrastructure (Julian Kunkel, Glenn Lockwood)
+- Conform to strict C99 (Glenn Lockwood)
+
+Known issues:
+- S3 AIORI may not compile with new versions of aws4c (#25, #26)
 
 Version 3.2.1
 --------------------------------------------------------------------------------
