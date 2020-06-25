@@ -26,7 +26,10 @@ IOR 2 -a POSIX -r    -z  -Z -Q 2        -F -k -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -r    -z  -Z -Q 3 -X  13 -F -k -e -i1 -m -t 100k -b 100k
 IOR 2 -a POSIX -w    -z  -Z -Q 1 -X -13 -F    -e -i1 -m -t 100k -b 100k
 
-
 IOR 2 -f "$ROOT/test_comments.ior"
+
+# Test for JSON output
+IOR 2 -a DUMMY -e -F -t 1m -b 1m -A 328883 -O summaryFormat=JSON -O summaryFile=OUT.json
+python -mjson.tool OUT.json >/dev/null  && echo "JSON OK"
 
 END
