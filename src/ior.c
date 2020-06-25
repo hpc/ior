@@ -1303,7 +1303,6 @@ static void TestIoSys(IOR_test_t *test)
         /* loop over test iterations */
         uint64_t params_saved_wearout = params->stoneWallingWearOutIterations;
         for (rep = 0; rep < params->repetitions; rep++) {
-                PrintRepeatStart();
                 /* Get iteration start time in seconds in task 0 and broadcast to
                    all tasks */
                 if (rank == 0) {
