@@ -81,8 +81,8 @@ void FailMessage(int rank, const char *location, char *format, ...) {
     va_start(args, format);
     vsnprintf(msg, 4096, format, args);
     va_end(args);
-    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n",
-                PrintTimestamp(), rank, location, msg, strerror(errno));
+    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s\n",
+                PrintTimestamp(), rank, location, msg);
     fflush(out_logfile);
     MPI_Abort(testComm, 1);
 }
@@ -889,4 +889,3 @@ unsigned long GetProcessorAndCore(int *chip, int *core){
 	return ((unsigned long)a) | (((unsigned long)d) << 32);;
 }
 #endif
-

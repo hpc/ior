@@ -25,6 +25,7 @@
 #include <stdbool.h>
 
 #include "iordef.h"                                     /* IOR Definitions */
+#include "aiori-debug.h"
 #include "option.h"
 
 /*************************** D E F I N I T I O N S ****************************/

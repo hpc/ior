@@ -18,8 +18,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <mpi.h>
 
 #ifdef _WIN32
 #   define _CRT_SECURE_NO_WARNINGS
@@ -51,13 +49,6 @@
 #   include <unistd.h>
 #   include <limits.h>
 #endif
-
-/************************** D E C L A R A T I O N S ***************************/
-
-extern int numTasks;                           /* MPI variables */
-extern int rank;
-extern int rankOffset;
-extern int verbose;                            /* verbose output */
 
 /*************************** D E F I N I T I O N S ****************************/
 
@@ -119,112 +110,6 @@ typedef long long int      IOR_offset_t;
 typedef long long int      IOR_size_t;
 
 #define                    IOR_format "%016llx"
-
-extern FILE * out_logfile;
-
-/******************************** M A C R O S *********************************/
-
-/******************************************************************************/
-/*
- * WARN_RESET will display a custom error message and set value to default
- */
-#define WARN_RESET(MSG, TO_STRUCT_PTR, FROM_STRUCT_PTR, MEMBER) do {     \
-        (TO_STRUCT_PTR)->MEMBER = (FROM_STRUCT_PTR)->MEMBER;             \
-        if (rank == 0) {                                                 \
-            fprintf(out_logfile, "ior WARNING: %s.  Using value of %d.\n",    \
-                    MSG, (TO_STRUCT_PTR)->MEMBER);                       \
-        }                                                                \
-        fflush(out_logfile);                                                  \
-} while (0)
-
-extern int aiori_warning_as_errors;
-
-#define WARN(MSG) do {                                                   \
-        if(aiori_warning_as_errors){ ERR(MSG); }                           \
-        if (verbose > VERBOSE_2) {                                       \
-            fprintf(out_logfile, "ior WARNING: %s, (%s:%d).\n",               \
-                    MSG, __FILE__, __LINE__);                            \
-        } else {                                                         \
-            fprintf(out_logfile, "ior WARNING: %s.\n", MSG);                  \
-        }                                                                \
-        fflush(out_logfile);                                                  \
-} while (0)
-
-
-/* warning with format string and errno printed */
-#define EWARNF(FORMAT, ...) do {                                         \
-        if(aiori_warning_as_errors){ ERRF(FORMAT, __VA_ARGS__); }          \
-        if (verbose > VERBOSE_2) {                                       \
-            fprintf(out_logfile, "ior WARNING: " FORMAT ", (%s:%d).\n", \
-                    __VA_ARGS__,  __FILE__, __LINE__); \
-        } else {                                                         \
-            fprintf(out_logfile, "ior WARNING: " FORMAT "\n",  \
-                    __VA_ARGS__);                \
-        }                                                                \
-        fflush(out_logfile);                                                  \
-} while (0)
-
-
-/* warning with errno printed */
-#define EWARN(MSG) do {                                                  \
-        EWARNF("%s", MSG);                                               \
-} while (0)
-
-
-/* display error message with format string and terminate execution */
-#define ERRF(FORMAT, ...) do {                                           \
-        fprintf(out_logfile, "ior ERROR: " FORMAT ", (%s:%d)\n", \
-                __VA_ARGS__, __FILE__, __LINE__); \
-        fflush(out_logfile);                                                  \
-        MPI_Abort(MPI_COMM_WORLD, -1);                                   \
-} while (0)
-
-
-/* display error message and terminate execution */
-#define ERR_ERRNO(MSG) do {                                                    \
-        ERRF("%s", MSG);                                                 \
-} while (0)
-
-
-/* display a simple error message (i.e. errno is not set) and terminate execution */
-#define ERR(MSG) do {                                            \
-        fprintf(out_logfile, "ior ERROR: %s, (%s:%d)\n",                     \
-                MSG, __FILE__, __LINE__);                               \
-        fflush(out_logfile);                                                 \
-        MPI_Abort(MPI_COMM_WORLD, -1);                                  \
-} while (0)
-
-
-/******************************************************************************/
-/*
- * MPI_CHECKF will display a custom format string as well as an error string
- * from the MPI_STATUS and then exit the program
- */
-
-#define MPI_CHECKF(MPI_STATUS, FORMAT, ...) do {                         \
-    char resultString[MPI_MAX_ERROR_STRING];                             \
-    int resultLength;                                                    \
-                                                                         \
-    if (MPI_STATUS != MPI_SUCCESS) {                                     \
-        MPI_Error_string(MPI_STATUS, resultString, &resultLength);       \
-        fprintf(out_logfile, "ior ERROR: " FORMAT ", MPI %s, (%s:%d)\n",      \
-                __VA_ARGS__, resultString, __FILE__, __LINE__);          \
-        fflush(out_logfile);                                                  \
-        MPI_Abort(MPI_COMM_WORLD, -1);                                   \
-    }                                                                    \
-} while(0)
-
-
-/******************************************************************************/
-/*
- * MPI_CHECK will display a custom error message as well as an error string
- * from the MPI_STATUS and then exit the program
- */
-
-#define MPI_CHECK(MPI_STATUS, MSG) do {                                  \
-    MPI_CHECKF(MPI_STATUS, "%s", MSG);                                   \
-} while(0)
-
 
 /******************************************************************************/
 /*

@@ -23,7 +23,6 @@ extern int rankOffset;
 extern int verbose;
 extern MPI_Comm testComm;
 extern MPI_Comm mpi_comm_world;
-extern FILE * out_logfile;
 extern FILE * out_resultfile;
 extern enum OutputFormat_t outputFormat;  /* format of the output */
 
@@ -39,8 +38,6 @@ extern enum OutputFormat_t outputFormat;  /* format of the output */
 #define ERROR_LOCATION __LINE__
 #endif
 
-#define FAIL(...) FailMessage(rank, ERROR_LOCATION, __VA_ARGS__)
-void FailMessage(int rank, const char *location, char *format, ...);
 
 void* safeMalloc(uint64_t size);
 void set_o_direct_flag(int *fd);
