@@ -1377,7 +1377,7 @@ void summarize_results(int iterations, int print_time) {
 }
 
 /* Checks to see if the test setup is valid.  If it isn't, fail. */
-void valid_tests() {
+void md_validate_tests() {
 
     if (((stone_wall_timer_seconds > 0) && (branch_factor > 1)) || ! barriers) {
         FAIL( "Error, stone wall timer does only work with a branch factor <= 1 (current is %d) and with barriers\n", branch_factor);
@@ -1388,7 +1388,7 @@ void valid_tests() {
         VERBOSE(1,-1,"main: Setting create/stat/read/remove_only to True" );
     }
 
-    VERBOSE(1,-1,"Entering valid_tests..." );
+    VERBOSE(1,-1,"Entering md_validate_tests..." );
 
     /* if dirs_only and files_only were both left unset, set both now */
     if (!dirs_only && !files_only) {
@@ -1462,6 +1462,15 @@ void valid_tests() {
     if (write_bytes > 0 && make_node) {
         FAIL("-k not compatible with -w");
     }
+
+    if(verify_read && ! read_only)
+      FAIL("Verify read requires that the read test is used");
+
+    if(verify_read && read_bytes <= 0)
+      FAIL("Verify read requires that read bytes is > 0");
+
+    if(read_only && read_bytes <= 0)
+      WARN("Read bytes is 0, thus, a read test will actually just open/close");
 }
 
 void show_file_system_size(char *file_system) {
@@ -2010,7 +2019,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }else{
       directory_loops = 1;
     }
-    valid_tests();
+    md_validate_tests();
 
     // option_print_current(options);
     VERBOSE(1,-1, "api                     : %s", api);
