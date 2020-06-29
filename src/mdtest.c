@@ -106,8 +106,6 @@ static char unique_read_dir[MAX_PATHLEN];
 static char unique_rm_dir[MAX_PATHLEN];
 static char unique_rm_uni_dir[MAX_PATHLEN];
 static char *write_buffer;
-static char *read_buffer;
-static char *verify_read_buffer;
 static char *stoneWallingStatusFile;
 
 
@@ -116,6 +114,7 @@ static int create_only;
 static int stat_only;
 static int read_only;
 static int verify_read;
+static int verify_write;
 static int verification_error;
 static int remove_only;
 static int leaf_only;
@@ -213,7 +212,8 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
 }
 
 void generate_memory_pattern(char * buffer, size_t bytes){
-  for(int i=0; i < bytes; i++){
+  // the first byte is set to the item number
+  for(int i=1; i < bytes; i++){
     buffer[i] = i + 1;
   }
 }
@@ -344,6 +344,22 @@ static void remove_file (const char *path, uint64_t itemNum) {
     }
 }
 
+void mdtest_verify_data(int item, char * buffer, size_t bytes){
+  if((bytes >= 8 && ((uint64_t*) buffer)[0] != item) || (bytes < 8 && buffer[0] != (char) item)){
+    VERBOSE(2, -1, "Error verifying first element for item: %d", item);
+    verification_error++;
+  }
+
+  size_t i = bytes < 8 ? 1 : 8; // the first byte
+
+  for( ; i < bytes; i++){
+    if(buffer[i] != (char) (i + 1)){
+      VERBOSE(0, -1, "Error verifying byte %zu for item %d", i, item);
+      verification_error++;
+    }
+  }
+}
+
 static void create_file (const char *path, uint64_t itemNum) {
     char curr_item[MAX_PATHLEN];
     aiori_fd_t *aiori_fh = NULL;
@@ -392,8 +408,21 @@ static void create_file (const char *path, uint64_t itemNum) {
          * offset 0 (zero).
          */
         hints.fsyncPerWrite = sync_file;
-        if ( write_bytes != (size_t) backend->xfer (WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, 0, backend_options)) {
+        if(write_bytes >= 8){ // set the item number as first element of the buffer to be as much unique as possible
+          ((uint64_t*) write_buffer)[0] = itemNum;
+        }else{
+          write_buffer[0] = (char) itemNum;
+        }
+        if ( write_bytes != (size_t) backend->xfer(WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, 0, backend_options)) {
             FAIL("unable to write file %s", curr_item);
+        }
+
+        if (verify_write) {
+            write_buffer[0] = 42;
+            if (write_bytes != (size_t) backend->xfer(READ, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, 0, backend_options)) {
+                FAIL("unable to verify write (read/back) file %s", curr_item);
+            }
+            mdtest_verify_data(itemNum, write_buffer, write_bytes);
         }
     }
 
@@ -616,7 +645,6 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
     }
 }
 
-
 /* reads all of the items created as specified by the input parameters */
 void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     uint64_t parent_dir, item_num = 0;
@@ -624,20 +652,13 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     aiori_fd_t *aiori_fh;
 
     VERBOSE(1,-1,"Entering mdtest_read on %s", path );
+    char *read_buffer;
 
     /* allocate read buffer */
     if (read_bytes > 0) {
         int alloc_res = posix_memalign((void**)&read_buffer, sysconf(_SC_PAGESIZE), read_bytes);
         if (alloc_res) {
             FAIL("out of memory");
-        }
-
-        if (verify_read > 0) {
-            verify_read_buffer = (char *)malloc(read_bytes);
-            if (verify_read_buffer == NULL) {
-                FAIL("out of memory");
-            }
-            generate_memory_pattern(verify_read_buffer, read_bytes);
         }
     }
 
@@ -714,20 +735,23 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* read file */
         if (read_bytes > 0) {
-            read_buffer[0] = 42; /* use a random value to ensure that the read_buffer is now different from the expected buffer and read isn't sometimes NOOP */
-            if (read_bytes != (size_t) backend->xfer (READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, 0, backend_options)) {
+            read_buffer[0] = 42;
+            if (read_bytes != (size_t) backend->xfer(READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, 0, backend_options)) {
                 FAIL("unable to read file %s", item);
             }
             if(verify_read){
-              if (memcmp(read_buffer, verify_read_buffer, read_bytes) != 0){
-                VERBOSE(2, -1, "Error verifying %s", item);
-                verification_error++;
-              }
+              mdtest_verify_data(item_num, read_buffer, read_bytes);
+            }else if((read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != item_num) || (read_bytes < 8 && read_buffer[0] != (char) item_num)){
+              // do a lightweight check, which cost is neglectable
+              verification_error++;
             }
         }
 
         /* close file */
         backend->close (aiori_fh, backend_options);
+    }
+    if(read_bytes){
+      free(read_buffer);
     }
 }
 
@@ -1471,6 +1495,9 @@ void md_validate_tests() {
 
     if(read_only && read_bytes <= 0)
       WARN("Read bytes is 0, thus, a read test will actually just open/close");
+
+    if(create_only && read_only && read_bytes > write_bytes)
+      FAIL("When writing and reading files, read bytes must be smaller than write bytes");
 }
 
 void show_file_system_size(char *file_system) {
@@ -1954,6 +1981,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'W', NULL,        "number in seconds; stonewall timer, write as many seconds and ensure all processes did the same number of operations (currently only stops during create phase)", OPTION_OPTIONAL_ARGUMENT, 'd', & stone_wall_timer_seconds},
       {'x', NULL,        "StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs", OPTION_OPTIONAL_ARGUMENT, 's', & stoneWallingStatusFile},
       {'X', "verify-read", "Verify the data read", OPTION_FLAG, 'd', & verify_read},
+      {0, "verify-write", "Verify the data after a write by reading it back immediately", OPTION_FLAG, 'd', & verify_write},
       {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & sync_file},
       {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
@@ -2275,6 +2303,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     if (backend->finalize){
       backend->finalize(backend_options);
+    }
+
+    if (write_bytes > 0) {
+      free(write_buffer);
     }
 
     return summary_table;
