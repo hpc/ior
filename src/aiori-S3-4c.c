@@ -130,7 +130,7 @@ const char* bucket_name = "ior";
 #   define      IOR_CURL_NOCONTINUE  0x02
 #   define      IOR_CURL_S3_EMC_EXT  0x04 /* allow EMC extensions to S3? */
 
-#ifdef USE_S3_AIORI
+#ifdef USE_S3_4C_AIORI
 #  include <curl/curl.h>
 #  include "aws4c.h"
 #else
@@ -167,8 +167,8 @@ static int S3_check_params(IOR_param_t *);
 // "Pure S3"
 //     N:1 writes use multi-part upload
 //     N:N fails if "transfer-size" != "block-size" (because that requires "append")
-ior_aiori_t s3_aiori = {
-	.name = "S3",
+ior_aiori_t s3_4c_aiori = {
+	.name = "S3-4c",
 	.name_legacy = NULL,
 	.create = S3_Create,
 	.open = S3_Open,
