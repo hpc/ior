@@ -1994,6 +1994,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     backend = aiori_select(api);
     if (backend == NULL)
         ERR("Unrecognized I/O API");
+    if (! backend->enable_mdtest)
+        ERR("Backend doesn't support MDTest");
     backend_options = airoi_update_module_options(backend, global_options);
 
     free(global_options->modules);
