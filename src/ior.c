@@ -1379,6 +1379,7 @@ static void TestIoSys(IOR_test_t *test)
                         params->open = WRITE;
                         timer[0] = GetTimeStamp();
                         fd = backend->create(testFileName, IOR_WRONLY | IOR_CREAT | IOR_TRUNC, params->backend_options);
+                        if(fd == NULL) FAIL("Cannot create file");
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1449,6 +1450,7 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
                         fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
+                        if(fd == NULL) FAIL("Cannot open file");
                         dataMoved = WriteOrRead(params, &results[rep], fd, WRITECHECK, &ioBuffers);
                         backend->close(fd, params->backend_options);
                         rankOffset = 0;
@@ -1521,6 +1523,7 @@ static void TestIoSys(IOR_test_t *test)
                         params->open = READ;
                         timer[0] = GetTimeStamp();
                         fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
+                        if(fd == NULL) FAIL("Cannot open file");
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
