@@ -39,6 +39,12 @@
 #include "iordef.h"
 #include "aiori.h"
 
+#include <mpi.h>
+
+#ifndef MPI_FILE_NULL
+#   include <mpio.h>
+#endif /* not MPI_FILE_NULL */
+
 #define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
 /******************** DATA Packet Type ***************************************/
 /* Holds the types of data packets: generic, offset, timestamp, incompressible */

@@ -114,7 +114,7 @@ static void DFS_Delete(char *, aiori_mod_opt_t *);
 static char* DFS_GetVersion();
 static void DFS_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static void DFS_Sync(aiori_mod_opt_t *);
-static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, MPI_Comm, char *);
+static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, char *);
 static int DFS_Statfs (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t *);
 static int DFS_Stat (const char *, struct stat *, aiori_mod_opt_t *);
 static int DFS_Mkdir (const char *, mode_t, aiori_mod_opt_t *);
@@ -774,7 +774,7 @@ static char* DFS_GetVersion()
  * Use DFS stat() to return aggregate file size.
  */
 static IOR_offset_t
-DFS_GetFileSize(aiori_mod_opt_t * test, MPI_Comm comm, char *testFileName)
+DFS_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 {
         dfs_obj_t *obj;
         daos_size_t fsize, tmpMin, tmpMax, tmpSum;
@@ -791,27 +791,6 @@ DFS_GetFileSize(aiori_mod_opt_t * test, MPI_Comm comm, char *testFileName)
                 return -1;
 
         dfs_release(obj);
-
-        if (hints->filePerProc == TRUE) {
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, comm),
-                          "cannot total data moved");
-                fsize = tmpSum;
-        } else {
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, comm),
-                          "cannot total data moved");
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, comm),
-                          "cannot total data moved");
-                if (tmpMin != tmpMax) {
-                        if (rank == 0) {
-                                WARN("inconsistent file size by different tasks");
-                        }
-                        /* incorrect, but now consistent across tasks */
-                        fsize = tmpMin;
-                }
-        }
 
         return (fsize);
 }

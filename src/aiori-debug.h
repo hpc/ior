@@ -4,6 +4,7 @@
 /* This file contains only debug relevant helpers */
 
 #include <stdio.h>
+#include <mpi.h>
 
 extern FILE * out_logfile;
 extern int verbose;                            /* verbose output */

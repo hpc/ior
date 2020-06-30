@@ -313,8 +313,7 @@ CheckForOutliers(IOR_param_t *test, const double *timer, const int access)
  * Check if actual file size equals expected size; if not use actual for
  * calculating performance rate.
  */
-static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t dataMoved, int rep,
-                          const int access)
+static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t dataMoved, int rep, const int access)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
@@ -323,7 +322,7 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
 
         /* get the size of the file */
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
-        aggFileSizeFromStat = backend->get_file_size(params->backend_options, testComm, testFilename);
+        aggFileSizeFromStat = backend->get_file_size(params->backend_options,  testFilename);
 
         if (params->hints.filePerProc == TRUE) {
             MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
