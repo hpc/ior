@@ -24,4 +24,8 @@ I=100 # Start with this ID
 IOR 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey -b $((10*1024*1024)) -t $((10*1024*1024))
 MDTEST 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey
 
+IOR 1 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey -b $((10*1024)) -t $((10*1024)) --S3.bucket-per-file
+MDTEST 1 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey --S3.bucket-per-file
+
+
 kill -9 %1
