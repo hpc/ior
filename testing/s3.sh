@@ -5,20 +5,23 @@
 ROOT="$(dirname ${BASH_SOURCE[0]})"
 TYPE="basic"
 
-cd $ROOT
-
-if [[ ! -e minio ]] ; then
+if [[ ! -e $ROOT/minio ]] ; then
   wget https://dl.min.io/server/minio/release/linux-amd64/minio
-  chmod +x minio
+  mv minio $ROOT
+  chmod +x $ROOT/minio
 fi
 
 export MINIO_ACCESS_KEY=accesskey
 export MINIO_SECRET_KEY=secretkey
 
-./minio --quiet server /dev/shm &
+$ROOT/minio --quiet server /dev/shm &
 
+export IOR_EXTRA="-o test"
+export MDTEST_EXTRA="-d test"
 source $ROOT/test-lib.sh
-IOR 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey 
-MDTEST 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey 
+
+I=100 # Start with this ID
+IOR 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey -b $((10*1024*1024)) -t $((10*1024*1024))
+MDTEST 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey
 
 kill -9 %1

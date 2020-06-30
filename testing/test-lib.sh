@@ -40,7 +40,7 @@ I=0
 function IOR(){
   RANKS=$1
   shift
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} ${IOR_EXTRA} -o ${IOR_TMP}/ior"
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} -o ${IOR_TMP}/ior ${IOR_EXTRA}"
   $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
@@ -56,7 +56,7 @@ function MDTEST(){
   RANKS=$1
   shift
   rm -rf ${IOR_TMP}/mdest
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} ${MDTEST_EXTRA} -d ${IOR_TMP}/mdest -V=4"
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} -d ${IOR_TMP}/mdest ${MDTEST_EXTRA} -V=4"
   $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
