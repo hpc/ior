@@ -354,8 +354,9 @@ void mdtest_verify_data(int item, char * buffer, size_t bytes){
 
   for( ; i < bytes; i++){
     if(buffer[i] != (char) (i + 1)){
-      VERBOSE(0, -1, "Error verifying byte %zu for item %d", i, item);
+      VERBOSE(5, -1, "Error verifying byte %zu for item %d", i, item);
       verification_error++;
+      break;
     }
   }
 }
