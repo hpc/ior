@@ -133,3 +133,9 @@ MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
 
 libaiori_a_SOURCES += $(extraSOURCES)
 libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
+
+# Generate config file with build flags to allow reuse of library
+all-local: build.conf
+build.conf:
+	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) > build.conf
+	@echo CFLAGS=$(CFLAGS) $(extraCPPFLAGS) >> build.conf
