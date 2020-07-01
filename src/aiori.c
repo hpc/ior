@@ -103,6 +103,7 @@ void * airoi_update_module_options(const ior_aiori_t * backend, options_all_t * 
 }
 
 options_all_t * airoi_create_all_module_options(option_help * global_options){
+  if(! out_logfile) out_logfile = stdout;
   int airoi_c = aiori_count();
   options_all_t * opt = malloc(sizeof(options_all_t));
   opt->module_count = airoi_c + 1;
