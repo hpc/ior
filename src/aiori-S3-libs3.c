@@ -335,10 +335,22 @@ static void S3_Close(aiori_fd_t * afd, aiori_mod_opt_t * options)
   free(afd);
 }
 
-S3Status list_delete_cb(int isTruncated, const char *nextMarker, int contentsCount, const S3ListBucketContent *contents, int commonPrefixesCount, const char **commonPrefixes, void *callbackData){
-  s3_options_t * o = (s3_options_t*) callbackData;
-  S3_delete_object(& o->bucket_context, contents->key, NULL, o->timeout, & responseHandler, NULL);
+typedef struct {
+  int status; // do not reorder!
+  s3_options_t * o;
+  int truncated;
+  char const *nextMarker;
+} s3_delete_req;
 
+S3Status list_delete_cb(int isTruncated, const char *nextMarker, int contentsCount, const S3ListBucketContent *contents, int commonPrefixesCount, const char **commonPrefixes, void *callbackData){
+  s3_delete_req * req = (s3_delete_req*) callbackData;
+  for(int i=0; i < contentsCount; i++){
+    S3_delete_object(& req->o->bucket_context, contents[i].key, NULL, req->o->timeout, & responseHandler, NULL);
+  }
+  req->truncated = isTruncated;
+  if(isTruncated){
+    req->nextMarker = nextMarker;
+  }
   return S3StatusOK;
 }
 
@@ -352,10 +364,16 @@ static void S3_Delete(char *path, aiori_mod_opt_t * options)
 
   if(o->bucket_per_file){
     o->bucket_context.bucketName = p;
-    S3_list_bucket(& o->bucket_context, NULL, NULL, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, o);
-
+    s3_delete_req req = {0, o, 1, NULL};
+    while(req.truncated){
+      S3_list_bucket(& o->bucket_context, NULL, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
+    }
     S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
   }else{
+    s3_delete_req req = {0, o, 1, NULL};
+    while(req.truncated){
+      S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
+    }
     S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
   }
   CHECK_ERROR(p);
@@ -386,6 +404,12 @@ static int S3_rmdir (const char *path, aiori_mod_opt_t * options){
 
   def_bucket_name(o, p, path);
   if (o->bucket_per_file){
+    o->bucket_context.bucketName = p;
+    s3_delete_req req = {0, o, 1, NULL};
+    while(req.truncated){
+      S3_list_bucket(& o->bucket_context, req.nextMarker, NULL, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
+    }
+
     S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
     CHECK_ERROR(p);
     return 0;
@@ -471,7 +495,7 @@ static void S3_init(aiori_mod_opt_t * options){
   o->bucket_context.accessKeyId = o->access_key;
   o->bucket_context.secretAccessKey = o->secret_key;
 
-  if (! o->bucket_per_file){
+  if (! o->bucket_per_file && rank == 0){
     S3_create_bucket(o->s3_protocol, o->access_key, o->secret_key, NULL, o->host, o->bucket_context.bucketName, o->authRegion, S3CannedAclPrivate, o->locationConstraint, NULL, o->timeout, & responseHandler, NULL);
     CHECK_ERROR(o->bucket_context.bucketName);
   }
@@ -482,6 +506,12 @@ static void S3_init(aiori_mod_opt_t * options){
 }
 
 static void S3_final(aiori_mod_opt_t * options){
+  s3_options_t * o = (s3_options_t*) options;
+  if (! o->bucket_per_file && rank == 0){
+    S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host,  o->bucket_context.bucketName, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
+    CHECK_ERROR(o->bucket_context.bucketName);
+  }
+
   S3_deinitialize();
 }
 

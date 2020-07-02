@@ -22,10 +22,10 @@ source $ROOT/test-lib.sh
 
 I=100 # Start with this ID
 IOR 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey -b $((10*1024*1024)) -t $((10*1024*1024))
-MDTEST 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey
+MDTEST 2 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey -n 10
 
 IOR 1 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey -b $((10*1024)) -t $((10*1024)) --S3.bucket-per-file
-MDTEST 1 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey --S3.bucket-per-file
+MDTEST 1 -a S3-libs3 --S3.host=localhost:9000  --S3.secret-key=secretkey --S3.access-key=accesskey --S3.bucket-per-file -n 10
 
 
 kill -9 %1
