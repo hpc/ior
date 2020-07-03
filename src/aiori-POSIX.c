@@ -368,7 +368,7 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 
 
 /*
- * Creat and open a file through the POSIX interface.
+ * Create and open a file through the POSIX interface.
  */
 aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
@@ -394,9 +394,9 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 #define FASYNC          00020000   /* fcntl, for BSD compatibility */
 #endif
         if (o->lustre_set_striping) {
-                /* In the single-shared-file case, task 0 has to creat the
-                   file with the Lustre striping options before any other processes
-                   open the file */
+                /* In the single-shared-file case, task 0 has to create the
+                   file with the Lustre striping options before any other
+                   processes open the file */
                 if (!hints->filePerProc && rank != 0) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         fd_oflag |= O_RDWR;
@@ -485,7 +485,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 }
 
 /*
- * Creat a file through mknod interface.
+ * Create a file through mknod interface.
  */
 int POSIX_Mknod(char *testFileName)
 {

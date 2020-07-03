@@ -514,7 +514,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
                         uuid_t uuid;
                         double t1, t2;
 
-                        INFO(VERBOSE_1, "Destorying DFS Container: %s\n", o->cont);
+                        INFO(VERBOSE_1, "Destroying DFS Container: %s\n", o->cont);
                         uuid_parse(o->cont, uuid);
                         t1 = MPI_Wtime();
                         rc = daos_cont_destroy(poh, uuid, 1, NULL);
@@ -561,7 +561,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
 }
 
 /*
- * Creat and open a file through the DFS interface.
+ * Create and open a file through the DFS interface.
  */
 static aiori_fd_t *
 DFS_Create(char *testFileName, int flags, aiori_mod_opt_t *param)

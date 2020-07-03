@@ -492,7 +492,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
     progress->items_done = progress->items_per_dir;
 }
 
-/* recusive function to create and remove files/directories from the
+/* recursive function to create and remove files/directories from the
    directory tree */
 void create_remove_items(int currDepth, const int dirs, const int create, const int collective, const char *path, uint64_t dirNum, rank_progress_t * progress) {
     unsigned i;

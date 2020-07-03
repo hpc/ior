@@ -7,7 +7,7 @@ Following are basic notes on how to deploy the 'ceph/demo' docker container. The
 Run `docker pull ceph/demo` to download the image to your system.
 
 ################################
-# Deploy 'ceph/demo' conatiner #
+# Deploy 'ceph/demo' container #
 ################################
 
 To deploy the Ceph cluster, execute the following command:

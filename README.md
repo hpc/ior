@@ -1,8 +1,8 @@
 # HPC IO Benchmark Repository [![Build Status](https://travis-ci.org/hpc/ior.svg?branch=master)](https://travis-ci.org/hpc/ior)
 
 This repository contains the IOR and mdtest parallel I/O benchmarks.  The
-[official IOR/mdtest documention][] can be found in the `docs/` subdirectory or
-on Read the Docs.
+[official IOR/mdtest documentation][] can be found in the `docs/` subdirectory
+or on Read the Docs.
 
 ## Building
 
@@ -28,4 +28,4 @@ on Read the Docs.
   distributions at once.  
 
 [official IOR release]: https://github.com/hpc/ior/releases
-[official IOR/mdtest documention]: http://ior.readthedocs.org/
+[official IOR/mdtest documentation]: http://ior.readthedocs.org/

@@ -47,7 +47,7 @@ Two ways to run IOR:
     E.g., to execute:  IOR -W -f script
     This defaults all tests in 'script' to use write data checking.
 
-  * The Command line supports to specify additional parameters for the choosen API.
+  * The Command line supports to specify additional parameters for the chosen API.
     For example, username and password for the storage.
     Available options are listed in the help text after selecting the API when running with -h.
     For example, 'IOR -a DUMMY -h' shows the supported options for the DUMMY backend.
@@ -361,7 +361,7 @@ GPFS-SPECIFIC:
 
   * gpfsReleaseToken     - immediately after opening or creating file, release
 			   all locks.  Might help mitigate lock-revocation
-			   traffic when many proceses write/read to same file.
+			   traffic when many processes write/read to same file.
 
 BeeGFS-SPECIFIC (POSIX only):
 ================
@@ -499,7 +499,7 @@ zip, gzip, and bzip.
 
 3) bzip2: For bziped files a transfer size of 1k is insufficient (~50% compressed).
    To avoid compression a transfer size of greater than the bzip block size is required
-   (default = 900KB). I suggest a transfer size of greather than 1MB to avoid bzip2 compression.
+   (default = 900KB). I suggest a transfer size of greater than 1MB to avoid bzip2 compression.
 
 Be aware of the block size your compression algorithm will look at, and adjust the transfer size
 accordingly.
@@ -660,7 +660,7 @@ HOW DO I USE HINTS?
     'setenv IOR_HINT__MPI__<hint> <value>'
 
 
-HOW DO I EXPLICITY SET THE FILE DATA SIGNATURE?
+HOW DO I EXPLICITLY SET THE FILE DATA SIGNATURE?
 
   The data signature for a transfer contains the MPI task number, transfer-
   buffer offset, and also timestamp for the start of iteration.  As IOR works

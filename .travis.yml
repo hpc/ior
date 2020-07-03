@@ -20,12 +20,12 @@ install:
     # TODO: Not in repos for 14.04 trustz but comes 16.04 xenial
     #- sudo apt-get install -y libpnetcdf-dev pnetcdf-bin
     # Install HDFS
-    # TODO: Not sure with which c libray hdfs should be used and if it is in
+    # TODO: Not sure with which c library hdfs should be used and if it is in
     # the ubuntu repos
     # Probably hadoop needs to be installed an provides native API.
     # Install Amazon S3
     # TODO: The needed library needs to be installed. Follow the instructions in
-    # aiori-S3.c to achive this.
+    # aiori-S3.c to achieve this.
     # GPFS
     # NOTE: Think GPFS need a license and is therefore not testable with travis.
 script:

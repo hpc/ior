@@ -128,7 +128,7 @@ static void ior_mmap_file(int *file, int mflags, void *param)
 }
 
 /*
- * Creat and open a file through the POSIX interface, then setup mmap.
+ * Create and open a file through the POSIX interface, then setup mmap.
  */
 static aiori_fd_t *MMAP_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {

@@ -641,9 +641,9 @@ FillBuffer(void *buffer,
         unsigned long long hi, lo;
         unsigned long long *buf = (unsigned long long *)buffer;
 
-        if(test->dataPacketType == incompressible ) { /* Make for some non compressable buffers with randomish data */
+        if(test->dataPacketType == incompressible ) { /* Make for some non compressible buffers with randomish data */
 
-                /* In order for write checks to work, we have to restart the psuedo random sequence */
+                /* In order for write checks to work, we have to restart the pseudo random sequence */
                 if(reseed_incompressible_prng == TRUE) {
                         test->incompressibleSeed = test->setTimeStampSignature + rank; /* We copied seed into timestampSignature at initialization, also add the rank to add randomness between processes */
                         reseed_incompressible_prng = FALSE;
@@ -1637,7 +1637,7 @@ static void ValidateTests(IOR_param_t * test)
             && (strcasecmp(test->api, "CEPHFS") != 0)) && test->fsync)
                 WARN_RESET("fsync() not supported in selected backend",
                            test, &defaults, fsync);
-        /* parameter consitency */
+        /* parameter consistency */
         if (test->reorderTasks == TRUE && test->reorderTasksRandom == TRUE)
                 ERR("Both Constant and Random task re-ordering specified. Choose one and resubmit");
         if (test->randomOffset && test->reorderTasksRandom
@@ -1672,7 +1672,7 @@ static void ValidateTests(IOR_param_t * test)
  * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
  * They are sequential and the last element is set to -1 as end marker.
  * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
- * @param pretendRank int pretended Rank for shifting the offsest corectly
+ * @param pretendRank int pretended Rank for shifting the offsets correctly
  * @return IOR_offset_t
  */
 IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank)
@@ -1720,7 +1720,7 @@ IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank)
  * diversion in accesse as it dose with filePerProc. This is expected but
  * should be mined.
  * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
- * @param pretendRank int pretended Rank for shifting the offsest corectly
+ * @param pretendRank int pretended Rank for shifting the offsets correctly
  * @return IOR_offset_t
  * @return
  */

@@ -149,7 +149,7 @@ static int IME_Access(const char *path, int mode, IOR_param_t *param)
 }
 
 /*
- * Creat and open a file through the IME interface.
+ * Create and open a file through the IME interface.
  */
 static void *IME_Create(char *testFileName, IOR_param_t *param)
 {
