@@ -133,7 +133,7 @@ Version 2.10.3
 Contributed by demyn@users.sourceforge.net
 - Ported to Windows. Required changes related to 'long' types, which on Windows
   are always 32-bits, even on 64-bit systems. Missing system headers and
-  functions acount for most of the remaining changes.
+  functions account for most of the remaining changes.
   New files for Windows:
    - IOR/ior.vcproj                - Visual C project file
    - IOR/src/C/win/getopt.{h,c}    - GNU getopt() support
@@ -193,7 +193,7 @@ Version 2.9.5
 - Added notification for "Using reorderTasks '-C' (expecting block, not cyclic,
   task assignment)"
 - Corrected bug with read performance with stonewalling (was using full size,
-  stat'ed file instead of bytes transfered).
+  stat'ed file instead of bytes transferred).
 
 Version 2.9.4
 --------------------------------------------------------------------------------

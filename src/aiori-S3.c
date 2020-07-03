@@ -126,7 +126,7 @@ const char* bucket_name = "ior";
 /* TODO: The following stuff goes into options! */
 /* REST/S3 variables */
 //    CURL*       curl;             /* for libcurl "easy" fns (now managed by aws4c) */
-#   define      IOR_CURL_INIT        0x01 /* curl top-level inits were perfomed once? */
+#   define      IOR_CURL_INIT        0x01 /* curl top-level inits were performed once? */
 #   define      IOR_CURL_NOCONTINUE  0x02
 #   define      IOR_CURL_S3_EMC_EXT  0x04 /* allow EMC extensions to S3? */
 
@@ -286,7 +286,7 @@ static int S3_check_params(IOR_param_t * test){
  * NOTE: Our custom version of aws4c can be configured so that connections
  *       are reused, instead of opened and closed on every operation.  We
  *       do configure it that way, but you still need to call these
- *       connect/disconnet functions, in order to insure that aws4c has
+ *       connect/disconnect functions, in order to insure that aws4c has
  *       been configured.
  * ---------------------------------------------------------------------------
  */
@@ -322,7 +322,7 @@ static void s3_connect( IOR_param_t* param ) {
 	aws_read_config(getenv("USER"));  // requires ~/.awsAuth
 	aws_reuse_connections(1);
 
-	// initalize IOBufs.  These are basically dynamically-extensible
+	// initialize IOBufs.  These are basically dynamically-extensible
 	// linked-lists.  "growth size" controls the increment of new memory
 	// allocated, whenever storage is used up.
 	param->io_buf = aws_iobuf_new();
@@ -714,7 +714,7 @@ EMC_Open( char *testFileName, IOR_param_t * param ) {
  *     impose two scaling problems: (1) requires all ETags to be shipped at
  *     the BW available to a single process, (1) requires either that they
  *     all fit into memory of a single process, or be written to disk
- *     (imposes additional BW contraints), or make a more-complex
+ *     (imposes additional BW constraints), or make a more-complex
  *     interaction with a threaded curl writefunction, to present the
  *     appearance of a single thread to curl, whilst allowing streaming
  *     reception of non-local ETags.
@@ -777,7 +777,7 @@ S3_Xfer_internal(int          access,
          //
          // In the N:1 case, the global order of part-numbers we're writing
          // depends on whether wer're writing strided or segmented, in
-         // other words, how <offset> and <remaining> are acutally
+         // other words, how <offset> and <remaining> are actually
          // positioning the parts being written. [See discussion at
          // S3_Close_internal().]
          //
@@ -1014,7 +1014,7 @@ S3_Fsync( void *fd, IOR_param_t * param ) {
  *
  * ISSUE: The S3 spec says that a multi-part upload can have at most 10,000
  *        parts.  Does EMC allow more than this?  (NOTE the spec also says
- *        parts must be at leaast 5MB, but EMC definitely allows smaller
+ *        parts must be at least 5MB, but EMC definitely allows smaller
  *        parts than that.)
  *
  * ISSUE: All Etags must be sent from a single rank, in a single
@@ -1126,7 +1126,7 @@ S3_Close_internal( void*         fd,
 					// add XML for *all* the parts.  The XML must be ordered by
 					// part-number.  Each rank wrote <etags_per_rank> parts,
 					// locally.  At rank0, the etags for each rank are now
-					// stored as a continguous block of text, with the blocks
+					// stored as a contiguous block of text, with the blocks
 					// stored in rank order in etag_vec.  In other words, our
 					// internal rep at rank 0 matches the "segmented" format.
 					// From this, we must select etags in an order matching how

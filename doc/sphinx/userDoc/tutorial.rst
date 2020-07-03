@@ -4,7 +4,7 @@ First Steps with IOR
 ====================
 
 This is a short tutorial for the basic usage of IOR and some tips on how to use
-IOR to handel caching effects as these are very likely to affect your
+IOR to handle caching effects as these are very likely to affect your
 measurements.
 
 Running IOR

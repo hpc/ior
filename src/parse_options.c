@@ -282,7 +282,7 @@ int contains_only(char *haystack, char *needle)
         /* check for "needle" */
         if (strncasecmp(ptr, needle, strlen(needle)) != 0)
                 return 0;
-        /* make sure the rest of the line is only whitspace as well */
+        /* make sure the rest of the line is only whitespace as well */
         for (ptr += strlen(needle); ptr < end; ptr++) {
                 if (!isspace(*ptr))
                         return 0;
@@ -395,7 +395,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'C', NULL,        "reorderTasks -- changes task ordering for readback (useful to avoid client cache)", OPTION_FLAG, 'd', & params->reorderTasks},
     {'d', NULL,        "interTestDelay -- delay between reps in seconds", OPTION_OPTIONAL_ARGUMENT, 'd', & params->interTestDelay},
     {'D', NULL,        "deadlineForStonewalling -- seconds before stopping write or read phase", OPTION_OPTIONAL_ARGUMENT, 'd', & params->deadlineForStonewalling},
-    {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timeout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
     {'e', NULL,        "fsync -- perform a fsync() operation at the end of each read/write phase", OPTION_FLAG, 'd', & params->fsync},
@@ -436,7 +436,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random ordering for readback", OPTION_FLAG, 'd', & params->reorderTasksRandom},
     {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & params->warningAsErrors},
     {.help="  -O summaryFile=FILE                 -- store result data into this file", .arg = OPTION_OPTIONAL_ARGUMENT},
-    {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputing the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputting the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
     {0, "dryRun",      "do not perform any I/Os just run evtl. inputs print dummy output", OPTION_FLAG, 'd', & params->dryRun},
     LAST_OPTION,
   };
