@@ -7,6 +7,23 @@
 
 #include <option.h>
 
+
+/* merge two option lists and return the total size */
+option_help * option_merge(option_help * a, option_help * b){
+  int count_a = 0;
+  for(option_help * i = a; i->type != 0; i++){
+    count_a++;
+  }
+  int count = count_a + 1; // LAST_OPTION is one
+  for(option_help * i = b; i->type != 0; i++){
+    count++;
+  }
+  option_help * h = malloc(sizeof(option_help) * count);
+  memcpy(h, a, sizeof(option_help) * count_a);
+  memcpy(h + count_a, b, sizeof(option_help) * (count - count_a));
+  return h;
+}
+
 /*
 * Takes a string of the form 64, 8m, 128k, 4g, etc. and converts to bytes.
 */

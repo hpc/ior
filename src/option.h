@@ -43,6 +43,7 @@ void option_print_current(option_help * args);
 //@return the number of parsed arguments
 int option_parse(int argc, char ** argv, options_all_t * args);
 int option_parse_str(char*val, options_all_t * opt_all);
+option_help * option_merge(option_help * a, option_help * b);
 
 /* Parse a single line */
 int option_parse_key_value(char * key, char * value, options_all_t * opt_all);
