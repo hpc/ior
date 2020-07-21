@@ -2297,8 +2297,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         }
     }
 
-    if (created_root_dir && backend->rmdir(testdirpath, backend_options) != 0) {
-        FAIL("Unable to remote test directory path %s", testdirpath);
+    if (created_root_dir && remove_only && backend->rmdir(testdirpath, backend_options) != 0) {
+        FAIL("Unable to remove test directory path %s", testdirpath);
     }
 
     if(verification_error){
