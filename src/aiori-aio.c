@@ -100,7 +100,10 @@ static int aio_check_params(aiori_mod_opt_t * param){
   aio_options_t * o = (aio_options_t*) param;
   POSIX_check_params((aiori_mod_opt_t*) o->p);
   if(o->max_pending < 8){
-    ERRF("max-pending = %d < 8", o->max_pending);
+    ERRF("AIO max-pending = %d < 8", o->max_pending);
+  }
+  if(o->granularity > o->max_pending){
+    ERRF("AIO granularity must be < max-pending, is %d > %d", o->granularity, o->max_pending);
   }
   return 0;
 }
