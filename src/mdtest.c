@@ -354,8 +354,9 @@ void mdtest_verify_data(int item, char * buffer, size_t bytes){
 
   for( ; i < bytes; i++){
     if(buffer[i] != (char) (i + 1)){
-      VERBOSE(0, -1, "Error verifying byte %zu for item %d", i, item);
+      VERBOSE(5, -1, "Error verifying byte %zu for item %d", i, item);
       verification_error++;
+      break;
     }
   }
 }
@@ -1931,6 +1932,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     int last = 0;
     int stride = 1;
     int iterations = 1;
+    int created_root_dir = 0; // was the root directory existing or newly created
 
     verbose = 0;
     int no_barriers = 0;
@@ -2188,6 +2190,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         if (backend->mkdir(testdirpath, DIRMODE, backend_options) != 0) {
             FAIL("Unable to create test directory path %s", testdirpath);
         }
+        created_root_dir = 1;
     }
 
     /* display disk usage */
@@ -2292,6 +2295,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         if (i == 1 && stride > 1) {
             i = 0;
         }
+    }
+
+    if (created_root_dir && backend->rmdir(testdirpath, backend_options) != 0) {
+        FAIL("Unable to remote test directory path %s", testdirpath);
     }
 
     if(verification_error){

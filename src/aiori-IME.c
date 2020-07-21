@@ -21,8 +21,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <errno.h>                                  /* sys_errlist */
-#include <fcntl.h>                                  /* IO operations */
+#include <errno.h>                              /* sys_errlist */
+#include <fcntl.h>                              /* IO operations */
 
 #include "ior.h"
 #include "iordef.h"
@@ -30,62 +30,69 @@
 #include "utilities.h"
 #include "ime_native.h"
 
-#ifndef   O_BINARY                                  /* Required on Windows */
+#define IME_UNUSED(x) (void)(x)                 /* Silence compiler warnings */
+
+#ifndef   O_BINARY                              /* Required on Windows */
 #  define O_BINARY 0
 #endif
 
 /**************************** P R O T O T Y P E S *****************************/
 
-static void        *IME_Create(char *, IOR_param_t *);
-static void        *IME_Open(char *, IOR_param_t *);
-static void         IME_Close(void *, IOR_param_t *);
-static void         IME_Delete(char *, IOR_param_t *);
-static char        *IME_GetVersion();
-static void         IME_Fsync(void *, IOR_param_t *);
-static int          IME_Access(const char *, int, IOR_param_t *);
-static IOR_offset_t IME_GetFileSize(IOR_param_t *, MPI_Comm, char *);
-static IOR_offset_t IME_Xfer(int, void *, IOR_size_t *,
-                             IOR_offset_t, IOR_param_t *);
-static int          IME_StatFS(const char *, ior_aiori_statfs_t *,
-                               IOR_param_t *);
-static int          IME_RmDir(const char *, IOR_param_t *);
-static int          IME_MkDir(const char *, mode_t, IOR_param_t *);
-static int          IME_Stat(const char *, struct stat *, IOR_param_t *);
+aiori_fd_t         *IME_Create(char *, int, aiori_mod_opt_t *);
+aiori_fd_t         *IME_Open(char *, int, aiori_mod_opt_t *);
+void                IME_Close(aiori_fd_t *, aiori_mod_opt_t *);
+void                IME_Delete(char *, aiori_mod_opt_t *);
+char               *IME_GetVersion();
+void                IME_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
+int                 IME_Access(const char *, int, aiori_mod_opt_t *);
+IOR_offset_t        IME_GetFileSize(aiori_mod_opt_t *, char *);
+IOR_offset_t        IME_Xfer(int, aiori_fd_t *, IOR_size_t *, IOR_offset_t,
+                             IOR_offset_t, aiori_mod_opt_t *);
+int                 IME_Statfs(const char *, ior_aiori_statfs_t *,
+                               aiori_mod_opt_t *);
+int                 IME_Rmdir(const char *, aiori_mod_opt_t *);
+int                 IME_Mkdir(const char *, mode_t, aiori_mod_opt_t *);
+int                 IME_Stat(const char *, struct stat *, aiori_mod_opt_t *);
+void                IME_Xferhints(aiori_xfer_hint_t *params);
 
 #if (IME_NATIVE_API_VERSION >= 132)
-static int          IME_Mknod(char *);
-static void         IME_Sync(IOR_param_t *);
+int                 IME_Mknod(char *);
+void                IME_Sync(aiori_mod_opt_t *param);
 #endif
 
-static void         IME_Initialize();
-static void         IME_Finalize();
+void                IME_Initialize();
+void                IME_Finalize();
 
 
-/************************** O P T I O N S *****************************/
+
+/****************************** O P T I O N S *********************************/
+
 typedef struct{
-  int direct_io;
+        int direct_io;
 } ime_options_t;
 
+option_help *IME_Options(aiori_mod_opt_t **init_backend_options,
+                         aiori_mod_opt_t *init_values)
+{
+        ime_options_t *o = malloc(sizeof(ime_options_t));
 
-option_help * IME_options(void ** init_backend_options, void * init_values){
-  ime_options_t * o = malloc(sizeof(ime_options_t));
+        if (init_values != NULL)
+                memcpy(o, init_values, sizeof(ime_options_t));
+        else
+                o->direct_io = 0;
 
-  if (init_values != NULL){
-    memcpy(o, init_values, sizeof(ime_options_t));
-  }else{
-    o->direct_io = 0;
-  }
+        *init_backend_options = (aiori_mod_opt_t*)o;
 
-  *init_backend_options = o;
+        option_help h[] = {
+            {0, "ime.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
+            LAST_OPTION
+        };
+        option_help *help = malloc(sizeof(h));
+        memcpy(help, h, sizeof(h));
 
-  option_help h [] = {
-    {0, "ime.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
-    LAST_OPTION
-  };
-  option_help * help = malloc(sizeof(h));
-  memcpy(help, h, sizeof(h));
-  return help;
+        return help;
 }
+
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -100,19 +107,20 @@ ior_aiori_t ime_aiori = {
         .create        = IME_Create,
         .open          = IME_Open,
         .xfer          = IME_Xfer,
+        .xfer_hints    = IME_Xferhints,
         .close         = IME_Close,
         .delete        = IME_Delete,
         .get_version   = IME_GetVersion,
         .fsync         = IME_Fsync,
         .get_file_size = IME_GetFileSize,
         .access        = IME_Access,
-        .statfs        = IME_StatFS,
-        .rmdir         = IME_RmDir,
-        .mkdir         = IME_MkDir,
+        .statfs        = IME_Statfs,
+        .rmdir         = IME_Rmdir,
+        .mkdir         = IME_Mkdir,
         .stat          = IME_Stat,
         .initialize    = IME_Initialize,
         .finalize      = IME_Finalize,
-        .get_options   = IME_options,
+        .get_options   = IME_Options,
 #if (IME_NATIVE_API_VERSION >= 132)
         .sync          = IME_Sync,
         .mknod         = IME_Mknod,
@@ -120,30 +128,48 @@ ior_aiori_t ime_aiori = {
         .enable_mdtest = true,
 };
 
+static aiori_xfer_hint_t *hints = NULL;
+static bool ime_initialized = false;
+
+
 /***************************** F U N C T I O N S ******************************/
+
+void IME_Xferhints(aiori_xfer_hint_t *params)
+{
+        hints = params;
+}
 
 /*
  * Initialize IME (before MPI is started).
  */
-static void IME_Initialize()
+void IME_Initialize()
 {
+        if (ime_initialized)
+                return;
+
         ime_native_init();
+        ime_initialized = true;
 }
 
 /*
  * Finlize IME (after MPI is shutdown).
  */
-static void IME_Finalize()
+void IME_Finalize()
 {
+        if (!ime_initialized)
+                return;
+
         (void)ime_native_finalize();
+        ime_initialized = true;
 }
 
 /*
  * Try to access a file through the IME interface.
  */
-static int IME_Access(const char *path, int mode, IOR_param_t *param)
+
+int IME_Access(const char *path, int mode, aiori_mod_opt_t *module_options)
 {
-        (void)param;
+        IME_UNUSED(module_options);
 
         return ime_native_access(path, mode);
 }
@@ -151,41 +177,43 @@ static int IME_Access(const char *path, int mode, IOR_param_t *param)
 /*
  * Create and open a file through the IME interface.
  */
-static void *IME_Create(char *testFileName, IOR_param_t *param)
+aiori_fd_t *IME_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
 {
-        return IME_Open(testFileName, param);
+        return IME_Open(testFileName, flags, param);
 }
 
 /*
  * Open a file through the IME interface.
  */
-static void *IME_Open(char *testFileName, IOR_param_t *param)
+aiori_fd_t *IME_Open(char *testFileName, int flags, aiori_mod_opt_t *param)
 {
         int fd_oflag = O_BINARY;
         int *fd;
+
+        if (hints->dryRun)
+                return NULL;
 
         fd = (int *)malloc(sizeof(int));
         if (fd == NULL)
                 ERR("Unable to malloc file descriptor");
 
-        ime_options_t * o = (ime_options_t*) param->backend_options;
-        if (o->direct_io == TRUE){
-          set_o_direct_flag(&fd_oflag);
-        }
+        ime_options_t *o = (ime_options_t*) param;
+        if (o->direct_io == TRUE)
+                set_o_direct_flag(&fd_oflag);
 
-        if (param->openFlags & IOR_RDONLY)
+        if (flags & IOR_RDONLY)
                 fd_oflag |= O_RDONLY;
-        if (param->openFlags & IOR_WRONLY)
+        if (flags & IOR_WRONLY)
                 fd_oflag |= O_WRONLY;
-        if (param->openFlags & IOR_RDWR)
+        if (flags & IOR_RDWR)
                 fd_oflag |= O_RDWR;
-        if (param->openFlags & IOR_APPEND)
+        if (flags & IOR_APPEND)
                 fd_oflag |= O_APPEND;
-        if (param->openFlags & IOR_CREAT)
+        if (flags & IOR_CREAT)
                 fd_oflag |= O_CREAT;
-        if (param->openFlags & IOR_EXCL)
+        if (flags & IOR_EXCL)
                 fd_oflag |= O_EXCL;
-        if (param->openFlags & IOR_TRUNC)
+        if (flags & IOR_TRUNC)
                 fd_oflag |= O_TRUNC;
 
         *fd = ime_native_open(testFileName, fd_oflag, 0664);
@@ -194,14 +222,14 @@ static void *IME_Open(char *testFileName, IOR_param_t *param)
                 ERR("cannot open file");
         }
 
-        return((void *)fd);
+        return (aiori_fd_t*) fd;
 }
 
 /*
  * Write or read access to file using the IM interface.
  */
-static IOR_offset_t IME_Xfer(int access, void *file, IOR_size_t *buffer,
-                             IOR_offset_t length, IOR_param_t *param)
+IOR_offset_t IME_Xfer(int access, aiori_fd_t *file, IOR_size_t *buffer,
+                      IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t *param)
 {
         int xferRetries = 0;
         long long remaining = (long long)length;
@@ -209,25 +237,28 @@ static IOR_offset_t IME_Xfer(int access, void *file, IOR_size_t *buffer,
         int fd = *(int *)file;
         long long rc;
 
+        if (hints->dryRun)
+                return length;
+
         while (remaining > 0) {
                 /* write/read file */
                 if (access == WRITE) { /* WRITE */
                         if (verbose >= VERBOSE_4) {
                                 fprintf(stdout, "task %d writing to offset %lld\n",
-                                        rank, param->offset + length - remaining);
+                                        rank, offset + length - remaining);
                         }
 
-                        rc = ime_native_pwrite(fd, ptr, remaining, param->offset);
+                        rc = ime_native_pwrite(fd, ptr, remaining, offset);
 
-                        if (param->fsyncPerWrite)
-                                IME_Fsync(&fd, param);
+                        if (hints->fsyncPerWrite)
+                                IME_Fsync(file, param);
                 } else {               /* READ or CHECK */
                         if (verbose >= VERBOSE_4) {
                                 fprintf(stdout, "task %d reading from offset %lld\n",
-                                        rank, param->offset + length - remaining);
+                                        rank, offset + length - remaining);
                         }
 
-                        rc = ime_native_pread(fd, ptr, remaining, param->offset);
+                        rc = ime_native_pread(fd, ptr, remaining, offset);
                         if (rc == 0)
                                 ERR("hit EOF prematurely");
                         else if (rc < 0)
@@ -238,9 +269,9 @@ static IOR_offset_t IME_Xfer(int access, void *file, IOR_size_t *buffer,
                         fprintf(stdout, "WARNING: Task %d, partial %s, %lld of "
                                 "%lld bytes at offset %lld\n",
                                 rank, access == WRITE ? "write" : "read", rc,
-                                remaining, param->offset + length - remaining );
+                                remaining, offset + length - remaining );
 
-                        if (param->singleXferAttempt) {
+                        if (hints->singleXferAttempt) {
                                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
                                           "barrier error");
                         }
@@ -264,7 +295,7 @@ static IOR_offset_t IME_Xfer(int access, void *file, IOR_size_t *buffer,
 /*
  * Perform fsync().
  */
-static void IME_Fsync(void *fd, IOR_param_t *param)
+void IME_Fsync(aiori_fd_t *fd, aiori_mod_opt_t *param)
 {
         if (ime_native_fsync(*(int *)fd) != 0)
                 WARN("cannot perform fsync on file");
@@ -273,33 +304,34 @@ static void IME_Fsync(void *fd, IOR_param_t *param)
 /*
  * Close a file through the IME interface.
  */
-static void IME_Close(void *fd, IOR_param_t *param)
+void IME_Close(aiori_fd_t *file, aiori_mod_opt_t *param)
 {
-        if (ime_native_close(*(int *)fd) != 0)
-        {
-                free(fd);
-                ERR("cannot close file");
-        }
-        else
-                free(fd);
+        if (hints->dryRun)
+                return;
+
+        if (ime_native_close(*(int*)file) != 0)
+                ERRF("Cannot close file descriptor: %d", *(int*)file);
+
+        free(file);
 }
 
 /*
  * Delete a file through the IME interface.
  */
-static void IME_Delete(char *testFileName, IOR_param_t *param)
+void IME_Delete(char *testFileName, aiori_mod_opt_t *param)
 {
-        char errmsg[256];
-        sprintf(errmsg, "[RANK %03d]:cannot delete file %s\n",
-                rank, testFileName);
+        if (hints->dryRun)
+                return;
+
         if (ime_native_unlink(testFileName) != 0)
-                WARN(errmsg);
+                EWARNF("[RANK %03d]: cannot delete file \"%s\"\n",
+                       rank, testFileName);
 }
 
 /*
  * Determine API version.
  */
-static char *IME_GetVersion()
+char *IME_GetVersion()
 {
         static char ver[1024] = {};
 #if (IME_NATIVE_API_VERSION >= 120)
@@ -310,18 +342,17 @@ static char *IME_GetVersion()
         return ver;
 }
 
-static int IME_StatFS(const char *path, ior_aiori_statfs_t *stat_buf,
-                      IOR_param_t *param)
+int IME_Statfs(const char *path, ior_aiori_statfs_t *stat_buf,
+               aiori_mod_opt_t *module_options)
 {
-        (void)param;
+        IME_UNUSED(module_options);
 
 #if (IME_NATIVE_API_VERSION >= 130)
         struct statvfs statfs_buf;
 
         int ret = ime_native_statvfs(path, &statfs_buf);
         if (ret)
-            return ret;
-
+                return ret;
         stat_buf->f_bsize = statfs_buf.f_bsize;
         stat_buf->f_blocks = statfs_buf.f_blocks;
         stat_buf->f_bfree = statfs_buf.f_bfree;
@@ -330,38 +361,37 @@ static int IME_StatFS(const char *path, ior_aiori_statfs_t *stat_buf,
 
         return 0;
 #else
-        (void)path;
-        (void)stat_buf;
+        IME_UNUSED(path);
+        IME_UNUSED(stat_buf);
 
         WARN("statfs is currently not supported in IME backend!");
         return -1;
 #endif
 }
 
-
-static int IME_MkDir(const char *path, mode_t mode, IOR_param_t *param)
+int IME_Mkdir(const char *path, mode_t mode, aiori_mod_opt_t * module_options)
 {
-        (void)param;
+        IME_UNUSED(module_options);
 
 #if (IME_NATIVE_API_VERSION >= 130)
         return ime_native_mkdir(path, mode);
 #else
-        (void)path;
-        (void)mode;
+        IME_UNUSED(path);
+        IME_UNUSED(mode);
 
         WARN("mkdir not supported in IME backend!");
         return -1;
 #endif
 }
 
-static int IME_RmDir(const char *path, IOR_param_t *param)
+int IME_Rmdir(const char *path, aiori_mod_opt_t *module_options)
 {
-        (void)param;
+        IME_UNUSED(module_options);
 
 #if (IME_NATIVE_API_VERSION >= 130)
         return ime_native_rmdir(path);
 #else
-        (void)path;
+        IME_UNUSED(path);
 
         WARN("rmdir not supported in IME backend!");
         return -1;
@@ -371,9 +401,10 @@ static int IME_RmDir(const char *path, IOR_param_t *param)
 /*
  * Perform stat() through the IME interface.
  */
-static int IME_Stat(const char *path, struct stat *buf, IOR_param_t *param)
+int IME_Stat(const char *path, struct stat *buf,
+             aiori_mod_opt_t *module_options)
 {
-    (void)param;
+    IME_UNUSED(module_options);
 
     return ime_native_stat(path, buf);
 }
@@ -381,62 +412,40 @@ static int IME_Stat(const char *path, struct stat *buf, IOR_param_t *param)
 /*
  * Use IME stat() to return aggregate file size.
  */
-static IOR_offset_t IME_GetFileSize(IOR_param_t *test, MPI_Comm testComm,
-                                    char *testFileName)
+IOR_offset_t IME_GetFileSize(aiori_mod_opt_t *test, char *testFileName)
 {
         struct stat stat_buf;
-        IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
 
-        if (ime_native_stat(testFileName, &stat_buf) != 0) {
-                ERR("cannot get status of written file");
-        }
-        aggFileSizeFromStat = stat_buf.st_size;
+        if (hints->dryRun)
+                return 0;
 
-        if (test->filePerProc) {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, testComm),
-                          "cannot total data moved");
-                aggFileSizeFromStat = tmpSum;
-        } else {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, testComm),
-                          "cannot total data moved");
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, testComm),
-                          "cannot total data moved");
+        if (ime_native_stat(testFileName, &stat_buf) != 0)
+                ERRF("cannot get status of written file %s",
+                      testFileName);
 
-                if (tmpMin != tmpMax) {
-                        if (rank == 0) {
-                                WARN("inconsistent file size by different tasks");
-                        }
-                        /* incorrect, but now consistent across tasks */
-                        aggFileSizeFromStat = tmpMin;
-                }
-        }
-
-        return(aggFileSizeFromStat);
+        return stat_buf.st_size;
 }
 
 #if (IME_NATIVE_API_VERSION >= 132)
 /*
  * Create a file through mknod interface.
  */
-static int IME_Mknod(char *testFileName)
+int IME_Mknod(char *testFileName)
 {
-    int ret = ime_native_mknod(testFileName, S_IFREG | S_IRUSR, 0);
-    if (ret < 0)
-        ERR("mknod failed");
+        int ret = ime_native_mknod(testFileName, S_IFREG | S_IRUSR, 0);
+        if (ret < 0)
+                ERR("mknod failed");
 
-    return ret;
+        return ret;
 }
 
 /*
  * Use IME sync to flush page cache of all opened files.
  */
-static void IME_Sync(IOR_param_t * param)
+void IME_Sync(aiori_mod_opt_t *param)
 {
-    int ret = ime_native_sync(0);
-    if (ret != 0)
-        FAIL("Error executing the sync command.");
+        int ret = ime_native_sync(0);
+        if (ret != 0)
+                FAIL("Error executing the sync command.");
 }
 #endif

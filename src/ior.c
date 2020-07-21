@@ -313,13 +313,38 @@ CheckForOutliers(IOR_param_t *test, const double *timer, const int access)
  * Check if actual file size equals expected size; if not use actual for
  * calculating performance rate.
  */
-static void CheckFileSize(IOR_test_t *test, IOR_offset_t dataMoved, int rep,
-                          const int access)
+static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t dataMoved, int rep, const int access)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
         IOR_point_t *point = (access == WRITE) ? &results[rep].write :
                                                  &results[rep].read;
+
+        /* get the size of the file */
+        IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
+        aggFileSizeFromStat = backend->get_file_size(params->backend_options,  testFilename);
+
+        if (params->hints.filePerProc == TRUE) {
+            MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
+                                    MPI_LONG_LONG_INT, MPI_SUM, testComm),
+                      "cannot reduce total data moved");
+            aggFileSizeFromStat = tmpSum;
+        } else {
+            MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMin, 1,
+                                    MPI_LONG_LONG_INT, MPI_MIN, testComm),
+                      "cannot reduce total data moved");
+            MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMax, 1,
+                                    MPI_LONG_LONG_INT, MPI_MAX, testComm),
+                      "cannot reduce total data moved");
+            if (tmpMin != tmpMax) {
+                    if (rank == 0) {
+                            WARN("inconsistent file size by different tasks");
+                    }
+                    /* incorrect, but now consistent across tasks */
+                    aggFileSizeFromStat = tmpMin;
+            }
+        }
+        point->aggFileSizeFromStat = aggFileSizeFromStat;
 
         MPI_CHECK(MPI_Allreduce(&dataMoved, &point->aggFileSizeFromXfer,
                                 1, MPI_LONG_LONG_INT, MPI_SUM, testComm),
@@ -1354,6 +1379,7 @@ static void TestIoSys(IOR_test_t *test)
                         params->open = WRITE;
                         timer[0] = GetTimeStamp();
                         fd = backend->create(testFileName, IOR_WRONLY | IOR_CREAT | IOR_TRUNC, params->backend_options);
+                        if(fd == NULL) FAIL("Cannot create file");
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1379,13 +1405,9 @@ static void TestIoSys(IOR_test_t *test)
                         timer[5] = GetTimeStamp();
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
-                        /* get the size of the file just written */
-                        results[rep].write.aggFileSizeFromStat =
-                                backend->get_file_size(params->backend_options, testComm, testFileName);
-
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
-                        CheckFileSize(test, dataMoved, rep, WRITE);
+                        CheckFileSize(test, testFileName, dataMoved, rep, WRITE);
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, WRITE);
@@ -1428,6 +1450,7 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         params->open = WRITECHECK;
                         fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
+                        if(fd == NULL) FAIL("Cannot open file");
                         dataMoved = WriteOrRead(params, &results[rep], fd, WRITECHECK, &ioBuffers);
                         backend->close(fd, params->backend_options);
                         rankOffset = 0;
@@ -1500,6 +1523,7 @@ static void TestIoSys(IOR_test_t *test)
                         params->open = READ;
                         timer[0] = GetTimeStamp();
                         fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
+                        if(fd == NULL) FAIL("Cannot open file");
                         timer[1] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -1519,14 +1543,9 @@ static void TestIoSys(IOR_test_t *test)
                         backend->close(fd, params->backend_options);
                         timer[5] = GetTimeStamp();
 
-                        /* get the size of the file just read */
-                        results[rep].read.aggFileSizeFromStat =
-                                backend->get_file_size(params->backend_options, testComm,
-                                                       testFileName);
-
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
-                        CheckFileSize(test, dataMoved, rep, READ);
+                        CheckFileSize(test, testFileName, dataMoved, rep, READ);
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, READ);

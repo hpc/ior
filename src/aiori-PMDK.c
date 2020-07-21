@@ -28,14 +28,19 @@ static option_help options [] = {
 /**************************** P R O T O T Y P E S *****************************/
 
 static option_help * PMDK_options();
-static void *PMDK_Create(char *, IOR_param_t *);
-static void *PMDK_Open(char *, IOR_param_t *);
-static IOR_offset_t PMDK_Xfer(int, void *, IOR_size_t *, IOR_offset_t, IOR_param_t *);
-static void PMDK_Fsync(void *, IOR_param_t *);
-static void PMDK_Close(void *, IOR_param_t *);
-static void PMDK_Delete(char *, IOR_param_t *);
-static IOR_offset_t PMDK_GetFileSize(IOR_param_t *, MPI_Comm, char *);
+static aiori_fd_t *PMDK_Create(char *,int iorflags,  aiori_mod_opt_t *);
+static aiori_fd_t *PMDK_Open(char *, int iorflags, aiori_mod_opt_t *);
+static IOR_offset_t PMDK_Xfer(int, aiori_fd_t *, IOR_size_t *, IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
+static void PMDK_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
+static void PMDK_Close(aiori_fd_t *, aiori_mod_opt_t *);
+static void PMDK_Delete(char *, aiori_mod_opt_t *);
+static IOR_offset_t PMDK_GetFileSize(aiori_mod_opt_t *, char *);
 
+static aiori_xfer_hint_t * hints = NULL;
+
+static void PMDK_xfer_hints(aiori_xfer_hint_t * params){
+  hints = params;
+}
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -55,6 +60,7 @@ ior_aiori_t pmdk_aiori = {
         .delete = PMDK_Delete,
         .get_version = aiori_get_version,
         .fsync = PMDK_Fsync,
+        .xfer_hints = PMDK_xfer_hints,
         .get_file_size = PMDK_GetFileSize,
         .statfs = aiori_posix_statfs,
         .mkdir = aiori_posix_mkdir,
@@ -78,18 +84,18 @@ static option_help * PMDK_options(){
 /*
  * Create and open a memory space through the PMDK interface.
  */
-static void *PMDK_Create(char * testFileName, IOR_param_t * param){
+static aiori_fd_t *PMDK_Create(char * testFileName, int iorflags, aiori_mod_opt_t * param){
     char *pmemaddr = NULL;
     int is_pmem;
     size_t mapped_len;
     size_t open_length;
 
-    if(!param->filePerProc){
+    if(! hints->filePerProc){
       fprintf(stdout, "\nPMDK functionality can only be used with filePerProc functionality\n");
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
     }
 
-    open_length = param->blockSize * param->segmentCount;
+    open_length = hints->blockSize * hints->segmentCount;
 
     if((pmemaddr = pmem_map_file(testFileName, open_length,
 				  PMEM_FILE_CREATE|PMEM_FILE_EXCL,
@@ -98,7 +104,7 @@ static void *PMDK_Create(char * testFileName, IOR_param_t * param){
       perror("pmem_map_file");
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
     }
-    
+
     if(!is_pmem){
       fprintf(stdout, "\n is_pmem is %d\n",is_pmem);
       fprintf(stdout, "\npmem_map_file thinks the hardware being used is not pmem\n");
@@ -106,7 +112,7 @@ static void *PMDK_Create(char * testFileName, IOR_param_t * param){
     }
 
 
-    
+
     return((void *)pmemaddr);
 } /* PMDK_Create() */
 
@@ -115,20 +121,19 @@ static void *PMDK_Create(char * testFileName, IOR_param_t * param){
 /*
  * Open a memory space through the PMDK interface.
  */
-
-static void *PMDK_Open(char * testFileName, IOR_param_t * param){
+static aiori_fd_t *PMDK_Open(char * testFileName,int iorflags, aiori_mod_opt_t * param){
 
     char *pmemaddr = NULL;
     int is_pmem;
     size_t mapped_len;
     size_t open_length;
 
-    if(!param->filePerProc){
+    if(!hints->filePerProc){
       fprintf(stdout, "\nPMDK functionality can only be used with filePerProc functionality\n");
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
     }
 
-    open_length = param->blockSize * param->segmentCount;
+    open_length = hints->blockSize * hints->segmentCount;
 
     if((pmemaddr = pmem_map_file(testFileName, 0,
 				  PMEM_FILE_EXCL,
@@ -138,12 +143,12 @@ static void *PMDK_Open(char * testFileName, IOR_param_t * param){
       fprintf(stdout, "\n %ld %ld\n",open_length, mapped_len);
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
     }
-    
+
     if(!is_pmem){
       fprintf(stdout, "pmem_map_file thinks the hardware being used is not pmem\n");
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
     }
-   
+
     return((void *)pmemaddr);
 } /* PMDK_Open() */
 
@@ -153,8 +158,8 @@ static void *PMDK_Open(char * testFileName, IOR_param_t * param){
  * Write or read access to a memory space created with PMDK. Include drain/flush functionality.
  */
 
-static IOR_offset_t PMDK_Xfer(int access, void *file, IOR_size_t * buffer,
-                       IOR_offset_t length, IOR_param_t * param){
+static IOR_offset_t PMDK_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
+                       IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * param){
     int            xferRetries = 0;
     long long      remaining  = (long long)length;
     char         * ptr = (char *)buffer;
@@ -162,11 +167,11 @@ static IOR_offset_t PMDK_Xfer(int access, void *file, IOR_size_t * buffer,
     long long      i;
     long long      offset_size;
 
-    offset_size = param->offset;
+    offset_size = offset;
 
     if(access == WRITE){
-      if(param->fsync){
-	pmem_memcpy_nodrain(&file[offset_size], ptr, length);
+      if(hints->fsyncPerWrite){
+	      pmem_memcpy_nodrain(&file[offset_size], ptr, length);
       }else{
         pmem_memcpy_persist(&file[offset_size], ptr, length);
       }
@@ -183,7 +188,7 @@ static IOR_offset_t PMDK_Xfer(int access, void *file, IOR_size_t * buffer,
  * Perform fsync().
  */
 
-static void PMDK_Fsync(void *fd, IOR_param_t * param)
+static void PMDK_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
   pmem_drain();
 } /* PMDK_Fsync() */
@@ -194,11 +199,10 @@ static void PMDK_Fsync(void *fd, IOR_param_t * param)
  * Stub for close functionality that is not required for PMDK
  */
 
-static void PMDK_Close(void *fd, IOR_param_t * param){
+static void PMDK_Close(aiori_fd_t *fd, aiori_mod_opt_t * param){
   size_t open_length;
-  open_length = param->transferSize;
+  open_length = hints->transferSize;
   pmem_unmap(fd, open_length);
-
 } /* PMDK_Close() */
 
 
@@ -207,38 +211,25 @@ static void PMDK_Close(void *fd, IOR_param_t * param){
  * Delete the file backing a memory space through PMDK
  */
 
-static void PMDK_Delete(char *testFileName, IOR_param_t * param)
+static void PMDK_Delete(char *testFileName, aiori_mod_opt_t * param)
 {
     char errmsg[256];
     sprintf(errmsg,"[RANK %03d]:cannot delete file %s\n",rank,testFileName);
     if (unlink(testFileName) != 0) WARN(errmsg);
 } /* PMDK_Delete() */
 
-
-/******************************************************************************/
-/*
- * Determine api version.
- */
-
-static void PMDK_SetVersion(IOR_param_t *test)
-{
-    strcpy(test->apiVersion, test->api);
-} /* PMDK_SetVersion() */
-
-
 /******************************************************************************/
 /*
  * Use POSIX stat() to return aggregate file size.
  */
 
-static IOR_offset_t PMDK_GetFileSize(IOR_param_t * test,
-                      MPI_Comm      testComm,
+static IOR_offset_t PMDK_GetFileSize(aiori_mod_opt_t * test,
                       char        * testFileName)
 {
     struct stat stat_buf;
     IOR_offset_t aggFileSizeFromStat,
                  tmpMin, tmpMax, tmpSum;
-    if (test->filePerProc == FALSE) {
+    if (hints->filePerProc == FALSE) {
       fprintf(stdout, "\nPMDK functionality can only be used with filePerProc functionality\n");
       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
     }
@@ -247,11 +238,6 @@ static IOR_offset_t PMDK_GetFileSize(IOR_param_t * test,
         ERR("cannot get status of written file");
     }
     aggFileSizeFromStat = stat_buf.st_size;
-
-    MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
-			    MPI_LONG_LONG_INT, MPI_SUM, testComm),
-	      "cannot total data moved");
-    aggFileSizeFromStat = tmpSum;
 
     return(aggFileSizeFromStat);
 } /* PMDK_GetFileSize() */

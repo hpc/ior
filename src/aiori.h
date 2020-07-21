@@ -15,12 +15,6 @@
 #ifndef _AIORI_H
 #define _AIORI_H
 
-#include <mpi.h>
-
-#ifndef MPI_FILE_NULL
-#   include <mpio.h>
-#endif /* not MPI_FILE_NULL */
-
 #include <sys/stat.h>
 #include <stdbool.h>
 
@@ -101,12 +95,12 @@ typedef struct ior_aiori {
         */
         void (*xfer_hints)(aiori_xfer_hint_t * params);
         IOR_offset_t (*xfer)(int access, aiori_fd_t *, IOR_size_t *,
-                             IOR_offset_t size, IOR_offset_t offset, aiori_mod_opt_t *);
-        void (*close)(aiori_fd_t *, aiori_mod_opt_t *);
-        void (*delete)(char *, aiori_mod_opt_t *);
+                             IOR_offset_t size, IOR_offset_t offset, aiori_mod_opt_t * module_options);
+        void (*close)(aiori_fd_t *, aiori_mod_opt_t * module_options);
+        void (*delete)(char *, aiori_mod_opt_t * module_options);
         char* (*get_version)(void);
-        void (*fsync)(aiori_fd_t *, aiori_mod_opt_t *);
-        IOR_offset_t (*get_file_size)(aiori_mod_opt_t * module_options, MPI_Comm, char *);
+        void (*fsync)(aiori_fd_t *, aiori_mod_opt_t * module_options);
+        IOR_offset_t (*get_file_size)(aiori_mod_opt_t * module_options, char * filename);
         int (*statfs) (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t * module_options);
         int (*mkdir) (const char *path, mode_t mode, aiori_mod_opt_t * module_options);
         int (*rmdir) (const char *path, aiori_mod_opt_t * module_options);
@@ -136,7 +130,8 @@ extern ior_aiori_t ncmpi_aiori;
 extern ior_aiori_t posix_aiori;
 extern ior_aiori_t pmdk_aiori;
 extern ior_aiori_t mmap_aiori;
-extern ior_aiori_t s3_aiori;
+extern ior_aiori_t S3_libS3_aiori;
+extern ior_aiori_t s3_4c_aiori;
 extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
 extern ior_aiori_t rados_aiori;
@@ -164,7 +159,7 @@ void aiori_posix_xfer_hints(aiori_xfer_hint_t * params);
 aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * module_options);
 int POSIX_Mknod(char *testFileName);
 aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * module_options);
-IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm, char *testFileName);
+IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, char *testFileName);
 void POSIX_Delete(char *testFileName, aiori_mod_opt_t * module_options);
 void POSIX_Close(aiori_fd_t *fd, aiori_mod_opt_t * module_options);
 option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values);
@@ -172,7 +167,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
 
 /* NOTE: these 3 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
 void MPIIO_Delete(char *testFileName, aiori_mod_opt_t * module_options);
-IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * options, MPI_Comm testComm, char *testFileName);
-int MPIIO_Access(const char *, int, aiori_mod_opt_t *);
+IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * options, char *testFileName);
+int MPIIO_Access(const char *, int, aiori_mod_opt_t * module_options);
 
 #endif /* not _AIORI_H */

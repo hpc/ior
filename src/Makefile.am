@@ -90,8 +90,8 @@ extraSOURCES += aiori-Gfarm.c
 extraLDADD += -lgfarm
 endif
 
-if USE_S3_AIORI
-extraSOURCES  += aiori-S3.c
+if USE_S3_4C_AIORI
+extraSOURCES  += aiori-S3-4c.c
 if AWS4C_DIR
   extraCPPFLAGS += $(AWS4C_CPPFLAGS)
   extraLDFLAGS  += $(AWS4C_LDFLAGS)
@@ -100,6 +100,11 @@ extraLDADD    += -lcurl
 extraLDADD    += -lxml2
 extraLDADD    += -laws4c
 extraLDADD    += -laws4c_extra
+endif
+
+if USE_S3_LIBS3_AIORI
+extraSOURCES  += aiori-S3-libs3.c
+extraLDADD    += -ls3
 endif
 
 if WITH_LUSTRE
@@ -128,3 +133,9 @@ MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
 
 libaiori_a_SOURCES += $(extraSOURCES)
 libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
+
+# Generate config file with build flags to allow reuse of library
+all-local: build.conf
+build.conf:
+	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) > build.conf
+	@echo CFLAGS=$(CFLAGS) $(extraCPPFLAGS) >> build.conf

@@ -108,7 +108,7 @@ static char * DUMMY_getVersion()
   return "0.5";
 }
 
-static IOR_offset_t DUMMY_GetFileSize(aiori_mod_opt_t * options, MPI_Comm testComm, char *testFileName)
+static IOR_offset_t DUMMY_GetFileSize(aiori_mod_opt_t * options, char *testFileName)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY getFileSize: %s\n", testFileName);

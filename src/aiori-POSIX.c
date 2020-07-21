@@ -676,8 +676,7 @@ void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
-                                      char *testFileName)
+IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 {
         if(hints->dryRun)
           return 0;
@@ -688,27 +687,6 @@ IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
                 ERRF("stat(\"%s\", ...) failed", testFileName);
         }
         aggFileSizeFromStat = stat_buf.st_size;
-
-        if (hints->filePerProc == TRUE) {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, testComm),
-                          "cannot total data moved");
-                aggFileSizeFromStat = tmpSum;
-        } else {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, testComm),
-                          "cannot total data moved");
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, testComm),
-                          "cannot total data moved");
-                if (tmpMin != tmpMax) {
-                        if (rank == 0) {
-                                WARN("inconsistent file size by different tasks");
-                        }
-                        /* incorrect, but now consistent across tasks */
-                        aggFileSizeFromStat = tmpMin;
-                }
-        }
 
         return (aggFileSizeFromStat);
 }
