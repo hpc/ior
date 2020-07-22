@@ -86,7 +86,7 @@ static void DAOS_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static void DAOS_Delete(char *, aiori_mod_opt_t *);
 static char* DAOS_GetVersion();
 static void DAOS_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static IOR_offset_t DAOS_GetFileSize(aiori_mod_opt_t *, MPI_Comm, char *);
+static IOR_offset_t DAOS_GetFileSize(aiori_mod_opt_t *, char *);
 static option_help * DAOS_options();
 static void DAOS_init_xfer_options(aiori_xfer_hint_t *);
 static int DAOS_check_params(aiori_mod_opt_t *);
@@ -532,7 +532,7 @@ DAOS_Fsync(aiori_fd_t *file, aiori_mod_opt_t *param)
 }
 
 static IOR_offset_t
-DAOS_GetFileSize(aiori_mod_opt_t *param, MPI_Comm comm, char *testFileName)
+DAOS_GetFileSize(aiori_mod_opt_t *param, char *testFileName)
 {
 	daos_obj_id_t	oid;
 	daos_size_t	size;
