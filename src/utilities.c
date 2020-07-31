@@ -877,9 +877,9 @@ char *HumanReadable(IOR_offset_t value, int base)
 unsigned long GetProcessorAndCore(int *chip, int *core){
 	return syscall(SYS_getcpu, core, chip, NULL);
 }
+#elif defined(__i386__) || defined(_X86_) || defined(__i386) || defined(__amd64__)
 // TODO: Add in AMD function
-#else
-// If we're not on an ARM processor assume we're on an intel processor and use the
+// We're on an intel processor and use the
 // rdtscp instruction.
 unsigned long GetProcessorAndCore(int *chip, int *core){
 	unsigned long a,d,c;
@@ -887,5 +887,12 @@ unsigned long GetProcessorAndCore(int *chip, int *core){
 	*chip = (c & 0xFFF000)>>12;
 	*core = c & 0xFFF;
 	return ((unsigned long)a) | (((unsigned long)d) << 32);;
+}
+#else
+unsigned long GetProcessorAndCore(int *chip, int *core){
+#warning GetProcessorAndCore is implemented as a dummy
+  *chip = 0;
+  *core = 0;
+	return 1;
 }
 #endif
