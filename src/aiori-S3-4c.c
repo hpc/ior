@@ -117,7 +117,7 @@ CURLcode           rc;
 #   define      IOR_CURL_NOCONTINUE  0x02
 #   define      IOR_CURL_S3_EMC_EXT  0x04 /* allow EMC extensions to S3? */
 
-#define MAX_UPLOAD_ID_SIZE 32 /* seems to be 32 */
+#define MAX_UPLOAD_ID_SIZE 256 /* TODO don't know the actual value */
 
 
 #ifdef USE_S3_4C_AIORI
@@ -132,6 +132,8 @@ CURLcode           rc;
 typedef struct {
   /* Any objects we create or delete will be under this bucket */
   char* bucket_name;
+  char* user;
+  char* host;
   /* Runtime data, this data isn't yet safe to allow concurrent access to multiple files, only open one file at a time */
   int curl_flags;
   IOBuf*      io_buf;              /* aws4c places parsed header values here */
@@ -239,7 +241,9 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
   o->bucket_name = "ior";
 
   option_help h [] = {
-  {0, "S3.bucket-name", "The name of the bucket.", OPTION_OPTIONAL_ARGUMENT, 's', & o->bucket_name},
+  {0, "S3-4c.user", "The username (in ~/.awsAuth).", OPTION_OPTIONAL_ARGUMENT, 's', & o->user},
+  {0, "S3-4C.host", "The host optionally followed by:port.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
+  {0, "S3-4c.bucket-name", "The name of the bucket.", OPTION_OPTIONAL_ARGUMENT, 's', & o->bucket_name},
   LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
@@ -350,7 +354,7 @@ static void s3_connect( s3_options_t* param ) {
 	//       would require conditional compilation, there.
 
 	aws_set_debug(0); // param->verbose >= 4
-	aws_read_config(getenv("USER"));  // requires ~/.awsAuth
+	aws_read_config(param->user);  // requires ~/.awsAuth
 	aws_reuse_connections(1);
 
 	// initialize IOBufs.  These are basically dynamically-extensible
@@ -396,6 +400,8 @@ static void s3_connect( s3_options_t* param ) {
 //   s3_set_proxy("10.143.0.1:80");
 //   s3_set_host( "10.143.0.1:80");
 #endif
+
+  s3_set_host(param->host);
 
 	// make sure test-bucket exists
 	s3_set_bucket((char*) param->bucket_name);
