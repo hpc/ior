@@ -792,8 +792,7 @@ void GetTestFileName(char *testFileName, IOR_param_t * test)
         strcpy(initialTestFileName, test->testFileName);
         if(test->dualMount){
                 GetProcessorAndCore(&socket, &core);
-                sprintf(tmpString, "%s%d/%s",initialTestFileName,
-                        socket, "data");
+                sprintf(tmpString, "%s%d/%s",initialTestFileName, socket, "data");
                 strcpy(initialTestFileName, tmpString);
         }
         fileNames = ParseFileName(initialTestFileName, &count);

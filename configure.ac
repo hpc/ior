@@ -387,6 +387,30 @@ Consider --with-aws4c=, CPPFLAGS, LDFLAGS, etc])
             LDFLAGS=$ORIG_LDFLAGS
 ])
 
+# Check for existence of the function to detect the CPU socket ID (for multi-socket systems)
+AC_COMPILE_IFELSE(
+  [AC_LANG_SOURCE([[
+      int main(){
+      unsigned long a,d,c;
+      __asm__ volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+      return 0;
+      }
+  ]])],
+  AC_DEFINE([HAVE_RDTSCP_ASM], [], [Has ASM to detect CPU socket ID]))
+
+AC_COMPILE_IFELSE(
+  [AC_LANG_SOURCE([[
+      #define _GNU_SOURCE
+      #include <unistd.h>
+      #include <sys/syscall.h>
+      unsigned long GetProcessorAndCore(int *chip, int *core){
+      	return syscall(SYS_getcpu, core, chip, NULL);
+      }
+      int main(){
+      }
+  ]])],
+  AC_DEFINE([HAVE_GETCPU_SYSCALL], [], [Has syscall to detect CPU socket ID]))
+
 
 # Enable building "IOR", in all capitals
 AC_ARG_ENABLE([caps],
