@@ -120,6 +120,7 @@ enum bench_type {
 };
 
 extern ior_aiori_t dummy_aiori;
+extern ior_aiori_t aio_aiori;
 extern ior_aiori_t daos_aiori;
 extern ior_aiori_t dfs_aiori;
 extern ior_aiori_t hdf5_aiori;
@@ -154,15 +155,6 @@ int aiori_posix_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * module_o
 int aiori_posix_rmdir (const char *path, aiori_mod_opt_t * module_options);
 int aiori_posix_access (const char *path, int mode, aiori_mod_opt_t * module_options);
 int aiori_posix_stat (const char *path, struct stat *buf, aiori_mod_opt_t * module_options);
-void aiori_posix_xfer_hints(aiori_xfer_hint_t * params);
-
-aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * module_options);
-int POSIX_Mknod(char *testFileName);
-aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * module_options);
-IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, char *testFileName);
-void POSIX_Delete(char *testFileName, aiori_mod_opt_t * module_options);
-void POSIX_Close(aiori_fd_t *fd, aiori_mod_opt_t * module_options);
-option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values);
 
 
 /* NOTE: these 3 MPI-IO functions are exported for reuse by HDF5/PNetCDF */

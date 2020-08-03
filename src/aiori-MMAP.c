@@ -22,6 +22,7 @@
 
 #include "ior.h"
 #include "aiori.h"
+#include "aiori-POSIX.h"
 #include "iordef.h"
 #include "utilities.h"
 
@@ -86,7 +87,7 @@ static aiori_xfer_hint_t * hints = NULL;
 
 static void MMAP_xfer_hints(aiori_xfer_hint_t * params){
   hints = params;
-  aiori_posix_xfer_hints(params);
+  POSIX_xfer_hints(params);
 }
 
 static int MMAP_check_params(aiori_mod_opt_t * options){

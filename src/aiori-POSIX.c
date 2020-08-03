@@ -55,6 +55,8 @@
 #include "iordef.h"
 #include "utilities.h"
 
+#include "aiori-POSIX.h"
+
 #ifndef   open64                /* necessary for TRU64 -- */
 #  define open64  open            /* unlikely, but may pose */
 #endif  /* not open64 */                        /* conflicting prototypes */
@@ -70,32 +72,6 @@
 /**************************** P R O T O T Y P E S *****************************/
 static IOR_offset_t POSIX_Xfer(int, aiori_fd_t *, IOR_size_t *,
                                IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
-static void POSIX_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static void POSIX_Sync(aiori_mod_opt_t * );
-static int POSIX_check_params(aiori_mod_opt_t * options);
-
-/************************** O P T I O N S *****************************/
-typedef struct{
-  /* in case of a change, please update depending MMAP module too */
-  int direct_io;
-
-  /* Lustre variables */
-  int lustre_set_striping;         /* flag that we need to set lustre striping */
-  int lustre_stripe_count;
-  int lustre_stripe_size;
-  int lustre_start_ost;
-  int lustre_ignore_locks;
-
-  /* gpfs variables */
-  int gpfs_hint_access;          /* use gpfs "access range" hint */
-  int gpfs_release_token;        /* immediately release GPFS tokens after
-                                    creating or opening a file */
-  /* beegfs variables */
-  int beegfs_numTargets;           /* number storage targets to use */
-  int beegfs_chunkSize;            /* srtipe pattern for new files */
-
-} posix_options_t;
-
 
 option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   posix_options_t * o = malloc(sizeof(posix_options_t));
@@ -149,7 +125,7 @@ ior_aiori_t posix_aiori = {
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
         .delete = POSIX_Delete,
-        .xfer_hints = aiori_posix_xfer_hints,
+        .xfer_hints = POSIX_xfer_hints,
         .get_version = aiori_get_version,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
@@ -168,11 +144,11 @@ ior_aiori_t posix_aiori = {
 
 static aiori_xfer_hint_t * hints = NULL;
 
-void aiori_posix_xfer_hints(aiori_xfer_hint_t * params){
+void POSIX_xfer_hints(aiori_xfer_hint_t * params){
   hints = params;
 }
 
-static int POSIX_check_params(aiori_mod_opt_t * param){
+int POSIX_check_params(aiori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
   if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
         ERR("beegfsChunkSize must be a power of two and >64k");
@@ -630,17 +606,14 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
         return (length);
 }
 
-/*
- * Perform fsync().
- */
-static void POSIX_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
+void POSIX_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         if (fsync(*(int *)fd) != 0)
                 EWARNF("fsync(%d) failed", *(int *)fd);
 }
 
 
-static void POSIX_Sync(aiori_mod_opt_t * param)
+void POSIX_Sync(aiori_mod_opt_t * param)
 {
   int ret = system("sync");
   if (ret != 0){

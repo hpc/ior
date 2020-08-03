@@ -200,6 +200,19 @@ AS_IF([test "x$with_pmdk" != xno], [
 	[AC_MSG_ERROR([Library containing pmdk symbols not found])])
 ])
 
+# LINUX AIO support
+AC_ARG_WITH([aio],
+        [AS_HELP_STRING([--with-aio],
+           [support Linux AIO @<:@default=no@:>@])],
+        [],
+        [with_aio=no])
+AM_CONDITIONAL([USE_AIO_AIORI], [test x$with_aio = xyes])
+AS_IF([test "x$with_aio" != xno], [
+        AC_DEFINE([USE_AIO_AIORI], [], [Build AIO backend])
+        AC_CHECK_HEADERS(libaio.h,, [unset AIO])
+	AC_SEARCH_LIBS([aio],	[io_setup], [AC_MSG_ERROR([Library containing AIO symbol io_setup not found])])
+])
+
 
 # RADOS support
 AC_ARG_WITH([rados],

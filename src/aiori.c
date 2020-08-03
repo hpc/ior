@@ -42,6 +42,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_POSIX_AIORI
         &posix_aiori,
 #endif
+#ifdef USE_AIO_AIORI
+        &aio_aiori,
+#endif
 #ifdef USE_PMDK_AIORI
         &pmdk_aiori,
 #endif
