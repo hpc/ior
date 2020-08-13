@@ -105,6 +105,7 @@ extraLDADD    += -lcurl
 extraLDADD    += -lxml2
 extraLDADD    += -laws4c
 extraLDADD    += -laws4c_extra
+extraLDADD    += -lcrypto
 endif
 
 if USE_S3_LIBS3_AIORI

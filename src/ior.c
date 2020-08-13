@@ -246,7 +246,6 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->hdfs_block_size = 0;
 
         p->URI = NULL;
-        p->part_number = 0;
 }
 
 static void
