@@ -374,36 +374,55 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
  * difference in buffers and returns total errors counted.
  */
 static size_t
-CompareBuffers(void *expectedBuffer,
-               void *unknownBuffer,
-               size_t size,
-               IOR_offset_t transferCount, IOR_param_t *test, int access)
+CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
 {
         char testFileName[MAX_PATHLEN];
         char bufferLabel1[MAX_STR];
         char bufferLabel2[MAX_STR];
-        size_t i, j, length, first, last;
+        size_t i, j, length;
         size_t errorCount = 0;
-        int inError = 0;
-        unsigned long long *goodbuf = (unsigned long long *)expectedBuffer;
-        unsigned long long *testbuf = (unsigned long long *)unknownBuffer;
+
+        IOR_offset_t offsetSignature = 0;
+        unsigned long long hi, lo, val; // for data verification
+        hi = ((unsigned long long)fillrank) << 32;
+        lo = (unsigned long long)test->timeStampSignatureValue;
+        if (test->storeFileOffset){
+          offsetSignature = offset;
+        }
+
+        unsigned long long *testbuf = (unsigned long long *)expectedBuffer;
 
         if (access == WRITECHECK || access == READCHECK) {
                 strcpy(bufferLabel1, "Expected: ");
                 strcpy(bufferLabel2, "Actual:   ");
         } else {
-                ERR("incorrect argument for CompareBuffers()");
+                ERR("incorrect argument for CompareData()");
         }
 
         length = size / sizeof(IOR_size_t);
-        first = -1;
         if (verbose >= VERBOSE_3) {
                 fprintf(out_logfile,
                         "[%d] At file byte offset %lld, comparing %llu-byte transfer\n",
                         rank, (long long) offset, (long long)size);
         }
+
+        int incompressibleSeed = test->setTimeStampSignature + fillrank;
         for (i = 0; i < length; i++) {
-                if (testbuf[i] != goodbuf[i]) {
+                if(test->dataPacketType == incompressible ) {
+                  /* same logic as in FillIncompressibleBuffer() */
+                  hi = ((unsigned long long) rand_r(& incompressibleSeed) << 32);
+                  lo = (unsigned long long) rand_r(& incompressibleSeed);
+                  val = hi | lo;
+                }else{
+                  if ((i % 2) == 0) {
+                    /* evens contain MPI rank and time in seconds */
+                    val = hi | lo;
+                  } else {
+                    /* odds contain offset */
+                    val = offsetSignature + (i * sizeof(unsigned long long));
+                  }
+                }
+                if (testbuf[i] != val) {
                         errorCount++;
                         if (verbose >= VERBOSE_2) {
                                 fprintf(out_logfile,
@@ -412,58 +431,28 @@ CompareBuffers(void *expectedBuffer,
                                         (long long) offset +
                                         (IOR_size_t) (i * sizeof(IOR_size_t)));
                                 fprintf(out_logfile, "[%d] %s0x", rank, bufferLabel1);
-                                fprintf(out_logfile, "%016llx\n", goodbuf[i]);
+                                fprintf(out_logfile, "%016llx\n", val);
                                 fprintf(out_logfile, "[%d] %s0x", rank, bufferLabel2);
                                 fprintf(out_logfile, "%016llx\n", testbuf[i]);
                         }
-                        if (!inError) {
-                                inError = 1;
-                                first = i;
-                                last = i;
-                        } else {
-                                last = i;
-                        }
-                } else if (verbose >= VERBOSE_5 && i % 4 == 0) {
+
+                } else if (verbose >= VERBOSE_5) {
                         fprintf(out_logfile,
-                                "[%d] PASSED offset = %lu bytes, transfer %lld\n",
-                                rank,
-                                ((i * sizeof(unsigned long long)) +
-                                 offset), transferCount);
+                                "[%d] PASSED offset = %llu bytes, transfer %lld\n",
+                                rank, ((i * sizeof(unsigned long long)) + offset), transferCount);
                         fprintf(out_logfile, "[%d] GOOD %s0x", rank, bufferLabel1);
-                        for (j = 0; j < 4; j++)
-                                fprintf(out_logfile, "%016llx ", goodbuf[i + j]);
+                        fprintf(out_logfile, "%016llx ", val);
                         fprintf(out_logfile, "\n[%d] GOOD %s0x", rank, bufferLabel2);
-                        for (j = 0; j < 4; j++)
-                                fprintf(out_logfile, "%016llx ", testbuf[i + j]);
+                        fprintf(out_logfile, "%016llx ", testbuf[i]);
                         fprintf(out_logfile, "\n");
                 }
         }
-        if (inError) {
-                inError = 0;
+        if (errorCount > 0) {
                 GetTestFileName(testFileName, test);
-                EWARNF("[%d] FAILED comparison of buffer containing %d-byte ints:\n",
-                        rank, (int)sizeof(unsigned long long int));
-                fprintf(out_logfile, "[%d]   File name = %s\n", rank, testFileName);
-                fprintf(out_logfile, "[%d]   In transfer %lld, ", rank,
-                        transferCount);
-                fprintf(out_logfile,
-                        "%lld errors between buffer indices %lld and %lld.\n",
-                        (long long)errorCount, (long long)first,
-                        (long long)last);
-                fprintf(out_logfile, "[%d]   File byte offset = %lu:\n", rank,
-                        ((first * sizeof(unsigned long long)) + offset));
-
-                fprintf(out_logfile, "[%d]     %s0x", rank, bufferLabel1);
-                for (j = first; j < length && j < first + 4; j++)
-                        fprintf(out_logfile, "%016llx ", goodbuf[j]);
-                if (j == length)
-                        fprintf(out_logfile, "[end of buffer]");
-                fprintf(out_logfile, "\n[%d]     %s0x", rank, bufferLabel2);
-                for (j = first; j < length && j < first + 4; j++)
-                        fprintf(out_logfile, "%016llx ", testbuf[j]);
-                if (j == length)
-                        fprintf(out_logfile, "[end of buffer]");
-                fprintf(out_logfile, "\n");
+                EWARNF("[%d] FAILED comparison of buffer in file %s during transfer %lld offset %lld containing %d-byte ints (%zd errors)",
+                        rank, testFileName, transferCount, offset, (int)sizeof(unsigned long long int),errorCount);
+        }else if(verbose >= VERBOSE_2){
+          fprintf(out_logfile, "[%d] comparison successful during transfer %lld offset %lld\n", rank, transferCount, offset);
         }
         return (errorCount);
 }
@@ -639,23 +628,26 @@ void DistributeHints(void)
  * ints, store transfer offset.  If storeFileOffset option is used, the file
  * (not transfer) offset is stored instead.
  */
+static unsigned int reseed_incompressible_prng = TRUE;
 
 static void
 FillIncompressibleBuffer(void* buffer, IOR_param_t * test)
-
 {
         size_t i;
         unsigned long long hi, lo;
         unsigned long long *buf = (unsigned long long *)buffer;
 
+        /* In order for write checks to work, we have to restart the pseudo random sequence */
+        if(reseed_incompressible_prng == TRUE) {
+                test->incompressibleSeed = test->setTimeStampSignature + rank; /* We copied seed into timestampSignature at initialization, also add the rank to add randomness between processes */
+                reseed_incompressible_prng = FALSE;
+        }
         for (i = 0; i < test->transferSize / sizeof(unsigned long long); i++) {
                 hi = ((unsigned long long) rand_r(&test->incompressibleSeed) << 32);
                 lo = (unsigned long long) rand_r(&test->incompressibleSeed);
                 buf[i] = hi | lo;
         }
 }
-
-unsigned int reseed_incompressible_prng = TRUE;
 
 static void
 FillBuffer(void *buffer,
@@ -666,16 +658,8 @@ FillBuffer(void *buffer,
         unsigned long long *buf = (unsigned long long *)buffer;
 
         if(test->dataPacketType == incompressible ) { /* Make for some non compressible buffers with randomish data */
-
-                /* In order for write checks to work, we have to restart the pseudo random sequence */
-                if(reseed_incompressible_prng == TRUE) {
-                        test->incompressibleSeed = test->setTimeStampSignature + rank; /* We copied seed into timestampSignature at initialization, also add the rank to add randomness between processes */
-                        reseed_incompressible_prng = FALSE;
-                }
                 FillIncompressibleBuffer(buffer, test);
-        }
-
-        else {
+        } else {
                 hi = ((unsigned long long)fillrank) << 32;
                 lo = (unsigned long long)test->timeStampSignatureValue;
                 for (i = 0; i < test->transferSize / sizeof(unsigned long long); i++) {
@@ -1051,15 +1035,6 @@ static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
                              int pretendRank)
 {
         ioBuffers->buffer = aligned_buffer_alloc(test->transferSize);
-
-        if (test->checkWrite || test->checkRead) {
-                ioBuffers->checkBuffer = aligned_buffer_alloc(test->transferSize);
-        }
-        if (test->checkRead || test->checkWrite) {
-                ioBuffers->readCheckBuffer = aligned_buffer_alloc(test->transferSize);
-        }
-
-        return;
 }
 
 /*
@@ -1069,15 +1044,6 @@ static void XferBuffersFree(IOR_io_buffers* ioBuffers, IOR_param_t* test)
 
 {
         aligned_buffer_free(ioBuffers->buffer);
-
-        if (test->checkWrite || test->checkRead) {
-                aligned_buffer_free(ioBuffers->checkBuffer);
-        }
-        if (test->checkRead) {
-                aligned_buffer_free(ioBuffers->readCheckBuffer);
-        }
-
-        return;
 }
 
 
@@ -1439,10 +1405,6 @@ static void TestIoSys(IOR_test_t *test)
                                 }
                                 rankOffset = (2 * shift) % params->numTasks;
                         }
-
-                        // update the check buffer
-                        FillBuffer(ioBuffers.readCheckBuffer, params, 0, (rank + rankOffset) % params->numTasks);
-
                         reseed_incompressible_prng = TRUE; /* Re-Seed the PRNG to get same sequence back, if random */
 
                         GetTestFileName(testFileName, params);
@@ -1505,10 +1467,6 @@ static void TestIoSys(IOR_test_t *test)
                                         file_hits_histogram(params);
                                 }
                         }
-                        if(operation_flag == READCHECK){
-                            FillBuffer(ioBuffers.readCheckBuffer, params, 0, (rank + rankOffset) % params->numTasks);
-                        }
-
                         /* Using globally passed rankOffset, following function generates testFileName to read */
                         GetTestFileName(testFileName, params);
 
@@ -1816,8 +1774,6 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
   IOR_offset_t transfer;
 
   void *buffer = ioBuffers->buffer;
-  void *checkBuffer = ioBuffers->checkBuffer;
-  void *readCheckBuffer = ioBuffers->readCheckBuffer;
 
   IOR_offset_t offset = offsetArray[pairCnt]; // this looks inappropriate
 
@@ -1846,30 +1802,19 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offset
             nanosleep( & wait, NULL);
           }
   } else if (access == WRITECHECK) {
-          memset(checkBuffer, 'a', transfer);
-
-          if (test->storeFileOffset == TRUE) {
-                  FillBuffer(readCheckBuffer, test, offset, pretendRank);
-          }
-
-          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, offset, test->backend_options);
+          ((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
+          amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
           (*transferCount)++;
-          *errors += CompareBuffers(readCheckBuffer, checkBuffer, transfer,
-                                   *transferCount, test,
-                                   WRITECHECK);
+          *errors += CompareData(buffer, transfer, *transferCount, test, offset, pretendRank, WRITECHECK);
   } else if (access == READCHECK) {
-          memset(checkBuffer, 'a', transfer);
-
-          amtXferred = backend->xfer(access, fd, checkBuffer, transfer, offset, test->backend_options);
+          ((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
+          amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer){
             ERR("cannot read from file");
           }
-          if (test->storeFileOffset == TRUE) {
-                  FillBuffer(readCheckBuffer, test, offset, pretendRank);
-          }
-          *errors += CompareBuffers(readCheckBuffer, checkBuffer, transfer, *transferCount, test, READCHECK);
+          *errors += CompareData(buffer, transfer, *transferCount, test, offset, pretendRank, READCHECK);
   }
   return amtXferred;
 }
