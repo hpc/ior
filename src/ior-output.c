@@ -371,10 +371,10 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("setTimeStampSignature/incompressibleSeed", test->setTimeStampSignature); /* Seed value was copied into setTimeStampSignature as well */
     PrintKeyValInt("collective", test->collective);
     PrintKeyValInt("segmentCount", test->segmentCount);
-    #ifdef HAVE_GPFS_FCNTL_H
-    PrintKeyValInt("gpfsHintAccess", test->gpfs_hint_access);
-    PrintKeyValInt("gpfsReleaseToken", test->gpfs_release_token);
-    #endif
+    //#ifdef HAVE_GPFS_FCNTL_H
+    //PrintKeyValInt("gpfsHintAccess", test->gpfs_hint_access);
+    //PrintKeyValInt("gpfsReleaseToken", test->gpfs_release_token);
+    //#endif
     PrintKeyValInt("transferSize", test->transferSize);
     PrintKeyValInt("blockSize", test->blockSize);
     PrintEndSection();
