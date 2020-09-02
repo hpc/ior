@@ -157,9 +157,10 @@ int aiori_posix_access (const char *path, int mode, aiori_mod_opt_t * module_opt
 int aiori_posix_stat (const char *path, struct stat *buf, aiori_mod_opt_t * module_options);
 
 
-/* NOTE: these 3 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
+/* NOTE: these 4 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
 void MPIIO_Delete(char *testFileName, aiori_mod_opt_t * module_options);
 IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * options, char *testFileName);
 int MPIIO_Access(const char *, int, aiori_mod_opt_t * module_options);
+void MPIIO_xfer_hints(aiori_xfer_hint_t * params);
 
 #endif /* not _AIORI_H */
