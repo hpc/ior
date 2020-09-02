@@ -179,7 +179,7 @@ void gpfs_free_all_locks(int fd)
                 EWARNF("gpfs_fcntl(%d, ...) release all locks hint failed.", fd);
         }
 }
-void gpfs_access_start(int fd, IOR_offset_t length, int access)
+void gpfs_access_start(int fd, IOR_offset_t length, IOR_offset_t offset, int access)
 {
         int rc;
         struct {
@@ -193,7 +193,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, int access)
 
         take_locks.access.structLen = sizeof(take_locks.access);
         take_locks.access.structType = GPFS_ACCESS_RANGE;
-        take_locks.access.start = hints->offset;
+        take_locks.access.start = offset;
         take_locks.access.length = length;
         take_locks.access.isWrite = (access == WRITE);
 
@@ -203,7 +203,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, int access)
         }
 }
 
-void gpfs_access_end(int fd, IOR_offset_t length, int access)
+void gpfs_access_end(int fd, IOR_offset_t length, IOR_offset_t offset,  int access)
 {
         int rc;
         struct {
@@ -218,7 +218,7 @@ void gpfs_access_end(int fd, IOR_offset_t length, int access)
 
         free_locks.free.structLen = sizeof(free_locks.free);
         free_locks.free.structType = GPFS_FREE_RANGE;
-        free_locks.free.start = hints->offset;
+        free_locks.free.start = offset;
         free_locks.free.length = length;
 
         rc = gpfs_fcntl(fd, &free_locks);
@@ -539,7 +539,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
 
 #ifdef HAVE_GPFS_FCNTL_H
         if (o->gpfs_hint_access) {
-                gpfs_access_start(fd, length, access);
+          gpfs_access_start(fd, length, offset, access);
         }
 #endif
 
@@ -600,7 +600,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
         }
 #ifdef HAVE_GPFS_FCNTL_H
         if (o->gpfs_hint_access) {
-                gpfs_access_end(fd, length, param, access);
+            gpfs_access_end(fd, length, offset, access);
         }
 #endif
         return (length);
