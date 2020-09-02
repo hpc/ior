@@ -40,7 +40,6 @@ static IOR_offset_t MPIIO_Xfer(int, aiori_fd_t *, IOR_size_t *,
 static void MPIIO_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static char* MPIIO_GetVersion();
 static void MPIIO_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static void MPIIO_xfer_hints(aiori_xfer_hint_t * params);
 static int MPIIO_check_params(aiori_mod_opt_t * options);
 
 /************************** D E C L A R A T I O N S ***************************/
@@ -108,7 +107,7 @@ ior_aiori_t mpiio_aiori = {
 /***************************** F U N C T I O N S ******************************/
 static aiori_xfer_hint_t * hints = NULL;
 
-static void MPIIO_xfer_hints(aiori_xfer_hint_t * params){
+void MPIIO_xfer_hints(aiori_xfer_hint_t * params){
   hints = params;
 }
 
@@ -140,10 +139,10 @@ static int MPIIO_check_params(aiori_mod_opt_t * module_options){
  */
 int MPIIO_Access(const char *path, int mode, aiori_mod_opt_t *module_options)
 {
-    mpiio_options_t * param = (mpiio_options_t*) module_options;
     if(hints->dryRun){
       return MPI_SUCCESS;
     }
+    mpiio_options_t * param = (mpiio_options_t*) module_options;
     MPI_File fd;
     int mpi_mode = MPI_MODE_UNIQUE_OPEN;
     MPI_Info mpiHints = MPI_INFO_NULL;

@@ -171,6 +171,8 @@ static aiori_xfer_hint_t * hints = NULL;
 
 static void HDF5_init_xfer_options(aiori_xfer_hint_t * params){
   hints = params;
+  /** HDF5 utilizes the MPIIO backend too, so init hints there */
+  MPIIO_xfer_hints(params);
 }
 
 static int HDF5_check_params(aiori_mod_opt_t * options){
