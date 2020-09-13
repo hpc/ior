@@ -217,7 +217,7 @@ static aiori_fd_t *S3_Create(char *path, int iorflags, aiori_mod_opt_t * options
   s3_options_t * o = (s3_options_t*) options;
   char p[FILENAME_MAX];
   def_file_name(o, p, path);
-  
+
 
   if(iorflags & IOR_CREAT){
     if(o->bucket_per_file){
@@ -317,7 +317,7 @@ static IOR_offset_t S3_Xfer(int access, aiori_fd_t * afd, IOR_size_t * buffer, I
     }else{
       sprintf(p, "%s", fd->object);
     }
-  }  
+  }
   if(access == WRITE){
     S3_put_object(& o->bucket_context, p, length, NULL, NULL, o->timeout, &putObjectHandler, & dh);
   }else{
@@ -363,7 +363,7 @@ static void S3_Delete(char *path, aiori_mod_opt_t * options)
   s3_options_t * o = (s3_options_t*) options;
   char p[FILENAME_MAX];
   def_file_name(o, p, path);
-  
+
 
   if(o->bucket_per_file){
     o->bucket_context.bucketName = p;
@@ -386,7 +386,7 @@ static int S3_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * options){
   s3_options_t * o = (s3_options_t*) options;
   char p[FILENAME_MAX];
   def_bucket_name(o, p, path);
-  
+
 
   if (o->bucket_per_file){
     S3_create_bucket(o->s3_protocol, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, S3CannedAclPrivate, o->locationConstraint, NULL, o->timeout, & responseHandler, NULL);
@@ -406,7 +406,7 @@ static int S3_rmdir (const char *path, aiori_mod_opt_t * options){
   s3_options_t * o = (s3_options_t*) options;
   char p[FILENAME_MAX];
 
-  def_bucket_name(o, p, path);  
+  def_bucket_name(o, p, path);
   if (o->bucket_per_file){
     S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
     CHECK_ERROR(p);
@@ -423,7 +423,7 @@ static int S3_stat(const char *path, struct stat *buf, aiori_mod_opt_t * options
   char p[FILENAME_MAX];
   def_file_name(o, p, path);
   memset(buf, 0, sizeof(struct stat));
-  // TODO count the individual file fragment sizes together  
+  // TODO count the individual file fragment sizes together
   if (o->bucket_per_file){
     S3_test_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key,
                         NULL, o->host, p, o->authRegion, 0, NULL,
@@ -451,10 +451,6 @@ static IOR_offset_t S3_GetFileSize(aiori_mod_opt_t * options, char *testFileName
 
 
 static int S3_check_params(aiori_mod_opt_t * options){
-  if(hints->blockSize != hints->transferSize){
-    ERR("S3 Blocksize must be transferSize");
-  }
-
   return 0;
 }
 
