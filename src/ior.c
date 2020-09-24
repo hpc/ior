@@ -410,6 +410,7 @@ CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_p
         for (i = 0; i < length; i++) {
                 if(test->dataPacketType == incompressible ) {
                   /* same logic as in FillIncompressibleBuffer() */
+                  /* WARNING: make sure that both functions are changed at the same time */
                   hi = ((unsigned long long) rand_r(& incompressibleSeed) << 32);
                   lo = (unsigned long long) rand_r(& incompressibleSeed);
                   val = hi | lo;
@@ -638,6 +639,8 @@ FillIncompressibleBuffer(void* buffer, IOR_param_t * test)
         unsigned long long *buf = (unsigned long long *)buffer;
 
         /* In order for write checks to work, we have to restart the pseudo random sequence */
+        /* This function has the same logic as CompareData() */
+        /* WARNING: make sure that both functions are changed at the same time */
         if(reseed_incompressible_prng == TRUE) {
                 test->incompressibleSeed = test->setTimeStampSignature + rank; /* We copied seed into timestampSignature at initialization, also add the rank to add randomness between processes */
                 reseed_incompressible_prng = FALSE;
