@@ -593,8 +593,8 @@ static IOR_offset_t SeekOffset(void *afd, IOR_offset_t offset,
     hsCount[0] = (hsize_t) 1;
     hsStride[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
     hsBlock[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
-    
-    fd->fileDataSpace = H5Dget_space(fd->dataSet);
+
+    /* select hyperslab in file data space */
     HDF5_CHECK(H5Sselect_hyperslab(fd->fileDataSpace, H5S_SELECT_SET, hsStart, hsStride, hsCount, hsBlock),
                "cannot select hyperslab");
     return (offset);
@@ -659,6 +659,10 @@ static void SetupDataSet(aiori_h5fd_t *fd, int flags, aiori_mod_opt_t * param)
                 fd->dataSet = H5Dopen(*(hid_t *) fd, dataSetName);
                 HDF5_CHECK(fd->dataSet, "cannot open data set");
         }
+
+        /* retrieve data space from data set for hyperslab */
+        fd->fileDataSpace = H5Dget_space(fd->dataSet);
+        HDF5_CHECK(fd->fileDataSpace, "cannot get data space from data set");
 }
 
 static IOR_offset_t HDF5_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
