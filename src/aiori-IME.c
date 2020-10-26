@@ -160,7 +160,7 @@ void IME_Finalize()
                 return;
 
         (void)ime_native_finalize();
-        ime_initialized = true;
+        ime_initialized = false;
 }
 
 /*
