@@ -1529,8 +1529,8 @@ static void TestIoSys(IOR_test_t *test)
                 params->errorFound = FALSE;
                 rankOffset = 0;
 
-                PrintRepeatEnd();
         }
+        PrintRepeatEnd();
 
         MPI_CHECK(MPI_Comm_free(&testComm), "MPI_Comm_free() error");
 
