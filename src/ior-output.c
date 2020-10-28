@@ -620,9 +620,6 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           PrintKeyValInt("taskPerNodeOffset", params->taskPerNodeOffset);
           PrintKeyValInt("reorderTasksRandom", params->reorderTasksRandom);
           PrintKeyValInt("reorderTasksRandomSeed", params->reorderTasksRandomSeed);
-          PrintKeyValInt("segmentCount", params->segmentCount);
-          PrintKeyValInt("blockSize", params->blockSize);
-          PrintKeyValInt("transferSize", params->transferSize);
           PrintKeyValDouble("bwMaxMIB", bw->max / MEBIBYTE);
           PrintKeyValDouble("bwMinMIB", bw->min / MEBIBYTE);
           PrintKeyValDouble("bwMeanMIB", bw->mean / MEBIBYTE);
