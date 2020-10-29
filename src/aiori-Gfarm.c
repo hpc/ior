@@ -284,6 +284,16 @@ Gfarm_stat(const char *fn, struct stat *buf, aiori_mod_opt_t *param)
 	return (0);
 }
 
+void
+Gfarm_sync(aiori_mod_opt_t *param)
+{
+	if (hints->dryRun)
+		return;
+
+	/* no cache in libgfarm */
+	return;
+}
+
 ior_aiori_t gfarm_aiori = {
 	.name = "Gfarm",
 	.name_legacy = NULL,
@@ -304,5 +314,6 @@ ior_aiori_t gfarm_aiori = {
 	.initialize = Gfarm_initialize,
 	.finalize = Gfarm_finalize,
 	.get_options = NULL,
+	.sync = Gfarm_sync,
 	.enable_mdtest = true,
 };
