@@ -24,6 +24,8 @@ It follows the hierarchical file system semantics in contrast to the md-workbenc
 #define LLU (long long unsigned)
 #define min(a,b) (a < b ? a : b)
 
+#define oprintf(...) do { fprintf(o.logfile, __VA_ARGS__); fflush(o.logfile); } while(0);
+
 struct benchmark_options{
   ior_aiori_t const * backend;
   void * backend_options;
@@ -309,11 +311,11 @@ static uint64_t aggregate_timers(int repeats, int max_repeats, time_result_t * t
 
 static void compute_histogram(const char * name, time_result_t * times, time_statistics_t * stats, size_t repeats, int writeLatencyFile){
   if(writeLatencyFile && o.latency_file_prefix ){
-    char file[1024];
+    char file[MAX_PATHLEN];
     sprintf(file, "%s-%.2f-%d-%s.csv", o.latency_file_prefix, o.relative_waiting_factor, o.global_iteration, name);
     FILE * f = fopen(file, "w+");
     if(f == NULL){
-      printf("%d: Error writing to latency file: %s\n", o.rank, file);
+      ERRF("%d: Error writing to latency file: %s\n", o.rank, file);
       return;
     }
     fprintf(f, "time,runtime\n");
@@ -414,16 +416,16 @@ static void end_phase(const char * name, phase_stat_t * p){
   if (o.rank == 0){
     //print the stats:
     print_p_stat(buff, name, & g_stat, g_stat.t, 1);
-    printf("%s\n", buff);
+    oprintf("%s\n", buff);
   }
 
   if(o.process_report){
     if(o.rank == 0){
       print_p_stat(buff, name, p, p->t, 0);
-      printf("0: %s\n", buff);
+      oprintf("0: %s\n", buff);
       for(int i=1; i < o.size; i++){
         MPI_Recv(buff, MAX_PATHLEN, MPI_CHAR, i, 4711, o.com, MPI_STATUS_IGNORE);
-        printf("%d: %s\n", i, buff);
+        oprintf("%d: %s\n", i, buff);
       }
     }else{
       print_p_stat(buff, name, p, p->t, 0);
@@ -469,8 +471,7 @@ void run_precreate(phase_stat_t * s, int current_index){
     }else{
       s->dset_create.err++;
       if (! o.ignore_precreate_errors){
-        printf("%d: Error while creating the dset: %s\n", o.rank, dset);
-        MPI_Abort(o.com, 1);
+        ERRF("%d: Error while creating the dset: %s\n", o.rank, dset);
       }
     }
   }
@@ -497,9 +498,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       }else{
         s->obj_create.err++;
         if (! o.ignore_precreate_errors){
-         printf("%d: Error while creating the obj: %s\n", o.rank, obj_name);
-         fflush(stdout);
-         MPI_Abort(o.com, 1);
+         ERRF("%d: Error while creating the obj: %s\n", o.rank, obj_name);
         }
       }
       o.backend->close(aiori_fh, o.backend_options);
@@ -507,7 +506,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       add_timed_result(op_timer, s->phase_start_timer, s->time_create, pos, & s->max_op_time, & op_time);
 
       if (o.verbosity >= 2){
-        printf("%d: write %s:%s (%d)\n", o.rank, dset, obj_name, ret);
+        oprintf("%d: write %s:%s (%d)\n", o.rank, dset, obj_name, ret);
       }
     }
   }
@@ -552,19 +551,19 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       if (o.verbosity >= 2){
-        printf("%d: stat %s (%d)\n", o.rank, obj_name, ret);
+        oprintf("%d: stat %s (%d)\n", o.rank, obj_name, ret);
       }
 
       if(ret != 0){
         if (o.verbosity)
-          printf("%d: Error while stating the obj: %s\n", o.rank, obj_name);
+          ERRF("%d: Error while stating the obj: %s\n", o.rank, obj_name);
         s->obj_stat.err++;
         continue;
       }
       s->obj_stat.suc++;
 
       if (o.verbosity >= 2){
-        printf("%d: read %s \n", o.rank, obj_name);
+        oprintf("%d: read %s \n", o.rank, obj_name);
       }
 
       op_timer = GetTimeStamp();
@@ -576,9 +575,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
         s->obj_read.suc++;
       }else{
         s->obj_read.err++;
-        printf("%d: Error while reading the obj: %s\n", o.rank, obj_name);
-        fflush(stdout);
-        MPI_Abort(o.com, 1);
+        ERRF("%d: Error while reading the obj: %s\n", o.rank, obj_name);
       }
       o.backend->close(aiori_fh, o.backend_options);
 
@@ -598,7 +595,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       if (o.verbosity >= 2){
-        printf("%d: delete %s\n", o.rank, obj_name);
+        oprintf("%d: delete %s\n", o.rank, obj_name);
       }
       s->obj_delete.suc++;
 
@@ -615,9 +612,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }else{
         s->obj_create.err++;
         if (! o.ignore_precreate_errors){
-         printf("%d: Error while creating the obj: %s\n", o.rank, obj_name);
-         fflush(stdout);
-         MPI_Abort(o.com, 1);
+         ERRF("%d: Error while creating the obj: %s\n", o.rank, obj_name);
         }
       }
       o.backend->close(aiori_fh, o.backend_options);
@@ -628,13 +623,13 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       if (o.verbosity >= 2){
-        printf("%d: write %s (%d)\n", o.rank, obj_name, ret);
+        oprintf("%d: write %s (%d)\n", o.rank, obj_name, ret);
       }
     } // end loop
 
     if(armed_stone_wall && bench_runtime >= o.stonewall_timer){
       if(o.verbosity){
-        printf("%d: stonewall runtime %fs (%ds)\n", o.rank, bench_runtime, o.stonewall_timer);
+        oprintf("%d: stonewall runtime %fs (%ds)\n", o.rank, bench_runtime, o.stonewall_timer);
       }
       if(! o.stonewall_timer_wear_out){
         s->stonewall_iterations = f;
@@ -649,7 +644,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       s->phase_start_timer = GetTimeStamp();
       s->stonewall_iterations = total_num;
       if(o.rank == 0){
-        printf("stonewall wear out %fs (%d iter)\n", bench_runtime, total_num);
+        oprintf("stonewall wear out %fs (%d iter)\n", bench_runtime, total_num);
       }
       if(f == total_num){
         break;
@@ -694,7 +689,7 @@ void run_cleanup(phase_stat_t * s, int start_index){
       add_timed_result(op_timer, s->phase_start_timer, s->time_delete, pos, & s->max_op_time, & op_time);
 
       if (o.verbosity >= 2){
-        printf("%d: delete %s\n", o.rank, obj_name);
+        oprintf("%d: delete %s\n", o.rank, obj_name);
       }
       s->obj_delete.suc++;
     }
@@ -703,10 +698,10 @@ void run_cleanup(phase_stat_t * s, int start_index){
     if (o.backend->rmdir(dset, o.backend_options) == 0) {
       s->dset_delete.suc++;
     }else{
-      printf("Unable to remove directory %s\n", dset);
+      oprintf("Unable to remove directory %s\n", dset);
     }
     if (o.verbosity >= 2){
-      printf("%d: delete dset %s\n", o.rank, dset);
+      oprintf("%d: delete dset %s\n", o.rank, dset);
     }
   }
 }
@@ -747,7 +742,7 @@ static void printTime(){
     char buff[100];
     time_t now = time(0);
     strftime (buff, 100, "%Y-%m-%d %H:%M:%S", localtime (&now));
-    printf("%s\n", buff);
+    oprintf("%s\n", buff);
 }
 
 static int return_position(){
@@ -755,12 +750,12 @@ static int return_position(){
   if( o.rank == 0){
     FILE * f = fopen(o.run_info_file, "r");
     if(! f){
-      printf("[ERROR] Could not open %s for restart\n", o.run_info_file);
+      ERRF("[ERROR] Could not open %s for restart\n", o.run_info_file);
       exit(1);
     }
     ret = fscanf(f, "pos: %d", & position);
     if (ret != 1){
-      printf("Could not read from %s for restart\n", o.run_info_file);
+      ERRF("Could not read from %s for restart\n", o.run_info_file);
       exit(1);
     }
     fclose(f);
@@ -775,7 +770,7 @@ static void store_position(int position){
   }
   FILE * f = fopen(o.run_info_file, "w");
   if(! f){
-    printf("[ERROR] Could not open %s for saving data\n", o.run_info_file);
+    ERRF("[ERROR] Could not open %s for saving data\n", o.run_info_file);
     exit(1);
   }
   fprintf(f, "pos: %d\n", position);
@@ -796,11 +791,11 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
   MPI_Comm_size(o.com, & o.size);
 
   if (o.rank == 0 && ! o.quiet_output){
-    printf("Args: %s", argv[0]);
+    oprintf("Args: %s", argv[0]);
     for(int i=1; i < argc; i++){
-      printf(" \"%s\"", argv[i]);
+      oprintf(" \"%s\"", argv[i]);
     }
-    printf("\n");
+    oprintf("\n");
   }
 
   memset(& o.hints, 0, sizeof(o.hints));
@@ -821,7 +816,7 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
   }
   if (! o.phase_precreate && o.phase_benchmark && o.stonewall_timer && ! o.stonewall_timer_wear_out){
     if(o.rank == 0)
-      printf("Invalid options, if running only the benchmark phase using -2 with stonewall option then use stonewall wear-out\n");
+      ERR("Invalid options, if running only the benchmark phase using -2 with stonewall option then use stonewall wear-out");
     exit(1);
   }
 
@@ -843,23 +838,23 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
   }
 
   if(o.start_item_number){
-    printf("Using start position %lld\n", (long long) o.start_item_number);
+    oprintf("Using start position %lld\n", (long long) o.start_item_number);
     current_index = o.start_item_number;
   }
 
   size_t total_obj_count = o.dset_count * (size_t) (o.num * o.iterations + o.precreate) * o.size;
   if (o.rank == 0 && ! o.quiet_output){
-    printf("MD-Workbench total objects: %zu workingset size: %.3f MiB (version: %s) time: ", total_obj_count, ((double) o.size) * o.dset_count * o.precreate * o.file_size / 1024.0 / 1024.0,  PACKAGE_VERSION);
+    oprintf("MD-Workbench total objects: %zu workingset size: %.3f MiB (version: %s) time: ", total_obj_count, ((double) o.size) * o.dset_count * o.precreate * o.file_size / 1024.0 / 1024.0,  PACKAGE_VERSION);
     printTime();
     if(o.num > o.precreate){
-      printf("WARNING: num > precreate, this may cause the situation that no objects are available to read\n");
+      oprintf("WARNING: num > precreate, this may cause the situation that no objects are available to read\n");
     }
   }
 
   if ( o.rank == 0 && ! o.quiet_output ){
     // print the set output options
     option_print_current(options);
-    printf("\n");
+    oprintf("\n");
   }
 
   // preallocate memory if necessary
@@ -929,7 +924,7 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
 
     if (o.rank == 0){
       if (o.backend->rmdir(o.prefix, o.backend_options) != 0) {
-        printf("Unable to remove directory %s\n", o.prefix);
+        oprintf("Unable to remove directory %s\n", o.prefix);
       }
     }
   }else{
@@ -941,7 +936,7 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
     o.backend->finalize(o.backend_options);
   }
   if (o.rank == 0 && ! o.quiet_output){
-    printf("Total runtime: %.0fs time: ",  t_all);
+    oprintf("Total runtime: %.0fs time: ",  t_all);
     printTime();
   }
 
