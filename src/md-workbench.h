@@ -30,11 +30,9 @@ typedef struct{ // NOTE: if this type is changed, adjust end_phase() !!!
   double t; // maximum time
   double * t_all;
 
-  op_stat_t dset_name;
   op_stat_t dset_create;
   op_stat_t dset_delete;
 
-  op_stat_t obj_name;
   op_stat_t obj_create;
   op_stat_t obj_read;
   op_stat_t obj_stat;
