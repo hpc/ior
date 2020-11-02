@@ -777,21 +777,35 @@ static IOR_offset_t
 DFS_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 {
         dfs_obj_t *obj;
-        daos_size_t fsize, tmpMin, tmpMax, tmpSum;
+        MPI_Comm comm;
+        daos_size_t fsize;
         int rc;
 
-	rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
-        if (rc) {
-                fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
-                return -1;
+        if (hints->filePerProc == TRUE) {
+                comm = MPI_COMM_SELF;
+        } else {
+                comm = testComm;
         }
 
-        rc = dfs_get_size(dfs, obj, &fsize);
-        if (rc)
-                return -1;
+        if (hints->filePerProc || rank == 0) {
+                rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
+                if (rc) {
+                        fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
+                        return -1;
+                }
 
-        dfs_release(obj);
+                rc = dfs_get_size(dfs, obj, &fsize);
+                dfs_release(obj);
+                if (rc)
+                        return -1;
+        }
 
+        if (!hints->filePerProc) {
+                rc = MPI_Bcast(&fsize, 1, MPI_UINT64_T, 0, comm);
+                if (rc)
+                        return rc;
+        }
+        
         return (fsize);
 }
 
