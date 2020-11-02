@@ -1,13 +1,14 @@
 #include <mpi.h>
 
 #include <time.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
 
+#include "md-workbench.h"
+#include "config.h"
 #include "aiori.h"
 #include "utilities.h"
 #include "parse_options.h"
@@ -17,60 +18,6 @@ This is the modified version md-workbench-fs that can utilize AIORI.
 It follows the hierarchical file system semantics in contrast to the md-workbench (without -fs) which has dataset and object semantics.
  */
 
-// successfull, errors
-typedef struct {
-  int suc;
-  int err;
-} op_stat_t;
-
-// A runtime for an operation and when the operation was started
-typedef struct{
-  float time_since_app_start;
-  float runtime;
-} time_result_t;
-
-typedef struct{
-  float min;
-  float q1;
-  float median;
-  float q3;
-  float q90;
-  float q99;
-  float max;
-} time_statistics_t;
-
-// statistics for running a single phase
-typedef struct{ // NOTE: if this type is changed, adjust end_phase() !!!
-  double t; // maximum time
-  double * t_all;
-
-  op_stat_t dset_name;
-  op_stat_t dset_create;
-  op_stat_t dset_delete;
-
-  op_stat_t obj_name;
-  op_stat_t obj_create;
-  op_stat_t obj_read;
-  op_stat_t obj_stat;
-  op_stat_t obj_delete;
-
-  // time measurements individual runs
-  uint64_t repeats;
-  time_result_t * time_create;
-  time_result_t * time_read;
-  time_result_t * time_stat;
-  time_result_t * time_delete;
-
-  time_statistics_t stats_create;
-  time_statistics_t stats_read;
-  time_statistics_t stats_stat;
-  time_statistics_t stats_delete;
-
-  // the maximum time for any single operation
-  double max_op_time;
-  double phase_start_timer;
-  int stonewall_iterations;
-} phase_stat_t;
 
 #define CHECK_MPI_RET(ret) if (ret != MPI_SUCCESS){ printf("Unexpected error in MPI on Line %d\n", __LINE__);}
 #define LLU (long long unsigned)
@@ -79,6 +26,7 @@ typedef struct{ // NOTE: if this type is changed, adjust end_phase() !!!
 struct benchmark_options{
   ior_aiori_t const * backend;
   void * backend_options;
+  aiori_xfer_hint_t hints;
 
   char * interface;
   int num;
@@ -501,7 +449,7 @@ void run_precreate(phase_stat_t * s, int current_index){
   int ret;
 
   for(int i=0; i < o.dset_count; i++){
-    ret = o.plugin->def_dset_name(dset, o.rank, i);
+    ret = o.backend->def_dset_name(dset, o.rank, i);
     if (ret != 0){
       if (! o.ignore_precreate_errors){
         printf("Error defining the dataset name\n");
@@ -511,10 +459,8 @@ void run_precreate(phase_stat_t * s, int current_index){
       continue;
     }
     s->dset_name.suc++;
-    ret = o.plugin->create_dset(dset);
-    if (ret == MD_NOOP){
-      // do not increment any counter
-    }else if (ret == 0){
+    ret = o.backend->create_dset(dset);
+    if (ret == 0){
       s->dset_create.suc++;
     }else{
       s->dset_create.err++;
@@ -534,9 +480,9 @@ void run_precreate(phase_stat_t * s, int current_index){
   // create the obj
   for(int f=current_index; f < o.precreate; f++){
     for(int d=0; d < o.dset_count; d++){
-      ret = o.plugin->def_dset_name(dset, o.rank, d);
+      ret = o.backend->def_dset_name(dset, o.rank, d);
       pos++;
-      ret = o.plugin->def_obj_name(obj_name, o.rank, d, f);
+      ret = o.backend->def_obj_name(obj_name, o.rank, d, f);
       if (ret != 0){
         s->dset_name.err++;
         if (! o.ignore_precreate_errors){
@@ -549,16 +495,14 @@ void run_precreate(phase_stat_t * s, int current_index){
       }
 
       op_timer = GetTimeStamp();
-      ret = o.plugin->write_obj(dset, obj_name, buf, o.file_size);
+      ret = o.backend->write_obj(dset, obj_name, buf, o.file_size);
       add_timed_result(op_timer, s->phase_start_timer, s->time_create, pos, & s->max_op_time, & op_time);
 
       if (o.verbosity >= 2){
         printf("%d: write %s:%s (%d)\n", o.rank, dset, obj_name, ret);
       }
 
-      if (ret == MD_NOOP){
-        // do not increment any counter
-      }else if (ret == 0){
+      if (ret == 0){
         s->obj_create.suc++;
       }else{
         s->obj_create.err++;
@@ -597,15 +541,15 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       int readRank = (o.rank - o.offset * (d+1)) % o.size;
       readRank = readRank < 0 ? readRank + o.size : readRank;
-      ret = o.plugin->def_obj_name(obj_name, readRank, d, prevFile);
+      ret = o.backend->def_obj_name(obj_name, readRank, d, prevFile);
       if (ret != 0){
         s->obj_name.err++;
         continue;
       }
-      ret = o.plugin->def_dset_name(dset, readRank, d);
+      ret = o.backend->def_dset_name(dset, readRank, d);
 
       op_timer = GetTimeStamp();
-      ret = o.plugin->stat_obj(dset, obj_name, o.file_size);
+      ret = o.backend->stat_obj(dset, obj_name, o.file_size);
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_stat, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
         wait(op_time);
@@ -615,7 +559,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
         printf("%d: stat %s:%s (%d)\n", o.rank, dset, obj_name, ret);
       }
 
-      if(ret != 0 && ret != MD_NOOP){
+      if(ret != 0){
         if (o.verbosity)
           printf("%d: Error while stating the obj: %s\n", o.rank, dset);
         s->obj_stat.err++;
@@ -628,7 +572,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       op_timer = GetTimeStamp();
-      ret = o.plugin->read_obj(dset, obj_name, buf, o.file_size);
+      ret = o.backend->read_obj(dset, obj_name, buf, o.file_size);
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_read, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
         wait(op_time);
@@ -636,11 +580,6 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       if (ret == 0){
         s->obj_read.suc++;
-      }else if (ret == MD_NOOP){
-        // nothing to do
-      }else if (ret == MD_ERROR_FIND){
-        printf("%d: Error while accessing the file %s (%s)\n", o.rank, dset, strerror(errno));
-        s->obj_read.err++;
       }else{
         printf("%d: Error while reading the file %s (%s)\n", o.rank, dset, strerror(errno));
         s->obj_read.err++;
@@ -651,7 +590,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       op_timer = GetTimeStamp();
-      ret = o.plugin->delete_obj(dset, obj_name);
+      ret = o.backend->delete_obj(dset, obj_name);
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_delete, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
         wait(op_time);
@@ -663,23 +602,21 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       if (ret == 0){
         s->obj_delete.suc++;
-      }else if (ret == MD_NOOP){
-        // nothing to do
       }else{
         printf("%d: Error while deleting the object %s:%s\n", o.rank, dset, obj_name);
         s->obj_delete.err++;
       }
 
       int writeRank = (o.rank + o.offset * (d+1)) % o.size;
-      ret = o.plugin->def_obj_name(obj_name, writeRank, d, o.precreate + prevFile);
+      ret = o.backend->def_obj_name(obj_name, writeRank, d, o.precreate + prevFile);
       if (ret != 0){
         s->obj_name.err++;
         continue;
       }
-      ret = o.plugin->def_dset_name(dset, writeRank, d);
+      ret = o.backend->def_dset_name(dset, writeRank, d);
 
       op_timer = GetTimeStamp();
-      ret = o.plugin->write_obj(dset, obj_name, buf, o.file_size);
+      ret = o.backend->write_obj(dset, obj_name, buf, o.file_size);
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_create, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
         wait(op_time);
@@ -691,12 +628,6 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       if (ret == 0){
           s->obj_create.suc++;
-      }else if (ret == MD_ERROR_CREATE){
-        if (o.verbosity)
-          printf("%d: Error while creating the obj: %s\n",o.rank, dset);
-        s->obj_create.err++;
-      }else if (ret == MD_NOOP){
-          // do not increment any counter
       }else{
         if (o.verbosity)
           printf("%d: Error while writing the obj: %s\n", o.rank, dset);
@@ -757,31 +688,29 @@ void run_cleanup(phase_stat_t * s, int start_index){
   size_t pos = -1; // position inside the individual measurement array
 
   for(int d=0; d < o.dset_count; d++){
-    ret = o.plugin->def_dset_name(dset, o.rank, d);
+    ret = o.backend->def_dset_name(dset, o.rank, d);
 
     for(int f=0; f < o.precreate; f++){
       double op_time;
       pos++;
-      ret = o.plugin->def_obj_name(obj_name, o.rank, d, f + start_index);
+      ret = o.backend->def_obj_name(obj_name, o.rank, d, f + start_index);
 
       op_timer = GetTimeStamp();
-      ret = o.plugin->delete_obj(dset, obj_name);
+      ret = o.backend->delete_obj(dset, obj_name);
       add_timed_result(op_timer, s->phase_start_timer, s->time_delete, pos, & s->max_op_time, & op_time);
 
       if (o.verbosity >= 2){
         printf("%d: delete %s:%s (%d)\n", o.rank, dset, obj_name, ret);
       }
 
-      if (ret == MD_NOOP){
-        // nothing to do
-      }else if (ret == 0){
+      if (ret == 0){
         s->obj_delete.suc++;
-      }else if(ret != MD_NOOP){
+      }else{
         s->obj_delete.err++;
       }
     }
 
-    ret = o.plugin->rm_dset(dset);
+    ret = o.backend->rm_dset(dset);
 
     if (o.verbosity >= 2){
       printf("%d: delete dset %s (%d)\n", o.rank, dset, ret);
@@ -789,7 +718,7 @@ void run_cleanup(phase_stat_t * s, int start_index){
 
     if (ret == 0){
       s->dset_delete.suc++;
-    }else if (ret != MD_NOOP){
+    }else{
       s->dset_delete.err++;
     }
   }
@@ -865,14 +794,13 @@ static void store_position(int position){
   fclose(f);
 }
 
-int main(int argc, char ** argv){
+int md_workbench(int argc, char ** argv){
   int ret;
   int printhelp = 0;
   char * limit_memory_P = NULL;
 
   init_options();
 
-  MPI_Init(& argc, & argv);
   MPI_Comm_rank(MPI_COMM_WORLD, & o.rank);
   MPI_Comm_size(MPI_COMM_WORLD, & o.size);
 
@@ -884,6 +812,7 @@ int main(int argc, char ** argv){
     printf("\n");
   }
 
+  memset(& o.hints, 0, sizeof(o.hints));
   options_all_t * global_options = airoi_create_all_module_options(options);
   int parsed = option_parse(argc, argv, global_options);
   o.backend = aiori_select(o.interface);
@@ -903,11 +832,14 @@ int main(int argc, char ** argv){
     exit(1);
   }
 
-  ret = o.plugin->initialize();
-  if (ret != 0){
-    printf("%d: Error initializing module\n", o.rank);
-    MPI_Abort(MPI_COMM_WORLD, 1);
+  o.backend->initialize(o.backend_options);
+  if(o.backend->xfer_hints){
+    o.backend->xfer_hints(& o.hints);
   }
+  if(o.backend->check_params){
+    o.backend->check_params(o.backend_options);
+  }
+
 
   int current_index = 0;
 
@@ -952,12 +884,10 @@ int main(int argc, char ** argv){
 
   if (o.phase_precreate){
     if (o.rank == 0){
-      ret = o.plugin->prepare_global();
-      if ( ret != 0 && ret != MD_NOOP ){
-        if ( ! (ret == MD_EXISTS && o.ignore_precreate_errors)){
-          printf("Rank 0 could not prepare the run, aborting\n");
-          MPI_Abort(MPI_COMM_WORLD, 1);
-        }
+      ret = o.backend->prepare_global();
+      if ( ret != 0 ){
+        printf("Rank 0 could not prepare the run, aborting\n");
+        MPI_Abort(MPI_COMM_WORLD, 1);
       }
     }
     init_stats(& phase_stats, o.precreate * o.dset_count);
@@ -1005,8 +935,8 @@ int main(int argc, char ** argv){
     end_phase("cleanup", & phase_stats);
 
     if (o.rank == 0){
-      ret = o.plugin->purge_global();
-      if (ret != 0 && ret != MD_NOOP){
+      ret = o.backend->purge_global();
+      if (ret != 0){
         printf("Rank 0: Error purging the global environment\n");
       }
     }
@@ -1015,17 +945,12 @@ int main(int argc, char ** argv){
   }
 
   double t_all = GetTimeStamp();
-  ret = o.plugin->finalize();
-  if (ret != 0){
-    printf("Error while finalization of module\n");
-  }
+  o.backend->finalize(o.backend_options);
   if (o.rank == 0 && ! o.quiet_output){
     printf("Total runtime: %.0fs time: ",  t_all);
     printTime();
   }
 
   //mem_free_preallocated(& limit_memory_P);
-
-  MPI_Finalize();
   return 0;
 }
