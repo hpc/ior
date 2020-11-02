@@ -18,7 +18,6 @@ This is the modified version md-workbench-fs that can utilize AIORI.
 It follows the hierarchical file system semantics in contrast to the md-workbench (without -fs) which has dataset and object semantics.
  */
 
-#define FILEMODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #define DIRMODE S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IXOTH
 
 #define CHECK_MPI_RET(ret) if (ret != MPI_SUCCESS){ printf("Unexpected error in MPI on Line %d\n", __LINE__);}
@@ -79,8 +78,8 @@ static void def_dset_name(char * out_name, int n, int d){
   sprintf(out_name, "%s/%d_%d", o.prefix, n, d);
 }
 
-static void def_obj_name(char * out_name, char * dset, int n, int d, int i){
-  sprintf(out_name, "%s/%d_%d/file-%d", dset, n, d, i);
+static void def_obj_name(char * out_name, int n, int d, int i){
+  sprintf(out_name, "%s/%d_%d/file-%d", o.prefix, n, d, i);
 }
 
 void init_options(){
@@ -484,14 +483,13 @@ void run_precreate(phase_stat_t * s, int current_index){
   // create the obj
   for(int f=current_index; f < o.precreate; f++){
     for(int d=0; d < o.dset_count; d++){
-      def_dset_name(dset, o.rank, d);
       pos++;
-      def_obj_name(obj_name, dset, o.rank, d, f);
+      def_obj_name(obj_name, o.rank, d, f);
 
       op_timer = GetTimeStamp();
-      aiori_fd_t * aiori_fh = o.backend->open(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
+      aiori_fd_t * aiori_fh = o.backend->create(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
       if (NULL == aiori_fh){
-        FAIL("unable to open file %s", obj_name);
+        FAIL("Unable to open file %s", obj_name);
       }
       if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
         s->obj_create.suc++;
@@ -517,7 +515,6 @@ void run_precreate(phase_stat_t * s, int current_index){
 
 /* FIFO: create a new file, write to it. Then read from the first created file, delete it... */
 void run_benchmark(phase_stat_t * s, int * current_index_p){
-  char dset[MAX_PATHLEN];
   char obj_name[MAX_PATHLEN];
   int ret;
   char * buf = malloc(o.file_size);
@@ -541,8 +538,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       int readRank = (o.rank - o.offset * (d+1)) % o.size;
       readRank = readRank < 0 ? readRank + o.size : readRank;
-      def_dset_name(dset, readRank, d);
-      def_obj_name(obj_name, dset, readRank, d, prevFile);
+      def_obj_name(obj_name, readRank, d, prevFile);
 
       op_timer = GetTimeStamp();
 
@@ -555,25 +551,25 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       if (o.verbosity >= 2){
-        printf("%d: stat %s:%s (%d)\n", o.rank, dset, obj_name, ret);
+        printf("%d: stat %s (%d)\n", o.rank, obj_name, ret);
       }
 
       if(ret != 0){
         if (o.verbosity)
-          printf("%d: Error while stating the obj: %s\n", o.rank, dset);
+          printf("%d: Error while stating the obj: %s\n", o.rank, obj_name);
         s->obj_stat.err++;
         continue;
       }
       s->obj_stat.suc++;
 
       if (o.verbosity >= 2){
-        printf("%d: read %s:%s \n", o.rank, dset, obj_name);
+        printf("%d: read %s \n", o.rank, obj_name);
       }
 
       op_timer = GetTimeStamp();
-      aiori_fh = o.backend->open(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
+      aiori_fh = o.backend->open(obj_name, IOR_RDONLY, o.backend_options);
       if (NULL == aiori_fh){
-        FAIL("unable to open file %s", obj_name);
+        FAIL("Unable to open file %s", obj_name);
       }
       if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
         s->obj_read.suc++;
@@ -601,18 +597,17 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       if (o.verbosity >= 2){
-        printf("%d: delete %s:%s\n", o.rank, dset, obj_name);
+        printf("%d: delete %s\n", o.rank, obj_name);
       }
       s->obj_delete.suc++;
 
       int writeRank = (o.rank + o.offset * (d+1)) % o.size;
-      def_dset_name(dset, writeRank, d);
-      def_obj_name(obj_name, dset, writeRank, d, o.precreate + prevFile);
+      def_obj_name(obj_name, writeRank, d, o.precreate + prevFile);
 
       op_timer = GetTimeStamp();
-      aiori_fh = o.backend->open(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
+      aiori_fh = o.backend->create(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
       if (NULL == aiori_fh){
-        FAIL("unable to open file %s", obj_name);
+        FAIL("Unable to open file %s", obj_name);
       }
       if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
         s->obj_create.suc++;
@@ -632,7 +627,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       if (o.verbosity >= 2){
-        printf("%d: write %s:%s (%d)\n", o.rank, dset, obj_name, ret);
+        printf("%d: write %s (%d)\n", o.rank, obj_name, ret);
       }
     } // end loop
 
@@ -688,12 +683,10 @@ void run_cleanup(phase_stat_t * s, int start_index){
   size_t pos = -1; // position inside the individual measurement array
 
   for(int d=0; d < o.dset_count; d++){
-    def_dset_name(dset, o.rank, d);
-
     for(int f=0; f < o.precreate; f++){
       double op_time;
       pos++;
-      def_obj_name(obj_name, dset, o.rank, d, f + start_index);
+      def_obj_name(obj_name, o.rank, d, f + start_index);
 
       op_timer = GetTimeStamp();
       o.backend->delete(obj_name, o.backend_options);
@@ -705,10 +698,11 @@ void run_cleanup(phase_stat_t * s, int start_index){
       s->obj_delete.suc++;
     }
 
-    if (o.backend->rmdir(dset, o.backend_options)) {
+    def_dset_name(dset, o.rank, d);
+    if (o.backend->rmdir(dset, o.backend_options) == 0) {
       s->dset_delete.suc++;
     }else{
-      printf("unable to remove directory %s", dset);
+      printf("Unable to remove directory %s\n", dset);
     }
     if (o.verbosity >= 2){
       printf("%d: delete dset %s\n", o.rank, dset);
@@ -931,8 +925,8 @@ int md_workbench(int argc, char ** argv){
     end_phase("cleanup", & phase_stats);
 
     if (o.rank == 0){
-      if (! o.backend->rmdir(o.prefix, o.backend_options)) {
-          FAIL("unable to remove directory %s", o.prefix);
+      if (o.backend->rmdir(o.prefix, o.backend_options) != 0) {
+        printf("Unable to remove directory %s\n", o.prefix);
       }
     }
   }else{
@@ -940,7 +934,9 @@ int md_workbench(int argc, char ** argv){
   }
 
   double t_all = GetTimeStamp();
-  o.backend->finalize(o.backend_options);
+  if(o.backend->finalize){
+    o.backend->finalize(o.backend_options);
+  }
   if (o.rank == 0 && ! o.quiet_output){
     printf("Total runtime: %.0fs time: ",  t_all);
     printTime();
