@@ -2,6 +2,8 @@
 #define IOR_MD_WORKBENCH_H
 
 #include <stdint.h>
+#include <stdio.h>
+#include <mpi.h>
 
 // successfull, errors
 typedef struct {
@@ -56,6 +58,6 @@ typedef struct{ // NOTE: if this type is changed, adjust end_phase() !!!
   int stonewall_iterations;
 } phase_stat_t;
 
-int md_workbench(int argc, char ** argv);
+int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logfile);
 
 #endif

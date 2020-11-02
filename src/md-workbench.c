@@ -28,6 +28,8 @@ struct benchmark_options{
   ior_aiori_t const * backend;
   void * backend_options;
   aiori_xfer_hint_t hints;
+  MPI_Comm com;
+  FILE * logfile;
 
   char * interface;
   int num;
@@ -36,6 +38,7 @@ struct benchmark_options{
 
   int offset;
   int iterations;
+  int global_iteration;
   int file_size;
   int read_only;
   int stonewall_timer;
@@ -69,8 +72,6 @@ struct benchmark_options{
 
   uint64_t start_item_number;
 };
-
-static int global_iteration;
 
 struct benchmark_options o;
 
@@ -293,13 +294,13 @@ static uint64_t aggregate_timers(int repeats, int max_repeats, time_result_t * t
     count += repeats;
     for(int i=1; i < o.size; i++){
       int cnt;
-      ret = MPI_Recv(& global_times[count], max_repeats*2, MPI_FLOAT, i, 888, MPI_COMM_WORLD, & status);
+      ret = MPI_Recv(& global_times[count], max_repeats*2, MPI_FLOAT, i, 888, o.com, & status);
       CHECK_MPI_RET(ret)
       MPI_Get_count(& status, MPI_FLOAT, & cnt);
       count += cnt / 2;
     }
   }else{
-    ret = MPI_Send(times, repeats * 2, MPI_FLOAT, 0, 888, MPI_COMM_WORLD);
+    ret = MPI_Send(times, repeats * 2, MPI_FLOAT, 0, 888, o.com);
     CHECK_MPI_RET(ret)
   }
 
@@ -309,7 +310,7 @@ static uint64_t aggregate_timers(int repeats, int max_repeats, time_result_t * t
 static void compute_histogram(const char * name, time_result_t * times, time_statistics_t * stats, size_t repeats, int writeLatencyFile){
   if(writeLatencyFile && o.latency_file_prefix ){
     char file[1024];
-    sprintf(file, "%s-%.2f-%d-%s.csv", o.latency_file_prefix, o.relative_waiting_factor, global_iteration, name);
+    sprintf(file, "%s-%.2f-%d-%s.csv", o.latency_file_prefix, o.relative_waiting_factor, o.global_iteration, name);
     FILE * f = fopen(file, "w+");
     if(f == NULL){
       printf("%d: Error writing to latency file: %s\n", o.rank, file);
@@ -341,7 +342,7 @@ static void end_phase(const char * name, phase_stat_t * p){
   char buff[MAX_PATHLEN];
 
   //char * limit_memory_P = NULL;
-  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Barrier(o.com);
 
   int max_repeats = o.precreate * o.dset_count;
   if(strcmp(name,"benchmark") == 0){
@@ -352,19 +353,19 @@ static void end_phase(const char * name, phase_stat_t * p){
   phase_stat_t g_stat;
   init_stats(& g_stat, (o.rank == 0 ? 1 : 0) * ((size_t) max_repeats) * o.size);
   // reduce timers
-  ret = MPI_Reduce(& p->t, & g_stat.t, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+  ret = MPI_Reduce(& p->t, & g_stat.t, 2, MPI_DOUBLE, MPI_MAX, 0, o.com);
   CHECK_MPI_RET(ret)
   if(o.rank == 0) {
     g_stat.t_all = (double*) malloc(sizeof(double) * o.size);
   }
-  ret = MPI_Gather(& p->t, 1, MPI_DOUBLE, g_stat.t_all, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  ret = MPI_Gather(& p->t, 1, MPI_DOUBLE, g_stat.t_all, 1, MPI_DOUBLE, 0, o.com);
   CHECK_MPI_RET(ret)
-  ret = MPI_Reduce(& p->dset_create, & g_stat.dset_create, 2*(2+4), MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+  ret = MPI_Reduce(& p->dset_create, & g_stat.dset_create, 2*(2+4), MPI_INT, MPI_SUM, 0, o.com);
   CHECK_MPI_RET(ret)
-  ret = MPI_Reduce(& p->max_op_time, & g_stat.max_op_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+  ret = MPI_Reduce(& p->max_op_time, & g_stat.max_op_time, 1, MPI_DOUBLE, MPI_MAX, 0, o.com);
   CHECK_MPI_RET(ret)
   if( p->stonewall_iterations ){
-    ret = MPI_Reduce(& p->repeats, & g_stat.repeats, 1, MPI_UINT64_T, MPI_MIN, 0, MPI_COMM_WORLD);
+    ret = MPI_Reduce(& p->repeats, & g_stat.repeats, 1, MPI_UINT64_T, MPI_MIN, 0, o.com);
     CHECK_MPI_RET(ret)
     g_stat.stonewall_iterations = p->stonewall_iterations;
   }
@@ -421,12 +422,12 @@ static void end_phase(const char * name, phase_stat_t * p){
       print_p_stat(buff, name, p, p->t, 0);
       printf("0: %s\n", buff);
       for(int i=1; i < o.size; i++){
-        MPI_Recv(buff, MAX_PATHLEN, MPI_CHAR, i, 4711, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(buff, MAX_PATHLEN, MPI_CHAR, i, 4711, o.com, MPI_STATUS_IGNORE);
         printf("%d: %s\n", i, buff);
       }
     }else{
       print_p_stat(buff, name, p, p->t, 0);
-      MPI_Send(buff, MAX_PATHLEN, MPI_CHAR, 0, 4711, MPI_COMM_WORLD);
+      MPI_Send(buff, MAX_PATHLEN, MPI_CHAR, 0, 4711, o.com);
     }
   }
 
@@ -469,7 +470,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       s->dset_create.err++;
       if (! o.ignore_precreate_errors){
         printf("%d: Error while creating the dset: %s\n", o.rank, dset);
-        MPI_Abort(MPI_COMM_WORLD, 1);
+        MPI_Abort(o.com, 1);
       }
     }
   }
@@ -498,7 +499,7 @@ void run_precreate(phase_stat_t * s, int current_index){
         if (! o.ignore_precreate_errors){
          printf("%d: Error while creating the obj: %s\n", o.rank, obj_name);
          fflush(stdout);
-         MPI_Abort(MPI_COMM_WORLD, 1);
+         MPI_Abort(o.com, 1);
         }
       }
       o.backend->close(aiori_fh, o.backend_options);
@@ -577,7 +578,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
         s->obj_read.err++;
         printf("%d: Error while reading the obj: %s\n", o.rank, obj_name);
         fflush(stdout);
-        MPI_Abort(MPI_COMM_WORLD, 1);
+        MPI_Abort(o.com, 1);
       }
       o.backend->close(aiori_fh, o.backend_options);
 
@@ -616,7 +617,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
         if (! o.ignore_precreate_errors){
          printf("%d: Error while creating the obj: %s\n", o.rank, obj_name);
          fflush(stdout);
-         MPI_Abort(MPI_COMM_WORLD, 1);
+         MPI_Abort(o.com, 1);
         }
       }
       o.backend->close(aiori_fh, o.backend_options);
@@ -643,7 +644,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       // wear out mode, now reduce the maximum
       int cur_pos = f + 1;
       phase_allreduce_time = GetTimeStamp() - s->phase_start_timer;
-      int ret = MPI_Allreduce(& cur_pos, & total_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+      int ret = MPI_Allreduce(& cur_pos, & total_num, 1, MPI_INT, MPI_MAX, o.com);
       CHECK_MPI_RET(ret)
       s->phase_start_timer = GetTimeStamp();
       s->stonewall_iterations = total_num;
@@ -658,14 +659,14 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
   s->t = GetTimeStamp() - s->phase_start_timer + phase_allreduce_time;
   if(armed_stone_wall && o.stonewall_timer_wear_out){
     int f = total_num;
-    int ret = MPI_Allreduce(& f, & total_num, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+    int ret = MPI_Allreduce(& f, & total_num, 1, MPI_INT, MPI_MAX, o.com);
     CHECK_MPI_RET(ret)
     s->stonewall_iterations = total_num;
   }
   if(o.stonewall_timer && ! o.stonewall_timer_wear_out){
     // TODO FIXME
     int sh = s->stonewall_iterations;
-    int ret = MPI_Allreduce(& sh, & s->stonewall_iterations, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+    int ret = MPI_Allreduce(& sh, & s->stonewall_iterations, 1, MPI_INT, MPI_MAX, o.com);
     CHECK_MPI_RET(ret)
   }
 
@@ -764,7 +765,7 @@ static int return_position(){
     }
     fclose(f);
   }
-  ret = MPI_Bcast( & position, 1, MPI_INT, 0, MPI_COMM_WORLD );
+  ret = MPI_Bcast( & position, 1, MPI_INT, 0, o.com );
   return position;
 }
 
@@ -781,16 +782,18 @@ static void store_position(int position){
   fclose(f);
 }
 
-int md_workbench(int argc, char ** argv){
+int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logfile){
   int ret;
   int printhelp = 0;
   char * limit_memory_P = NULL;
 
-  global_iteration = 0;
   init_options();
 
-  MPI_Comm_rank(MPI_COMM_WORLD, & o.rank);
-  MPI_Comm_size(MPI_COMM_WORLD, & o.size);
+  o.com = world_com;
+  o.logfile = out_logfile;
+
+  MPI_Comm_rank(o.com, & o.rank);
+  MPI_Comm_size(o.com, & o.size);
 
   if (o.rank == 0 && ! o.quiet_output){
     printf("Args: %s", argv[0]);
@@ -863,7 +866,7 @@ int md_workbench(int argc, char ** argv){
   //ret = mem_preallocate(& limit_memory_P, o.limit_memory, o.verbosity >= 3);
   //if(ret != 0){
   //  printf("%d: Error allocating memory\n", o.rank);
-  //  MPI_Abort(MPI_COMM_WORLD, 1);
+  //  MPI_Abort(o.com, 1);
   //}
 
   double bench_start;
@@ -881,7 +884,7 @@ int md_workbench(int argc, char ** argv){
       }
     }
     init_stats(& phase_stats, o.precreate * o.dset_count);
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(o.com);
 
     // pre-creation phase
     phase_stats.phase_start_timer = GetTimeStamp();
@@ -892,12 +895,12 @@ int md_workbench(int argc, char ** argv){
 
   if (o.phase_benchmark){
     // benchmark phase
-    for(global_iteration = 0; global_iteration < o.iterations; global_iteration++){
+    for(o.global_iteration = 0; o.global_iteration < o.iterations; o.global_iteration++){
       if(o.adaptive_waiting_mode){
         o.relative_waiting_factor = 0;
       }
       init_stats(& phase_stats, o.num * o.dset_count);
-      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Barrier(o.com);
       phase_stats.phase_start_timer = GetTimeStamp();
       run_benchmark(& phase_stats, & current_index);
       end_phase("benchmark", & phase_stats);
@@ -906,7 +909,7 @@ int md_workbench(int argc, char ** argv){
         o.relative_waiting_factor = 0.0625;
         for(int r=0; r <= 6; r++){
           init_stats(& phase_stats, o.num * o.dset_count);
-          MPI_Barrier(MPI_COMM_WORLD);
+          MPI_Barrier(o.com);
           phase_stats.phase_start_timer = GetTimeStamp();
           run_benchmark(& phase_stats, & current_index);
           end_phase("benchmark", & phase_stats);

@@ -497,7 +497,7 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 
         *fd = open64(testFileName, fd_oflag);
         if (*fd < 0)
-                ERRF("open64(\"%s\", %d) failed", testFileName, fd_oflag);
+                ERRF("open64(\"%s\", %d) failed: %s", testFileName, fd_oflag, strerror(errno));
 
 #ifdef HAVE_LUSTRE_USER
         if (o->lustre_ignore_locks) {
