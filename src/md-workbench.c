@@ -38,6 +38,8 @@ struct benchmark_options{
   int precreate;
   int dset_count;
 
+  int result_position; // in the global structure
+
   int offset;
   int iterations;
   int global_iteration;
@@ -339,7 +341,7 @@ static void compute_histogram(const char * name, time_result_t * times, time_sta
   stats->max = times[repeats - 1].runtime;
 }
 
-static void end_phase(const char * name, phase_stat_t * p){
+static void end_phase(const char * name, phase_stat_t * p, phase_stat_t * result){
   int ret;
   char buff[MAX_PATHLEN];
 
@@ -448,6 +450,10 @@ static void end_phase(const char * name, phase_stat_t * p){
     free(g_stat.time_stat);
     free(g_stat.time_delete);
   }
+
+  // copy the result back for the API
+  memcpy(& result[o.result_position], & g_stat, sizeof(g_stat));
+  o.result_position++;
 
   // allocate memory if necessary
   // ret = mem_preallocate(& limit_memory_P, o.limit_memory_between_phases, o.verbosity >= 3);
@@ -777,7 +783,7 @@ static void store_position(int position){
   fclose(f);
 }
 
-int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logfile){
+phase_stat_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logfile){
   int ret;
   int printhelp = 0;
   char * limit_memory_P = NULL;
@@ -867,6 +873,7 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
   double bench_start;
   bench_start = GetTimeStamp();
   phase_stat_t phase_stats;
+  phase_stat_t* all_phases_stats = malloc(sizeof(phase_stat_t) * (2 + o.iterations));
 
   if(o.rank == 0 && o.print_detailed_stats && ! o.quiet_output){
     print_detailed_stat_header();
@@ -885,7 +892,7 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
     phase_stats.phase_start_timer = GetTimeStamp();
     run_precreate(& phase_stats, current_index);
     phase_stats.t = GetTimeStamp() - phase_stats.phase_start_timer;
-    end_phase("precreate", & phase_stats);
+    end_phase("precreate", & phase_stats, all_phases_stats);
   }
 
   if (o.phase_benchmark){
@@ -898,7 +905,7 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
       MPI_Barrier(o.com);
       phase_stats.phase_start_timer = GetTimeStamp();
       run_benchmark(& phase_stats, & current_index);
-      end_phase("benchmark", & phase_stats);
+      end_phase("benchmark", & phase_stats, all_phases_stats);
 
       if(o.adaptive_waiting_mode){
         o.relative_waiting_factor = 0.0625;
@@ -907,7 +914,7 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
           MPI_Barrier(o.com);
           phase_stats.phase_start_timer = GetTimeStamp();
           run_benchmark(& phase_stats, & current_index);
-          end_phase("benchmark", & phase_stats);
+          end_phase("benchmark", & phase_stats, all_phases_stats);
           o.relative_waiting_factor *= 2;
         }
       }
@@ -920,7 +927,7 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
     phase_stats.phase_start_timer = GetTimeStamp();
     run_cleanup(& phase_stats, current_index);
     phase_stats.t = GetTimeStamp() - phase_stats.phase_start_timer;
-    end_phase("cleanup", & phase_stats);
+    end_phase("cleanup", & phase_stats, all_phases_stats);
 
     if (o.rank == 0){
       if (o.backend->rmdir(o.prefix, o.backend_options) != 0) {
@@ -939,7 +946,6 @@ int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logf
     oprintf("Total runtime: %.0fs time: ",  t_all);
     printTime();
   }
-
   //mem_free_preallocated(& limit_memory_P);
-  return 0;
+  return all_phases_stats;
 }

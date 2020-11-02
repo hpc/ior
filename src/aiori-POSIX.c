@@ -100,7 +100,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
 
 #endif
 #ifdef HAVE_LUSTRE_USER
-    {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
+    {0, "posix.lustre.stribeegfs_chunkSizepecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
     {0, "posix.lustre.startost", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_start_ost},
     {0, "posix.lustre.ignorelocks", "", OPTION_FLAG, 'd', & o->lustre_ignore_locks},

@@ -40,7 +40,7 @@ typedef struct{ // NOTE: if this type is changed, adjust end_phase() !!!
   op_stat_t obj_stat;
   op_stat_t obj_delete;
 
-  // time measurements individual runs
+  // time measurements of individual runs, these are not returned for now by the API!
   uint64_t repeats;
   time_result_t * time_create;
   time_result_t * time_read;
@@ -58,6 +58,7 @@ typedef struct{ // NOTE: if this type is changed, adjust end_phase() !!!
   int stonewall_iterations;
 } phase_stat_t;
 
-int md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logfile);
+// @Return The first statistics returned are precreate, then iteration many benchmark runs, the last is cleanup
+phase_stat_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logfile);
 
 #endif

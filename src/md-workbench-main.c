@@ -4,7 +4,10 @@
 
 int main(int argc, char ** argv){
   MPI_Init(& argc, & argv);
-  int ret = md_workbench_run(argc, argv, MPI_COMM_WORLD, stdout);
+  //phase_stat_t* results =
+  md_workbench_run(argc, argv, MPI_COMM_WORLD, stdout);
+  // API check, access the results of the first phase which is precrate.
+  //printf("Max op runtime: %f\n", results->max_op_time);
   MPI_Finalize();
-  return ret;
+  return 0;
 }
