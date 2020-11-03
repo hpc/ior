@@ -751,42 +751,35 @@ static IOR_offset_t
 DFS_GetFileSize(IOR_param_t * test, MPI_Comm comm, char *testFileName)
 {
         dfs_obj_t *obj;
-        daos_size_t fsize, tmpMin, tmpMax, tmpSum;
+        MPI_Comm comm;
+        daos_size_t fsize;
         int rc;
 
-	rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
-        if (rc) {
-                fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
-                return -1;
-        }
-
-        rc = dfs_get_size(dfs, obj, &fsize);
-        if (rc)
-                return -1;
-
-        dfs_release(obj);
-
-        if (test->filePerProc == TRUE) {
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, comm),
-                          "cannot total data moved");
-                fsize = tmpSum;
+        if (hints->filePerProc == TRUE) {
+                comm = MPI_COMM_SELF;
         } else {
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, comm),
-                          "cannot total data moved");
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, comm),
-                          "cannot total data moved");
-                if (tmpMin != tmpMax) {
-                        if (rank == 0) {
-                                WARN("inconsistent file size by different tasks");
-                        }
-                        /* incorrect, but now consistent across tasks */
-                        fsize = tmpMin;
-                }
+                comm = testComm;
         }
 
+        if (hints->filePerProc || rank == 0) {
+                rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
+                if (rc) {
+                        fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
+                        return -1;
+                }
+
+                rc = dfs_get_size(dfs, obj, &fsize);
+                dfs_release(obj);
+                if (rc)
+                        return -1;
+        }
+
+        if (!hints->filePerProc) {
+                rc = MPI_Bcast(&fsize, 1, MPI_UINT64_T, 0, comm);
+                if (rc)
+                        return rc;
+        }
+        
         return (fsize);
 }
 
