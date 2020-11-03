@@ -15,7 +15,7 @@ extraLDADD =
 extraLDFLAGS =
 extraCPPFLAGS =
 
-md_workbench_SOURCES = md-workbench.c md-workbench-main.c
+md_workbench_SOURCES = md-workbench-main.c
 md_workbench_LDFLAGS =
 md_workbench_LDADD = libaiori.a
 md_workbench_CPPFLAGS =
@@ -132,6 +132,16 @@ mdtest_LDFLAGS  += $(extraLDFLAGS)
 mdtest_LDADD    += $(extraLDADD)
 mdtest_CPPFLAGS += $(extraCPPFLAGS)
 
+md_workbench_SOURCES  += $(extraSOURCES)
+md_workbench_LDFLAGS  += $(extraLDFLAGS)
+md_workbench_LDADD    += $(extraLDADD)
+md_workbench_CPPFLAGS += $(extraCPPFLAGS)
+
+MD_WORKBENCH_SOURCES  = $(md_workbench_SOURCES)
+MD_WORKBENCH_LDFLAGS  = $(md_workbench_LDFLAGS)
+MD_WORKBENCH_LDADD    = $(md_workbench_LDADD)
+MD_WORKBENCH_CPPFLAGS = $(md_workbench_CPPFLAGS)
+
 IOR_SOURCES  = $(ior_SOURCES)
 IOR_LDFLAGS  = $(ior_LDFLAGS)
 IOR_LDADD    = $(ior_LDADD)
@@ -145,7 +155,8 @@ MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
 libaiori_a_SOURCES += $(extraSOURCES)
 libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
 
-# Generate config file with build flags to allow reuse of library
+# Generate a config file with the build flags to allow the reuse of library
+.PHONY: build.conf
 all-local: build.conf
 build.conf:
 	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) > build.conf
