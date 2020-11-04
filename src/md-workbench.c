@@ -175,7 +175,7 @@ static void init_stats(phase_stat_t * p, size_t repeats){
 
 static float add_timed_result(double start, double phase_start_timer, time_result_t * results, size_t pos, double * max_time, double * out_op_time){
   float curtime = start - phase_start_timer;
-  double op_time = GetTimeStamp();
+  double op_time = GetTimeStamp() - start;
   results[pos].runtime = (float) op_time;
   results[pos].time_since_app_start = curtime;
   if (op_time > *max_time){
@@ -248,7 +248,7 @@ static void print_p_stat(char * buff, const char * name, phase_stat_t * p, doubl
     // single line
     pos += sprintf(buff, "%s process max:%.2fs ", name, t);
     if(print_global){
-      pos += sprintf(buff + pos, "min:%.1fs mean: %.1fs balance:%.1f stddev:%.1f ", r_min, r_mean, r_min/r_max * 100.0, r_std);
+      pos += sprintf(buff + pos, "min:%.2fs mean: %.2fs balance:%.1f stddev:%.1f ", r_min, r_mean, r_min/r_max * 100.0, r_std);
     }
     int ioops_per_iter = 4;
     if(o.read_only){
