@@ -859,8 +859,8 @@ phase_stat_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE 
 
   if ( o.rank == 0 && ! o.quiet_output ){
     // print the set output options
-    option_print_current(options);
-    oprintf("\n");
+    // option_print_current(options);
+    // oprintf("\n");
   }
 
   // preallocate memory if necessary
