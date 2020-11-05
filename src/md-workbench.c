@@ -144,7 +144,7 @@ void init_options(){
   o.run_info_file = "md-workbench.status";
 }
 
-static void wait(double runtime){
+static void mdw_wait(double runtime){
   double waittime = runtime * o.relative_waiting_factor;
   //printf("waittime: %e\n", waittime);
   if(waittime < 0.01){
@@ -617,7 +617,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_stat, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
-        wait(op_time);
+        mdw_wait(op_time);
       }
 
       if (o.verbosity >= 2){
@@ -651,7 +651,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_read, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
-        wait(op_time);
+        mdw_wait(op_time);
       }
       if(o.read_only){
         continue;
@@ -661,7 +661,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       o.backend->delete(obj_name, o.backend_options);
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_delete, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
-        wait(op_time);
+        mdw_wait(op_time);
       }
 
       if (o.verbosity >= 2){
@@ -689,7 +689,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_create, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
-        wait(op_time);
+        mdw_wait(op_time);
       }
 
       if (o.verbosity >= 2){
