@@ -1646,47 +1646,6 @@ static void ValidateTests(IOR_param_t * test)
 
 /**
  * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
- * They are sequential and the last element is set to -1 as end marker.
- * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
- * @param pretendRank int pretended Rank for shifting the offsets correctly
- * @return IOR_offset_t
- */
-IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank)
-{
-        IOR_offset_t i, j, k = 0;
-        IOR_offset_t offsets;
-        IOR_offset_t *offsetArray;
-
-        /* count needed offsets */
-        offsets = (test->blockSize / test->transferSize) * test->segmentCount;
-
-        /* setup empty array */
-        offsetArray =
-                (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
-        if (offsetArray == NULL)
-                ERR("malloc() failed");
-        offsetArray[offsets] = -1;      /* set last offset with -1 */
-
-        /* fill with offsets */
-        for (i = 0; i < test->segmentCount; i++) {
-                for (j = 0; j < (test->blockSize / test->transferSize); j++) {
-                        offsetArray[k] = j * test->transferSize;
-                        if (test->filePerProc) {
-                                offsetArray[k] += i * test->blockSize;
-                        } else {
-                                offsetArray[k] +=
-                                        (i * test->numTasks * test->blockSize)
-                                        + (pretendRank * test->blockSize);
-                        }
-                        k++;
-                }
-        }
-
-        return (offsetArray);
-}
-
-/**
- * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
  * They get created sequentially and mixed up in the end. The last array element
  * is set to -1 as end marker.
  * It should be noted that as the seeds get synchronised across all processes
@@ -1769,14 +1728,12 @@ IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, int acce
         return (offsetArray);
 }
 
-static IOR_offset_t WriteOrReadSingle(IOR_offset_t pairCnt, IOR_offset_t *offsetArray, int pretendRank,
+static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank,
   IOR_offset_t * transferCount, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
   IOR_offset_t amtXferred = 0;
   IOR_offset_t transfer;
 
   void *buffer = ioBuffers->buffer;
-
-  IOR_offset_t offset = offsetArray[pairCnt]; // this looks inappropriate
 
   transfer = test->transferSize;
   if (access == WRITE) {
@@ -1830,41 +1787,48 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
         int errors = 0;
         IOR_offset_t transferCount = 0;
         uint64_t pairCnt = 0;
-        IOR_offset_t *offsetArray;
         int pretendRank;
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
         double startForStonewall;
         int hitStonewall;
+        int i, j;
         IOR_point_t *point = ((access == WRITE) || (access == WRITECHECK)) ?
                              &results->write : &results->read;
 
         /* initialize values */
         pretendRank = (rank + rankOffset) % test->numTasks;
 
-        if (test->randomOffset) {
-                offsetArray = GetOffsetArrayRandom(test, pretendRank, access);
-        } else {
-                offsetArray = GetOffsetArraySequential(test, pretendRank);
-        }
+        //  offsetArray = GetOffsetArraySequential(test, pretendRank);
 
         startForStonewall = GetTimeStamp();
         hitStonewall = 0;
 
-        /* loop over offsets to access */
-        while ((offsetArray[pairCnt] != -1) && !hitStonewall ) {
-                dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
-                pairCnt++;
+        for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
+          for (j = 0; j < (test->blockSize / test->transferSize) &&  !hitStonewall ; j++) {
+            IOR_offset_t offset;
+            if (test->randomOffset) {
 
-                hitStonewall = ((test->deadlineForStonewalling != 0
-                                && (GetTimeStamp() - startForStonewall)
-                                    > test->deadlineForStonewalling)) || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
+            }else{
+              offset = j * test->transferSize;
+              if (test->filePerProc) {
+                offset += i * test->blockSize;
+              } else {
+                offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
+              }
+            }
+            dataMoved += WriteOrReadSingle(offset, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
+            pairCnt++;
 
-                if ( test->collective && test->deadlineForStonewalling ) {
-                        // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
-                        // it absolutely must be an 'all or none':
-                        MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, MPI_COMM_WORLD), "hitStonewall broadcast failed");
-               }
+            hitStonewall = ((test->deadlineForStonewalling != 0
+                && (GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
+                || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
 
+            if ( test->collective && test->deadlineForStonewalling ) {
+              // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
+              // it absolutely must be an 'all or none':
+              MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, MPI_COMM_WORLD), "hitStonewall broadcast failed");
+            }
+          }
         }
         if (test->stoneWallingWearOut){
           if (verbose >= VERBOSE_1){
@@ -1891,18 +1855,29 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
           }
           if(pairCnt != point->pairs_accessed){
             // some work needs still to be done !
-            for(; pairCnt < point->pairs_accessed; pairCnt++ ) {
-                    dataMoved += WriteOrReadSingle(pairCnt, offsetArray, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
+            for ( ; pairCnt < point->pairs_accessed; i++) {
+              for ( ; j < (test->blockSize / test->transferSize) &&  pairCnt < point->pairs_accessed ; j++) {
+                IOR_offset_t offset;
+                if (test->randomOffset) {
+
+                }else{
+                  offset = j * test->transferSize;
+                  if (test->filePerProc) {
+                    offset += i * test->blockSize;
+                  } else {
+                    offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
+                  }
+                }
+                dataMoved += WriteOrReadSingle(offset, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
+                pairCnt++;
+              }
             }
           }
         }else{
           point->pairs_accessed = pairCnt;
         }
 
-
         totalErrorCount += CountErrors(test, access, errors);
-
-        free(offsetArray);
 
         if (access == WRITE && test->fsync == TRUE) {
                 backend->fsync(fd, test->backend_options);       /*fsync after all accesses */
