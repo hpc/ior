@@ -384,7 +384,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
   char APIs[1024];
   char APIs_legacy[1024];
   aiori_supported_apis(APIs, APIs_legacy, IOR);
-  char apiStr[1024];
+  char * apiStr = safeMalloc(1024);
   sprintf(apiStr, "API for I/O [%s]", APIs);
 
   option_help o [] = {
