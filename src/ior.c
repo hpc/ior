@@ -1586,6 +1586,8 @@ static void ValidateTests(IOR_param_t * test)
         }
         if (test->blockSize < test->transferSize)
                 ERR("block size must not be smaller than transfer size");
+        if (test->randomOffset && test->blockSize == test->transferSize)
+            ERR("IOR will randomize access within a block and repeats the same pattern for all segments, therefore choose blocksize > transferSize");
 
         /* specific APIs */
         if ((strcasecmp(test->api, "MPIIO") == 0)
