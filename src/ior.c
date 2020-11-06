@@ -1642,7 +1642,7 @@ static void ValidateTests(IOR_param_t * test)
 }
 
 /**
- * Returns a precomputed array of IOR_offset_t for the inner benchmark loop terminated by offset -1.
+ * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
  * They get created sequentially and mixed up in the end.
  * It should be noted that as the seeds get synchronised across all processes if not FilePerProcess is set
  * every process computes the same random order.
@@ -1654,7 +1654,7 @@ static void ValidateTests(IOR_param_t * test)
  * @param pretendRank int pretended Rank for shifting the offsets correctly
  * @return IOR_offset_t
  */
-IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank)
+IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, IOR_offset_t * out_count)
 {
         int seed;
         IOR_offset_t i;
@@ -1686,32 +1686,32 @@ IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank)
         srandom(seed);
 
         /* count needed offsets (pass 1) */
-        if (test->filePerProc == FALSE) {
+        if (test->filePerProc) {
+          offsets = test->blockSize / test->transferSize;
+        }else{
           offsets = 0;
-          for (i = 0; i < test->blockSize; i += test->transferSize) {
+          for (i = 0; i < test->blockSize * test->numTasks; i += test->transferSize) {
             // this counts which process get how many transferes in the shared file
             if ((rand() % test->numTasks) == pretendRank) {
               offsets++;
             }
           }
-        } else {
-          offsets = test->blockSize / test->transferSize;
         }
 
         /* setup empty array */
-        offsetArray = (IOR_offset_t *) safeMalloc((offsets + 1) * sizeof(IOR_offset_t));
+        offsetArray = (IOR_offset_t *) safeMalloc(offsets * sizeof(IOR_offset_t));
 
-        offsetArray[offsets] = -1;      /* set last offset with -1 */
+        *out_count = offsets;
 
         if (test->filePerProc) {
             /* fill array */
             for (i = 0; i < offsets; i++) {
-                    offsetArray[i] = i * test->transferSize;
+                offsetArray[i] = i * test->transferSize;
             }
         } else {
             /* fill with offsets (pass 2) */
             srandom(seed);  /* need same seed to get same transfers as counted in the beginning*/
-            for (i = 0; i < test->blockSize; i += test->transferSize) {
+            for (i = 0; i < test->blockSize * test->numTasks; i += test->transferSize) {
                 if ((rand() % test->numTasks) == pretendRank) {
                     offsetArray[offsetCnt] = i;
                     offsetCnt++;
@@ -1805,11 +1805,23 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
         startForStonewall = GetTimeStamp();
         hitStonewall = 0;
 
+        IOR_offset_t offsets;
+        IOR_offset_t * offsets_rnd;
+        if (test->randomOffset) {
+          offsets_rnd = GetOffsetArrayRandom(test, pretendRank, & offsets);
+        }else{
+          offsets = (test->blockSize / test->transferSize);
+        }
+
         for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
-          for (j = 0; j < (test->blockSize / test->transferSize) &&  !hitStonewall ; j++) {
+          for (j = 0; j < offsets &&  !hitStonewall ; j++) {
             IOR_offset_t offset;
             if (test->randomOffset) {
-
+              if(test->filePerProc){
+                offset = offsets_rnd[j] + (i * test->blockSize);
+              }else{
+                offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
+              }
             }else{
               offset = j * test->transferSize;
               if (test->filePerProc) {
@@ -1858,10 +1870,14 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
           if(pairCnt != point->pairs_accessed){
             // some work needs still to be done !
             for ( ; pairCnt < point->pairs_accessed; i++) {
-              for ( ; j < (test->blockSize / test->transferSize) &&  pairCnt < point->pairs_accessed ; j++) {
+              for ( ; j < offsets &&  pairCnt < point->pairs_accessed ; j++) {
                 IOR_offset_t offset;
                 if (test->randomOffset) {
-
+                  if(test->filePerProc){
+                    offset = offsets_rnd[j] + (i * test->blockSize);
+                  }else{
+                    offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
+                  }
                 }else{
                   offset = j * test->transferSize;
                   if (test->filePerProc) {
