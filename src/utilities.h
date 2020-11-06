@@ -30,13 +30,7 @@ extern enum OutputFormat_t outputFormat;  /* format of the output */
  * Try using the system's PATH_MAX, which is what realpath and such use.
  */
 #define MAX_PATHLEN PATH_MAX
-
-
-#ifdef __linux__
 #define ERROR_LOCATION __func__
-#else
-#define ERROR_LOCATION __LINE__
-#endif
 
 
 void* safeMalloc(uint64_t size);
