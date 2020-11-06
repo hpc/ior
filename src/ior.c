@@ -1025,9 +1025,6 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
         }
 
         init_clock();
-
-        /* seed random number generator */
-        SeedRandGen(mpi_comm_world);
 }
 
 /*
@@ -1645,11 +1642,10 @@ static void ValidateTests(IOR_param_t * test)
 }
 
 /**
- * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
- * They get created sequentially and mixed up in the end. The last array element
- * is set to -1 as end marker.
- * It should be noted that as the seeds get synchronised across all processes
- * every process computes the same random order if used with filePerProc.
+ * Returns a precomputed array of IOR_offset_t for the inner benchmark loop terminated by offset -1.
+ * They get created sequentially and mixed up in the end.
+ * It should be noted that as the seeds get synchronised across all processes if not FilePerProcess is set
+ * every process computes the same random order.
  * For a shared file all transfers get randomly assigned to ranks. The processes
  * can also have differen't numbers of transfers. This might lead to a bigger
  * diversion in accesse as it dose with filePerProc. This is expected but
@@ -1657,73 +1653,79 @@ static void ValidateTests(IOR_param_t * test)
  * @param test IOR_param_t for getting transferSize, blocksize and SegmentCount
  * @param pretendRank int pretended Rank for shifting the offsets correctly
  * @return IOR_offset_t
- * @return
  */
-IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, int access)
+IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank)
 {
         int seed;
-        IOR_offset_t i, value, tmp;
-        IOR_offset_t offsets = 0;
+        IOR_offset_t i;
+        IOR_offset_t offsets;
         IOR_offset_t offsetCnt = 0;
-        IOR_offset_t fileSize;
         IOR_offset_t *offsetArray;
 
-        /* set up seed, each process can determine which regions to access individually */
-        if (test->randomSeed == -1) {
-                test->randomSeed = seed = rand();
-        } else {
-                seed = test->randomSeed + pretendRank;
+        if (test->filePerProc) {
+          /* set up seed, each process can determine which regions to access individually */
+          if (test->randomSeed == -1) {
+                  seed = time(NULL);
+                  test->randomSeed = seed;
+          } else {
+              seed = test->randomSeed + pretendRank;
+          }
+        }else{
+          /* Shared file requires that the seed is synchronized */
+          if (test->randomSeed == -1) {
+            // all processes need to have the same seed.
+            if(rank == 0){
+              seed = time(NULL);
+            }
+            MPI_CHECK(MPI_Bcast(& seed, 1, MPI_INT, 0, test->testComm), "cannot broadcast random seed value");
+            test->randomSeed = seed;
+          }else{
+            seed = test->randomSeed;
+          }
         }
-        srand(seed);
-
-        fileSize = test->blockSize * test->segmentCount;
-        if (test->filePerProc == FALSE) {
-                fileSize *= test->numTasks;
-        }
+        srandom(seed);
 
         /* count needed offsets (pass 1) */
         if (test->filePerProc == FALSE) {
-          for (i = 0; i < fileSize; i += test->transferSize) {
-                        // this counts which process get how many transferes in
-                        // a shared file
-                        if ((rand() % test->numTasks) == pretendRank) {
-                                offsets++;
-                        }
+          offsets = 0;
+          for (i = 0; i < test->blockSize; i += test->transferSize) {
+            // this counts which process get how many transferes in the shared file
+            if ((rand() % test->numTasks) == pretendRank) {
+              offsets++;
+            }
           }
         } else {
-          offsets += fileSize / test->transferSize;
+          offsets = test->blockSize / test->transferSize;
         }
 
         /* setup empty array */
-        offsetArray =
-                (IOR_offset_t *) malloc((offsets + 1) * sizeof(IOR_offset_t));
-        if (offsetArray == NULL)
-                ERR("malloc() failed");
+        offsetArray = (IOR_offset_t *) safeMalloc((offsets + 1) * sizeof(IOR_offset_t));
+
         offsetArray[offsets] = -1;      /* set last offset with -1 */
 
         if (test->filePerProc) {
-                /* fill array */
-                for (i = 0; i < offsets; i++) {
-                        offsetArray[i] = i * test->transferSize;
-                }
+            /* fill array */
+            for (i = 0; i < offsets; i++) {
+                    offsetArray[i] = i * test->transferSize;
+            }
         } else {
-                /* fill with offsets (pass 2) */
-                srand(seed);  /* need same seedto get same transfers as counted in the beginning*/
-                for (i = 0; i < fileSize; i += test->transferSize) {
-                        if ((rand() % test->numTasks) == pretendRank) {
-                                offsetArray[offsetCnt] = i;
-                                offsetCnt++;
-                        }
+            /* fill with offsets (pass 2) */
+            srandom(seed);  /* need same seed to get same transfers as counted in the beginning*/
+            for (i = 0; i < test->blockSize; i += test->transferSize) {
+                if ((rand() % test->numTasks) == pretendRank) {
+                    offsetArray[offsetCnt] = i;
+                    offsetCnt++;
                 }
+            }
         }
         /* reorder array */
         for (i = 0; i < offsets; i++) {
+                IOR_offset_t value, tmp;
                 value = rand() % offsets;
                 tmp = offsetArray[value];
                 offsetArray[value] = offsetArray[i];
                 offsetArray[i] = tmp;
         }
-        SeedRandGen(test->testComm);    /* synchronize seeds across tasks */
 
         return (offsetArray);
 }

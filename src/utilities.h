@@ -46,7 +46,6 @@ char *CurrentTimeString(void);
 int Regex(char *, char *);
 void ShowFileSystemSize(IOR_param_t * test);
 void DumpBuffer(void *, size_t);
-void SeedRandGen(MPI_Comm);
 void SetHints (MPI_Info *, char *);
 void ShowHints (MPI_Info *);
 char *HumanReadable(IOR_offset_t value, int base);

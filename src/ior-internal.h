@@ -25,8 +25,7 @@ void PrintTestEnds();
 void PrintTableHeader();
 /* End of ior-output */
 
-IOR_offset_t *GetOffsetArraySequential(IOR_param_t * test, int pretendRank);
-IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, int access);
+IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank);
 
 struct results {
   double min;
