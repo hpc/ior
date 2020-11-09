@@ -572,16 +572,14 @@ IOR_offset_t StringToBytes(char *size_str)
 /*
  * Displays size of file system and percent of data blocks and inodes used.
  */
-void ShowFileSystemSize(IOR_param_t * test) // this might be converted to an AIORI call
+void ShowFileSystemSize(char * filename, const struct ior_aiori * backend, void * backend_options) // this might be converted to an AIORI call
 {
   ior_aiori_statfs_t stat;
-  if(! test->backend->statfs){
+  if(! backend->statfs){
     WARN("Backend doesn't implement statfs");
     return;
   }
-  char filename[MAX_PATHLEN];
-  GetTestFileName(filename, test);
-  int ret = test->backend->statfs(filename, & stat, test->backend_options);
+  int ret = backend->statfs(filename, & stat, backend_options);
   if( ret != 0 ){
     WARN("Backend returned error during statfs");
     return;

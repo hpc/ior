@@ -346,7 +346,9 @@ void ShowTestStart(IOR_param_t *test)
   PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
 
-  ShowFileSystemSize(test);
+  char filename[MAX_PATHLEN];
+  GetTestFileName(filename, test);
+  ShowFileSystemSize(filename, test->backend, test->backend_options);
 
   if (verbose >= VERBOSE_3 || outputFormat == OUTPUT_JSON) {
     char* data_packets[] = {"g","t","o","i"};
