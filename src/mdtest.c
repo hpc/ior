@@ -1563,39 +1563,6 @@ void show_file_system_size(char *file_system) {
     return;
 }
 
-void display_freespace(char *testdirpath)
-{
-    char dirpath[MAX_PATHLEN] = {0};
-    int  i;
-    int  directoryFound   = 0;
-
-
-    VERBOSE(3,5,"Entering display_freespace on %s...", testdirpath );
-
-    strcpy(dirpath, testdirpath);
-
-    /* get directory for outfile */
-    i = strlen(dirpath);
-    while (i-- > 0) {
-        if (dirpath[i] == '/') {
-            dirpath[i] = '\0';
-            directoryFound = 1;
-            break;
-        }
-    }
-
-    /* if no directory/, use '.' */
-    if (directoryFound == 0) {
-        strcpy(dirpath, ".");
-    }
-
-    VERBOSE(3,5,"Before show_file_system_size, dirpath is '%s'", dirpath );
-    show_file_system_size(dirpath);
-    VERBOSE(3,5, "After show_file_system_size, dirpath is '%s'\n", dirpath );
-
-    return;
-}
-
 void create_remove_directory_tree(int create,
                                   int currDepth, char* path, int dirNum, rank_progress_t * progress) {
 
@@ -1921,6 +1888,7 @@ void mdtest_init_args(){
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
     testComm = world_com;
     out_logfile = world_out;
+    out_resultfile = world_out;
     mpi_comm_world = world_com;
 
     init_clock();
@@ -2203,7 +2171,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /* display disk usage */
     VERBOSE(3,-1,"main (before display_freespace): testdirpath is '%s'", testdirpath );
 
-    if (rank == 0) display_freespace(testdirpath);
+    if (rank == 0) ShowFileSystemSize(testdirpath, backend, backend_options);
     int tasksBlockMapping = QueryNodeMapping(testComm, true);
 
     /* set the shift to mimic IOR and shift by procs per node */
