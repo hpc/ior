@@ -890,16 +890,15 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
     exit(1);
   }
 
-  if (o.backend->initialize){
-    o.backend->initialize(o.backend_options);
-  }
   if(o.backend->xfer_hints){
     o.backend->xfer_hints(& o.hints);
   }
   if(o.backend->check_params){
     o.backend->check_params(o.backend_options);
   }
-
+  if (o.backend->initialize){
+    o.backend->initialize(o.backend_options);
+  }
 
   int current_index = 0;
 
