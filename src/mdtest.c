@@ -1981,16 +1981,16 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &size);
 
-    if (backend->initialize){
-	    backend->initialize(backend_options);
-    }
     if(backend->xfer_hints){
       backend->xfer_hints(& hints);
     }
     if(backend->check_params){
       backend->check_params(backend_options);
     }
-
+    if (backend->initialize){
+	    backend->initialize(backend_options);
+    }
+    
     pid = getpid();
     uid = getuid();
 
