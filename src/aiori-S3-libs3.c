@@ -86,9 +86,14 @@ static void def_file_name(s3_options_t * o, char * out_name, char const * path){
     }else if(c >= 'A' && c <= 'Z'){
       *out_name = *path + ('a' - 'A');
       out_name++;
+    }else if(c == '/'){
+      *out_name = '_';
+      out_name++;
     }
     path++;
   }
+  *out_name = '-';
+  out_name++;
   *out_name = '\0';
 }
 
