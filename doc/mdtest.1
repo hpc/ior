@@ -78,6 +78,9 @@ Stride # between neighbor tasks for file/dir stat, 0 = local
 .I "-p" seconds
 Pre-iteration delay (in seconds).
 .TP
+.I "-P"
+Print both the file creation rate and the elapsed time.
+.TP
 .I "-r"
 Only perform the remove phase of the tests.
 .TP
@@ -120,6 +123,19 @@ Set verbosity value
 .I "-w" bytes
 Set the number of Bytes to write to each file after it is created
 [default: 0].
+.TP
+.I "-W" seconds
+Specify the stonewall time in seconds.  When the stonewall timer has elapsed,
+the rank with the highest number of creates sets
+.I number_of_items
+for the other ranks, so that all ranks create the same number of files.
+.TP
+.I "-x" filename
+Filename to use for stonewall synchronization between processes.
+.TP
+.I "Y"
+Call the sync command after each phase, which is included in the
+timing. Note that it causes all IO to be flushed from the nodes.
 .TP
 .I "-z" tree_depth
 The depth of the hierarchical directory tree [default: 0].
