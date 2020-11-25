@@ -138,6 +138,7 @@ static uint64_t num_dirs_in_tree_calc; /* this is a workaround until the overal 
 static int directory_loops;
 static int print_time;
 static int print_rate_and_time;
+static int print_all_proc;
 static int random_seed;
 static int shared_file;
 static int files_only;
@@ -1253,8 +1254,25 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", t[4] - t[3], summary_table[iteration].rate[7]);
 }
 
+char const * mdtest_test_name(int i){
+  switch (i) {
+  case 0: return "Directory creation        :";
+  case 1: return "Directory stat            :";
+  case 2: return NULL;
+  case 3: return "Directory removal         :";
+  case 4: return "File creation             :";
+  case 5: return "File stat                 :";
+  case 6: return "File read                 :";
+  case 7: return "File removal              :";
+  case 8: return "Tree creation             :";
+  case 9: return "Tree removal              :";
+  default: return "ERR INVALID TESTNAME     :";
+  }
+  return NULL;
+}
+
 void summarize_results(int iterations, int print_time) {
-    char access[MAX_PATHLEN];
+    char const * access;
     int i, j, k;
     int start, stop, tableSize = MDTEST_LAST_NUM;
     double min, max, mean, sd, sum = 0, var = 0, curr = 0;
@@ -1277,10 +1295,6 @@ void summarize_results(int iterations, int print_time) {
       return;
     }
 
-    VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
-    VERBOSE(0,-1,"   Operation                      Max            Min           Mean        Std Dev");
-    VERBOSE(0,-1,"   ---------                      ---            ---           ----        -------");
-
     /* if files only access, skip entries 0-3 (the dir tests) */
     if (files_only && !dirs_only) {
         start = 4;
@@ -1299,6 +1313,30 @@ void summarize_results(int iterations, int print_time) {
     if (!dirs_only && !files_only) {
         start = stop = 0;
     }
+
+
+    if(print_all_proc){
+      fprintf(out_logfile, "\nPer process result (%s):\n", print_time ? "time" : "rate");
+      for (j = 0; j < iterations; j++) {
+        fprintf(out_logfile, "iteration: %d\n", j);
+        for (i = start; i < tableSize; i++) {
+          access = mdtest_test_name(i);
+          if(access == NULL){
+            continue;
+          }
+          fprintf(out_logfile, "Test %s", access);
+          for (k=0; k < size; k++) {
+            curr = all[(k*tableSize*iterations) + (j*tableSize) + i];
+            fprintf(out_logfile, "%c%e", (k==0 ? ' ': ','), curr);
+          }
+          fprintf(out_logfile, "\n");
+        }
+      }
+    }
+
+    VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
+    VERBOSE(0,-1,"   Operation                      Max            Min           Mean        Std Dev");
+    VERBOSE(0,-1,"   ---------                      ---            ---           ----        -------");
 
     for (i = start; i < stop; i++) {
             min = max = all[i];
@@ -1324,18 +1362,7 @@ void summarize_results(int iterations, int print_time) {
             }
             var = var / (iterations * size);
             sd = sqrt(var);
-            switch (i) {
-            case 0: strcpy(access, "Directory creation        :"); break;
-            case 1: strcpy(access, "Directory stat            :"); break;
-                /* case 2: strcpy(access, "Directory read    :"); break; */
-            case 2: ;                                      break; /* N/A */
-            case 3: strcpy(access, "Directory removal         :"); break;
-            case 4: strcpy(access, "File creation             :"); break;
-            case 5: strcpy(access, "File stat                 :"); break;
-            case 6: strcpy(access, "File read                 :"); break;
-            case 7: strcpy(access, "File removal              :"); break;
-            default: strcpy(access, "ERR");                 break;
-            }
+            access = mdtest_test_name(i);
             if (i != 2) {
                 fprintf(out_logfile, "   %s ", access);
                 fprintf(out_logfile, "%14.3f ", max);
@@ -1392,11 +1419,7 @@ void summarize_results(int iterations, int print_time) {
         }
         var = var / (iterations);
         sd = sqrt(var);
-        switch (i) {
-        case 8: strcpy(access, "Tree creation             :"); break;
-        case 9: strcpy(access, "Tree removal              :"); break;
-        default: strcpy(access, "ERR");                 break;
-        }
+        access = mdtest_test_name(i);
         fprintf(out_logfile, "   %s ", access);
         fprintf(out_logfile, "%14.3f ", max);
         fprintf(out_logfile, "%14.3f ", min);
@@ -1872,6 +1895,7 @@ void mdtest_init_args(){
    items = 0;
    num_dirs_in_tree_calc = 0;
    collective_creates = 0;
+   print_all_proc = 0;
    write_bytes = 0;
    stone_wall_timer_seconds = 0;
    read_bytes = 0;
@@ -1945,6 +1969,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'N', NULL,        "stride # between tasks for file/dir operation (local=0; set to 1 to avoid client cache)", OPTION_OPTIONAL_ARGUMENT, 'd', & nstride},
       {'p', NULL,        "pre-iteration delay (in seconds)", OPTION_OPTIONAL_ARGUMENT, 'd', & pre_delay},
       {'P', NULL,        "print rate AND time", OPTION_FLAG, 'd', & print_rate_and_time},
+      {0, "print-all-procs", "all processes print an excerpt of their results", OPTION_FLAG, 'd', & print_all_proc},
       {'R', NULL,        "random access to files (only for stat)", OPTION_FLAG, 'd', & randomize},
       {0, "random-seed", "random seed for -R", OPTION_OPTIONAL_ARGUMENT, 'd', & random_seed},
       {'s', NULL,        "stride between the number of tasks for each test", OPTION_OPTIONAL_ARGUMENT, 'd', & stride},
@@ -1990,7 +2015,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (backend->initialize){
 	    backend->initialize(backend_options);
     }
-    
+
     pid = getpid();
     uid = getuid();
 
