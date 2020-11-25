@@ -95,6 +95,11 @@ extraSOURCES += aiori-Gfarm.c
 extraLDADD += -lgfarm
 endif
 
+if USE_BFS_AIORI
+extraSOURCES += aiori-BFS.c
+extraLDADD += -ldfs
+endif
+
 if USE_S3_4C_AIORI
 extraSOURCES  += aiori-S3-4c.c
 if AWS4C_DIR

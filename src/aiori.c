@@ -88,6 +88,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_GFARM_AIORI
         &gfarm_aiori,
 #endif
+#ifdef USE_BFS_AIORI
+	&bfs_aiori,
+#endif
         NULL
 };
 
