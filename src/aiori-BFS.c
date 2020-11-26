@@ -66,7 +66,7 @@ BFS_create(char *fn, int flags, aiori_mod_opt_t *param)
 	if (hints->dryRun)
 		return (NULL);
 
-	fd = dfs_create_chunk_size(fn, 0664, flags, o->chunk_size);
+	fd = dfs_create_chunk_size(fn, flags, 0664, o->chunk_size);
 	if (fd < 0)
 		ERR("dfs_create failed");
 	bf = malloc(sizeof(*bf));
@@ -107,7 +107,7 @@ BFS_xfer(int access, aiori_fd_t *fd, IOR_size_t *buffer,
 	case WRITE:
 		r = dfs_pwrite(bf->fd, buffer, len, offset);
 		break;
-	case READ:
+	default:
 		r = dfs_pread(bf->fd, buffer, len, offset);
 		break;
 	}
