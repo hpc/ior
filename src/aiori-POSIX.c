@@ -81,6 +81,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
   }else{
     memset(o, 0, sizeof(posix_options_t));
     o->direct_io = 0;
+    o->lustre_stripe_count = -1;
     o->lustre_start_ost = -1;
     o->beegfs_numTargets = -1;
     o->beegfs_chunkSize = -1;
@@ -392,8 +393,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         /* File needs to be opened O_EXCL because we cannot set
                          * Lustre striping information on a pre-existing file.*/
 
-                        fd_oflag |=
-                            O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
+                        fd_oflag |= O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
                         *fd = open64(testFileName, fd_oflag, mode);
                         if (*fd < 0) {
                                 fprintf(stdout, "\nUnable to open '%s': %s\n",
