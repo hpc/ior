@@ -1291,6 +1291,20 @@ void summarize_results(int iterations, int print_time) {
       }
     }
 
+    if(print_all_proc && 0){
+      // This code prints the result table for debugging
+      for (i = 0; i < tableSize; i++) {
+        for (j = 0; j < iterations; j++) {
+          access = mdtest_test_name(i);
+          if(access == NULL){
+            continue;
+          }
+          curr = summary_table[j].rate[i];
+          fprintf(out_logfile, "Rank %d Iter %d Test %s Rate: %e\n", rank, j, access, curr);
+        }
+      }
+    }
+
     if (rank != 0) {
       return;
     }
@@ -1314,7 +1328,6 @@ void summarize_results(int iterations, int print_time) {
         start = stop = 0;
     }
 
-
     if(print_all_proc){
       fprintf(out_logfile, "\nPer process result (%s):\n", print_time ? "time" : "rate");
       for (j = 0; j < iterations; j++) {
@@ -1326,7 +1339,7 @@ void summarize_results(int iterations, int print_time) {
           }
           fprintf(out_logfile, "Test %s", access);
           for (k=0; k < size; k++) {
-            curr = all[(k*tableSize*iterations) + (j*tableSize) + i];
+            curr = all[j*tableSize*size + k * tableSize + i];
             fprintf(out_logfile, "%c%e", (k==0 ? ' ': ','), curr);
           }
           fprintf(out_logfile, "\n");
@@ -1340,10 +1353,9 @@ void summarize_results(int iterations, int print_time) {
 
     for (i = start; i < stop; i++) {
             min = max = all[i];
-            for (k=0; k < size; k++) {
-                for (j = 0; j < iterations; j++) {
-                    curr = all[(k*tableSize*iterations)
-                               + (j*tableSize) + i];
+            for (j = 0; j < iterations; j++) {
+                for (k=0; k < size; k++) {
+                    curr = all[j*tableSize*size + k*tableSize + i];
                     if (min > curr) {
                         min = curr;
                     }
@@ -1372,7 +1384,6 @@ void summarize_results(int iterations, int print_time) {
                 fflush(out_logfile);
             }
             sum = var = 0;
-
     }
 
     // TODO generalize once more stonewall timers are supported
@@ -1389,7 +1400,7 @@ void summarize_results(int iterations, int print_time) {
       fprintf(out_logfile, "%14s %14s %14.3f %14s\n", "NA", "NA", print_time ? stonewall_time :  stonewall_items / stonewall_time, "NA");
     }
 
-    /* calculate tree create/remove rates */
+    /* calculate tree create/remove rates, applies only to Rank 0 */
     for (i = 8; i < tableSize; i++) {
         min = max = all[i];
         for (j = 0; j < iterations; j++) {
