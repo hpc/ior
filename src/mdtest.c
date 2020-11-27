@@ -76,6 +76,8 @@
 
 #include <mpi.h>
 
+#pragma GCC diagnostic ignored "-Wformat-overflow"
+
 #ifdef HAVE_LUSTRE_LUSTREAPI
 #include <lustre/lustreapi.h>
 #endif /* HAVE_LUSTRE_LUSTREAPI */
