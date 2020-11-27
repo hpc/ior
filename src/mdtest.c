@@ -1522,6 +1522,8 @@ void md_validate_tests() {
          FAIL("only specify the number of items or the number of items per directory");
        }else if( o.items % o.items_per_dir != 0){
          FAIL("items must be a multiple of items per directory");
+       }else if( o.stone_wall_timer_seconds != 0){
+         FAIL("items + items_per_dir can only be set without stonewalling");
        }
     }
     /* check for using mknod */
