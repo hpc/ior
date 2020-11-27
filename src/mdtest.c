@@ -1015,20 +1015,20 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 }
 
 /* Returns if the stonewall was hit */
-int updateStoneWallIterations(int iteration, rank_progress_t * progress, double tstart){
+int updateStoneWallIterations(int iteration, uint64_t items_done, double tstart, uint64_t * out_max_iter){
   int hit = 0;
-  uint64_t done = progress->items_done;
   long long unsigned max_iter = 0;
 
-  VERBOSE(1,1,"stonewall hit with %lld items", (long long) progress->items_done );
-  MPI_Allreduce(& progress->items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
+  VERBOSE(1,1,"stonewall hit with %lld items", (long long) items_done );
+  MPI_Allreduce(& items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
   summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = GetTimeStamp() - tstart;
+  *out_max_iter = max_iter;
 
   // continue to the maximum...
   long long min_accessed = 0;
-  MPI_Reduce(& progress->items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm);
+  MPI_Reduce(& items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm);
   long long sum_accessed = 0;
-  MPI_Reduce(& progress->items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
+  MPI_Reduce(& items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
   summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
   summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
 
@@ -1036,8 +1036,6 @@ int updateStoneWallIterations(int iteration, rank_progress_t * progress, double 
     VERBOSE(0,-1, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
     hit = 1;
   }
-  progress->items_start = done;
-  progress->items_per_dir = max_iter;
 
   return hit;
 }
@@ -1085,7 +1083,11 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         /* create files */
         create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
         if(stone_wall_timer_seconds){
-	        int hit = updateStoneWallIterations(iteration, progress, t[0]);
+          uint64_t max_iter = 0;
+          uint64_t items_done = progress->items_done + dir_iter * items_per_dir;
+	        int hit = updateStoneWallIterations(iteration, items_done, t[0], & max_iter);
+          progress->items_start = items_done;
+          progress->items_per_dir = max_iter;
 
           if (hit){
             progress->stone_wall_timer_seconds = 0;
@@ -1096,7 +1098,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             items = progress->items_done;
           }
           if (stoneWallingStatusFile){
-            StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_done);
+            StoreStoneWallingIterations(stoneWallingStatusFile, max_iter);
           }
           // reset stone wall timer to allow proper cleanup
           progress->stone_wall_timer_seconds = 0;
@@ -1510,8 +1512,6 @@ void md_validate_tests() {
          FAIL("only specify the number of items or the number of items per directory");
        }else if( items % items_per_dir != 0){
          FAIL("items must be a multiple of items per directory");
-       }else if( stone_wall_timer_seconds != 0){
-         FAIL("items + items_per_dir can only be set without stonewalling");
        }
     }
     /* check for using mknod */
