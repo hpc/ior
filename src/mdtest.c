@@ -149,7 +149,6 @@ typedef struct {
   int pre_delay;
   int unique_dir_per_task;
   int time_unique_dir_overhead;
-  int throttle;
   int collective_creates;
   size_t write_bytes;
   int stone_wall_timer_seconds;
@@ -1885,7 +1884,6 @@ void mdtest_init_args(){
    memset(& o, 0, sizeof(o));
    o.barriers = 1;
    o.branch_factor = 1;
-   o.throttle = 1;
 }
 
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
