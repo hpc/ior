@@ -1271,6 +1271,11 @@ char const * mdtest_test_name(int i){
   return NULL;
 }
 
+int calc_allreduce_index(int iter, int rank, int op){
+  int tableSize = MDTEST_LAST_NUM;
+  return iter*tableSize*size + rank * tableSize + op;
+}
+
 void summarize_results(int iterations, int print_time) {
     char const * access;
     int i, j, k;
@@ -1339,7 +1344,7 @@ void summarize_results(int iterations, int print_time) {
           }
           fprintf(out_logfile, "Test %s", access);
           for (k=0; k < size; k++) {
-            curr = all[j*tableSize*size + k * tableSize + i];
+            curr = all[calc_allreduce_index(j, k, i)];
             fprintf(out_logfile, "%c%e", (k==0 ? ' ': ','), curr);
           }
           fprintf(out_logfile, "\n");
@@ -1355,7 +1360,7 @@ void summarize_results(int iterations, int print_time) {
             min = max = all[i];
             for (j = 0; j < iterations; j++) {
                 for (k=0; k < size; k++) {
-                    curr = all[j*tableSize*size + k*tableSize + i];
+                    curr = all[calc_allreduce_index(j, k, i)];
                     if (min > curr) {
                         min = curr;
                     }
