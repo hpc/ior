@@ -1046,8 +1046,7 @@ int updateStoneWallIterations(int iteration, uint64_t items_done, double tstart,
 
 void file_test_create(const int iteration, const int ntasks, const char *path, rank_progress_t * progress, double *t){
   char temp_path[MAX_PATHLEN];
-  int cur_dir_loops = o.directory_loops;
-  for (int dir_iter = 0; dir_iter < cur_dir_loops; dir_iter ++){
+  for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
     prep_testdir(iteration, dir_iter);
 
     if (o.unique_dir_per_task) {
@@ -1091,6 +1090,7 @@ void file_test_create(const int iteration, const int ntasks, const char *path, r
       }
       // reset stone wall timer to allow proper cleanup
       progress->stone_wall_timer_seconds = 0;
+      // at the moment, stonewall can be done only with one directory_loop, so we can return here safely
       break;
     }
   }
@@ -1881,9 +1881,10 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 }
 
 void mdtest_init_args(){
-   memset(& o, 0, sizeof(o));
-   o.barriers = 1;
-   o.branch_factor = 1;
+  o = (mdtest_options_t) {
+     .barriers = 1,
+     .branch_factor = 1
+  };
 }
 
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
