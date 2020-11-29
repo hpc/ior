@@ -138,7 +138,7 @@ extern ior_aiori_t s3_emc_aiori;
 extern ior_aiori_t rados_aiori;
 extern ior_aiori_t cephfs_aiori;
 extern ior_aiori_t gfarm_aiori;
-extern ior_aiori_t bfs_aiori;
+extern ior_aiori_t chfs_aiori;
 
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);

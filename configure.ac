@@ -295,24 +295,24 @@ if test x$with_gfarm != xno; then
   AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec])
 fi
 
-# BFS support
-AC_MSG_CHECKING([for BFS burst buffer file system])
-AC_ARG_WITH([bfs],
-  [AS_HELP_STRING([--with-bfs=BFS_ROOT],
-    [support IO with BFS backend @<:@default=no@:>@])],
-  [], [with_bfs=no])
-AC_MSG_RESULT([$with_bfs])
-AM_CONDITIONAL([USE_BFS_AIORI], [test x$with_bfs != xno])
-if test x$with_bfs != xno; then
-  AC_DEFINE([USE_BFS_AIORI], [], [Build BFS backend AIORI])
-  case x$with_bfs in
+# CHFS support
+AC_MSG_CHECKING([for CHFS consistent hash file system])
+AC_ARG_WITH([chfs],
+  [AS_HELP_STRING([--with-chfs=CHFS_ROOT],
+    [support IO with CHFS backend @<:@default=no@:>@])],
+  [], [with_chfs=no])
+AC_MSG_RESULT([$with_chfs])
+AM_CONDITIONAL([USE_CHFS_AIORI], [test x$with_chfs != xno])
+if test x$with_chfs != xno; then
+  AC_DEFINE([USE_CHFS_AIORI], [], [Build CHFS backend AIORI])
+  case x$with_chfs in
     xyes) ;;
     *)
-    CPPFLAGS="$CPPFLAGS -I$with_bfs/include"
-    LDFLAGS="$LDFLAGS -L$with_bfs/lib"
-    LIBS="$LIBS `pkg-config --libs margo openssl` -ldfs" ;;
+    CPPFLAGS="$CPPFLAGS -I$with_chfs/include"
+    LDFLAGS="$LDFLAGS -L$with_chfs/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_chfs/lib"
+    PKG_CHECK_MODULES([MARGO], [margo])
+    PKG_CHECK_MODULES([OPENSSL], [openssl]) ;;
   esac
-  AC_CHECK_LIB([dfs], [dfs_init],, [AC_MSG_ERROR([libdfs not found])])
 fi
 
 # aws4c is needed for the S3 backend (see --with-S3, below).
