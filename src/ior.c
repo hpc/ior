@@ -1849,14 +1849,16 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
           if(rank == 0 && verbose > VERBOSE_1){
             fprintf(out_logfile, "Random prefill took: %fs\n", GetTimeStamp() - t_start);
           }
+          // must synchronize processes to ensure they are not running ahead
+          MPI_Barrier(test->testComm);
         }
 
         for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
           if(randomPrefillBuffer && test->deadlineForStonewalling != 0){
             // prefill the whole segment with data, this needs to be done collectively
             double t_start = GetTimeStamp();
-            MPI_Barrier(test->testComm);
             prefillSegment(test, randomPrefillBuffer, pretendRank, fd, ioBuffers, i, i+1);
+            MPI_Barrier(test->testComm);
             if(rank == 0 && verbose > VERBOSE_1){
               fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
             }
