@@ -76,9 +76,9 @@ typedef struct aiori_xfer_hint_t{
 } aiori_xfer_hint_t;
 
 /* this is a dummy structure to create some type safety */
-typedef struct aiori_mod_opt_t{
+struct aiori_mod_opt_t{
   void * dummy;
-} aiori_mod_opt_t;
+};
 
 typedef struct aiori_fd_t{
   void * dummy;
