@@ -1588,7 +1588,10 @@ static void ValidateTests(IOR_param_t * test)
                 ERR("block size must not be smaller than transfer size");
         if (test->randomOffset && test->blockSize == test->transferSize)
             ERR("IOR will randomize access within a block and repeats the same pattern for all segments, therefore choose blocksize > transferSize");
-
+        if (! test->randomOffset && test->randomPrefillBlocksize)
+          ERR("Setting the randomPrefill option without using random is not useful");
+        if (test->randomPrefillBlocksize && (test->blockSize % test->randomPrefillBlocksize != 0))
+          ERR("The randomPrefill option must divide the blockSize");
         /* specific APIs */
         if ((strcasecmp(test->api, "MPIIO") == 0)
             && (test->blockSize < sizeof(IOR_size_t)
@@ -1732,14 +1735,10 @@ IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, IOR_offs
         return (offsetArray);
 }
 
-static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank,
-  IOR_offset_t * transferCount, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
+static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_offset_t transfer, IOR_offset_t * transferCount, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
   IOR_offset_t amtXferred = 0;
-  IOR_offset_t transfer;
 
   void *buffer = ioBuffers->buffer;
-
-  transfer = test->transferSize;
   if (access == WRITE) {
           /* fills each transfer with a unique pattern
            * containing the offset into the file */
@@ -1804,9 +1803,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
 
         //  offsetArray = GetOffsetArraySequential(test, pretendRank);
 
-        startForStonewall = GetTimeStamp();
-        hitStonewall = 0;
-
         IOR_offset_t offsets;
         IOR_offset_t * offsets_rnd;
         if (test->randomOffset) {
@@ -1815,7 +1811,38 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
           offsets = (test->blockSize / test->transferSize);
         }
 
+        // start timer after random offset was generated
+        startForStonewall = GetTimeStamp();
+        hitStonewall = 0;
+
+        if(test->randomPrefillBlocksize && test->deadlineForStonewalling == 0){
+          // prefill the whole file already with an invalid pattern
+          int offsets = test->blockSize / test->randomPrefillBlocksize;
+          void * oldBuffer = ioBuffers->buffer;
+          ioBuffers->buffer = aligned_buffer_alloc(test->randomPrefillBlocksize);
+          // store invalid data into the buffer
+          memset(ioBuffers->buffer, -1, test->randomPrefillBlocksize);
+          for (i = 0; i < test->segmentCount; i++){
+            for (j = 0; j < offsets; j++) {
+              IOR_offset_t offset = j * test->randomPrefillBlocksize;
+              if (test->filePerProc) {
+                offset += i * test->blockSize;
+              } else {
+                offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
+              }
+              WriteOrReadSingle(offset, pretendRank, test->randomPrefillBlocksize, & transferCount, & errors, test, fd, ioBuffers, access);
+            }
+          }
+          aligned_buffer_free(ioBuffers->buffer);
+          ioBuffers->buffer = oldBuffer;
+        }
+
         for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
+          if(test->randomPrefillBlocksize && test->deadlineForStonewalling != 0){
+            // prefill the whole segment with data
+            // TODO
+            ERR("Not supported, yet");
+          }
           for (j = 0; j < offsets &&  !hitStonewall ; j++) {
             IOR_offset_t offset;
             if (test->randomOffset) {
@@ -1832,7 +1859,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                 offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
               }
             }
-            dataMoved += WriteOrReadSingle(offset, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
+            dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
             pairCnt++;
 
             hitStonewall = ((test->deadlineForStonewalling != 0
@@ -1888,7 +1915,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                     offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
                   }
                 }
-                dataMoved += WriteOrReadSingle(offset, pretendRank, & transferCount, & errors, test, fd, ioBuffers, access);
+                dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
               }
             }
