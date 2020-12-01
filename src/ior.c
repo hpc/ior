@@ -1780,6 +1780,27 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_
   return amtXferred;
 }
 
+static void prefillSegment(IOR_param_t *test, void * randomPrefillBuffer, int pretendRank, aiori_fd_t *fd, IOR_io_buffers *ioBuffers, int startSegment, int endSegment){
+  // prefill the whole file already with an invalid pattern
+  int offsets = test->blockSize / test->randomPrefillBlocksize;
+  void * oldBuffer = ioBuffers->buffer;
+  IOR_offset_t transferCount;
+  int errors;
+  ioBuffers->buffer = randomPrefillBuffer;
+  for (int i = startSegment; i < endSegment; i++){
+    for (int j = 0; j < offsets; j++) {
+      IOR_offset_t offset = j * test->randomPrefillBlocksize;
+      if (test->filePerProc) {
+        offset += i * test->blockSize;
+      } else {
+        offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
+      }
+      WriteOrReadSingle(offset, pretendRank, test->randomPrefillBlocksize, & transferCount, & errors, test, fd, ioBuffers, WRITE);
+    }
+  }
+  ioBuffers->buffer = oldBuffer;
+}
+
 /*
  * Write or Read data to file(s).  This loops through the strides, writing
  * out the data to each block in transfer sizes, until the remainder left is 0.
@@ -1811,37 +1832,34 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
           offsets = (test->blockSize / test->transferSize);
         }
 
+        void * randomPrefillBuffer = NULL;
+        if(test->randomPrefillBlocksize && (access == WRITE || access == WRITECHECK)){
+          randomPrefillBuffer = aligned_buffer_alloc(test->randomPrefillBlocksize);
+          // store invalid data into the buffer
+          memset(randomPrefillBuffer, -1, test->randomPrefillBlocksize);
+        }
+
         // start timer after random offset was generated
         startForStonewall = GetTimeStamp();
         hitStonewall = 0;
 
-        if(test->randomPrefillBlocksize && test->deadlineForStonewalling == 0){
-          // prefill the whole file already with an invalid pattern
-          int offsets = test->blockSize / test->randomPrefillBlocksize;
-          void * oldBuffer = ioBuffers->buffer;
-          ioBuffers->buffer = aligned_buffer_alloc(test->randomPrefillBlocksize);
-          // store invalid data into the buffer
-          memset(ioBuffers->buffer, -1, test->randomPrefillBlocksize);
-          for (i = 0; i < test->segmentCount; i++){
-            for (j = 0; j < offsets; j++) {
-              IOR_offset_t offset = j * test->randomPrefillBlocksize;
-              if (test->filePerProc) {
-                offset += i * test->blockSize;
-              } else {
-                offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
-              }
-              WriteOrReadSingle(offset, pretendRank, test->randomPrefillBlocksize, & transferCount, & errors, test, fd, ioBuffers, access);
-            }
+        if(randomPrefillBuffer && test->deadlineForStonewalling == 0){
+          double t_start = GetTimeStamp();
+          prefillSegment(test, randomPrefillBuffer, pretendRank, fd, ioBuffers, 0, test->segmentCount);
+          if(rank == 0 && verbose > VERBOSE_1){
+            fprintf(out_logfile, "Random prefill took: %fs\n", GetTimeStamp() - t_start);
           }
-          aligned_buffer_free(ioBuffers->buffer);
-          ioBuffers->buffer = oldBuffer;
         }
 
         for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
-          if(test->randomPrefillBlocksize && test->deadlineForStonewalling != 0){
-            // prefill the whole segment with data
-            // TODO
-            ERR("Not supported, yet");
+          if(randomPrefillBuffer && test->deadlineForStonewalling != 0){
+            // prefill the whole segment with data, this needs to be done collectively
+            double t_start = GetTimeStamp();
+            MPI_Barrier(test->testComm);
+            prefillSegment(test, randomPrefillBuffer, pretendRank, fd, ioBuffers, i, i+1);
+            if(rank == 0 && verbose > VERBOSE_1){
+              fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
+            }
           }
           for (j = 0; j < offsets &&  !hitStonewall ; j++) {
             IOR_offset_t offset;
@@ -1929,5 +1947,9 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
         if (access == WRITE && test->fsync == TRUE) {
                 backend->fsync(fd, test->backend_options);       /*fsync after all accesses */
         }
+        if(randomPrefillBuffer){
+          aligned_buffer_free(randomPrefillBuffer);
+        }
+
         return (dataMoved);
 }
