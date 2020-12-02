@@ -39,8 +39,8 @@
 
 dfs_t *dfs;
 static daos_handle_t poh, coh;
-static daos_oclass_id_t objectClass = OC_SX;
-static daos_oclass_id_t dir_oclass = OC_SX;
+static daos_oclass_id_t objectClass;
+static daos_oclass_id_t dir_oclass;
 static struct d_hash_table *dir_hash;
 static bool dfs_init;
 
@@ -247,8 +247,7 @@ HandleDistribute(enum handleType type)
                 DCHECK(rc, "Failed to get global handle size");
         }
 
-        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0,
-                            MPI_COMM_WORLD),
+        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD),
                   "Failed to bcast global handle buffer size");
 
 	global.iov_len = global.iov_buf_len;
@@ -266,8 +265,7 @@ HandleDistribute(enum handleType type)
                 DCHECK(rc, "Failed to create global handle");
         }
 
-        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0,
-                            MPI_COMM_WORLD),
+        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0, MPI_COMM_WORLD),
                   "Failed to bcast global pool handle");
 
         if (rank != 0) {
@@ -372,6 +370,45 @@ out:
 	if (f2)
 		free(f2);
 	return rc;
+}
+
+static void
+share_file_handle(dfs_obj_t **file, MPI_Comm comm)
+{
+        d_iov_t global;
+        int        rc;
+
+        global.iov_buf = NULL;
+        global.iov_buf_len = 0;
+        global.iov_len = 0;
+
+        if (rank == 0) {
+                rc = dfs_obj_local2global(dfs, *file, &global);
+                DCHECK(rc, "Failed to get global handle size");
+        }
+
+        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0, testComm),
+                  "Failed to bcast global handle buffer size");
+
+	global.iov_len = global.iov_buf_len;
+        global.iov_buf = malloc(global.iov_buf_len);
+        if (global.iov_buf == NULL)
+                ERR("Failed to allocate global handle buffer");
+
+        if (rank == 0) {
+                rc = dfs_obj_local2global(dfs, *file, &global);
+                DCHECK(rc, "Failed to create global handle");
+        }
+
+        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0, testComm),
+                  "Failed to bcast global pool handle");
+
+        if (rank != 0) {
+                rc = dfs_obj_global2local(dfs, 0, global, file);
+                DCHECK(rc, "Failed to get local handle");
+        }
+
+        free(global.iov_buf);
 }
 
 static dfs_obj_t *
@@ -555,8 +592,8 @@ DFS_Finalize(aiori_mod_opt_t *options)
 	o->dir_oclass	= NULL;
 	o->prefix	= NULL;
 	o->destroy	= 0;
-	objectClass	= OC_SX;
-	dir_oclass	= OC_SX;
+	objectClass	= 0;
+	dir_oclass	= 0;
 	dfs_init	= false;
 }
 
@@ -578,26 +615,21 @@ DFS_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
 	assert(dir_name);
 	assert(name);
 
-        parent = lookup_insert_dir(dir_name, NULL);
-        if (parent == NULL)
-                GERR("Failed to lookup parent dir");
-
         mode = S_IFREG | mode;
 	if (hints->filePerProc || rank == 0) {
                 fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
+
+                parent = lookup_insert_dir(dir_name, NULL);
+                if (parent == NULL)
+                        GERR("Failed to lookup parent dir");
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                               objectClass, o->chunk_size, NULL, &obj);
                 DCHECK(rc, "dfs_open() of %s Failed", name);
         }
+
         if (!hints->filePerProc) {
-                MPI_Barrier(MPI_COMM_WORLD);
-                if (rank != 0) {
-                        fd_oflag |= O_RDWR;
-                        rc = dfs_open(dfs, parent, name, mode, fd_oflag,
-                                      objectClass, o->chunk_size, NULL, &obj);
-                        DCHECK(rc, "dfs_open() of %s Failed", name);
-                }
+                share_file_handle(&obj, testComm);
         }
 
 	if (name)
@@ -629,13 +661,19 @@ DFS_Open(char *testFileName, int flags, aiori_mod_opt_t *param)
 	assert(dir_name);
 	assert(name);
 
-        parent = lookup_insert_dir(dir_name, NULL);
-        if (parent == NULL)
-                GERR("Failed to lookup parent dir");
+	if (hints->filePerProc || rank == 0) {
+                parent = lookup_insert_dir(dir_name, NULL);
+                if (parent == NULL)
+                        GERR("Failed to lookup parent dir");
 
-	rc = dfs_open(dfs, parent, name, mode, fd_oflag, objectClass,
-                      o->chunk_size, NULL, &obj);
-        DCHECK(rc, "dfs_open() of %s Failed", name);
+                rc = dfs_open(dfs, parent, name, mode, fd_oflag, objectClass,
+                              o->chunk_size, NULL, &obj);
+                DCHECK(rc, "dfs_open() of %s Failed", name);
+        }
+
+        if (!hints->filePerProc) {
+                share_file_handle(&obj, testComm);
+        }
 
 	if (name)
 		free(name);
@@ -675,14 +713,14 @@ DFS_Xfer(int access, aiori_fd_t *file, IOR_size_t *buffer, IOR_offset_t length,
                 if (access == WRITE) {
                         rc = dfs_write(dfs, obj, &sgl, off, NULL);
                         if (rc) {
-                                fprintf(stderr, "dfs_write() failed (%d)", rc);
+                                fprintf(stderr, "dfs_write() failed (%d)\n", rc);
                                 return -1;
                         }
                         ret = remaining;
                 } else {
                         rc = dfs_read(dfs, obj, &sgl, off, &ret, NULL);
                         if (rc || ret == 0)
-                                fprintf(stderr, "dfs_read() failed(%d)", rc);
+                                fprintf(stderr, "dfs_read() failed(%d)\n", rc);
                 }
 
                 if (ret < remaining) {
@@ -787,7 +825,7 @@ DFS_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
                 comm = testComm;
         }
 
-        if (hints->filePerProc || rank == 0) {
+	if (hints->filePerProc || rank == 0) {
                 rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
                 if (rc) {
                         fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
@@ -805,7 +843,7 @@ DFS_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
                 if (rc)
                         return rc;
         }
-        
+
         return (fsize);
 }
 
