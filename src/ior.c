@@ -1295,11 +1295,13 @@ static void TestIoSys(IOR_test_t *test)
         uint64_t params_saved_wearout = params->stoneWallingWearOutIterations;
 
         /* Check if the file exists and warn users */
-        struct stat sb;
-        GetTestFileName(testFileName, params);
-        int ret = backend->stat(testFileName, & sb, params->backend_options);
-        if(ret == 0) {
-          EWARNF("The file \"%s\" exists already and will be overwritten", testFileName);
+        if( params->hints.filePerProc || rank == 0){
+          struct stat sb;
+          GetTestFileName(testFileName, params);
+          int ret = backend->stat(testFileName, & sb, params->backend_options);
+          if(ret == 0) {
+            EWARNF("The file \"%s\" exists already and will be overwritten", testFileName);
+          }
         }
 
         for (rep = 0; rep < params->repetitions; rep++) {
