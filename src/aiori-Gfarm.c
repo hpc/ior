@@ -14,6 +14,14 @@ struct gfarm_file {
 	GFS_File gf;
 };
 
+static aiori_xfer_hint_t *hints = NULL;
+
+void
+Gfarm_xfer_hints(aiori_xfer_hint_t *params)
+{
+	hints = params;
+}
+
 void
 Gfarm_initialize()
 {
@@ -26,14 +34,14 @@ Gfarm_finalize()
 	gfarm_terminate();
 }
 
-void *
-Gfarm_create(char *fn, IOR_param_t *param)
+aiori_fd_t *
+Gfarm_create(char *fn, int flag, aiori_mod_opt_t *param)
 {
 	GFS_File gf;
 	struct gfarm_file *fp;
 	gfarm_error_t e;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (NULL);
 
 	e = gfs_pio_create(fn, GFARM_FILE_RDWR, 0664, &gf);
@@ -43,17 +51,17 @@ Gfarm_create(char *fn, IOR_param_t *param)
 	if (fp == NULL)
 		ERR("no memory");
 	fp->gf = gf;
-	return (fp);
+	return ((aiori_fd_t *)fp);
 }
 
-void *
-Gfarm_open(char *fn, IOR_param_t *param)
+aiori_fd_t *
+Gfarm_open(char *fn, int flag, aiori_mod_opt_t *param)
 {
 	GFS_File gf;
 	struct gfarm_file *fp;
 	gfarm_error_t e;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (NULL);
 
 	e = gfs_pio_open(fn, GFARM_FILE_RDWR, &gf);
@@ -63,14 +71,14 @@ Gfarm_open(char *fn, IOR_param_t *param)
 	if (fp == NULL)
 		ERR("no memory");
 	fp->gf = gf;
-	return (fp);
+	return ((aiori_fd_t *)fp);
 }
 
 IOR_offset_t
-Gfarm_xfer(int access, void *fd, IOR_size_t *buffer, IOR_offset_t len,
-	IOR_param_t *param)
+Gfarm_xfer(int access, aiori_fd_t *fd, IOR_size_t *buffer,
+	IOR_offset_t len, IOR_offset_t offset, aiori_mod_opt_t *param)
 {
-	struct gfarm_file *fp = fd;
+	struct gfarm_file *fp = (struct gfarm_file *)fd;
 	IOR_offset_t rem = len;
 	gfarm_off_t off;
 	gfarm_error_t e;
@@ -78,7 +86,7 @@ Gfarm_xfer(int access, void *fd, IOR_size_t *buffer, IOR_offset_t len,
 	int sz, n;
 	char *buf = (char *)buffer;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (len);
 
 	if (len > MAX_SZ)
@@ -86,7 +94,7 @@ Gfarm_xfer(int access, void *fd, IOR_size_t *buffer, IOR_offset_t len,
 	else
 		sz = len;
 
-	e = gfs_pio_seek(fp->gf, param->offset, GFARM_SEEK_SET, &off);
+	e = gfs_pio_seek(fp->gf, offset, GFARM_SEEK_SET, &off);
 	if (e != GFARM_ERR_NO_ERROR)
 		ERR("gfs_pio_seek failed");
 	while (rem > 0) {
@@ -105,11 +113,11 @@ Gfarm_xfer(int access, void *fd, IOR_size_t *buffer, IOR_offset_t len,
 }
 
 void
-Gfarm_close(void *fd, IOR_param_t *param)
+Gfarm_close(aiori_fd_t *fd, aiori_mod_opt_t *param)
 {
-	struct gfarm_file *fp = fd;
+	struct gfarm_file *fp = (struct gfarm_file *)fd;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return;
 
 	if (gfs_pio_close(fp->gf) != GFARM_ERR_NO_ERROR)
@@ -118,11 +126,11 @@ Gfarm_close(void *fd, IOR_param_t *param)
 }
 
 void
-Gfarm_delete(char *fn, IOR_param_t *param)
+Gfarm_delete(char *fn, aiori_mod_opt_t *param)
 {
 	gfarm_error_t e;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return;
 
 	e = gfs_unlink(fn);
@@ -137,11 +145,11 @@ Gfarm_version()
 }
 
 void
-Gfarm_fsync(void *fd, IOR_param_t *param)
+Gfarm_fsync(aiori_fd_t *fd, aiori_mod_opt_t *param)
 {
-	struct gfarm_file *fp = fd;
+	struct gfarm_file *fp = (struct gfarm_file *)fd;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return;
 
 	if (gfs_pio_sync(fp->gf) != GFARM_ERR_NO_ERROR)
@@ -149,12 +157,12 @@ Gfarm_fsync(void *fd, IOR_param_t *param)
 }
 
 IOR_offset_t
-Gfarm_get_file_size(IOR_param_t *param, MPI_Comm comm, char *fn)
+Gfarm_get_file_size(aiori_mod_opt_t *param, char *fn)
 {
 	struct gfs_stat st;
 	IOR_offset_t size, sum, min, max;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (0);
 
 	if (gfs_stat(fn, &st) != GFARM_ERR_NO_ERROR)
@@ -162,34 +170,17 @@ Gfarm_get_file_size(IOR_param_t *param, MPI_Comm comm, char *fn)
 	size = st.st_size;
 	gfs_stat_free(&st);
 
-	if (param->filePerProc == TRUE) {
-		MPI_CHECK(MPI_Allreduce(&size, &sum, 1, MPI_LONG_LONG_INT,
-			MPI_SUM, comm), "cannot total data moved");
-		size = sum;
-	} else {
-		MPI_CHECK(MPI_Allreduce(&size, &min, 1, MPI_LONG_LONG_INT,
-			MPI_MIN, comm), "cannot total data moved");
-		MPI_CHECK(MPI_Allreduce(&size, &max, 1, MPI_LONG_LONG_INT,
-			MPI_MAX, comm), "cannot total data moved");
-		if (min != max) {
-			if (rank == 0)
-				WARN("inconsistent file size by different "
-				     "tasks");
-			/* incorrect, but now consistent across tasks */
-			size = min;
-		}
-	}
 	return (size);
 }
 
 int
-Gfarm_statfs(const char *fn, ior_aiori_statfs_t *st, IOR_param_t *param)
+Gfarm_statfs(const char *fn, ior_aiori_statfs_t *st, aiori_mod_opt_t *param)
 {
 	gfarm_off_t used, avail, files;
 	gfarm_error_t e;
 	int bsize = 4096;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (0);
 
 	e = gfs_statfs_by_path(fn, &used, &avail, &files);
@@ -206,11 +197,11 @@ Gfarm_statfs(const char *fn, ior_aiori_statfs_t *st, IOR_param_t *param)
 }
 
 int
-Gfarm_mkdir(const char *fn, mode_t mode, IOR_param_t *param)
+Gfarm_mkdir(const char *fn, mode_t mode, aiori_mod_opt_t *param)
 {
 	gfarm_error_t e;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (0);
 
 	e = gfs_mkdir(fn, mode);
@@ -221,11 +212,11 @@ Gfarm_mkdir(const char *fn, mode_t mode, IOR_param_t *param)
 }
 
 int
-Gfarm_rmdir(const char *fn, IOR_param_t *param)
+Gfarm_rmdir(const char *fn, aiori_mod_opt_t *param)
 {
 	gfarm_error_t e;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (0);
 
 	e = gfs_rmdir(fn);
@@ -236,12 +227,12 @@ Gfarm_rmdir(const char *fn, IOR_param_t *param)
 }
 
 int
-Gfarm_access(const char *fn, int mode, IOR_param_t *param)
+Gfarm_access(const char *fn, int mode, aiori_mod_opt_t *param)
 {
 	struct gfs_stat st;
 	gfarm_error_t e;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (0);
 
 	e = gfs_stat(fn, &st);
@@ -259,12 +250,12 @@ Gfarm_access(const char *fn, int mode, IOR_param_t *param)
 #define STAT_BLKSIZ	512	/* for st_blocks */
 
 int
-Gfarm_stat(const char *fn, struct stat *buf, IOR_param_t *param)
+Gfarm_stat(const char *fn, struct stat *buf, aiori_mod_opt_t *param)
 {
 	struct gfs_stat st;
 	gfarm_error_t e;
 
-	if (param->dryRun)
+	if (hints->dryRun)
 		return (0);
 
 	e = gfs_stat(fn, &st);
@@ -293,11 +284,22 @@ Gfarm_stat(const char *fn, struct stat *buf, IOR_param_t *param)
 	return (0);
 }
 
+void
+Gfarm_sync(aiori_mod_opt_t *param)
+{
+	if (hints->dryRun)
+		return;
+
+	/* no cache in libgfarm */
+	return;
+}
+
 ior_aiori_t gfarm_aiori = {
 	.name = "Gfarm",
 	.name_legacy = NULL,
 	.create = Gfarm_create,
 	.open = Gfarm_open,
+	.xfer_hints = Gfarm_xfer_hints,
 	.xfer = Gfarm_xfer,
 	.close = Gfarm_close,
 	.delete = Gfarm_delete,
@@ -312,5 +314,6 @@ ior_aiori_t gfarm_aiori = {
 	.initialize = Gfarm_initialize,
 	.finalize = Gfarm_finalize,
 	.get_options = NULL,
+	.sync = Gfarm_sync,
 	.enable_mdtest = true,
 };

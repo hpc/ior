@@ -34,7 +34,7 @@
 
 #ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
 #  include <linux/lustre/lustre_user.h>
-#elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
+#elif defined(HAVE_LUSTRE_USER)
 #  include <lustre/lustre_user.h>
 #endif
 #ifdef HAVE_GPFS_H
@@ -55,6 +55,8 @@
 #include "iordef.h"
 #include "utilities.h"
 
+#include "aiori-POSIX.h"
+
 #ifndef   open64                /* necessary for TRU64 -- */
 #  define open64  open            /* unlikely, but may pose */
 #endif  /* not open64 */                        /* conflicting prototypes */
@@ -70,32 +72,6 @@
 /**************************** P R O T O T Y P E S *****************************/
 static IOR_offset_t POSIX_Xfer(int, aiori_fd_t *, IOR_size_t *,
                                IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
-static void POSIX_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static void POSIX_Sync(aiori_mod_opt_t * );
-static int POSIX_check_params(aiori_mod_opt_t * options);
-
-/************************** O P T I O N S *****************************/
-typedef struct{
-  /* in case of a change, please update depending MMAP module too */
-  int direct_io;
-
-  /* Lustre variables */
-  int lustre_set_striping;         /* flag that we need to set lustre striping */
-  int lustre_stripe_count;
-  int lustre_stripe_size;
-  int lustre_start_ost;
-  int lustre_ignore_locks;
-
-  /* gpfs variables */
-  int gpfs_hint_access;          /* use gpfs "access range" hint */
-  int gpfs_release_token;        /* immediately release GPFS tokens after
-                                    creating or opening a file */
-  /* beegfs variables */
-  int beegfs_numTargets;           /* number storage targets to use */
-  int beegfs_chunkSize;            /* srtipe pattern for new files */
-
-} posix_options_t;
-
 
 option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   posix_options_t * o = malloc(sizeof(posix_options_t));
@@ -105,6 +81,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
   }else{
     memset(o, 0, sizeof(posix_options_t));
     o->direct_io = 0;
+    o->lustre_stripe_count = -1;
     o->lustre_start_ost = -1;
     o->beegfs_numTargets = -1;
     o->beegfs_chunkSize = -1;
@@ -123,7 +100,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     {0, "posix.gpfs.releasetoken", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->gpfs_release_token},
 
 #endif
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
     {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
     {0, "posix.lustre.startost", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_start_ost},
@@ -149,7 +126,7 @@ ior_aiori_t posix_aiori = {
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
         .delete = POSIX_Delete,
-        .xfer_hints = aiori_posix_xfer_hints,
+        .xfer_hints = POSIX_xfer_hints,
         .get_version = aiori_get_version,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
@@ -168,11 +145,11 @@ ior_aiori_t posix_aiori = {
 
 static aiori_xfer_hint_t * hints = NULL;
 
-void aiori_posix_xfer_hints(aiori_xfer_hint_t * params){
+void POSIX_xfer_hints(aiori_xfer_hint_t * params){
   hints = params;
 }
 
-static int POSIX_check_params(aiori_mod_opt_t * param){
+int POSIX_check_params(aiori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
   if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
         ERR("beegfsChunkSize must be a power of two and >64k");
@@ -203,7 +180,7 @@ void gpfs_free_all_locks(int fd)
                 EWARNF("gpfs_fcntl(%d, ...) release all locks hint failed.", fd);
         }
 }
-void gpfs_access_start(int fd, IOR_offset_t length, int access)
+void gpfs_access_start(int fd, IOR_offset_t length, IOR_offset_t offset, int access)
 {
         int rc;
         struct {
@@ -217,7 +194,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, int access)
 
         take_locks.access.structLen = sizeof(take_locks.access);
         take_locks.access.structType = GPFS_ACCESS_RANGE;
-        take_locks.access.start = hints->offset;
+        take_locks.access.start = offset;
         take_locks.access.length = length;
         take_locks.access.isWrite = (access == WRITE);
 
@@ -227,7 +204,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, int access)
         }
 }
 
-void gpfs_access_end(int fd, IOR_offset_t length, int access)
+void gpfs_access_end(int fd, IOR_offset_t length, IOR_offset_t offset,  int access)
 {
         int rc;
         struct {
@@ -242,7 +219,7 @@ void gpfs_access_end(int fd, IOR_offset_t length, int access)
 
         free_locks.free.structLen = sizeof(free_locks.free);
         free_locks.free.structType = GPFS_FREE_RANGE;
-        free_locks.free.start = hints->offset;
+        free_locks.free.start = offset;
         free_locks.free.length = length;
 
         rc = gpfs_fcntl(fd, &free_locks);
@@ -368,7 +345,7 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 
 
 /*
- * Creat and open a file through the POSIX interface.
+ * Create and open a file through the POSIX interface.
  */
 aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
@@ -387,16 +364,16 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
         if(hints->dryRun)
           return (aiori_fd_t*) 0;
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
 /* Add a #define for FASYNC if not available, as it forms part of
  * the Lustre O_LOV_DELAY_CREATE definition. */
 #ifndef FASYNC
 #define FASYNC          00020000   /* fcntl, for BSD compatibility */
 #endif
         if (o->lustre_set_striping) {
-                /* In the single-shared-file case, task 0 has to creat the
-                   file with the Lustre striping options before any other processes
-                   open the file */
+                /* In the single-shared-file case, task 0 has to create the
+                   file with the Lustre striping options before any other
+                   processes open the file */
                 if (!hints->filePerProc && rank != 0) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         fd_oflag |= O_RDWR;
@@ -416,8 +393,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         /* File needs to be opened O_EXCL because we cannot set
                          * Lustre striping information on a pre-existing file.*/
 
-                        fd_oflag |=
-                            O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
+                        fd_oflag |= O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
                         *fd = open64(testFileName, fd_oflag, mode);
                         if (*fd < 0) {
                                 fprintf(stdout, "\nUnable to open '%s': %s\n",
@@ -439,7 +415,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                                           "barrier error");
                 }
         } else {
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
                 fd_oflag |= O_CREAT | O_RDWR;
 
@@ -463,7 +439,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         ERRF("open64(\"%s\", %d, %#o) failed",
                                 testFileName, fd_oflag, mode);
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
         }
 
         if (o->lustre_ignore_locks) {
@@ -471,7 +447,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
                         ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         /* in the single shared file case, immediately release all locks, with
@@ -485,7 +461,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 }
 
 /*
- * Creat a file through mknod interface.
+ * Create a file through mknod interface.
  */
 int POSIX_Mknod(char *testFileName)
 {
@@ -521,9 +497,9 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 
         *fd = open64(testFileName, fd_oflag);
         if (*fd < 0)
-                ERRF("open64(\"%s\", %d) failed", testFileName, fd_oflag);
+                ERRF("open64(\"%s\", %d) failed: %s", testFileName, fd_oflag, strerror(errno));
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
         if (o->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
                 if (verbose >= VERBOSE_1) {
@@ -533,7 +509,7 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
                         ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         if(o->gpfs_release_token) {
@@ -563,7 +539,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
 
 #ifdef HAVE_GPFS_FCNTL_H
         if (o->gpfs_hint_access) {
-                gpfs_access_start(fd, length, access);
+          gpfs_access_start(fd, length, offset, access);
         }
 #endif
 
@@ -624,23 +600,20 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
         }
 #ifdef HAVE_GPFS_FCNTL_H
         if (o->gpfs_hint_access) {
-                gpfs_access_end(fd, length, param, access);
+            gpfs_access_end(fd, length, offset, access);
         }
 #endif
         return (length);
 }
 
-/*
- * Perform fsync().
- */
-static void POSIX_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
+void POSIX_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         if (fsync(*(int *)fd) != 0)
                 EWARNF("fsync(%d) failed", *(int *)fd);
 }
 
 
-static void POSIX_Sync(aiori_mod_opt_t * param)
+void POSIX_Sync(aiori_mod_opt_t * param)
 {
   int ret = system("sync");
   if (ret != 0){
@@ -669,16 +642,14 @@ void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
         if(hints->dryRun)
           return;
         if (unlink(testFileName) != 0){
-                EWARNF("[RANK %03d]: unlink() of file \"%s\" failed\n",
-                       rank, testFileName);
+                EWARNF("[RANK %03d]: unlink() of file \"%s\" failed", rank, testFileName);
         }
 }
 
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
-                                      char *testFileName)
+IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 {
         if(hints->dryRun)
           return 0;
@@ -689,27 +660,6 @@ IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
                 ERRF("stat(\"%s\", ...) failed", testFileName);
         }
         aggFileSizeFromStat = stat_buf.st_size;
-
-        if (hints->filePerProc == TRUE) {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, testComm),
-                          "cannot total data moved");
-                aggFileSizeFromStat = tmpSum;
-        } else {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, testComm),
-                          "cannot total data moved");
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, testComm),
-                          "cannot total data moved");
-                if (tmpMin != tmpMax) {
-                        if (rank == 0) {
-                                WARN("inconsistent file size by different tasks");
-                        }
-                        /* incorrect, but now consistent across tasks */
-                        aggFileSizeFromStat = tmpMin;
-                }
-        }
 
         return (aggFileSizeFromStat);
 }

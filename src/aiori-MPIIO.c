@@ -40,7 +40,6 @@ static IOR_offset_t MPIIO_Xfer(int, aiori_fd_t *, IOR_size_t *,
 static void MPIIO_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static char* MPIIO_GetVersion();
 static void MPIIO_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static void MPIIO_xfer_hints(aiori_xfer_hint_t * params);
 static int MPIIO_check_params(aiori_mod_opt_t * options);
 
 /************************** D E C L A R A T I O N S ***************************/
@@ -108,7 +107,7 @@ ior_aiori_t mpiio_aiori = {
 /***************************** F U N C T I O N S ******************************/
 static aiori_xfer_hint_t * hints = NULL;
 
-static void MPIIO_xfer_hints(aiori_xfer_hint_t * params){
+void MPIIO_xfer_hints(aiori_xfer_hint_t * params){
   hints = params;
 }
 
@@ -140,10 +139,10 @@ static int MPIIO_check_params(aiori_mod_opt_t * module_options){
  */
 int MPIIO_Access(const char *path, int mode, aiori_mod_opt_t *module_options)
 {
-    mpiio_options_t * param = (mpiio_options_t*) module_options;
     if(hints->dryRun){
       return MPI_SUCCESS;
     }
+    mpiio_options_t * param = (mpiio_options_t*) module_options;
     MPI_File fd;
     int mpi_mode = MPI_MODE_UNIQUE_OPEN;
     MPI_Info mpiHints = MPI_INFO_NULL;
@@ -562,8 +561,7 @@ static IOR_offset_t SeekOffset(MPI_File fd, IOR_offset_t offset,
  * Use MPI_File_get_size() to return aggregate file size.
  * NOTE: This function is used by the HDF5 and NCMPI backends.
  */
-IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * module_options, MPI_Comm testComm,
-                               char *testFileName)
+IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * module_options, char *testFileName)
 {
         mpiio_options_t * test = (mpiio_options_t*) module_options;
         if(hints->dryRun)
@@ -588,27 +586,6 @@ IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * module_options, MPI_Comm testCo
         MPI_CHECK(MPI_File_close(&fd), "cannot close file");
         if (mpiHints != MPI_INFO_NULL)
                 MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
-
-        if (hints->filePerProc == TRUE) {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, testComm),
-                          "cannot total data moved");
-                aggFileSizeFromStat = tmpSum;
-        } else {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, testComm),
-                          "cannot total data moved");
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, testComm),
-                          "cannot total data moved");
-                if (tmpMin != tmpMax) {
-                        if (rank == 0) {
-                                WARN("inconsistent file size by different tasks");
-                        }
-                        /* incorrect, but now consistent across tasks */
-                        aggFileSizeFromStat = tmpMin;
-                }
-        }
 
         return (aggFileSizeFromStat);
 }

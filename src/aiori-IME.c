@@ -45,7 +45,7 @@ void                IME_Delete(char *, aiori_mod_opt_t *);
 char               *IME_GetVersion();
 void                IME_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 int                 IME_Access(const char *, int, aiori_mod_opt_t *);
-IOR_offset_t        IME_GetFileSize(aiori_mod_opt_t *, MPI_Comm, char *);
+IOR_offset_t        IME_GetFileSize(aiori_mod_opt_t *, char *);
 IOR_offset_t        IME_Xfer(int, aiori_fd_t *, IOR_size_t *, IOR_offset_t,
                              IOR_offset_t, aiori_mod_opt_t *);
 int                 IME_Statfs(const char *, ior_aiori_statfs_t *,
@@ -62,8 +62,6 @@ void                IME_Sync(aiori_mod_opt_t *param);
 
 void                IME_Initialize();
 void                IME_Finalize();
-
-
 
 /****************************** O P T I O N S *********************************/
 
@@ -160,7 +158,7 @@ void IME_Finalize()
                 return;
 
         (void)ime_native_finalize();
-        ime_initialized = true;
+        ime_initialized = false;
 }
 
 /*
@@ -175,7 +173,7 @@ int IME_Access(const char *path, int mode, aiori_mod_opt_t *module_options)
 }
 
 /*
- * Creat and open a file through the IME interface.
+ * Create and open a file through the IME interface.
  */
 aiori_fd_t *IME_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
 {
@@ -412,11 +410,9 @@ int IME_Stat(const char *path, struct stat *buf,
 /*
  * Use IME stat() to return aggregate file size.
  */
-IOR_offset_t IME_GetFileSize(aiori_mod_opt_t *test, MPI_Comm testComm,
-                             char *testFileName)
+IOR_offset_t IME_GetFileSize(aiori_mod_opt_t *test, char *testFileName)
 {
         struct stat stat_buf;
-        IOR_offset_t size, tmpSum;
 
         if (hints->dryRun)
                 return 0;
@@ -424,17 +420,7 @@ IOR_offset_t IME_GetFileSize(aiori_mod_opt_t *test, MPI_Comm testComm,
         if (ime_native_stat(testFileName, &stat_buf) != 0)
                 ERRF("cannot get status of written file %s",
                       testFileName);
-
-        size = stat_buf.st_size;
-
-        if (hints->filePerProc) {
-                MPI_CHECK(MPI_Allreduce(&size, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, testComm),
-                          "cannot total data moved");
-                size = tmpSum;
-        }
-
-        return size;
+        return stat_buf.st_size;
 }
 
 #if (IME_NATIVE_API_VERSION >= 132)

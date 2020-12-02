@@ -60,6 +60,10 @@ static void CheckRunSettings(IOR_test_t *tests)
                         params->readFile = TRUE;
                         params->writeFile = TRUE;
                 }
+
+                if(params->dualMount && !params->filePerProc) {
+                        MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "Dual Mount can only be used with File Per Process");
+                }
         }
 }
 
@@ -117,6 +121,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->platform  = strdup(value);
         } else if (strcasecmp(option, "testfile") == 0) {
                 params->testFileName  = strdup(value);
+        } else if (strcasecmp(option, "dualmount") == 0){
+                params->dualMount = atoi(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
                 params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
@@ -169,8 +175,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->keepFileWithError = atoi(value);
         } else if (strcasecmp(option, "multiFile") == 0) {
                 params->multiFile = atoi(value);
-        } else if (strcasecmp(option, "quitonerror") == 0) {
-                params->quitOnError = atoi(value);
+        } else if (strcasecmp(option, "warningAsErrors") == 0) {
+                params->warningAsErrors = atoi(value);
         } else if (strcasecmp(option, "segmentcount") == 0) {
                 params->segmentCount = string_to_bytes(value);
         } else if (strcasecmp(option, "blocksize") == 0) {
@@ -276,7 +282,7 @@ int contains_only(char *haystack, char *needle)
         /* check for "needle" */
         if (strncasecmp(ptr, needle, strlen(needle)) != 0)
                 return 0;
-        /* make sure the rest of the line is only whitspace as well */
+        /* make sure the rest of the line is only whitespace as well */
         for (ptr += strlen(needle); ptr < end; ptr++) {
                 if (!isspace(*ptr))
                         return 0;
@@ -389,7 +395,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'C', NULL,        "reorderTasks -- changes task ordering for readback (useful to avoid client cache)", OPTION_FLAG, 'd', & params->reorderTasks},
     {'d', NULL,        "interTestDelay -- delay between reps in seconds", OPTION_OPTIONAL_ARGUMENT, 'd', & params->interTestDelay},
     {'D', NULL,        "deadlineForStonewalling -- seconds before stopping write or read phase", OPTION_OPTIONAL_ARGUMENT, 'd', & params->deadlineForStonewalling},
-    {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timeout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
     {'e', NULL,        "fsync -- perform a fsync() operation at the end of each read/write phase", OPTION_FLAG, 'd', & params->fsync},
@@ -412,7 +418,6 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'N', NULL,        "numTasks -- number of tasks that are participating in the test (overrides MPI)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},
     {'o', NULL,        "testFile -- full name for test", OPTION_OPTIONAL_ARGUMENT, 's', & params->testFileName},
     {'O', NULL,        "string of IOR directives (e.g. -O checkRead=1,lustreStripeCount=32)", OPTION_OPTIONAL_ARGUMENT, 'p', & decodeDirectiveWrapper},
-    {'q', NULL,        "quitOnError -- during file error-checking, abort on error", OPTION_FLAG, 'd', & params->quitOnError},
     {'Q', NULL,        "taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->taskPerNodeOffset},
     {'r', NULL,        "readFile -- read existing file", OPTION_FLAG, 'd', & params->readFile},
     {'R', NULL,        "checkRead -- verify that the output of read matches the expected signature (used with -G)", OPTION_FLAG, 'd', & params->checkRead},
@@ -425,11 +430,14 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'W', NULL,        "checkWrite -- check read after write", OPTION_FLAG, 'd', & params->checkWrite},
     {'x', NULL,        "singleXferAttempt -- do not retry transfer if incomplete", OPTION_FLAG, 'd', & params->singleXferAttempt},
     {'X', NULL,        "reorderTasksRandomSeed -- random seed for -Z option", OPTION_OPTIONAL_ARGUMENT, 'd', & params->reorderTasksRandomSeed},
+    {'y', NULL,        "dualMount -- use dual mount points for a filesystem", OPTION_FLAG, 'd', & params->dualMount},
     {'Y', NULL,        "fsyncPerWrite -- perform sync operation after every write operation", OPTION_FLAG, 'd', & params->fsyncPerWrite},
     {'z', NULL,        "randomOffset -- access is to random, not sequential, offsets within a file", OPTION_FLAG, 'd', & params->randomOffset},
+    {0, "random-offset-seed",        "The seed for -z", OPTION_OPTIONAL_ARGUMENT, 'd', & params->randomSeed},
     {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random ordering for readback", OPTION_FLAG, 'd', & params->reorderTasksRandom},
+    {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & params->warningAsErrors},
     {.help="  -O summaryFile=FILE                 -- store result data into this file", .arg = OPTION_OPTIONAL_ARGUMENT},
-    {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputing the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputting the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
     {0, "dryRun",      "do not perform any I/Os just run evtl. inputs print dummy output", OPTION_FLAG, 'd', & params->dryRun},
     LAST_OPTION,
   };

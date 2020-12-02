@@ -39,6 +39,12 @@
 #include "iordef.h"
 #include "aiori.h"
 
+#include <mpi.h>
+
+#ifndef MPI_FILE_NULL
+#   include <mpio.h>
+#endif /* not MPI_FILE_NULL */
+
 #define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
 /******************** DATA Packet Type ***************************************/
 /* Holds the types of data packets: generic, offset, timestamp, incompressible */
@@ -94,6 +100,7 @@ typedef struct
     int collective;                  /* collective I/O */
     MPI_Comm     testComm;           /* MPI communicator */
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
+  int dualMount;                   /* dual mount points */
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */
     int numTasksOnNode0;             /* number of tasks on node 0 (usually all the same, but don't have to be, use with caution) */
@@ -116,7 +123,6 @@ typedef struct
     int keepFile;                    /* don't delete the testfile on exit */
     int keepFileWithError;           /* don't delete the testfile with errors */
     int errorFound;                  /* error found in data check */
-    int quitOnError;                 /* quit code when error in check */
     IOR_offset_t segmentCount;       /* number of segments (or HDF5 datasets) */
     IOR_offset_t blockSize;          /* contiguous bytes to write per task */
     IOR_offset_t transferSize;       /* size of transfer in bytes */
@@ -127,7 +133,7 @@ typedef struct
     int useExistingTestFile;         /* do not delete test file before access */
     int storeFileOffset;             /* use file offset as stored signature */
     int deadlineForStonewalling;     /* max time in seconds to run any test phase */
-    int stoneWallingWearOut;         /* wear out the stonewalling, once the timout is over, each process has to write the same amount */
+    int stoneWallingWearOut;         /* wear out the stonewalling, once the timeout is over, each process has to write the same amount */
     uint64_t stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
     char * stoneWallingStatusFile;
 
@@ -162,9 +168,7 @@ typedef struct
     int         hdfs_block_size;     /* internal blk-size. (0 gets default) */
 
     char*       URI;                 /* "path" to target object */
-    size_t      part_number;         /* multi-part upload increment (PER-RANK!) */
-    char*       UploadId; /* key for multi-part-uploads */
-
+    
     /* RADOS variables */
     rados_t rados_cluster;           /* RADOS cluster handle */
     rados_ioctx_t rados_ioctx;       /* I/O context for our pool in the RADOS cluster */
@@ -174,6 +178,7 @@ typedef struct
 
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
+    int warningAsErrors;             /* treat any warning as an error */
 
     aiori_xfer_hint_t hints;
 } IOR_param_t;

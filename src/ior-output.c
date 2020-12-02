@@ -20,6 +20,8 @@ void PrintTableHeader(){
     fprintf(out_resultfile, "\n");
     fprintf(out_resultfile, "access    bw(MiB/s)  IOPS       Latency(s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
     fprintf(out_resultfile, "------    ---------  ----       ----------  ---------- ---------  --------   --------   --------   --------   ----\n");
+  }else if(outputFormat == OUTPUT_CSV){
+    fprintf(out_resultfile, "access,bw(MiB/s),IOPS,Latency,block(KiB),xfer(KiB),open(s),wr/rd(s),close(s),total(s),iter\n");
   }
 }
 
@@ -45,8 +47,6 @@ static void PrintKeyValStart(char * key){
   }
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": \"", key);
-  }else if(outputFormat == OUTPUT_CSV){
-
   }
 }
 
@@ -84,7 +84,7 @@ static void PrintKeyVal(char * key, char * value){
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": \"%s\"", key, value);
   }else if(outputFormat == OUTPUT_CSV){
-    fprintf(out_resultfile, "%s", value);
+    fprintf(out_resultfile, "%s,", value);
   }
 }
 
@@ -98,7 +98,7 @@ static void PrintKeyValDouble(char * key, double value){
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": %.4f", key, value);
   }else if(outputFormat == OUTPUT_CSV){
-    fprintf(out_resultfile, "%.4f", value);
+    fprintf(out_resultfile, "%.4f,", value);
   }
 }
 
@@ -113,7 +113,7 @@ static void PrintKeyValInt(char * key, int64_t value){
   if(outputFormat == OUTPUT_JSON){
     fprintf(out_resultfile, "\"%s\": %lld", key, (long long)  value);
   }else if(outputFormat == OUTPUT_CSV){
-    fprintf(out_resultfile, "%lld", (long long) value);
+    fprintf(out_resultfile, "%lld,", (long long) value);
   }
 }
 
@@ -203,14 +203,17 @@ void PrintRepeatEnd(){
 void PrintRepeatStart(){
   if (rank != 0)
           return;
-  if( outputFormat == OUTPUT_DEFAULT){
+  if(outputFormat == OUTPUT_DEFAULT){
     return;
   }
   PrintArrayStart();
 }
 
 void PrintTestEnds(){
-  if (rank != 0 ||  verbose < VERBOSE_0) {
+  if (outputFormat == OUTPUT_CSV){
+      return;
+  }
+  if (rank != 0 ||  verbose <= VERBOSE_0) {
     PrintEndSection();
     return;
   }
@@ -246,7 +249,20 @@ void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, do
     PrintKeyValDouble("closeTime", diff_subset[2]);
     PrintKeyValDouble("totalTime", totalTime);
     PrintEndSection();
+  }else if (outputFormat == OUTPUT_CSV){
+    PrintKeyVal("access", access == WRITE ? "write" : "read");
+    PrintKeyValDouble("bwMiB", bw / MEBIBYTE);
+    PrintKeyValDouble("iops", iops);
+    PrintKeyValDouble("latency", latency);
+    PrintKeyValDouble("blockKiB", (double)test->params.blockSize / KIBIBYTE);
+    PrintKeyValDouble("xferKiB", (double)test->params.transferSize / KIBIBYTE);
+    PrintKeyValDouble("openTime", diff_subset[0]);
+    PrintKeyValDouble("wrRdTime", diff_subset[1]);
+    PrintKeyValDouble("closeTime", diff_subset[2]);
+    PrintKeyValDouble("totalTime", totalTime);
+    fprintf(out_resultfile, "%d\n", rep);
   }
+
   fflush(out_resultfile);
 }
 
@@ -257,6 +273,10 @@ void PrintHeader(int argc, char **argv)
 
         if (rank != 0)
                 return;
+
+        if (outputFormat == OUTPUT_CSV){
+            return;
+        }
 
         PrintStartSection();
         if (outputFormat != OUTPUT_DEFAULT){
@@ -319,11 +339,16 @@ void PrintHeader(int argc, char **argv)
  */
 void ShowTestStart(IOR_param_t *test)
 {
+  if (outputFormat == OUTPUT_CSV){
+      return;
+  }
   PrintStartSection();
   PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
 
-  ShowFileSystemSize(test);
+  char filename[MAX_PATHLEN];
+  GetTestFileName(filename, test);
+  ShowFileSystemSize(filename, test->backend, test->backend_options);
 
   if (verbose >= VERBOSE_3 || outputFormat == OUTPUT_JSON) {
     char* data_packets[] = {"g","t","o","i"};
@@ -365,16 +390,16 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("storeFileOffset", test->storeFileOffset);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);
-    PrintKeyValInt("quitOnError", test->quitOnError);
+    PrintKeyValInt("warningAsErrors", test->warningAsErrors);
     PrintKeyValInt("verbose", verbose);
     PrintKeyVal("data packet type", data_packets[test->dataPacketType]);
     PrintKeyValInt("setTimeStampSignature/incompressibleSeed", test->setTimeStampSignature); /* Seed value was copied into setTimeStampSignature as well */
     PrintKeyValInt("collective", test->collective);
     PrintKeyValInt("segmentCount", test->segmentCount);
-    #ifdef HAVE_GPFS_FCNTL_H
-    PrintKeyValInt("gpfsHintAccess", test->gpfs_hint_access);
-    PrintKeyValInt("gpfsReleaseToken", test->gpfs_release_token);
-    #endif
+    //#ifdef HAVE_GPFS_FCNTL_H
+    //PrintKeyValInt("gpfsHintAccess", test->gpfs_hint_access);
+    //PrintKeyValInt("gpfsReleaseToken", test->gpfs_release_token);
+    //#endif
     PrintKeyValInt("transferSize", test->transferSize);
     PrintKeyValInt("blockSize", test->blockSize);
     PrintEndSection();
@@ -401,6 +426,9 @@ void ShowTestEnd(IOR_test_t *tptr){
  */
 void ShowSetup(IOR_param_t *params)
 {
+  if (outputFormat == OUTPUT_CSV){
+      return;
+  }
   if (params->debug) {
       fprintf(out_logfile, "\n*** DEBUG MODE ***\n");
       fprintf(out_logfile, "*** %s ***\n\n", params->debug);
@@ -441,6 +469,10 @@ void ShowSetup(IOR_param_t *params)
   if(params->dryRun){
     PrintKeyValInt("dryRun", params->dryRun);
   }
+  if(params->verbose) {
+    PrintKeyValInt("verbose", params->verbose);
+  }
+
   if (params->deadlineForStonewalling > 0) {
     PrintKeyValInt("stonewallingTime", params->deadlineForStonewalling);
     PrintKeyValInt("stoneWallingWearOut", params->stoneWallingWearOut );
@@ -516,7 +548,7 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
         struct results *ops;
 
         int reps;
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
         reps = params->repetitions;
@@ -590,9 +622,6 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           PrintKeyValInt("taskPerNodeOffset", params->taskPerNodeOffset);
           PrintKeyValInt("reorderTasksRandom", params->reorderTasksRandom);
           PrintKeyValInt("reorderTasksRandomSeed", params->reorderTasksRandomSeed);
-          PrintKeyValInt("segmentCount", params->segmentCount);
-          PrintKeyValInt("blockSize", params->blockSize);
-          PrintKeyValInt("transferSize", params->transferSize);
           PrintKeyValDouble("bwMaxMIB", bw->max / MEBIBYTE);
           PrintKeyValDouble("bwMinMIB", bw->min / MEBIBYTE);
           PrintKeyValDouble("bwMeanMIB", bw->mean / MEBIBYTE);
@@ -608,8 +637,6 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           }
           PrintKeyValDouble("xsizeMiB", (double) point->aggFileSizeForBW / MEBIBYTE);
           PrintEndSection();
-        }else if (outputFormat == OUTPUT_CSV){
-
         }
 
         fflush(out_resultfile);
@@ -631,10 +658,10 @@ void PrintLongSummaryOneTest(IOR_test_t *test)
 
 void PrintLongSummaryHeader()
 {
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
         if(outputFormat != OUTPUT_DEFAULT){
-          return;
+            return;
         }
 
         fprintf(out_resultfile, "\n");
@@ -651,7 +678,7 @@ void PrintLongSummaryHeader()
 void PrintLongSummaryAllTests(IOR_test_t *tests_head)
 {
   IOR_test_t *tptr;
-  if (rank != 0 || verbose < VERBOSE_0)
+  if (rank != 0 || verbose <= VERBOSE_0)
           return;
 
   PrintArrayEnd();
@@ -661,8 +688,6 @@ void PrintLongSummaryAllTests(IOR_test_t *tests_head)
     fprintf(out_resultfile, "Summary of all tests:");
   }else if (outputFormat == OUTPUT_JSON){
     PrintNamedArrayStart("summary");
-  }else if (outputFormat == OUTPUT_CSV){
-
   }
 
   PrintLongSummaryHeader();
@@ -684,7 +709,7 @@ void PrintShortSummary(IOR_test_t * test)
         int reps;
         int i;
 
-        if (rank != 0 || verbose < VERBOSE_0)
+        if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
         PrintArrayEnd();
@@ -723,7 +748,7 @@ void PrintShortSummary(IOR_test_t * test)
 
 void PrintRemoveTiming(double start, double finish, int rep)
 {
-  if (rank != 0 || verbose < VERBOSE_0)
+  if (rank != 0 || verbose <= VERBOSE_0)
     return;
 
   if (outputFormat == OUTPUT_DEFAULT){

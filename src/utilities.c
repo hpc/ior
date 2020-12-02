@@ -16,6 +16,12 @@
 #  include "config.h"
 #endif
 
+#ifdef HAVE_GETCPU_SYSCALL
+#  define _GNU_SOURCE
+#  include <unistd.h>
+#  include <sys/syscall.h>
+#endif
+
 #ifdef __linux__
 #  define _GNU_SOURCE            /* Needed for O_DIRECT in fcntl */
 #endif                           /* __linux__ */
@@ -60,8 +66,8 @@ int      rankOffset = 0;
 int      verbose = VERBOSE_0;        /* verbose output */
 MPI_Comm testComm;
 MPI_Comm mpi_comm_world;
-FILE * out_logfile;
-FILE * out_resultfile;
+FILE * out_logfile = NULL;
+FILE * out_resultfile = NULL;
 enum OutputFormat_t outputFormat;
 
 /***************************** F U N C T I O N S ******************************/
@@ -81,8 +87,8 @@ void FailMessage(int rank, const char *location, char *format, ...) {
     va_start(args, format);
     vsnprintf(msg, 4096, format, args);
     va_end(args);
-    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s: %s\n",
-                PrintTimestamp(), rank, location, msg, strerror(errno));
+    fprintf(out_logfile, "%s: Process %d: FAILED in %s, %s\n",
+                PrintTimestamp(), rank, location, msg);
     fflush(out_logfile);
     MPI_Abort(testComm, 1);
 }
@@ -566,16 +572,14 @@ IOR_offset_t StringToBytes(char *size_str)
 /*
  * Displays size of file system and percent of data blocks and inodes used.
  */
-void ShowFileSystemSize(IOR_param_t * test) // this might be converted to an AIORI call
+void ShowFileSystemSize(char * filename, const struct ior_aiori * backend, void * backend_options) // this might be converted to an AIORI call
 {
   ior_aiori_statfs_t stat;
-  if(! test->backend->statfs){
+  if(! backend->statfs){
     WARN("Backend doesn't implement statfs");
     return;
   }
-  char filename[MAX_PATHLEN];
-  GetTestFileName(filename, test);
-  int ret = test->backend->statfs(filename, & stat, test->backend_options);
+  int ret = backend->statfs(filename, & stat, backend_options);
   if( ret != 0 ){
     WARN("Backend returned error during statfs");
     return;
@@ -868,3 +872,30 @@ char *HumanReadable(IOR_offset_t value, int base)
         }
         return valueStr;
 }
+
+#if defined(HAVE_GETCPU_SYSCALL)
+// Assume we aren't worried about thread/process migration.
+// Test on Intel systems and see if we can get rid of the architecture specificity
+// of the code.
+unsigned long GetProcessorAndCore(int *chip, int *core){
+	return syscall(SYS_getcpu, core, chip, NULL);
+}
+#elif defined(HAVE_RDTSCP_ASM)
+// We're on an intel processor and use the
+// rdtscp instruction.
+unsigned long GetProcessorAndCore(int *chip, int *core){
+	unsigned long a,d,c;
+	__asm__ volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+	*chip = (c & 0xFFF000)>>12;
+	*core = c & 0xFFF;
+	return ((unsigned long)a) | (((unsigned long)d) << 32);;
+}
+#else
+// TODO: Add in AMD function
+unsigned long GetProcessorAndCore(int *chip, int *core){
+#warning GetProcessorAndCore is implemented as a dummy
+  *chip = 0;
+  *core = 0;
+	return 1;
+}
+#endif

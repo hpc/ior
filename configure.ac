@@ -84,7 +84,7 @@ AC_ARG_WITH([lustre],
                 [support configurable Lustre striping values @<:@default=check@:>@])],
         [], [with_lustre=check])
 AS_IF([test "x$with_lustre" = xyes ], [
-        AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], break, [
+        AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], [AC_DEFINE([HAVE_LUSTRE_USER], [], [Lustre user API available in some shape or form])], [
                 if test "x$with_lustre" != xcheck -a \
                         "x$ac_cv_header_linux_lustre_lustre_user_h" = "xno" -a \
                         "x$ac_cv_header_lustre_lustre_user_h" = "xno" ; then
@@ -186,6 +186,34 @@ AM_COND_IF([USE_POSIX_AIORI],[
         AC_DEFINE([USE_POSIX_AIORI], [], [Build POSIX backend AIORI])
 ])
 
+# PMDK IO support
+AC_ARG_WITH([pmdk],
+        [AS_HELP_STRING([--with-pmdk],
+           [support IO with PMDK backend @<:@default=no@:>@])],
+        [],
+        [with_pmdk=no])
+AM_CONDITIONAL([USE_PMDK_AIORI], [test x$with_pmdk = xyes])
+AS_IF([test "x$with_pmdk" != xno], [
+        AC_DEFINE([USE_PMDK_AIORI], [], [Build PMDK backend AIORI])
+        AC_CHECK_HEADERS(libpmem.h,, [unset PMDK])
+	AC_SEARCH_LIBS([pmem_map_file], [pmdk],
+	[AC_MSG_ERROR([Library containing pmdk symbols not found])])
+])
+
+# LINUX AIO support
+AC_ARG_WITH([aio],
+        [AS_HELP_STRING([--with-aio],
+           [support Linux AIO @<:@default=no@:>@])],
+        [],
+        [with_aio=no])
+AM_CONDITIONAL([USE_AIO_AIORI], [test x$with_aio = xyes])
+AS_IF([test "x$with_aio" != xno], [
+        AC_DEFINE([USE_AIO_AIORI], [], [Build AIO backend])
+        AC_CHECK_HEADERS(libaio.h,, [unset AIO])
+	AC_SEARCH_LIBS([aio],	[io_setup], [AC_MSG_ERROR([Library containing AIO symbol io_setup not found])])
+])
+
+
 # RADOS support
 AC_ARG_WITH([rados],
         [AS_HELP_STRING([--with-rados],
@@ -211,40 +239,25 @@ AM_COND_IF([USE_CEPHFS_AIORI],[
         AC_DEFINE([USE_CEPHFS_AIORI], [], [Build CEPHFS backend AIORI])
 ])
 
-# DAOS Backends (DAOS and DFS) IO support require DAOS and CART/GURT
-AC_ARG_WITH([cart],
-    [AS_HELP_STRING([--with-cart],
-	    [support IO with DAOS backends @<:@default=no@:>@])],
-    [], [with_daos=no])
-
-AS_IF([test "x$with_cart" != xno], [
-    CART="yes"
-    LDFLAGS="$LDFLAGS -L$with_cart/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cart/lib64"
-    LDFLAGS="$LDFLAGS -L$with_cart/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_cart/lib"
-    CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
-    AC_CHECK_HEADERS(gurt/common.h,, [unset CART])
-    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset CART])
-])
-
+# DAOS-FS Backend (DFS)
 AC_ARG_WITH([daos],
     [AS_HELP_STRING([--with-daos],
-	    [support IO with DAOS backends @<:@default=no@:>@])],
+	    [support IO with DAOS backend @<:@default=no@:>@])],
     [], [with_daos=no])
-
 AS_IF([test "x$with_daos" != xno], [
     DAOS="yes"
     LDFLAGS="$LDFLAGS -L$with_daos/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_daos/lib64"
     CPPFLAGS="$CPPFLAGS -I$with_daos/include"
-    AC_CHECK_HEADERS(daos_types.h,, [unset DAOS])
+    AC_CHECK_HEADERS(gurt/common.h,, [unset DAOS])
+    AC_CHECK_HEADERS(daos.h,, [unset DAOS])
+    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset DAOS])
     AC_CHECK_LIB([uuid], [uuid_generate],, [unset DAOS])
-    AC_CHECK_LIB([daos_common], [daos_sgl_init],, [unset DAOS])
     AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
     AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS])
 ])
-
 AM_CONDITIONAL([USE_DAOS_AIORI], [test x$DAOS = xyes])
 AM_COND_IF([USE_DAOS_AIORI],[
-        AC_DEFINE([USE_DAOS_AIORI], [], [Build DAOS backends AIORI])
+        AC_DEFINE([USE_DAOS_AIORI], [], [Build DAOS-FS backend AIORI])
 ])
 
 # Gfarm support
@@ -293,19 +306,54 @@ AM_COND_IF([AWS4C_DIR],[
 ])
 
 
-# Amazon S3 support  [see also:  --with-aws4c]
-AC_ARG_WITH([S3],
-        [AS_HELP_STRING([--with-S3],
-           [support IO with Amazon S3 backend @<:@default=no@:>@])],
+
+# Amazon S3 support using the libs3 API
+AC_ARG_WITH([S3-libs3],
+        [AS_HELP_STRING([--with-S3-libs3],
+           [support IO with Amazon libS3 @<:@default=no@:>@])],
         [],
-        [with_S3=no])
-AM_CONDITIONAL([USE_S3_AIORI], [test x$with_S3 = xyes])
-AM_COND_IF([USE_S3_AIORI],[
-        AC_DEFINE([USE_S3_AIORI], [], [Build Amazon-S3 backend AIORI])
+        [with_S3_libs3=no])
+AM_CONDITIONAL([USE_S3_LIBS3_AIORI], [test x$with_S3_libs3 = xyes])
+AM_COND_IF([USE_S3_LIBS3_AIORI],[
+        AC_DEFINE([USE_S3_LIBS3_AIORI], [], [Build Amazon-S3 backend AIORI using libs3])
 ])
 
 err=0
-AS_IF([test "x$with_S3" != xno], [
+AS_IF([test "x$with_S3_libs3" != xno], [
+            AC_MSG_NOTICE([beginning of S3-related checks])
+            ORIG_CPPFLAGS=$CPPFLAGS
+            ORIG_LDFLAGS=$LDFLAGS
+
+            AC_CHECK_HEADERS([libs3.h], [], [err=1])
+
+            # Autotools thinks searching for a library means I want it added to LIBS
+            ORIG_LIBS=$LIBS
+            AC_CHECK_LIB([s3], [S3_initialize], [], [err=1])
+            LIBS=$ORIG_LIBS
+
+            AC_MSG_NOTICE([end of S3-related checks])
+            if test "$err" == 1; then
+                AC_MSG_FAILURE([S3 support is missing.  dnl Make sure you have access to libs3.  dnl])
+            fi
+
+            # restore user's values
+            CPPFLAGS=$ORIG_CPPFLAGS
+            LDFLAGS=$ORIG_LDFLAGS
+])
+
+# Amazon S3 support  [see also:  --with-aws4c]
+AC_ARG_WITH([S3-4c],
+        [AS_HELP_STRING([--with-S3-4c],
+           [support IO with Amazon S3 backend @<:@default=no@:>@])],
+        [],
+        [with_S3_4c=no])
+AM_CONDITIONAL([USE_S3_4C_AIORI], [test x$with_S3_4c = xyes])
+AM_COND_IF([USE_S3_4C_AIORI],[
+        AC_DEFINE([USE_S3_4C_AIORI], [], [Build Amazon-S3 backend AIORI using lib4c])
+])
+
+err=0
+AS_IF([test "x$with_S3_4c" != xno], [
             AC_MSG_NOTICE([beginning of S3-related checks])
 
             # save user's values, while we use AC_CHECK_HEADERS with $AWS4C_DIR
@@ -336,6 +384,30 @@ Consider --with-aws4c=, CPPFLAGS, LDFLAGS, etc])
             CPPFLAGS=$ORIG_CPPFLAGS
             LDFLAGS=$ORIG_LDFLAGS
 ])
+
+# Check for existence of the function to detect the CPU socket ID (for multi-socket systems)
+AC_COMPILE_IFELSE(
+  [AC_LANG_SOURCE([[
+      int main(){
+      unsigned long a,d,c;
+      __asm__ volatile("rdtscp" : "=a" (a), "=d" (d), "=c" (c));
+      return 0;
+      }
+  ]])],
+  AC_DEFINE([HAVE_RDTSCP_ASM], [], [Has ASM to detect CPU socket ID]))
+
+AC_COMPILE_IFELSE(
+  [AC_LANG_SOURCE([[
+      #define _GNU_SOURCE
+      #include <unistd.h>
+      #include <sys/syscall.h>
+      unsigned long GetProcessorAndCore(int *chip, int *core){
+      	return syscall(SYS_getcpu, core, chip, NULL);
+      }
+      int main(){
+      }
+  ]])],
+  AC_DEFINE([HAVE_GETCPU_SYSCALL], [], [Has syscall to detect CPU socket ID]))
 
 
 # Enable building "IOR", in all capitals

@@ -91,7 +91,7 @@ static void HDF5_Close(aiori_fd_t *, aiori_mod_opt_t *);
 static void HDF5_Delete(char *, aiori_mod_opt_t *);
 static char* HDF5_GetVersion();
 static void HDF5_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static IOR_offset_t HDF5_GetFileSize(aiori_mod_opt_t *, MPI_Comm, char *);
+static IOR_offset_t HDF5_GetFileSize(aiori_mod_opt_t *, char *);
 static int HDF5_Access(const char *, int, aiori_mod_opt_t *);
 static void HDF5_init_xfer_options(aiori_xfer_hint_t * params);
 static int HDF5_check_params(aiori_mod_opt_t * options);
@@ -171,6 +171,8 @@ static aiori_xfer_hint_t * hints = NULL;
 
 static void HDF5_init_xfer_options(aiori_xfer_hint_t * params){
   hints = params;
+  /** HDF5 utilizes the MPIIO backend too, so init hints there */
+  MPIIO_xfer_hints(params);
 }
 
 static int HDF5_check_params(aiori_mod_opt_t * options){
@@ -660,11 +662,11 @@ static void SetupDataSet(void *fd, int flags, aiori_mod_opt_t * param)
  * Use MPIIO call to get file size.
  */
 static IOR_offset_t
-HDF5_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm, char *testFileName)
+HDF5_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 {
   if(hints->dryRun)
     return 0;
-  return(MPIIO_GetFileSize(test, testComm, testFileName));
+  return(MPIIO_GetFileSize(test, testFileName));
 }
 
 /*

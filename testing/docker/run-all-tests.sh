@@ -46,7 +46,7 @@ for IMAGE in $(find -type d | cut -b 3- |grep -v "^$") ; do
 done
 
 if [[ $ERROR != 0 ]] ; then
-	echo "Errors occured!"
+	echo "Errors occurred!"
 else
 	echo "OK: all tests passed!"
 fi
