@@ -63,8 +63,6 @@ void                IME_Sync(aiori_mod_opt_t *param);
 void                IME_Initialize();
 void                IME_Finalize();
 
-
-
 /****************************** O P T I O N S *********************************/
 
 typedef struct{
@@ -422,7 +420,6 @@ IOR_offset_t IME_GetFileSize(aiori_mod_opt_t *test, char *testFileName)
         if (ime_native_stat(testFileName, &stat_buf) != 0)
                 ERRF("cannot get status of written file %s",
                       testFileName);
-
         return stat_buf.st_size;
 }
 
