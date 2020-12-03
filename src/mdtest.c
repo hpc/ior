@@ -1372,6 +1372,11 @@ void print_help (void) {
     exit(0);
 }
 
+int calc_allreduce_index(int iter, int rank, int op){
+  int tableSize = MDTEST_LAST_NUM;
+  return iter * tableSize * size + rank * tableSize + op;
+}
+
 void summarize_results(int iterations) {
     char access[MAX_PATHLEN];
     int i, j, k;
@@ -1436,7 +1441,8 @@ void summarize_results(int iterations) {
                 for (j=0; j<iterations; j++) {
                     maxes[j] = all[j*tableSize + i];
                     for (k=0; k<size; k++) {
-                        curr = all[(k*tableSize*iterations) + (j*tableSize) + i];
+                        curr = all[calc_allreduce_index(j, k, i)];
+                        //For verification in 3.2 printf("%d %d %d = %f\n", j, k, i, curr);                        
                         if (maxes[j] < curr) {
                             maxes[j] = curr;
                         }
@@ -1488,8 +1494,7 @@ void summarize_results(int iterations) {
                 min = max = all[i];
                 for (k=0; k < size; k++) {
                     for (j = 0; j < iterations; j++) {
-                        curr = all[(k*tableSize*iterations)
-                                   + (j*tableSize) + i];
+                        curr = all[calc_allreduce_index(j, k, i)];
                         if (min > curr) {
                             min = curr;
                         }
