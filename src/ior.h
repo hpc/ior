@@ -190,8 +190,9 @@ typedef struct {
    size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
 
    double     stonewall_time;
-   long long  stonewall_min_data_accessed;
-   long long  stonewall_avg_data_accessed;
+   long long  stonewall_min_data_accessed; // of all processes
+   long long  stonewall_avg_data_accessed; // across all processes
+   long long  stonewall_total_data_accessed; // sum accross all processes
 
    IOR_offset_t aggFileSizeFromStat;
    IOR_offset_t aggFileSizeFromXfer;

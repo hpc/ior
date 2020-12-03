@@ -1918,14 +1918,14 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                                   1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "cannot reduce pairs moved");
           MPI_CHECK(MPI_Reduce(& data_moved_ll, &point->stonewall_min_data_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "cannot reduce pairs moved");
-          MPI_CHECK(MPI_Reduce(& data_moved_ll, &point->stonewall_avg_data_accessed,
+          MPI_CHECK(MPI_Reduce(& data_moved_ll, &point->stonewall_total_data_accessed,
                                   1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm), "cannot reduce pairs moved");
 
           if(rank == 0){
+            point->stonewall_avg_data_accessed = point->stonewall_total_data_accessed / test->numTasks;
             fprintf(out_logfile, "stonewalling pairs accessed min: %lld max: %zu -- min data: %.1f GiB mean data: %.1f GiB time: %.1fs\n",
              pairs_accessed_min, point->pairs_accessed,
-             point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 / test->numTasks , point->stonewall_time);
-             point->stonewall_min_data_accessed *= test->numTasks;
+             point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 , point->stonewall_time);
           }
           if(pairCnt != point->pairs_accessed){
             // some work needs still to be done !
