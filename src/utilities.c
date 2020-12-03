@@ -653,27 +653,6 @@ int Regex(char *string, char *pattern)
 }
 
 /*
- * Seed random generator.
- */
-void SeedRandGen(MPI_Comm testComm)
-{
-        unsigned int randomSeed;
-
-        if (rank == 0) {
-#ifdef _WIN32
-                rand_s(&randomSeed);
-#else
-                struct timeval randGenTimer;
-                gettimeofday(&randGenTimer, (struct timezone *)NULL);
-                randomSeed = randGenTimer.tv_usec;
-#endif
-        }
-        MPI_CHECK(MPI_Bcast(&randomSeed, 1, MPI_INT, 0,
-                            testComm), "cannot broadcast random seed value");
-        srandom(randomSeed);
-}
-
-/*
  * System info for Windows.
  */
 #ifdef _WIN32

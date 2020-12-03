@@ -127,6 +127,7 @@ typedef struct
     IOR_offset_t blockSize;          /* contiguous bytes to write per task */
     IOR_offset_t transferSize;       /* size of transfer in bytes */
     IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
+    IOR_offset_t randomPrefillBlocksize;   /* prefill option for random IO, the amount of data used for prefill */
 
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
@@ -168,7 +169,7 @@ typedef struct
     int         hdfs_block_size;     /* internal blk-size. (0 gets default) */
 
     char*       URI;                 /* "path" to target object */
-    
+
     /* RADOS variables */
     rados_t rados_cluster;           /* RADOS cluster handle */
     rados_ioctx_t rados_ioctx;       /* I/O context for our pool in the RADOS cluster */

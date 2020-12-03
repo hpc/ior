@@ -384,7 +384,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
   char APIs[1024];
   char APIs_legacy[1024];
   aiori_supported_apis(APIs, APIs_legacy, IOR);
-  char apiStr[1024];
+  char * apiStr = safeMalloc(1024);
   sprintf(apiStr, "API for I/O [%s]", APIs);
 
   option_help o [] = {
@@ -433,6 +433,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'y', NULL,        "dualMount -- use dual mount points for a filesystem", OPTION_FLAG, 'd', & params->dualMount},
     {'Y', NULL,        "fsyncPerWrite -- perform sync operation after every write operation", OPTION_FLAG, 'd', & params->fsyncPerWrite},
     {'z', NULL,        "randomOffset -- access is to random, not sequential, offsets within a file", OPTION_FLAG, 'd', & params->randomOffset},
+    {0, "randomPrefill", "For random -z access only: Prefill the file with this blocksize, e.g., 2m", OPTION_OPTIONAL_ARGUMENT, 'l', & params->randomPrefillBlocksize},
     {0, "random-offset-seed",        "The seed for -z", OPTION_OPTIONAL_ARGUMENT, 'd', & params->randomSeed},
     {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random ordering for readback", OPTION_FLAG, 'd', & params->reorderTasksRandom},
     {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & params->warningAsErrors},
