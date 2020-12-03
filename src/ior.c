@@ -1292,7 +1292,7 @@ static void TestIoSys(IOR_test_t *test)
         uint64_t params_saved_wearout = params->stoneWallingWearOutIterations;
 
         /* Check if the file exists and warn users */
-        if( params->hints.filePerProc || rank == 0){
+        if((params->writeFile || params->checkWrite) && (params->hints.filePerProc || rank == 0)){
           struct stat sb;
           GetTestFileName(testFileName, params);
           int ret = backend->stat(testFileName, & sb, params->backend_options);
