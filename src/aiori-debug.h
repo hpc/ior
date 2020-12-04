@@ -94,12 +94,13 @@ extern int aiori_warning_as_errors;
 #define MPI_CHECKF(MPI_STATUS, FORMAT, ...) do {                         \
     char resultString[MPI_MAX_ERROR_STRING];                             \
     int resultLength;                                                    \
+    int checkf_mpi_status = MPI_STATUS;                                  \
                                                                          \
-    if (MPI_STATUS != MPI_SUCCESS) {                                     \
-        MPI_Error_string(MPI_STATUS, resultString, &resultLength);       \
-        fprintf(out_logfile, "ERROR: " FORMAT ", MPI %s, (%s:%d)\n",      \
+    if (checkf_mpi_status != MPI_SUCCESS) {                              \
+        MPI_Error_string(checkf_mpi_status, resultString, &resultLength);\
+        fprintf(out_logfile, "ERROR: " FORMAT ", MPI %s, (%s:%d)\n",     \
                 __VA_ARGS__, resultString, __FILE__, __LINE__);          \
-        fflush(out_logfile);                                                  \
+        fflush(out_logfile);                                             \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
     }                                                                    \
 } while(0)
