@@ -56,6 +56,7 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
 
   *init_backend_options = (aiori_mod_opt_t*) o;
   o->bucket_prefix = "ior";
+  o->bucket_prefix_cur = "b";
 
   option_help h [] = {
   {0, "S3-libs3.bucket-per-file", "Use one bucket to map one file/directory, otherwise one bucket is used to store all dirs/files.", OPTION_FLAG, 'd', & o->bucket_per_file},
@@ -66,6 +67,8 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
   {0, "S3-libs3.host", "The host optionally followed by:port.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
   {0, "S3-libs3.secret-key", "The secret key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->secret_key},
   {0, "S3-libs3.access-key", "The access key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->access_key},
+  {0, "S3-libs3.region", "The region used for the authorization signature.", OPTION_OPTIONAL_ARGUMENT, 's', & o->authRegion},
+  {0, "S3-libs3.location", "The bucket geographic location.", OPTION_OPTIONAL_ARGUMENT, 's', & o->locationConstraint},
   LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
@@ -92,7 +95,7 @@ static void def_file_name(s3_options_t * o, char * out_name, char const * path){
     }
     path++;
   }
-  *out_name = '-';
+  *out_name = 'b';
   out_name++;
   *out_name = '\0';
 }
