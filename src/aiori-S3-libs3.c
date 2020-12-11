@@ -119,7 +119,7 @@ static void def_bucket_name(s3_options_t * o, char * out_name, char const * path
   }
   *out_name = '\0';
 
-  S3Status S3_validate_bucket_name(const char *bucketName, S3UriStyle uriStyle);
+  // S3Status S3_validate_bucket_name(const char *bucketName, S3UriStyle uriStyle);
 }
 
 struct data_handling{
