@@ -918,7 +918,6 @@ DFS_Stat(const char *path, struct stat *buf, IOR_param_t * param)
                 GERR("Failed to lookup parent dir");
 
 	rc = dfs_stat(dfs, parent, name, buf);
-        DCHECK(rc, "dfs_stat() of Failed (%d)", rc);
 
 	if (name)
 		free(name);
