@@ -1231,7 +1231,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
 int calc_allreduce_index(int iter, int rank, int op){
   int tableSize = MDTEST_LAST_NUM;
-  return iter * tableSize * o.size + rank * tableSize + op;
+  return iter * tableSize * size + rank * tableSize + op;
 }
 
 void summarize_results(int iterations, int print_time) {
