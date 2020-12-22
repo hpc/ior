@@ -110,6 +110,11 @@ static void HDFS_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static IOR_offset_t HDFS_GetFileSize(aiori_mod_opt_t *,char *);
 static void hdfs_xfer_hints(aiori_xfer_hint_t * params);
 static option_help * HDFS_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values);
+static int HDFS_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * options);
+static int HDFS_rmdir (const char *path, aiori_mod_opt_t * options);
+static int HDFS_access (const char *path, int mode, aiori_mod_opt_t * options);
+static int HDFS_stat (const char *path, struct stat *buf, aiori_mod_opt_t * options);
+static int HDFS_statfs (const char * path, ior_aiori_statfs_t * stat, aiori_mod_opt_t * options);
 
 static aiori_xfer_hint_t * hints = NULL;
 
@@ -128,6 +133,12 @@ ior_aiori_t hdfs_aiori = {
   .xfer_hints = hdfs_xfer_hints,
 	.fsync = HDFS_Fsync,
 	.get_file_size = HDFS_GetFileSize,
+  .enable_mdtest = true,
+  .statfs = HDFS_statfs,
+  .mkdir = HDFS_mkdir,
+  .rmdir = HDFS_rmdir,
+  .access = HDFS_access,
+  .stat = HDFS_stat
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -178,6 +189,33 @@ option_help * HDFS_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_op
   option_help * help = malloc(sizeof(h));
   memcpy(help, h, sizeof(h));
   return help;
+}
+
+
+int HDFS_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * options){
+  return 0;
+}
+
+int HDFS_rmdir (const char *path, aiori_mod_opt_t * options){
+  return 0;
+}
+
+int HDFS_access (const char *path, int mode, aiori_mod_opt_t * options){
+  return 0;
+}
+
+int HDFS_stat (const char *path, struct stat *buf, aiori_mod_opt_t * options){
+  return 0;
+}
+
+int HDFS_statfs (const char * path, ior_aiori_statfs_t * stat, aiori_mod_opt_t * options){
+  stat->f_bsize = 1;
+  stat->f_blocks = 1;
+  stat->f_bfree = 1;
+  stat->f_bavail = 1;
+  stat->f_files = 1;
+  stat->f_ffree = 1;
+  return 0;
 }
 
 /* This is identical to the one in aiori-POSIX.c  Doesn't seem like
