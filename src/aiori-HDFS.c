@@ -519,7 +519,6 @@ static IOR_offset_t HDFS_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
 			if ( rc < 0 ) {
 				ERR( "hdfsWrite() failed" );
 			}
-
 			offset += rc;
 
 			if ( hints->fsyncPerWrite == TRUE ) {
@@ -572,6 +571,15 @@ static IOR_offset_t HDFS_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
 		xferRetries++;
 	}
 
+  if(access == WRITE){
+    // flush user buffer, this makes the write visible to readers
+    // it is the expected semantics of read/writes
+    rc = hdfsHFlush(hdfs_fs, hdfs_file);
+    if(rc != 0){
+      WARN("Error during flush");
+    }
+  }
+
 	if (verbose >= VERBOSE_4) {
 		printf("<- HDFS_Xfer\n");
 	}
@@ -589,7 +597,8 @@ static void HDFS_Fsync(aiori_fd_t * fd, aiori_mod_opt_t * param) {
 	if (verbose >= VERBOSE_4) {
 		printf("\thdfsFlush(%p, %p)\n", hdfs_fs, hdfs_file);
 	}
-	if ( hdfsFlush( hdfs_fs, hdfs_file ) != 0 ) {
+	if ( hdfsHSync( hdfs_fs, hdfs_file ) != 0 ) {
+    // Hsync is implemented to flush out data with newer Hadoop versions
 		EWARN( "hdfsFlush() failed" );
 	}
 }
