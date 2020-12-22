@@ -230,9 +230,12 @@ int HDFS_stat (const char *path, struct stat *buf, aiori_mod_opt_t * options){
 }
 
 int HDFS_statfs (const char * path, ior_aiori_statfs_t * stat, aiori_mod_opt_t * options){
-  stat->f_bsize = 1;
-  stat->f_blocks = 1;
-  stat->f_bfree = 1;
+  hdfs_options_t * o = (hdfs_options_t*) options;
+  hdfs_connect(o);
+
+  stat->f_bsize = hdfsGetDefaultBlockSize(o->fs);
+  stat->f_blocks = hdfsGetCapacity(o->fs) / hdfsGetDefaultBlockSize(o->fs);
+  stat->f_bfree =  stat->f_blocks - hdfsGetUsed(o->fs) / hdfsGetDefaultBlockSize(o->fs);
   stat->f_bavail = 1;
   stat->f_files = 1;
   stat->f_ffree = 1;
