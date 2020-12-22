@@ -1229,6 +1229,11 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", t[4] - t[3], summary_table[iteration].rate[7]);
 }
 
+int calc_allreduce_index(int iter, int rank, int op){
+  int tableSize = MDTEST_LAST_NUM;
+  return iter * tableSize * size + rank * tableSize + op;
+}
+
 void summarize_results(int iterations, int print_time) {
     char access[MAX_PATHLEN];
     int i, j, k;
@@ -1280,8 +1285,7 @@ void summarize_results(int iterations, int print_time) {
             min = max = all[i];
             for (k=0; k < size; k++) {
                 for (j = 0; j < iterations; j++) {
-                    curr = all[(k*tableSize*iterations)
-                               + (j*tableSize) + i];
+                    curr = all[calc_allreduce_index(j, k, i)];
                     if (min > curr) {
                         min = curr;
                     }
@@ -1294,8 +1298,7 @@ void summarize_results(int iterations, int print_time) {
             mean = sum / (iterations * size);
             for (k=0; k<size; k++) {
                 for (j = 0; j < iterations; j++) {
-                    var += pow((mean -  all[(k*tableSize*iterations)
-                                            + (j*tableSize) + i]), 2);
+                    var += pow((mean -  all[calc_allreduce_index(j, k, i)]), 2);
                 }
             }
             var = var / (iterations * size);
