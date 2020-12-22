@@ -1298,8 +1298,7 @@ void summarize_results(int iterations, int print_time) {
             mean = sum / (iterations * size);
             for (k=0; k<size; k++) {
                 for (j = 0; j < iterations; j++) {
-                    var += pow((mean -  all[(k*tableSize*iterations)
-                                            + (j*tableSize) + i]), 2);
+                    var += pow((mean -  all[calc_allreduce_index(j, k, i)]), 2);
                 }
             }
             var = var / (iterations * size);
