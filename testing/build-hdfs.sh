@@ -8,5 +8,11 @@ if [[ ! -e $VER.tar.gz ]] ; then
   tar -xf $VER.tar.gz
 fi
 
-../configure --with-hdfs CFLAGS=-I$PWD/$VER/include/  LDFLAGS="-L$PWD/$VER/lib/native -Wl,-rpath=$PWD/$VER/lib/native"
+../configure --with-hdfs CFLAGS="-I$PWD/$VER/include/ -O0 -g3"  LDFLAGS="-L$PWD/$VER/lib/native -Wl,-rpath=$PWD/$VER/lib/native"
 make -j
+
+
+echo "To run execute:"
+echo export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/
+echo export CLASSPATH=$(find $VER/  -name "*.jar" -printf "%p:")
+echo ./src/ior   -a HDFS
