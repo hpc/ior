@@ -215,7 +215,7 @@ AM_COND_IF([USE_CEPHFS_AIORI],[
 AC_ARG_WITH([cart],
     [AS_HELP_STRING([--with-cart],
 	    [support IO with DAOS backends @<:@default=no@:>@])],
-    [], [with_daos=no])
+    [], [with_cart=no])
 
 AS_IF([test "x$with_cart" != xno], [
     CART="yes"
