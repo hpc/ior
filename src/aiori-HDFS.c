@@ -125,6 +125,7 @@ ior_aiori_t hdfs_aiori = {
 	.delete = HDFS_Delete,
   .get_options = HDFS_options,
 	.get_version = aiori_get_version,
+  .xfer_hints = hdfs_xfer_hints,
 	.fsync = HDFS_Fsync,
 	.get_file_size = HDFS_GetFileSize,
 };
