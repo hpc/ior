@@ -133,12 +133,12 @@ ior_aiori_t hdfs_aiori = {
   .xfer_hints = hdfs_xfer_hints,
 	.fsync = HDFS_Fsync,
 	.get_file_size = HDFS_GetFileSize,
-  .enable_mdtest = true,
   .statfs = HDFS_statfs,
   .mkdir = HDFS_mkdir,
   .rmdir = HDFS_rmdir,
   .access = HDFS_access,
-  .stat = HDFS_stat
+  .stat = HDFS_stat,
+  .enable_mdtest = true
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -159,6 +159,7 @@ typedef struct {
   tPort        name_node_port; /* (uint16_t) */
 } hdfs_options_t;
 
+static void hdfs_connect( hdfs_options_t* o );
 
 option_help * HDFS_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   hdfs_options_t * o = malloc(sizeof(hdfs_options_t));
@@ -193,18 +194,38 @@ option_help * HDFS_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_op
 
 
 int HDFS_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * options){
-  return 0;
+  hdfs_options_t * o = (hdfs_options_t*) options;
+  hdfs_connect(o);
+  return hdfsCreateDirectory(o->fs, path);
 }
 
 int HDFS_rmdir (const char *path, aiori_mod_opt_t * options){
-  return 0;
+  hdfs_options_t * o = (hdfs_options_t*) options;
+  hdfs_connect(o);
+  return hdfsDelete(o->fs, path, 1);
 }
 
 int HDFS_access (const char *path, int mode, aiori_mod_opt_t * options){
-  return 0;
+  hdfs_options_t * o = (hdfs_options_t*) options;
+  hdfs_connect(o);
+  return hdfsExists(o->fs, path);
 }
 
 int HDFS_stat (const char *path, struct stat *buf, aiori_mod_opt_t * options){
+  hdfsFileInfo * stat;
+  hdfs_options_t * o = (hdfs_options_t*) options;
+  hdfs_connect(o);
+  stat = hdfsGetPathInfo(o->fs, path);
+  if(stat == NULL){
+    return 1;
+  }
+  memset(buf, 0, sizeof(struct stat));
+  buf->st_atime = stat->mLastAccess;
+  buf->st_size = stat->mSize;
+  buf->st_mtime = stat->mLastMod;
+  buf->st_mode = stat->mPermissions;
+
+  hdfsFreeFileInfo(stat, 1);
   return 0;
 }
 
@@ -249,7 +270,7 @@ void hdfs_set_o_direct_flag(int *fd)
  * NOTE: It's okay to call this thing whenever you need to be sure the HDFS
  *       filesystem is connected.
  */
-static void hdfs_connect( hdfs_options_t* o ) {
+void hdfs_connect( hdfs_options_t* o ) {
 	if (verbose >= VERBOSE_4) {
 		printf("-> hdfs_connect  [nn:\"%s\", port:%d, user:%s]\n",
 					 o->name_node,
@@ -399,12 +420,7 @@ static void *HDFS_Create_Or_Open( char *testFileName, int flags, aiori_mod_opt_t
 					 o->replicas,
 					 o->block_size);
 	}
-	hdfs_file = hdfsOpenFile( o->fs,
-														testFileName,
-														fd_oflags,
-														hints->transferSize,
-														o->replicas,
-														o->block_size);
+	hdfs_file = hdfsOpenFile( o->fs, testFileName, fd_oflags, hints->transferSize, o->replicas, o->block_size);
 	if ( ! hdfs_file ) {
 		ERR( "Failed to open the file" );
 	}
@@ -562,40 +578,16 @@ static IOR_offset_t HDFS_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
 /*
  * Perform hdfs_sync().
  */
-
 static void HDFS_Fsync(aiori_fd_t * fd, aiori_mod_opt_t * param) {
   hdfs_options_t * o = (hdfs_options_t*) param;
-	if (verbose >= VERBOSE_4) {
-		printf("-> HDFS_Fsync\n");
-	}
 	hdfsFS   hdfs_fs   = o->fs;	/* (void *) */
 	hdfsFile hdfs_file = (hdfsFile)fd;		/* (void *) */
 
-#if 0
-	if (verbose >= VERBOSE_4) {
-		printf("\thdfsHSync(0x%llx, 0x%llx)\n", hdfs_fs, hdfs_file);
-	}
-	if ( hdfsHSync( hdfs_fs, hdfs_file ) != 0 ) {
-		EWARN( "hdfsHSync() failed" );
-	}
-#elif 0
-	if (verbose >= VERBOSE_4) {
-		printf("\thdfsHFlush(0x%llx, 0x%llx)\n", hdfs_fs, hdfs_file);
-	}
-	if ( hdfsHFlush( hdfs_fs, hdfs_file ) != 0 ) {
-		EWARN( "hdfsHFlush() failed" );
-	}
-#else
 	if (verbose >= VERBOSE_4) {
 		printf("\thdfsFlush(%p, %p)\n", hdfs_fs, hdfs_file);
 	}
 	if ( hdfsFlush( hdfs_fs, hdfs_file ) != 0 ) {
 		EWARN( "hdfsFlush() failed" );
-	}
-#endif
-
-	if (verbose >= VERBOSE_4) {
-		printf("<- HDFS_Fsync\n");
 	}
 }
 
