@@ -138,12 +138,13 @@ void hdfs_xfer_hints(aiori_xfer_hint_t * params){
 /************************** O P T I O N S *****************************/
 typedef struct {
   char      *  user;
-  const char*  name_node;
-  tPort        name_node_port; /* (uint16_t) */
-  hdfsFS       fs;             /* file-system handle */
+  char      *  name_node;
   int          replicas;       /* n block replicas.  (0 gets default) */
   int          direct_io;
   IOR_offset_t block_size;     /* internal blk-size. (0 gets default) */
+  // runtime options
+  hdfsFS       fs;             /* file-system handle */
+  tPort        name_node_port; /* (uint16_t) */
 } hdfs_options_t;
 
 
@@ -167,10 +168,10 @@ option_help * HDFS_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_op
 
   option_help h [] = {
     {0, "hdfs.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
-    {0, "hdfs.user", "Username", OPTION_FLAG, 's', & o->user},
-    {0, "hdfs.name_node", "Namenode", OPTION_FLAG, 's', & o->name_node},
-    {0, "hdfs.replicas", "Number of replicas", OPTION_FLAG, 'd', & o->replicas},
-    {0, "hdfs.block_size", "Blocksize", OPTION_FLAG, 'l', & o->block_size},
+    {0, "hdfs.user", "Username", OPTION_OPTIONAL_ARGUMENT, 's', & o->user},
+    {0, "hdfs.name_node", "Namenode", OPTION_OPTIONAL_ARGUMENT, 's', & o->name_node},
+    {0, "hdfs.replicas", "Number of replicas", OPTION_OPTIONAL_ARGUMENT, 'd', & o->replicas},
+    {0, "hdfs.block_size", "Blocksize", OPTION_OPTIONAL_ARGUMENT, 'l', & o->block_size},
     LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
