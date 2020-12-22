@@ -479,8 +479,7 @@ static IOR_offset_t HDFS_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer,
 				printf("\thdfsRead( %p, %p, %p, %lld)\n",
 							 hdfs_fs, hdfs_file, ptr, remaining ); /* DEBUGGING */
 			}
-			rc = hdfsRead( hdfs_fs, hdfs_file, ptr, remaining );
-
+			rc = hdfsPread(hdfs_fs, hdfs_file, offset, ptr, remaining);
 			if ( rc == 0 ) {
 				ERR( "hdfs_read() returned EOF prematurely" );
 			}
