@@ -204,8 +204,6 @@ int ior_main(int argc, char **argv)
 void init_IOR_Param_t(IOR_param_t * p)
 {
         const char *default_aiori = aiori_default ();
-        char *hdfs_user;
-
         assert (NULL != default_aiori);
 
         memset(p, 0, sizeof(IOR_param_t));
@@ -234,16 +232,6 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->randomSeed = -1;
         p->incompressibleSeed = 573;
         p->testComm = mpi_comm_world;
-
-        hdfs_user = getenv("USER");
-        if (!hdfs_user)
-          hdfs_user = "";
-        p->hdfs_user = strdup(hdfs_user);
-        p->hdfs_name_node      = "default";
-        p->hdfs_name_node_port = 0; /* ??? */
-        p->hdfs_fs = NULL;
-        p->hdfs_replicas = 0;   /* invokes the default */
-        p->hdfs_block_size = 0;
 
         p->URI = NULL;
 }

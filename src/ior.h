@@ -160,14 +160,6 @@ typedef struct
     int fsyncPerWrite;               /* fsync() after each write */
     int fsync;                       /* fsync() after write */
 
-    /* HDFS variables */
-    char      * hdfs_user;  /* copied from ENV, for now */
-    const char* hdfs_name_node;
-    tPort       hdfs_name_node_port; /* (uint16_t) */
-    hdfsFS      hdfs_fs;             /* file-system handle */
-    int         hdfs_replicas;       /* n block replicas.  (0 gets default) */
-    int         hdfs_block_size;     /* internal blk-size. (0 gets default) */
-
     char*       URI;                 /* "path" to target object */
 
     /* RADOS variables */
