@@ -17,13 +17,21 @@ repository.  The nomenclature is
 Building a release of IOR
 -------------------------
 
-To build a new version of IOR::
+To build a new version of IOR, e.g., from the 3.2 release branch::
 
     $ docker run -it ubuntu bash
     $ apt-get update
     $ apt-get install -y git automake autoconf make gcc mpich
-    $ git clone -b rc https://github.com/hpc/ior
+    $ git clone -b 3.2 https://github.com/hpc/ior
     $ cd ior
+    $ ./travis-build.sh
+
+Alternatively you can build an an arbitrary branch in Docker using a bind mount.
+This will be wrapped into a build-release Dockerfile in the future::
+
+    $ docker run -it --mount type=bind,source=$PWD,target=/ior ubuntu
+    $ apt-get update
+    $ apt-get install -y git automake autoconf make gcc mpich
     $ ./travis-build.sh
 
 Feature freezing for a new release
@@ -31,22 +39,26 @@ Feature freezing for a new release
 
 1. Branch `major.minor` from the commit at which the feature freeze should take
    effect.
-2. Append the "rc1+dev" designator to the Version field in the META file
+2. Append the "rc1+dev" designator to the Version field in the META file, and
+   update the NEWS file to have this new version as the topmost heading
 3. Commit and push this new branch
 2. Update the ``Version:`` field in META `of the master branch` to be the `next`
-   release version, not the one whose features have just been frozen.
+   release version, not the one whose features have just been frozen, and update
+   the NEWS file as you did in step 2.
 
 For example, to feature-freeze for version 3.2::
 
     $ git checkout 11469ac
     $ git checkout -B 3.2
-    $ # update the ``Version:`` field in ``META`` to 3.2.0rc1+dev
-    $ git add META
+    $ vim META # update the ``Version:`` field to 3.2.0rc1+dev
+    $ vim NEWS # update the topmost version number to 3.2.0rc1+dev
+    $ git add NEWS META
     $ git commit -m "Update version for feature freeze"
     $ git push upstream 3.2
     $ git checkout master
-    $ # update the ``Version:`` field in ``META`` to 3.3.0+dev
-    $ git add META
+    $ vim META # update the ``Version:`` field to 3.3.0+dev
+    $ vim NEWS # update the topmost version number to 3.3.0+dev
+    $ git add NEWS META
     $ git commit -m "Update version number"
     $ git push upstream master
 
@@ -78,7 +90,7 @@ For example to release 3.2.0rc1::
     $ # uptick rc number and re-add +dev to META (Version: 3.2.0rc2+dev)
     $ git add META # should contain Version: 3.2.0rc2+dev
     $ git commit -m "Uptick version after release"
-    $ git push --tags
+    $ git push && git push --tags
 
 Applying patches to a new microrelease
 --------------------------------------
@@ -96,9 +108,20 @@ Once you've accumulated enough bugs, move on to issuing a new release below.
 Creating a new release
 ----------------------
 
+This is a two-phase process because we need to ensure that NEWS in master
+contains a full history of releases, and we achieve this by always merging
+changes from master into a release branch.
+
+1. Check out master
+2. Ensure that the latest release notes for this release are reflected in NEWS
+3. Commit that to master
+
+Then work on the release branch:
+
 1. Check out the relevant `major.minor` branch
 2. Remove any "rcX" and "+dev" from the Version field in META
-3. Update NEWS with the release notes
+3. Cherry-pick your NEWS update commit from master into this release branch.
+   Resolve conflicts and get rid of news that reflect future releases.
 4. Build a release package as described above
 5. Tag and commit the updated NEWS and META so one can easily recompile this
    release from git
@@ -108,14 +131,26 @@ Creating a new release
 
 For example to release 3.2.0::
 
+    $ git checkout master
+    $ vim NEWS # add release notes from ``git log --oneline 3.2.0rc1..``
+    $ git commit
+
+Let's say the above generated commit abc345e on master.  Then::
+
     $ git checkout 3.2
     $ vim META # 3.2.0rc2+dev -> 3.2.0
-    $ vim NEWS # add release notes from ``git log --oneline 3.2.0rc1..``
+    $ git cherry-pick abc345e
+    $ vim NEWS # resolve conflicts, delete stuff for e.g., 3.4
     $ # build
     $ git add NEWS META
     $ git commit -m "Release v3.2.0"
     $ git tag 3.2.0
     $ vim META # 3.2.0 -> 3.2.1rc1+dev
-    $ git add META
+    # vim NEWS # add a placeholder for 3.2.1rc2+dev so automake is happy
+    $ git add NEWS META
     $ git commit -m "Uptick version after release"
-    $ git push --tags
+
+Then push your master and your release branch and also push tags::
+
+    $ git checkout master && git push && git push --tags
+    $ git checkout 3.2 && git push && git push --tags
