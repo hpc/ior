@@ -8,16 +8,19 @@ New minor features:
 Bugfixes:
 
 
-Version 3.3.0+dev
+Version 3.3.0
 --------------------------------------------------------------------------------
 
 New major features:
+
 - Add CephFS AIORI (Mark Nelson)
 - Add Gfarm AIORI (Osamu Tatebe)
 - Add DAOS AIORI (Mohamad Chaarawi)
 - Add DAOS DFS AIORI (Mohamad Chaarawi)
+- -B option has been replaced with --posix.odirect
 
 New minor features:
+
 - Display outlier host names (Jean-Yves Vet)
 - Enable global default dir layout for subdirs in Lustre (Petros Koutoupis)
 - Removed pound signs (#) from mdtest output file names (Julian Kunkel)
@@ -30,6 +33,7 @@ New minor features:
 - Add support for sync to AIORIs (Julian Kunkel)
 
 General user improvements and bug fixes:
+
 - Allocate aligned buffers to support DirectIO for BeeGFS (Sven Breuner)
 - Added IOPS and latency results to json output (Robert LeBlanc)
 - Fixed case where numTasks is not evenly divisible by tasksPerNode (J. Schwartz)
@@ -40,14 +44,16 @@ General user improvements and bug fixes:
 - Make write verification work without read test (Jean-Yves Vet)
 - Documentation updates (Vaclav Hapla, Glenn Lockwood)
 - Add more debugging support (J. Schwartz)
--
+
 General developer improvements:
+
 - Fix type casting errors (Vaclav Hapla)
 - Add basic test infrastructure (Julian Kunkel, Glenn Lockwood)
 - Conform to strict C99 (Glenn Lockwood)
 
 Known issues:
-- S3 AIORI may not compile with new versions of aws4c
+
+- S3 and HDFS backends may not compile with new versions of respective libraries
 
 Version 3.2.1
 --------------------------------------------------------------------------------
