@@ -160,8 +160,10 @@ AC_ARG_WITH([ncmpi],
         [],
         [with_ncmpi=no])
 AM_CONDITIONAL([USE_NCMPI_AIORI], [test x$with_ncmpi = xyes])
-AM_COND_IF([USE_NCMPI_AIORI],[
-        AC_DEFINE([USE_NCMPI_AIORI], [], [Build NCMPI backend AIORI])
+AS_IF([test "x$with_ncmpi" = xyes ], [
+        AC_CHECK_HEADERS([pnetcdf.h], [AC_DEFINE([USE_NCMPI_AIORI], [], [PNetCDF available])], [
+            AC_MSG_FAILURE([--with-ncmpi was given but pnetcdf.h not found])
+        ])
 ])
 
 # MMAP IO support
