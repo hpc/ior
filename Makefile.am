@@ -10,4 +10,5 @@ ACLOCAL_AMFLAGS = -I config
 # `make dist` and `make test` for simple test binaries that do not require any
 # special environment.
 #TESTS = testing/basic-tests.sh
-#DISTCLEANFILES = -r test test_out
+
+DISTCLEANFILES = ./src/build.conf
