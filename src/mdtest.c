@@ -1119,8 +1119,13 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         /* The number of items depends on the stonewalling file */
         expected_items = ReadStoneWallingIterations(o.stoneWallingStatusFile);
         if(expected_items >= 0){
-          o.items = expected_items;
-          progress->items_per_dir = o.items;
+          if(o.directory_loops > 1){
+            o.directory_loops = expected_items / o.items_per_dir;
+            o.items = o.items_per_dir;
+          }else{
+            o.items = expected_items;
+            progress->items_per_dir = o.items;
+          }
         }
         if (rank == 0) {
           if(expected_items == -1){
@@ -1537,8 +1542,6 @@ void md_validate_tests() {
          FAIL("only specify the number of items or the number of items per directory");
        }else if( o.items % o.items_per_dir != 0){
          FAIL("items must be a multiple of items per directory");
-       }else if( o.stone_wall_timer_seconds != 0){
-         FAIL("items + items_per_dir can only be set without stonewalling");
        }
     }
     /* check for using mknod */
