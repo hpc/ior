@@ -1648,7 +1648,7 @@ void create_remove_directory_tree(int create,
         if (!create) {
             VERBOSE(2,5,"Remove directory '%s'", dir);
             if (-1 == o.backend->rmdir(dir, o.backend_options)) {
-                FAIL("Unable to remove directory %s", dir);
+                EWARNF("Unable to remove directory %s", dir);
             }
         }
     } else if (currDepth <= o.depth) {
