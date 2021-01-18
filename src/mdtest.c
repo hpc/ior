@@ -1701,20 +1701,22 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   VERBOSE(1,-1,"main: * iteration %d *", j+1);
 
-  for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
-    prep_testdir(j, dir_iter);
+  if(rank == 0){
+    for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
+      prep_testdir(j, dir_iter);
 
-    VERBOSE(2,5,"main (for j loop): making o.testdir, '%s'", o.testdir );
-    if ((rank < o.path_count) && o.backend->access(o.testdir, F_OK, o.backend_options) != 0) {
-        if (o.backend->mkdir(o.testdir, DIRMODE, o.backend_options) != 0) {
-            FAIL("Unable to create test directory %s", o.testdir);
-        }
+      VERBOSE(2,5,"main (for j loop): making o.testdir, '%s'", o.testdir );
+      if (o.backend->access(o.testdir, F_OK, o.backend_options) != 0) {
+          if (o.backend->mkdir(o.testdir, DIRMODE, o.backend_options) != 0) {
+              FAIL("Unable to create test directory %s", o.testdir);
+          }
 #ifdef HAVE_LUSTRE_LUSTREAPI
-        /* internal node for branching, can be non-striped for children */
-        if (o.global_dir_layout && o.unique_dir_per_task && llapi_dir_set_default_lmv_stripe(o.testdir, -1, 0, LMV_HASH_TYPE_FNV_1A_64, NULL) == -1) {
-            FAIL("Unable to reset to global default directory layout");
-        }
+          /* internal node for branching, can be non-striped for children */
+          if (o.global_dir_layout && o.unique_dir_per_task && llapi_dir_set_default_lmv_stripe(o.testdir, -1, 0, LMV_HASH_TYPE_FNV_1A_64, NULL) == -1) {
+              FAIL("Unable to reset to global default directory layout");
+          }
 #endif /* HAVE_LUSTRE_LUSTREAPI */
+      }
     }
   }
 
@@ -1885,13 +1887,14 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
       VERBOSE(1,-1,"main   Tree removal      : %14.3f sec, %14.3f ops/sec", (endCreate - startCreate), summary_table->rate[9]);
       VERBOSE(2,-1,"main (at end of for j loop): Removing o.testdir of '%s'\n", o.testdir );
 
-      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
-        prep_testdir(j, dir_iter);
-        if ((rank < o.path_count) && o.backend->access(o.testdir, F_OK, o.backend_options) == 0) {
-            //if (( rank == 0 ) && access(o.testdir, F_OK) == 0) {
-            if (o.backend->rmdir(o.testdir, o.backend_options) == -1) {
-                FAIL("unable to remove directory %s", o.testdir);
-            }
+      if(rank == 0){
+        for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
+          prep_testdir(j, dir_iter);
+          if (o.backend->access(o.testdir, F_OK, o.backend_options) == 0) {
+              if (o.backend->rmdir(o.testdir, o.backend_options) == -1) {
+                  FAIL("unable to remove directory %s", o.testdir);
+              }
+          }
         }
       }
   } else {
@@ -2183,7 +2186,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     /*   if directory does not exist, create it */
-    if ((rank < o.path_count) && o.backend->access(o.testdirpath, F_OK, o.backend_options) != 0) {
+    if ((rank == 0) && o.backend->access(o.testdirpath, F_OK, o.backend_options) != 0) {
         if (o.backend->mkdir(o.testdirpath, DIRMODE, o.backend_options) != 0) {
             FAIL("Unable to create test directory path %s", o.testdirpath);
         }
