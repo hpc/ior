@@ -1705,7 +1705,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
     prep_testdir(j, dir_iter);
 
     VERBOSE(2,5,"main (for j loop): making o.testdir, '%s'", o.testdir );
-    if ((rank < o.path_count) && o.backend->access(o.testdir, F_OK, o.backend_options) != 0) {
+    if ((rank == 0) && o.backend->access(o.testdir, F_OK, o.backend_options) != 0) {
         if (o.backend->mkdir(o.testdir, DIRMODE, o.backend_options) != 0) {
             FAIL("Unable to create test directory %s", o.testdir);
         }
@@ -1887,8 +1887,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
-        if ((rank < o.path_count) && o.backend->access(o.testdir, F_OK, o.backend_options) == 0) {
-            //if (( rank == 0 ) && access(o.testdir, F_OK) == 0) {
+        if ((rank == 0) && o.backend->access(o.testdir, F_OK, o.backend_options) == 0) {
             if (o.backend->rmdir(o.testdir, o.backend_options) == -1) {
                 FAIL("unable to remove directory %s", o.testdir);
             }
