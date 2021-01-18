@@ -1298,7 +1298,8 @@ void summarize_results(int iterations, int print_time) {
     char const * access;
     int i, j, k;
     int start, stop, tableSize = MDTEST_LAST_NUM;
-    double min, max, mean, sd, sum = 0, var = 0, curr = 0;
+    double min, max, mean, sd, sum, var, curr = 0;
+    double imin, imax, isum, icur; // calculation per iteration
 
     double all[iterations * o.size * tableSize];
 
@@ -1371,22 +1372,42 @@ void summarize_results(int iterations, int print_time) {
     }
 
     VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
-    VERBOSE(0,-1,"   Operation                      Max            Min           Mean        Std Dev");
-    VERBOSE(0,-1,"   ---------                      ---            ---           ----        -------");
+    VERBOSE(0,-1,"   Operation         per Rank:      Max            Min           Mean          Std Dev     per Iteration: Max            Min           Mean");
+    VERBOSE(0,-1,"   ---------                        ---            ---           ----          -------                    ---            ---           ----");
 
     for (i = start; i < stop; i++) {
             min = max = all[i];
-            for (k=0; k < o.size; k++) {
-                for (j = 0; j < iterations; j++) {
+            sum = var = 0;
+            imin = 1e308;
+            isum = imax = 0;
+            for (j = 0; j < iterations; j++) {
+                icur = print_time ? 0 : 1e308;
+                for (k=0; k < o.size; k++) {
                     curr = all[calc_allreduce_index(j, k, i)];
                     if (min > curr) {
                         min = curr;
                     }
                     if (max < curr) {
-                        max =  curr;
+                        max = curr;
+                    }
+                    if(print_time){
+                      if(icur < curr){
+                        icur = curr;
+                      }
+                    }else{
+                      if(icur > curr){
+                        icur = curr;
+                      }
                     }
                     sum += curr;
                 }
+                if(icur > imax){
+                  imax = icur;
+                }
+                if(icur < imin){
+                  imin = icur;
+                }
+                isum += icur;
             }
             mean = sum / (iterations * o.size);
             for (k=0; k < o.size; k++) {
@@ -1403,10 +1424,12 @@ void summarize_results(int iterations, int print_time) {
                 fprintf(out_logfile, "%14.3f ", max);
                 fprintf(out_logfile, "%14.3f ", min);
                 fprintf(out_logfile, "%14.3f ", mean);
-                fprintf(out_logfile, "%14.3f\n", sd);
+                fprintf(out_logfile, "%14.3f ", sd);
+                fprintf(out_logfile, "%18.3f ", imax);
+                fprintf(out_logfile, "%14.3f ", imin);
+                fprintf(out_logfile, "%14.3f\n", isum / iterations);
                 fflush(out_logfile);
             }
-            sum = var = 0;
     }
 
     // TODO generalize once more stonewall timers are supported
@@ -1426,20 +1449,28 @@ void summarize_results(int iterations, int print_time) {
     /* calculate tree create/remove rates, applies only to Rank 0 */
     for (i = 8; i < tableSize; i++) {
         min = max = all[i];
+        sum = var = 0;
+        imin = imax = all[i];
+        isum = 0;
         for (j = 0; j < iterations; j++) {
             if(print_time){
               curr = o.summary_table[j].time[i];
             }else{
               curr = o.summary_table[j].rate[i];
             }
-
             if (min > curr) {
-                min = curr;
+              min = curr;
             }
             if (max < curr) {
-                max =  curr;
+              max =  curr;
             }
             sum += curr;
+            if(curr > imax){
+              imax = curr;
+            }
+            if(curr < imin){
+              imin = curr;
+            }
         }
         mean = sum / (iterations);
         for (j = 0; j < iterations; j++) {
@@ -1458,9 +1489,11 @@ void summarize_results(int iterations, int print_time) {
         fprintf(out_logfile, "%14.3f ", max);
         fprintf(out_logfile, "%14.3f ", min);
         fprintf(out_logfile, "%14.3f ", mean);
-        fprintf(out_logfile, "%14.3f\n", sd);
+        fprintf(out_logfile, "%14.3f ", sd);
+        fprintf(out_logfile, "%18.3f ", imax);
+        fprintf(out_logfile, "%14.3f ", imin);
+        fprintf(out_logfile, "%14.3f\n", sum / iterations);
         fflush(out_logfile);
-        sum = var = 0;
     }
 }
 
