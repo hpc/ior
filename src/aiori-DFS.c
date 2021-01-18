@@ -59,7 +59,9 @@ enum handleType {
 /************************** O P T I O N S *****************************/
 typedef struct {
         char	*pool;
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
         char	*svcl;
+#endif
         char	*group;
         char	*cont;
 	int	chunk_size;
@@ -85,7 +87,9 @@ static option_help * DFS_options(aiori_mod_opt_t ** init_backend_options,
 
         option_help h [] = {
                 {0, "dfs.pool", "pool uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->pool},
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
                 {0, "dfs.svcl", "pool SVCL", OPTION_OPTIONAL_ARGUMENT, 's', &o->svcl},
+#endif
                 {0, "dfs.group", "server group", OPTION_OPTIONAL_ARGUMENT, 's', &o->group},
                 {0, "dfs.cont", "DFS container uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->cont},
                 {0, "dfs.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o->chunk_size},
@@ -188,9 +192,13 @@ void DFS_init_xfer_options(aiori_xfer_hint_t * params)
 static int DFS_check_params(aiori_mod_opt_t * options){
         DFS_options_t *o = (DFS_options_t *) options;
 
-        if (o->pool == NULL || o->svcl == NULL || o->cont == NULL)
+        if (o->pool == NULL || o->cont == NULL)
                 ERR("Invalid pool or container options\n");
 
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
+        if (o->svcl == NULL)
+                ERR("Invalid SVCL\n");
+#endif
         return 0;
 }
 
@@ -455,8 +463,13 @@ DFS_Init(aiori_mod_opt_t * options)
                 return;
 
         /** shouldn't be fatal since it can be called with POSIX backend selection */
-        if (o->pool == NULL || o->svcl == NULL || o->cont == NULL)
+        if (o->pool == NULL || o->cont == NULL)
                 return;
+
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
+        if (o->svcl == NULL)
+                return;
+#endif
 
 	rc = daos_init();
         DCHECK(rc, "Failed to initialize daos");
@@ -478,7 +491,6 @@ DFS_Init(aiori_mod_opt_t * options)
 
         if (rank == 0) {
                 uuid_t pool_uuid, co_uuid;
-                d_rank_list_t *svcl = NULL;
                 daos_pool_info_t pool_info;
                 daos_cont_info_t co_info;
 
@@ -488,17 +500,25 @@ DFS_Init(aiori_mod_opt_t * options)
                 rc = uuid_parse(o->cont, co_uuid);
                 DCHECK(rc, "Failed to parse 'Cont uuid': %s", o->cont);
 
+                INFO(VERBOSE_1, "Pool uuid = %s", o->pool);
+                INFO(VERBOSE_1, "DFS Container namespace uuid = %s", o->cont);
+
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
+                d_rank_list_t *svcl = NULL;
+
                 svcl = daos_rank_list_parse(o->svcl, ":");
                 if (svcl == NULL)
                         ERR("Failed to allocate svcl");
-
-                INFO(VERBOSE_1, "Pool uuid = %s, SVCL = %s\n", o->pool, o->svcl);
-                INFO(VERBOSE_1, "DFS Container namespace uuid = %s\n", o->cont);
+                INFO(VERBOSE_1, "Pool svcl = %s", o->svcl);
 
                 /** Connect to DAOS pool */
                 rc = daos_pool_connect(pool_uuid, o->group, svcl, DAOS_PC_RW,
                                        &poh, &pool_info, NULL);
                 d_rank_list_free(svcl);
+#else
+                rc = daos_pool_connect(pool_uuid, o->group, DAOS_PC_RW,
+                                       &poh, &pool_info, NULL);
+#endif
                 DCHECK(rc, "Failed to connect to pool");
 
                 rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
@@ -584,8 +604,10 @@ DFS_Finalize(aiori_mod_opt_t *options)
 
         /** reset tunables */
 	o->pool		= NULL;
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
 	o->svcl		= NULL;
-	o->group		= NULL;
+#endif
+	o->group	= NULL;
 	o->cont		= NULL;
 	o->chunk_size	= 1048576;
 	o->oclass	= NULL;
