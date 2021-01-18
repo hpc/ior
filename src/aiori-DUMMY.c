@@ -156,6 +156,11 @@ static int DUMMY_stat (const char *path, struct stat *buf, aiori_mod_opt_t * opt
   return 0;
 }
 
+static int DUMMY_rename (const char *path, const char *path2, aiori_mod_opt_t * options){
+  return 0;
+}
+
+
 static int DUMMY_check_params(aiori_mod_opt_t * options){
   return 0;
 }
@@ -188,6 +193,7 @@ ior_aiori_t dummy_aiori = {
         .statfs = DUMMY_statfs,
         .mkdir = DUMMY_mkdir,
         .rmdir = DUMMY_rmdir,
+        .rename = DUMMY_rename,
         .access = DUMMY_access,
         .stat = DUMMY_stat,
         .initialize = DUMMY_init,
