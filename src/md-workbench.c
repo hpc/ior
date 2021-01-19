@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <assert.h>
 
 #include "md-workbench.h"
 #include "config.h"
@@ -343,7 +344,8 @@ static int compare_floats(time_result_t * x, time_result_t * y){
 }
 
 static double runtime_quantile(int repeats, time_result_t * times, float quantile){
-  int pos = round(quantile * repeats + 0.49);
+  int pos = round(quantile * (repeats - 1) + 0.49);
+  assert(pos < repeats);
   return times[pos].runtime;
 }
 

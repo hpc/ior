@@ -668,6 +668,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         if (alloc_res) {
             FAIL("out of memory");
         }
+        memset(read_buffer, -1, o.read_bytes);
     }
 
     uint64_t stop_items = o.items;
