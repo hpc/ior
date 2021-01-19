@@ -59,7 +59,9 @@ enum handleType {
 /************************** O P T I O N S *****************************/
 struct dfs_options{
         char	*pool;
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
         char	*svcl;
+#endif
         char	*group;
         char	*cont;
 	int	chunk_size;
@@ -71,7 +73,9 @@ struct dfs_options{
 
 static struct dfs_options o = {
         .pool		= NULL,
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
         .svcl		= NULL,
+#endif
         .group		= NULL,
         .cont		= NULL,
 	.chunk_size	= 1048576,
@@ -83,7 +87,9 @@ static struct dfs_options o = {
 
 static option_help options [] = {
       {0, "dfs.pool", "pool uuid", OPTION_OPTIONAL_ARGUMENT, 's', & o.pool},
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
       {0, "dfs.svcl", "pool SVCL", OPTION_OPTIONAL_ARGUMENT, 's', & o.svcl},
+#endif
       {0, "dfs.group", "server group", OPTION_OPTIONAL_ARGUMENT, 's', & o.group},
       {0, "dfs.cont", "DFS container uuid", OPTION_OPTIONAL_ARGUMENT, 's', & o.cont},
       {0, "dfs.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o.chunk_size},
@@ -429,8 +435,13 @@ DFS_Init() {
                 return;
 
         /** shouldn't be fatal since it can be called with POSIX backend selection */
-        if (o.pool == NULL || o.svcl == NULL || o.cont == NULL)
+        if (o.pool == NULL || o.cont == NULL)
                 return;
+
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
+        if (o.svcl == NULL)
+                return;
+#endif
 
 	rc = daos_init();
         DCHECK(rc, "Failed to initialize daos");
@@ -452,7 +463,6 @@ DFS_Init() {
 
         if (rank == 0) {
                 uuid_t pool_uuid, co_uuid;
-                d_rank_list_t *svcl = NULL;
                 daos_pool_info_t pool_info;
                 daos_cont_info_t co_info;
 
@@ -462,17 +472,25 @@ DFS_Init() {
                 rc = uuid_parse(o.cont, co_uuid);
                 DCHECK(rc, "Failed to parse 'Cont uuid': %s", o.cont);
 
+                INFO(VERBOSE_1, "Pool uuid = %s", o.pool);
+                INFO(VERBOSE_1, "DFS Container namespace uuid = %s", o.cont);
+
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
+                d_rank_list_t *svcl = NULL;
+
                 svcl = daos_rank_list_parse(o.svcl, ":");
                 if (svcl == NULL)
                         ERR("Failed to allocate svcl");
-
-                INFO(VERBOSE_1, "Pool uuid = %s, SVCL = %s\n", o.pool, o.svcl);
-                INFO(VERBOSE_1, "DFS Container namespace uuid = %s\n", o.cont);
+                INFO(VERBOSE_1, "Pool svcl = %s", o.svcl);
 
                 /** Connect to DAOS pool */
                 rc = daos_pool_connect(pool_uuid, o.group, svcl, DAOS_PC_RW,
                                        &poh, &pool_info, NULL);
                 d_rank_list_free(svcl);
+#else
+                rc = daos_pool_connect(pool_uuid, o.group, DAOS_PC_RW,
+                                       &poh, &pool_info, NULL);
+#endif
                 DCHECK(rc, "Failed to connect to pool");
 
                 rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
@@ -557,7 +575,9 @@ DFS_Finalize()
 
         /** reset tunables */
 	o.pool		= NULL;
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
 	o.svcl		= NULL;
+#endif
 	o.group		= NULL;
 	o.cont		= NULL;
 	o.chunk_size	= 1048576;
@@ -578,7 +598,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 {
 	char *name = NULL, *dir_name = NULL;
 	dfs_obj_t *obj = NULL, *parent = NULL;
-	mode_t mode = 0644;
+	mode_t mode = 0664;
         int fd_oflag = 0;
 	int rc;
 
@@ -590,7 +610,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
 	assert(name);
 
         mode = S_IFREG | mode;
-	if (hints->filePerProc || rank == 0) {
+	if (param->filePerProc || rank == 0) {
                 fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
 
                 parent = lookup_insert_dir(dir_name, NULL);
@@ -601,7 +621,7 @@ DFS_Create(char *testFileName, IOR_param_t *param)
                               objectClass, o.chunk_size, NULL, &obj);
                 DCHECK(rc, "dfs_open() of %s Failed", name);
         }
-        if (!hints->filePerProc) {
+        if (!param->filePerProc) {
                 share_file_handle(&obj, testComm);
         }
 
@@ -634,17 +654,17 @@ DFS_Open(char *testFileName, IOR_param_t *param)
 	assert(dir_name);
 	assert(name);
 
-	if (hints->filePerProc || rank == 0) {
+	if (param->filePerProc || rank == 0) {
                 parent = lookup_insert_dir(dir_name, NULL);
                 if (parent == NULL)
                         GERR("Failed to lookup parent dir");
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag, objectClass,
-                              o->chunk_size, NULL, &obj);
+                              o.chunk_size, NULL, &obj);
                 DCHECK(rc, "dfs_open() of %s Failed", name);
         }
 
-        if (!hints->filePerProc) {
+        if (!param->filePerProc) {
                 share_file_handle(&obj, testComm);
         }
 
@@ -788,17 +808,16 @@ static IOR_offset_t
 DFS_GetFileSize(IOR_param_t * test, MPI_Comm comm, char *testFileName)
 {
         dfs_obj_t *obj;
-        MPI_Comm comm;
         daos_size_t fsize;
         int rc;
 
-        if (hints->filePerProc == TRUE) {
+        if (test->filePerProc == TRUE) {
                 comm = MPI_COMM_SELF;
         } else {
                 comm = testComm;
         }
 
-	if (hints->filePerProc || rank == 0) {
+	if (test->filePerProc || rank == 0) {
                 rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
                 if (rc) {
                         fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
@@ -811,7 +830,7 @@ DFS_GetFileSize(IOR_param_t * test, MPI_Comm comm, char *testFileName)
                         return -1;
         }
 
-        if (!hints->filePerProc) {
+        if (!test->filePerProc) {
                 rc = MPI_Bcast(&fsize, 1, MPI_UINT64_T, 0, comm);
                 if (rc)
                         return rc;
