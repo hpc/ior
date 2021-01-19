@@ -1916,9 +1916,12 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
              point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 , point->stonewall_time);
           }
           if(pairCnt != point->pairs_accessed){
-            // some work needs still to be done !
+            // some work needs still to be done, complete the current block !            
+            if(j == offsets){
+              j = 0; // current block is completed
+            }
             for ( ; pairCnt < point->pairs_accessed; i++) {
-              for ( ; j < offsets &&  pairCnt < point->pairs_accessed ; j++) {
+              for ( ; j < offsets && pairCnt < point->pairs_accessed ; j++) {
                 IOR_offset_t offset;
                 if (test->randomOffset) {
                   if(test->filePerProc){
@@ -1937,6 +1940,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                 dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
               }
+              j = 0;
             }
           }
         }else{
