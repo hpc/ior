@@ -1916,6 +1916,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
             i--;
             if(j == offsets){
               j = 0; // current block is completed
+              i++;
             }
             for ( ; pairCnt < point->pairs_accessed; i++) {
               for ( ; j < offsets && pairCnt < point->pairs_accessed ; j++) {
