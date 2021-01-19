@@ -435,7 +435,7 @@ CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_p
                         fprintf(out_logfile, "\n");
                 }
         }
-        if (errorCount > 0) {
+        if (errorCount > 0 && verbose >= VERBOSE_1) {
                 GetTestFileName(testFileName, test);
                 EWARNF("[%d] FAILED comparison of buffer in file %s during transfer %lld offset %lld containing %d-byte ints (%zd errors)",
                         rank, testFileName, transferCount, offset, (int)sizeof(unsigned long long int),errorCount);
