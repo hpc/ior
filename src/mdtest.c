@@ -94,9 +94,8 @@ typedef struct {
   int size;
   uint64_t *rand_array;
   char testdir[MAX_PATHLEN];
-  char testdirpath[MAX_PATHLEN];
+  char *testdirpath;
   char base_tree_name[MAX_PATHLEN];
-  char **filenames;
   char hostname[MAX_PATHLEN];
   char mk_name[MAX_PATHLEN];
   char stat_name[MAX_PATHLEN];
@@ -155,7 +154,6 @@ typedef struct {
   size_t read_bytes;
   int sync_file;
   int call_sync;
-  int path_count;
   int nstride; /* neighbor stride */
   int make_node;
   #ifdef HAVE_LUSTRE_LUSTREAPI
@@ -235,38 +233,6 @@ void offset_timers(double * t, int tcount) {
     toffset = GetTimeStamp() - t[tcount];
     for (i = 0; i < tcount+1; i++) {
         t[i] += toffset;
-    }
-}
-
-void parse_dirpath(char *dirpath_arg) {
-    char * tmp, * token;
-    char delimiter_string[3] = { '@', '\n', '\0' };
-    int i = 0;
-
-
-    VERBOSE(1,-1, "Entering parse_dirpath on %s...", dirpath_arg );
-
-    tmp = dirpath_arg;
-
-    if (* tmp != '\0') o.path_count++;
-    while (* tmp != '\0') {
-        if (* tmp == '@') {
-            o.path_count++;
-        }
-        tmp++;
-    }
-    // prevent changes to the original dirpath_arg
-    dirpath_arg = strdup(dirpath_arg);
-    o.filenames = (char **)malloc(o.path_count * sizeof(char **));
-    if (o.filenames == NULL || dirpath_arg == NULL) {
-        FAIL("out of memory");
-    }
-
-    token = strtok(dirpath_arg, delimiter_string);
-    while (token != NULL) {
-        o.filenames[i] = token;
-        token = strtok(NULL, delimiter_string);
-        i++;
     }
 }
 
@@ -508,11 +474,8 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
     char temp_path[MAX_PATHLEN];
     unsigned long long currDir = dirNum;
 
-
     VERBOSE(1,-1,"Entering create_remove_items on %s, currDepth = %d...", path, currDepth );
 
-
-    memset(dir, 0, MAX_PATHLEN);
     strcpy(temp_path, path);
 
     VERBOSE(3,5,"create_remove_items (start): temp_path is '%s'", temp_path );
@@ -587,17 +550,6 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
     /* iterate over all of the item IDs */
     for (uint64_t i = 0 ; i < stop_items ; ++i) {
-        /*
-         * It doesn't make sense to pass the address of the array because that would
-         * be like passing char **. Tested it on a Cray and it seems to work either
-         * way, but it seems that it is correct without the "&".
-         *
-         memset(&item, 0, MAX_PATHLEN);
-        */
-        memset(item, 0, MAX_PATHLEN);
-        memset(temp, 0, MAX_PATHLEN);
-
-
         /* determine the item number to stat */
         if (random) {
             item_num = o.rand_array[i];
@@ -678,18 +630,6 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
     /* iterate over all of the item IDs */
     for (uint64_t i = 0 ; i < stop_items ; ++i) {
-        /*
-         * It doesn't make sense to pass the address of the array because that would
-         * be like passing char **. Tested it on a Cray and it seems to work either
-         * way, but it seems that it is correct without the "&".
-         *
-         * NTH: Both are technically correct in C.
-         *
-         * memset(&item, 0, MAX_PATHLEN);
-         */
-        memset(item, 0, MAX_PATHLEN);
-        memset(temp, 0, MAX_PATHLEN);
-
         /* determine the item number to read */
         if (random) {
             item_num = o.rand_array[i];
@@ -772,8 +712,6 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
 
     /* rank 0 does all of the creates and removes for all of the ranks */
     for (int i = 0 ; i < ntasks ; ++i) {
-        memset(temp, 0, MAX_PATHLEN);
-
         strcpy(temp, o.testdir);
         strcat(temp, "/");
 
@@ -1501,9 +1439,6 @@ void md_validate_tests() {
     if (o.shared_file && o.collective_creates && rank == 0) {
         FAIL("-c not compatible with -S");
     }
-    if (o.path_count > 1 && o.collective_creates && rank == 0) {
-        FAIL("-c not compatible with multiple test directories");
-    }
     if (o.collective_creates && !o.barriers) {
         FAIL("-c not compatible with -B");
     }
@@ -1511,21 +1446,6 @@ void md_validate_tests() {
     /* check for shared file incompatibilities */
     if (o.unique_dir_per_task && o.shared_file && rank == 0) {
         FAIL("-u not compatible with -S");
-    }
-
-    /* check multiple directory paths and strided option */
-    if (o.path_count > 1 && o.nstride > 0) {
-        FAIL("cannot have multiple directory paths with -N strides between neighbor tasks");
-    }
-
-    /* check for shared directory and multiple directories incompatibility */
-    if (o.path_count > 1 && o.unique_dir_per_task != 1) {
-        FAIL("shared directory mode is not compatible with multiple directory paths");
-    }
-
-    /* check if more directory paths than ranks */
-    if (o.path_count > o.size) {
-        FAIL("cannot have more directory paths than MPI tasks");
     }
 
     /* check depth */
@@ -1935,7 +1855,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     verbose = 0;
     int no_barriers = 0;
-    char * path = "./out";
+    o.testdirpath = "./out";
     int randomize = 0;
     char APIs[1024];
     char APIs_legacy[1024];
@@ -1947,7 +1867,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     option_help options [] = {
       {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & o.api},
       {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.branch_factor},
-      {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
+      {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & o.testdirpath},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
       {'C', NULL,        "only create files/dirs", OPTION_FLAG, 'd', & o.create_only},
       {'T', NULL,        "only stat files/dirs", OPTION_FLAG, 'd', & o.stat_only},
@@ -2034,9 +1954,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* adjust special variables */
     o.barriers = ! no_barriers;
-    if (path != NULL){
-      parse_dirpath(path);
-    }
     if( randomize > 0 ){
       if (o.random_seed == 0) {
         /* Ensure all procs have the same random number */
@@ -2058,10 +1975,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     VERBOSE(1,-1, "barriers                : %s", ( o.barriers ? "True" : "False" ));
     VERBOSE(1,-1, "collective_creates      : %s", ( o.collective_creates ? "True" : "False" ));
     VERBOSE(1,-1, "create_only             : %s", ( o.create_only ? "True" : "False" ));
-    VERBOSE(1,-1, "dirpath(s):" );
-    for ( i = 0; i < o.path_count; i++ ) {
-        VERBOSE(1,-1, "\t%s", o.filenames[i] );
-    }
+    VERBOSE(1,-1, "dirpath                 : %s", o.testdirpath );
     VERBOSE(1,-1, "dirs_only               : %s", ( o.dirs_only ? "True" : "False" ));
     VERBOSE(1,-1, "read_bytes              : "LLU"", o.read_bytes );
     VERBOSE(1,-1, "read_only               : %s", ( o.read_only ? "True" : "False" ));
@@ -2172,17 +2086,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
             FAIL("out of memory");
         }
         generate_memory_pattern(o.write_buffer, o.write_bytes);
-    }
-
-    /* setup directory path to work in */
-    if (o.path_count == 0) { /* special case where no directory path provided with '-d' option */
-        char *ret = getcwd(o.testdirpath, MAX_PATHLEN);
-        if (ret == NULL) {
-            FAIL("Unable to get current working directory on %s", o.testdirpath);
-        }
-        o.path_count = 1;
-    } else {
-        strcpy(o.testdirpath, o.filenames[rank % o.path_count]);
     }
 
     /*   if directory does not exist, create it */
