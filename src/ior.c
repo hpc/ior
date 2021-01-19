@@ -363,9 +363,11 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
 static size_t
 CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
 {
+        assert(access == WRITECHECK || access == READCHECK);
+
         char testFileName[MAX_PATHLEN];
-        char bufferLabel1[MAX_STR];
-        char bufferLabel2[MAX_STR];
+        char * bufferLabel1 = "Expected: ";
+        char * bufferLabel2 = "Actual:   ";
         size_t i, j, length;
         size_t errorCount = 0;
 
@@ -378,13 +380,6 @@ CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_p
         }
 
         unsigned long long *testbuf = (unsigned long long *)expectedBuffer;
-
-        if (access == WRITECHECK || access == READCHECK) {
-                strcpy(bufferLabel1, "Expected: ");
-                strcpy(bufferLabel2, "Actual:   ");
-        } else {
-                ERR("incorrect argument for CompareData()");
-        }
 
         length = size / sizeof(IOR_size_t);
         if (verbose >= VERBOSE_3) {
@@ -442,6 +437,7 @@ CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_p
         }else if(verbose >= VERBOSE_2){
           fprintf(out_logfile, "[%d] comparison successful during transfer %lld offset %lld\n", rank, transferCount, offset);
         }
+
         return (errorCount);
 }
 
@@ -1916,7 +1912,8 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
              point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 , point->stonewall_time);
           }
           if(pairCnt != point->pairs_accessed){
-            // some work needs still to be done, complete the current block !            
+            // some work needs still to be done, complete the current block !
+            i--;
             if(j == offsets){
               j = 0; // current block is completed
             }
