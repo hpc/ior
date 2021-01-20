@@ -589,11 +589,9 @@ void DistributeHints(void)
                 }
         }
 
-        MPI_CHECK(MPI_Bcast(&hintCount, sizeof(hintCount), MPI_BYTE,
-                            0, MPI_COMM_WORLD), "cannot broadcast hints");
+        MPI_CHECK(MPI_Bcast(&hintCount, sizeof(hintCount), MPI_BYTE, 0, testComm), "cannot broadcast hints");
         for (i = 0; i < hintCount; i++) {
-                MPI_CHECK(MPI_Bcast(&hint[i], MAX_STR, MPI_BYTE,
-                                    0, MPI_COMM_WORLD),
+                MPI_CHECK(MPI_Bcast(&hint[i], MAX_STR, MPI_BYTE, 0, testComm),
                           "cannot broadcast hints");
                 strcpy(fullHint, hint[i]);
                 strcpy(hintVariable, strtok(fullHint, "="));
@@ -1884,7 +1882,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
             if ( test->collective && test->deadlineForStonewalling ) {
               // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
               // it absolutely must be an 'all or none':
-              MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, MPI_COMM_WORLD), "hitStonewall broadcast failed");
+              MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, testComm), "hitStonewall broadcast failed");
             }
           }
         }
