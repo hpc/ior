@@ -98,7 +98,8 @@ typedef struct
     char * options;        /* options string */
     // intermediate options
     int collective;                  /* collective I/O */
-    MPI_Comm     testComm;           /* MPI communicator */
+    MPI_Comm     testComm;           /* Current MPI communicator */
+    MPI_Comm     mpi_comm_world;           /* The global MPI communicator */
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
   int dualMount;                   /* dual mount points */
     int numTasks;                    /* number of tasks for test */
@@ -205,7 +206,7 @@ IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num);
 void AllocResults(IOR_test_t *test);
 
 char * GetPlatformName(void);
-void init_IOR_Param_t(IOR_param_t *p);
+void init_IOR_Param_t(IOR_param_t *p, MPI_Comm global_com);
 
 /*
  * This function runs IOR given by command line, useful for testing

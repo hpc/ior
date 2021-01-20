@@ -853,8 +853,8 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
   int ret;
   int printhelp = 0;
   char * limit_memory_P = NULL;
-
   init_options();
+  init_clock(world_com);
 
   o.com = world_com;
   o.logfile = out_logfile;
@@ -935,8 +935,8 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
   //  MPI_Abort(o.com, 1);
   //}
 
-  double bench_start;
-  bench_start = GetTimeStamp();
+  double t_bench_start;
+  t_bench_start = GetTimeStamp();
   phase_stat_t phase_stats;
   size_t result_count = (2 + o.iterations) * (o.adaptive_waiting_mode ? 7 : 1);
   o.results = malloc(sizeof(mdworkbench_results_t) + sizeof(mdworkbench_result_t) * result_count);
@@ -1006,7 +1006,7 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
     store_position(current_index);
   }
 
-  double t_all = GetTimeStamp();
+  double t_all = GetTimeStamp() - t_bench_start;
   if(o.backend->finalize){
     o.backend->finalize(o.backend_options);
   }

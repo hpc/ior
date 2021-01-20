@@ -1076,7 +1076,7 @@ static void S3_Close_internal(aiori_fd_t* fd, s3_options_t*  param, int multi_pa
 						MPI_Abort(testComm, 1);
 					}
 					MPI_Gather(etag_data, etag_data_size, MPI_BYTE,
-								  etag_vec,  etag_data_size, MPI_BYTE, 0, MPI_COMM_WORLD);
+								  etag_vec,  etag_data_size, MPI_BYTE, 0, testComm);
 
 					// --- debugging: show the gathered etag data
 					//     (This shows the raw concatenated etag-data from each node.)
@@ -1196,7 +1196,7 @@ static void S3_Close_internal(aiori_fd_t* fd, s3_options_t*  param, int multi_pa
 					aws_iobuf_append_str(xml, "</CompleteMultipartUpload>\n");
 				} else {
 					MPI_Gather(etag_data, etag_data_size, MPI_BYTE,
-								  NULL,      etag_data_size, MPI_BYTE, 0, MPI_COMM_WORLD);
+								  NULL,      etag_data_size, MPI_BYTE, 0, testComm);
 				}
 			} else {   /* N:N */
 

@@ -19,13 +19,13 @@ MDTEST 2 -I 20 -a DUMMY -x stonewall-md.log -T -v
 MDTEST 2 -I 20 -a DUMMY -x stonewall-md.log -D -v
 
 #shared tests
-IOR 2 -a POSIX -w -z -Y -e -i1 -m -t 100k -b 100k
-IOR 2 -a POSIX -w -k -e -i1 -m -t 100k -b 100k
-IOR 2 -a POSIX -r -z-k -e -i1 -m -t 100k -b 100k
+IOR 2 -a POSIX -w -z -Y -e -i1 -m -t 100k -b 200k
+IOR 2 -a POSIX -w -k -e -i1 -m -t 100k -b 200k
+IOR 2 -a POSIX -r -z-k -e -i1 -m -t 100k -b 200k
 
 #test mutually exclusive options
-IOR 2 -a POSIX -w -z -k -e -i1 -m -t 100k -b 100k
-IOR 2 -a POSIX -w -z -k -e -i1 -m -t 100k -b 100k
+IOR 2 -a POSIX -w -z -k -e -i1 -m -t 100k -b 200k
+IOR 2 -a POSIX -w -z -k -e -i1 -m -t 100k -b 200k
 IOR 2 -a POSIX -w -Z -i1 -m -t 100k -b 100k -d 0.1
 
 # Now set the num tasks per node to 1:
