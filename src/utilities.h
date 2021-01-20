@@ -52,10 +52,10 @@ void updateParsedOptions(IOR_param_t * options, options_all_t * global_options);
 size_t NodeMemoryStringToBytes(char *size_str);
 
 /* Returns -1, if cannot be read  */
-int64_t ReadStoneWallingIterations(char * const filename);
+int64_t ReadStoneWallingIterations(char * const filename, MPI_Comm com);
 void StoreStoneWallingIterations(char * const filename, int64_t count);
 
-void init_clock(void);
+void init_clock(MPI_Comm com);
 double GetTimeStamp(void);
 char * PrintTimestamp(); // TODO remove this function
 unsigned long GetProcessorAndCore(int *chip, int *core);

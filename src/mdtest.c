@@ -1118,7 +1118,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       if (o.stoneWallingStatusFile){
         int64_t expected_items;
         /* The number of items depends on the stonewalling file */
-        expected_items = ReadStoneWallingIterations(o.stoneWallingStatusFile);
+        expected_items = ReadStoneWallingIterations(o.stoneWallingStatusFile, testComm);
         if(expected_items >= 0){
           if(o.directory_loops > 1){
             o.directory_loops = expected_items / o.items_per_dir;
@@ -1946,7 +1946,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     out_resultfile = world_out;
     mpi_comm_world = world_com;
 
-    init_clock();
+    init_clock(world_com);
 
     mdtest_init_args();
     int i, j;

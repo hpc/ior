@@ -1008,7 +1008,7 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
                 tests = tests->next;
         }
 
-        init_clock();
+        init_clock(com);
 }
 
 /*
@@ -1415,7 +1415,7 @@ static void TestIoSys(IOR_test_t *test)
                 if ((params->readFile || params->checkRead ) && !test_time_elapsed(params, startTime)) {
                         /* check for stonewall */
                         if(params->stoneWallingStatusFile){
-                          params->stoneWallingWearOutIterations = ReadStoneWallingIterations(params->stoneWallingStatusFile);
+                          params->stoneWallingWearOutIterations = ReadStoneWallingIterations(params->stoneWallingStatusFile, params->testComm);
                           if(params->stoneWallingWearOutIterations == -1 && rank == 0){
                             WARN("Could not read back the stonewalling status from the file!");
                             params->stoneWallingWearOutIterations = 0;
