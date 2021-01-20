@@ -51,7 +51,7 @@ static const ior_aiori_t *backend;
 static void DestroyTests(IOR_test_t *tests_head);
 static char *PrependDir(IOR_param_t *, char *);
 static char **ParseFileName(char *, int *);
-static void InitTests(IOR_test_t * , MPI_Comm);
+static void InitTests(IOR_test_t *);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t * params, MPI_Comm com);
 static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
@@ -112,7 +112,7 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
         /* setup tests, and validate parameters */
         tests_head = ParseCommandLine(argc, argv, world_com);
-        InitTests(tests_head, world_com);
+        InitTests(tests_head);
 
         PrintHeader(argc, argv);
 
@@ -158,7 +158,7 @@ int ior_main(int argc, char **argv)
        "cannot set errhandler"); */
 
     /* setup tests, and validate parameters */
-    InitTests(tests_head, MPI_COMM_WORLD);
+    InitTests(tests_head);
 
     PrintHeader(argc, argv);
 
@@ -950,8 +950,12 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
  * Setup tests by parsing commandline and creating test script.
  * Perform a sanity-check on the configured parameters.
  */
-static void InitTests(IOR_test_t *tests, MPI_Comm com)
+static void InitTests(IOR_test_t *tests)
 {
+        if(tests == NULL){
+          return;
+        }
+        MPI_Comm com = tests->params.mpi_comm_world;
         int mpiNumNodes = 0;
         int mpiNumTasks = 0;
         int mpiNumTasksOnNode0 = 0;
