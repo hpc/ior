@@ -1944,7 +1944,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     testComm = world_com;
     out_logfile = world_out;
     out_resultfile = world_out;
-    mpi_comm_world = world_com;
 
     init_clock(world_com);
 

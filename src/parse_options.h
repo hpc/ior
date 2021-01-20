@@ -13,8 +13,6 @@
 
 #include "ior.h"
 
-extern IOR_param_t initialTestParams;
-
-IOR_test_t *ParseCommandLine(int argc, char **argv);
+IOR_test_t *ParseCommandLine(int argc, char **argv, MPI_Comm com);
 
 #endif  /* !_PARSE_OPTIONS_H */

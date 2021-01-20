@@ -65,7 +65,6 @@ int      rank = 0;
 int      rankOffset = 0;
 int      verbose = VERBOSE_0;        /* verbose output */
 MPI_Comm testComm;
-MPI_Comm mpi_comm_world;
 FILE * out_logfile = NULL;
 FILE * out_resultfile = NULL;
 enum OutputFormat_t outputFormat;
