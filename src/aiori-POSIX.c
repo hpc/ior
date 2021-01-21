@@ -133,6 +133,7 @@ ior_aiori_t posix_aiori = {
         .statfs = aiori_posix_statfs,
         .mkdir = aiori_posix_mkdir,
         .rmdir = aiori_posix_rmdir,
+        .rename = POSIX_Rename,
         .access = aiori_posix_access,
         .stat = aiori_posix_stat,
         .get_options = POSIX_options,
@@ -634,6 +635,17 @@ void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
         if (unlink(testFileName) != 0){
                 EWARNF("[RANK %03d]: unlink() of file \"%s\" failed", rank, testFileName);
         }
+}
+
+int POSIX_Rename(const char * oldfile, const char * newfile, aiori_mod_opt_t * module_options){
+  if(hints->dryRun)
+    return 0;
+
+  if(rename(oldfile, newfile) != 0){
+    EWARNF("[RANK %03d]: rename() of file \"%s\" to  \"%s\" failed", rank, oldfile, newfile);
+    return -1;
+  }
+  return 0;
 }
 
 /*

@@ -108,6 +108,7 @@ typedef struct ior_aiori {
         int (*stat) (const char *path, struct stat *buf, aiori_mod_opt_t * module_options);
         void (*initialize)(aiori_mod_opt_t * options); /* called once per program before MPI is started */
         void (*finalize)(aiori_mod_opt_t * options); /* called once per program after MPI is shutdown */
+        int (*rename) (const char *oldpath, const char *newpath, aiori_mod_opt_t * module_options);
         option_help * (*get_options)(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t* init_values); /* initializes the backend options as well and returns the pointer to the option help structure */
         int (*check_params)(aiori_mod_opt_t *); /* check if the provided module_optionseters for the given test and the module options are correct, if they aren't print a message and exit(1) or return 1*/
         void (*sync)(aiori_mod_opt_t * ); /* synchronize every pending operation for this storage */
