@@ -378,9 +378,10 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         fd_oflag |= O_RDWR;
                         *fd = open64(testFileName, fd_oflag, mode);
-                        if (*fd < 0)
-                                ERRF("open64(\"%s\", %d, %#o) failed",
-                                        testFileName, fd_oflag, mode);
+                        if (*fd < 0){
+                                ERRF("open64(\"%s\", %d, %#o) failed. Error: %s",
+                                        testFileName, fd_oflag, mode, strerror(errno));
+                        }
                 } else {
                         struct lov_user_md opts = { 0 };
 
@@ -396,19 +397,14 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         fd_oflag |= O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
                         *fd = open64(testFileName, fd_oflag, mode);
                         if (*fd < 0) {
-                                fprintf(stdout, "\nUnable to open '%s': %s\n",
+                                ERRF("Unable to open '%s': %s\n",
                                         testFileName, strerror(errno));
-                                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
-                                          "MPI_Abort() error");
                         } else if (ioctl(*fd, LL_IOC_LOV_SETSTRIPE, &opts)) {
                                 char *errmsg = "stripe already set";
                                 if (errno != EEXIST && errno != EALREADY)
                                         errmsg = strerror(errno);
-                                fprintf(stdout,
-                                        "\nError on ioctl for '%s' (%d): %s\n",
+                                ERRF("Error on ioctl for '%s' (%d): %s\n",
                                         testFileName, *fd, errmsg);
-                                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
-                                          "MPI_Abort() error");
                         }
                         if (!hints->filePerProc)
                                 MPI_CHECK(MPI_Barrier(testComm),
@@ -435,9 +431,10 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 #endif /* HAVE_BEEGFS_BEEGFS_H */
 
                 *fd = open64(testFileName, fd_oflag, mode);
-                if (*fd < 0)
-                        ERRF("open64(\"%s\", %d, %#o) failed",
-                                testFileName, fd_oflag, mode);
+                if (*fd < 0){
+                        ERRF("open64(\"%s\", %d, %#o) failed. Error: %s",
+                                testFileName, fd_oflag, mode, strerror(errno));
+                }
 
 #ifdef HAVE_LUSTRE_USER
         }
@@ -503,8 +500,7 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
         if (o->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
                 if (verbose >= VERBOSE_1) {
-                        fprintf(stdout,
-                                "** Disabling lustre range locking **\n");
+                        EINFO("** Disabling lustre range locking **\n");
                 }
                 if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
                         ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
@@ -552,8 +548,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                 /* write/read file */
                 if (access == WRITE) {  /* WRITE */
                         if (verbose >= VERBOSE_4) {
-                                fprintf(stdout,
-                                        "task %d writing to offset %lld\n",
+                                EINFO("task %d writing to offset %lld\n",
                                         rank,
                                         offset + length - remaining);
                         }
@@ -566,8 +561,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                         }
                 } else {        /* READ or CHECK */
                         if (verbose >= VERBOSE_4) {
-                                fprintf(stdout,
-                                        "task %d reading from offset %lld\n",
+                                EINFO("task %d reading from offset %lld\n",
                                         rank,
                                         offset + length - remaining);
                         }
@@ -580,16 +574,12 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                         fd, (void*)ptr, remaining);
                 }
                 if (rc < remaining) {
-                        fprintf(stdout,
-                                "WARNING: Task %d, partial %s, %lld of %lld bytes at offset %lld\n",
+                        EWARNF("task %d, partial %s, %lld of %lld bytes at offset %lld\n",
                                 rank,
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
                                 offset + length - remaining);
-                        if (hints->singleXferAttempt == TRUE)
-                                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
-                                          "barrier error");
-                        if (xferRetries > MAX_RETRY)
+                        if (xferRetries > MAX_RETRY || hints->singleXferAttempt)
                                 ERR("too many retries -- aborting");
                 }
                 assert(rc >= 0);
