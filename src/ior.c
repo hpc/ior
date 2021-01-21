@@ -244,7 +244,7 @@ DisplayOutliers(int numTasks,
         double sum, mean, sqrDiff, var, sd;
 
         /* for local timerVal, don't compensate for wall clock delta */
-        timerVal += wall_clock_delta;
+        //timerVal += wall_clock_delta;
 
         MPI_CHECK(MPI_Allreduce
                   (&timerVal, &sum, 1, MPI_DOUBLE, MPI_SUM, testComm),

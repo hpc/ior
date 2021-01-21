@@ -304,23 +304,6 @@ void PrintHeader(int argc, char **argv)
                 }
                 PrintKeyValEnd();
         }
-
-#ifdef _NO_MPI_TIMER
-        if (verbose >= VERBOSE_2)
-                fprintf(out_logfile, "Using unsynchronized POSIX timer\n");
-#else                           /* not _NO_MPI_TIMER */
-        if (MPI_WTIME_IS_GLOBAL) {
-                if (verbose >= VERBOSE_2)
-                    fprintf(out_logfile, "Using synchronized MPI timer\n");
-        } else {
-                if (verbose >= VERBOSE_2)
-                  fprintf(out_logfile, "Using unsynchronized MPI timer\n");
-        }
-#endif                          /* _NO_MPI_TIMER */
-        if (verbose >= VERBOSE_1) {
-                fprintf(out_logfile, "Start time skew across all tasks: %.02f sec\n",
-                        wall_clock_deviation);
-        }
         if (verbose >= VERBOSE_3) {     /* show env */
                 fprintf(out_logfile, "STARTING ENVIRON LOOP\n");
                 for (i = 0; environ[i] != NULL; i++) {

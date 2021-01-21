@@ -59,6 +59,4 @@ double GetTimeStamp(void);
 char * PrintTimestamp(); // TODO remove this function
 unsigned long GetProcessorAndCore(int *chip, int *core);
 
-extern double wall_clock_deviation;
-extern double wall_clock_delta;
 #endif  /* !_UTILITIES_H */
