@@ -101,7 +101,8 @@ typedef struct
     MPI_Comm     testComm;           /* Current MPI communicator */
     MPI_Comm     mpi_comm_world;           /* The global MPI communicator */
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
-  int dualMount;                   /* dual mount points */
+    int dualMount;                   /* dual mount points */
+    int gpuMemoryFlags;              /* use the GPU to store the data */
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */
     int numTasksOnNode0;             /* number of tasks on node 0 (usually all the same, but don't have to be, use with caution) */

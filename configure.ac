@@ -73,6 +73,26 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
     ])
 ])
 
+# Check for CUDA
+AC_ARG_WITH([cuda],
+        [AS_HELP_STRING([--with-cuda],
+                [support configurable CUDA @<:@default=check@:>@])],
+        [], [with_cuda=check])
+
+AS_IF([test "x$with_cuda" != xno], [
+        AC_CHECK_HEADERS([cuda_runtime.h], [AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])], [
+                if test "x$with_cuda" != xcheck; then
+                        AC_MSG_FAILURE([--with-cuda was given, <cuda_runtime.h> not found])
+                fi
+        ])
+AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
+        AC_SEARCH_LIBS([cudaMalloc], [cudart], [],
+        [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
+    ])
+])
+AM_CONDITIONAL([USE_CUDA], [test x$with_cuda = xyes])
+
+
 # Check for system capabilities
 AC_SYS_LARGEFILE
 

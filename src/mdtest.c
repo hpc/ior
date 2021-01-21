@@ -666,10 +666,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
     /* allocate read buffer */
     if (o.read_bytes > 0) {
-        int alloc_res = posix_memalign((void**)&read_buffer, sysconf(_SC_PAGESIZE), o.read_bytes);
-        if (alloc_res) {
-            FAIL("out of memory");
-        }
+        read_buffer = aligned_buffer_alloc(o.read_bytes, 0);
         memset(read_buffer, -1, o.read_bytes);
     }
 
@@ -764,7 +761,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         o.backend->close (aiori_fh, o.backend_options);
     }
     if(o.read_bytes){
-      free(read_buffer);
+      aligned_buffer_free(read_buffer, 0);
     }
 }
 
@@ -2301,10 +2298,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* allocate and initialize write buffer with # */
     if (o.write_bytes > 0) {
-        int alloc_res = posix_memalign((void**)& o.write_buffer, sysconf(_SC_PAGESIZE), o.write_bytes);
-        if (alloc_res) {
-            FAIL("out of memory");
-        }
+        o.write_buffer = aligned_buffer_alloc(o.write_bytes, 0);
         generate_memory_pattern(o.write_buffer, o.write_bytes);
     }
 
@@ -2445,7 +2439,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     if (o.write_bytes > 0) {
-      free(o.write_buffer);
+      aligned_buffer_free(o.write_buffer, 0);
     }
 
     return o.summary_table;

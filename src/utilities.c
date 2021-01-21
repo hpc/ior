@@ -37,6 +37,10 @@
 #include <sys/types.h>
 #include <time.h>
 
+#ifdef HAVE_CUDA
+#include <cuda_runtime.h>
+#endif
+
 #ifndef _WIN32
 #  include <regex.h>
 #  ifdef __sun                    /* SunOS does not support statfs(), instead uses statvfs() */
@@ -864,3 +868,63 @@ unsigned long GetProcessorAndCore(int *chip, int *core){
 	return 1;
 }
 #endif
+
+
+
+/*
+ * Allocate a page-aligned (required by O_DIRECT) buffer.
+ */
+void *aligned_buffer_alloc(size_t size, int gpu)
+{
+  size_t pageMask;
+  char *buf, *tmp;
+  char *aligned;
+
+  if(gpu){
+#ifdef HAVE_CUDA
+    // use unified memory here to allow drop-in-replacement
+    if (cudaMallocManaged((void**) & buf, size, cudaMemAttachGlobal) != cudaSuccess){
+      ERR("Cannot allocate buffer on GPU");
+    }
+    return buf;
+#else
+    ERR("No CUDA supported, cannot allocate on the GPU");
+#endif
+  }
+
+#ifdef HAVE_SYSCONF
+  long pageSize = sysconf(_SC_PAGESIZE);
+#else
+  size_t pageSize = getpagesize();
+#endif
+
+  pageMask = pageSize - 1;
+  buf = safeMalloc(size + pageSize + sizeof(void *));
+  /* find the alinged buffer */
+  tmp = buf + sizeof(char *);
+  aligned = tmp + pageSize - ((size_t) tmp & pageMask);
+  /* write a pointer to the original malloc()ed buffer into the bytes
+     preceding "aligned", so that the aligned buffer can later be free()ed */
+  tmp = aligned - sizeof(void *);
+  *(void **)tmp = buf;
+
+  return (void *)aligned;
+}
+
+/*
+ * Free a buffer allocated by aligned_buffer_alloc().
+ */
+void aligned_buffer_free(void *buf, int gpu)
+{
+  if(gpu){
+#ifdef HAVE_CUDA
+    if (cudaFree(buf) != cudaSuccess){
+      WARN("Cannot free buffer on GPU");
+    }
+    return;
+#else
+    ERR("No CUDA supported, cannot free on the GPU");
+#endif
+  }
+  free(*(void **)((char *)buf - sizeof(char *)));
+}

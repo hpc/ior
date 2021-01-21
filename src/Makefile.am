@@ -41,6 +41,10 @@ extraLDFLAGS  += -L/opt/hadoop-2.2.0/lib/native
 extraLDADD    += -lhdfs
 endif
 
+if USE_CUDA
+extraLDADD    += -lcudart
+endif
+
 if USE_HDF5_AIORI
 extraSOURCES  += aiori-HDF5.c
 extraLDADD    += -lhdf5 -lz
