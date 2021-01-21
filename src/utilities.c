@@ -65,7 +65,6 @@ int      rank = 0;
 int      rankOffset = 0;
 int      verbose = VERBOSE_0;        /* verbose output */
 MPI_Comm testComm;
-MPI_Comm mpi_comm_world;
 FILE * out_logfile = NULL;
 FILE * out_resultfile = NULL;
 enum OutputFormat_t outputFormat;
@@ -706,34 +705,34 @@ double GetTimeStamp(void)
 /*
  * Determine any spread (range) between node times.
  */
-static double TimeDeviation(void)
+static double TimeDeviation(MPI_Comm com)
 {
         double timestamp;
         double min = 0;
         double max = 0;
         double roottimestamp;
 
-        MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
+        MPI_CHECK(MPI_Barrier(com), "barrier error");
         timestamp = GetTimeStamp();
         MPI_CHECK(MPI_Reduce(&timestamp, &min, 1, MPI_DOUBLE,
-                             MPI_MIN, 0, mpi_comm_world),
+                             MPI_MIN, 0, com),
                   "cannot reduce tasks' times");
         MPI_CHECK(MPI_Reduce(&timestamp, &max, 1, MPI_DOUBLE,
-                             MPI_MAX, 0, mpi_comm_world),
+                             MPI_MAX, 0, com),
                   "cannot reduce tasks' times");
 
         /* delta between individual nodes' time and root node's time */
         roottimestamp = timestamp;
-        MPI_CHECK(MPI_Bcast(&roottimestamp, 1, MPI_DOUBLE, 0, mpi_comm_world),
+        MPI_CHECK(MPI_Bcast(&roottimestamp, 1, MPI_DOUBLE, 0, com),
                   "cannot broadcast root's time");
         wall_clock_delta = timestamp - roottimestamp;
 
         return max - min;
 }
 
-void init_clock(){
+void init_clock(MPI_Comm com){
   /* check for skew between tasks' start times */
-  wall_clock_deviation = TimeDeviation();
+  wall_clock_deviation = TimeDeviation(com);
 }
 
 char * PrintTimestamp() {
@@ -751,16 +750,16 @@ char * PrintTimestamp() {
     return datestring;
 }
 
-int64_t ReadStoneWallingIterations(char * const filename){
+int64_t ReadStoneWallingIterations(char * const filename, MPI_Comm com){
   long long data;
   if(rank != 0){
-    MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, mpi_comm_world);
+    MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, com);
     return data;
   }else{
     FILE * out = fopen(filename, "r");
     if (out == NULL){
       data = -1;
-      MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, mpi_comm_world);
+      MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, com);
       return data;
     }
     int ret = fscanf(out, "%lld", & data);
@@ -768,7 +767,7 @@ int64_t ReadStoneWallingIterations(char * const filename){
       return -1;
     }
     fclose(out);
-    MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, mpi_comm_world);
+    MPI_Bcast( & data, 1, MPI_LONG_LONG_INT, 0, com);
     return data;
   }
 }

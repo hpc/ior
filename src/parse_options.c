@@ -32,7 +32,7 @@
 #include "option.h"
 #include "aiori.h"
 
-IOR_param_t initialTestParams;
+static IOR_param_t initialTestParams;
 
 option_help * createGlobalOptions(IOR_param_t * params);
 
@@ -451,9 +451,9 @@ option_help * createGlobalOptions(IOR_param_t * params){
 /*
  * Parse Commandline.
  */
-IOR_test_t *ParseCommandLine(int argc, char **argv)
+IOR_test_t *ParseCommandLine(int argc, char **argv, MPI_Comm com)
 {
-    init_IOR_Param_t(& initialTestParams);
+    init_IOR_Param_t(& initialTestParams, com);
 
     IOR_test_t *tests = NULL;
 

@@ -51,9 +51,9 @@ static const ior_aiori_t *backend;
 static void DestroyTests(IOR_test_t *tests_head);
 static char *PrependDir(IOR_param_t *, char *);
 static char **ParseFileName(char *, int *);
-static void InitTests(IOR_test_t * , MPI_Comm);
+static void InitTests(IOR_test_t *);
 static void TestIoSys(IOR_test_t *);
-static void ValidateTests(IOR_param_t *);
+static void ValidateTests(IOR_param_t * params, MPI_Comm com);
 static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                                 aiori_fd_t *fd, const int access,
                                 IOR_io_buffers *ioBuffers);
@@ -107,13 +107,12 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
         IOR_test_t *tptr;
         out_logfile = world_out;
         out_resultfile = world_out;
-        mpi_comm_world = world_com;
 
-        MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
+        MPI_CHECK(MPI_Comm_rank(world_com, &rank), "cannot get rank");
 
         /* setup tests, and validate parameters */
-        tests_head = ParseCommandLine(argc, argv);
-        InitTests(tests_head, world_com);
+        tests_head = ParseCommandLine(argc, argv, world_com);
+        InitTests(tests_head);
 
         PrintHeader(argc, argv);
 
@@ -147,20 +146,19 @@ int ior_main(int argc, char **argv)
     /*
      * check -h option from commandline without starting MPI;
      */
-    tests_head = ParseCommandLine(argc, argv);
+    tests_head = ParseCommandLine(argc, argv, MPI_COMM_WORLD);
 
     /* start the MPI code */
     MPI_CHECK(MPI_Init(&argc, &argv), "cannot initialize MPI");
 
-    mpi_comm_world = MPI_COMM_WORLD;
-    MPI_CHECK(MPI_Comm_rank(mpi_comm_world, &rank), "cannot get rank");
+    MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank), "cannot get rank");
 
     /* set error-handling */
     /*MPI_CHECK(MPI_Errhandler_set(mpi_comm_world, MPI_ERRORS_RETURN),
        "cannot set errhandler"); */
 
     /* setup tests, and validate parameters */
-    InitTests(tests_head, mpi_comm_world);
+    InitTests(tests_head);
 
     PrintHeader(argc, argv);
 
@@ -201,7 +199,7 @@ int ior_main(int argc, char **argv)
 /*
  * Initialize an IOR_param_t structure to the defaults
  */
-void init_IOR_Param_t(IOR_param_t * p)
+void init_IOR_Param_t(IOR_param_t * p, MPI_Comm com)
 {
         const char *default_aiori = aiori_default ();
         assert (NULL != default_aiori);
@@ -231,7 +229,8 @@ void init_IOR_Param_t(IOR_param_t * p)
         p->transferSize = 262144;
         p->randomSeed = -1;
         p->incompressibleSeed = 573;
-        p->testComm = mpi_comm_world;
+        p->testComm = com; // this com might change for smaller tests
+        p->mpi_comm_world = com;
 
         p->URI = NULL;
 }
@@ -363,9 +362,11 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
 static size_t
 CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
 {
+        assert(access == WRITECHECK || access == READCHECK);
+
         char testFileName[MAX_PATHLEN];
-        char bufferLabel1[MAX_STR];
-        char bufferLabel2[MAX_STR];
+        char * bufferLabel1 = "Expected: ";
+        char * bufferLabel2 = "Actual:   ";
         size_t i, j, length;
         size_t errorCount = 0;
 
@@ -378,13 +379,6 @@ CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_p
         }
 
         unsigned long long *testbuf = (unsigned long long *)expectedBuffer;
-
-        if (access == WRITECHECK || access == READCHECK) {
-                strcpy(bufferLabel1, "Expected: ");
-                strcpy(bufferLabel2, "Actual:   ");
-        } else {
-                ERR("incorrect argument for CompareData()");
-        }
 
         length = size / sizeof(IOR_size_t);
         if (verbose >= VERBOSE_3) {
@@ -435,13 +429,14 @@ CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_p
                         fprintf(out_logfile, "\n");
                 }
         }
-        if (errorCount > 0) {
+        if (errorCount > 0 && verbose >= VERBOSE_1) {
                 GetTestFileName(testFileName, test);
                 EWARNF("[%d] FAILED comparison of buffer in file %s during transfer %lld offset %lld containing %d-byte ints (%zd errors)",
                         rank, testFileName, transferCount, offset, (int)sizeof(unsigned long long int),errorCount);
         }else if(verbose >= VERBOSE_2){
           fprintf(out_logfile, "[%d] comparison successful during transfer %lld offset %lld\n", rank, transferCount, offset);
         }
+
         return (errorCount);
 }
 
@@ -571,7 +566,7 @@ static void DestroyTests(IOR_test_t *tests_head)
 /*
  * Distribute IOR_HINTs to all tasks' environments.
  */
-void DistributeHints(void)
+static void DistributeHints(MPI_Comm com)
 {
         char hint[MAX_HINTS][MAX_STR], fullHint[MAX_STR], hintVariable[MAX_STR];
         int hintCount = 0, i;
@@ -593,11 +588,9 @@ void DistributeHints(void)
                 }
         }
 
-        MPI_CHECK(MPI_Bcast(&hintCount, sizeof(hintCount), MPI_BYTE,
-                            0, MPI_COMM_WORLD), "cannot broadcast hints");
+        MPI_CHECK(MPI_Bcast(&hintCount, sizeof(hintCount), MPI_BYTE, 0, com), "cannot broadcast hints");
         for (i = 0; i < hintCount; i++) {
-                MPI_CHECK(MPI_Bcast(&hint[i], MAX_STR, MPI_BYTE,
-                                    0, MPI_COMM_WORLD),
+                MPI_CHECK(MPI_Bcast(&hint[i], MAX_STR, MPI_BYTE, 0, com),
                           "cannot broadcast hints");
                 strcpy(fullHint, hint[i]);
                 strcpy(hintVariable, strtok(fullHint, "="));
@@ -957,8 +950,12 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
  * Setup tests by parsing commandline and creating test script.
  * Perform a sanity-check on the configured parameters.
  */
-static void InitTests(IOR_test_t *tests, MPI_Comm com)
+static void InitTests(IOR_test_t *tests)
 {
+        if(tests == NULL){
+          return;
+        }
+        MPI_Comm com = tests->params.mpi_comm_world;
         int mpiNumNodes = 0;
         int mpiNumTasks = 0;
         int mpiNumTasksOnNode0 = 0;
@@ -979,7 +976,7 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
          * task 0 has the environment settings for the hints, pass
          * the hint=value pair to everyone else in mpi_comm_world
          */
-        DistributeHints();
+        DistributeHints(com);
 
         /* check validity of tests and create test queue */
         while (tests != NULL) {
@@ -1008,11 +1005,11 @@ static void InitTests(IOR_test_t *tests, MPI_Comm com)
                 params->expectedAggFileSize =
                   params->blockSize * params->segmentCount * params->numTasks;
 
-                ValidateTests(&tests->params);
+                ValidateTests(&tests->params, com);
                 tests = tests->next;
         }
 
-        init_clock();
+        init_clock(com);
 }
 
 /*
@@ -1075,7 +1072,7 @@ static void file_hits_histogram(IOR_param_t *params)
         }
 
         MPI_CHECK(MPI_Gather(&rankOffset, 1, MPI_INT, rankoffs,
-                             1, MPI_INT, 0, mpi_comm_world),
+                             1, MPI_INT, 0, params->testComm),
                   "MPI_Gather error");
 
         if (rank != 0)
@@ -1231,21 +1228,21 @@ static void TestIoSys(IOR_test_t *test)
         IOR_io_buffers ioBuffers;
 
         /* set up communicator for test */
-        MPI_CHECK(MPI_Comm_group(mpi_comm_world, &orig_group),
+        MPI_CHECK(MPI_Comm_group(params->mpi_comm_world, &orig_group),
                   "MPI_Comm_group() error");
         range[0] = 0;                     /* first rank */
         range[1] = params->numTasks - 1;  /* last rank */
         range[2] = 1;                     /* stride */
         MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
                   "MPI_Group_range_incl() error");
-        MPI_CHECK(MPI_Comm_create(mpi_comm_world, new_group, &testComm),
+        MPI_CHECK(MPI_Comm_create(params->mpi_comm_world, new_group, &testComm),
                   "MPI_Comm_create() error");
         MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
         MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
         params->testComm = testComm;
         if (testComm == MPI_COMM_NULL) {
                 /* tasks not in the group do not participate in this test */
-                MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
+                MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
                 return;
         }
         if (rank == 0 && verbose >= VERBOSE_1) {
@@ -1419,7 +1416,7 @@ static void TestIoSys(IOR_test_t *test)
                 if ((params->readFile || params->checkRead ) && !test_time_elapsed(params, startTime)) {
                         /* check for stonewall */
                         if(params->stoneWallingStatusFile){
-                          params->stoneWallingWearOutIterations = ReadStoneWallingIterations(params->stoneWallingStatusFile);
+                          params->stoneWallingWearOutIterations = ReadStoneWallingIterations(params->stoneWallingStatusFile, params->testComm);
                           if(params->stoneWallingWearOutIterations == -1 && rank == 0){
                             WARN("Could not read back the stonewalling status from the file!");
                             params->stoneWallingWearOutIterations = 0;
@@ -1542,17 +1539,16 @@ static void TestIoSys(IOR_test_t *test)
                 free(hog_buf);
 
         /* Sync with the tasks that did not participate in this test */
-        MPI_CHECK(MPI_Barrier(mpi_comm_world), "barrier error");
-
+        MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
 }
 
 /*
  * Determine if valid tests from parameters.
  */
-static void ValidateTests(IOR_param_t * test)
+static void ValidateTests(IOR_param_t * test, MPI_Comm com)
 {
         IOR_param_t defaults;
-        init_IOR_Param_t(&defaults);
+        init_IOR_Param_t(&defaults, com);
 
         if (test->repetitions <= 0)
                 WARN_RESET("too few test repetitions",
@@ -1888,7 +1884,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
             if ( test->collective && test->deadlineForStonewalling ) {
               // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
               // it absolutely must be an 'all or none':
-              MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, MPI_COMM_WORLD), "hitStonewall broadcast failed");
+              MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, testComm), "hitStonewall broadcast failed");
             }
           }
         }
@@ -1916,9 +1912,14 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
              point->stonewall_min_data_accessed /1024.0 / 1024 / 1024, point->stonewall_avg_data_accessed / 1024.0 / 1024 / 1024 , point->stonewall_time);
           }
           if(pairCnt != point->pairs_accessed){
-            // some work needs still to be done !
+            // some work needs still to be done, complete the current block !
+            i--;
+            if(j == offsets){
+              j = 0; // current block is completed
+              i++;
+            }
             for ( ; pairCnt < point->pairs_accessed; i++) {
-              for ( ; j < offsets &&  pairCnt < point->pairs_accessed ; j++) {
+              for ( ; j < offsets && pairCnt < point->pairs_accessed ; j++) {
                 IOR_offset_t offset;
                 if (test->randomOffset) {
                   if(test->filePerProc){
@@ -1937,6 +1938,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                 dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
               }
+              j = 0;
             }
           }
         }else{
