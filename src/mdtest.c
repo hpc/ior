@@ -1658,6 +1658,11 @@ void md_validate_tests() {
         FAIL("shared directory mode is not compatible with multiple directory paths");
     }
 
+    /* check if more directory paths than ranks */	
+    if (o.path_count > o.size) {
+        FAIL("cannot have more directory paths than MPI tasks");
+    }
+
     /* check depth */
     if (o.depth < 0) {
             FAIL("depth must be greater than or equal to zero");
