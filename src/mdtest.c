@@ -1658,7 +1658,7 @@ void md_validate_tests() {
         FAIL("shared directory mode is not compatible with multiple directory paths");
     }
 
-    /* check if more directory paths than ranks */	
+    /* check if more directory paths than ranks */
     if (o.path_count > o.size) {
         FAIL("cannot have more directory paths than MPI tasks");
     }
@@ -1836,7 +1836,7 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   VERBOSE(1,-1,"main: * iteration %d *", j+1);
 
-  if(rank == 0 && o.create_only){
+  if(o.create_only){
     for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
       if (rank >= o.path_count) {
         continue;
@@ -1856,63 +1856,61 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 #endif /* HAVE_LUSTRE_LUSTREAPI */
       }
     }
-  }
 
-  if (o.create_only) {
-      /* create hierarchical directory structure */
-      MPI_Barrier(testComm);
+    /* create hierarchical directory structure */
+    MPI_Barrier(testComm);
 
-      startCreate = GetTimeStamp();
-      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
-        prep_testdir(j, dir_iter);
+    startCreate = GetTimeStamp();
+    for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
+      prep_testdir(j, dir_iter);
 
-        if (o.unique_dir_per_task) {
-            if (o.collective_creates && (rank == 0)) {
-                /*
-                 * This is inside two loops, one of which already uses "i" and the other uses "j".
-                 * I don't know how this ever worked. I'm changing this loop to use "k".
-                 */
-                for (k=0; k < o.size; k++) {
-                    sprintf(o.base_tree_name, "mdtest_tree.%d", k);
+      if (o.unique_dir_per_task) {
+        if (o.collective_creates && (rank == 0)) {
+          /*
+           * This is inside two loops, one of which already uses "i" and the other uses "j".
+           * I don't know how this ever worked. I'm changing this loop to use "k".
+           */
+          for (k=0; k < o.size; k++) {
+            sprintf(o.base_tree_name, "mdtest_tree.%d", k);
 
-                    VERBOSE(3,5,"main (create hierarchical directory loop-collective): Calling create_remove_directory_tree with '%s'", o.testdir );
-                    /*
-                     * Let's pass in the path to the directory we most recently made so that we can use
-                     * full paths in the other calls.
-                     */
-                    create_remove_directory_tree(1, 0, o.testdir, 0, progress);
-                    if(CHECK_STONE_WALL(progress)){
-                      o.size = k;
-                      break;
-                    }
-                }
-            } else if (! o.collective_creates) {
-                VERBOSE(3,5,"main (create hierarchical directory loop-!collective_creates): Calling create_remove_directory_tree with '%s'", o.testdir );
-                /*
-                 * Let's pass in the path to the directory we most recently made so that we can use
-                 * full paths in the other calls.
-                 */
-                create_remove_directory_tree(1, 0, o.testdir, 0, progress);
+            VERBOSE(3,5,"main (create hierarchical directory loop-collective): Calling create_remove_directory_tree with '%s'", o.testdir );
+            /*
+             * Let's pass in the path to the directory we most recently made so that we can use
+             * full paths in the other calls.
+             */
+            create_remove_directory_tree(1, 0, o.testdir, 0, progress);
+            if(CHECK_STONE_WALL(progress)){
+              o.size = k;
+              break;
             }
-        } else {
-            if (rank == 0) {
-                VERBOSE(3,5,"main (create hierarchical directory loop-!unque_dir_per_task): Calling create_remove_directory_tree with '%s'", o.testdir );
+          }
+        } else if (! o.collective_creates) {
+          VERBOSE(3,5,"main (create hierarchical directory loop-!collective_creates): Calling create_remove_directory_tree with '%s'", o.testdir );
+          /*
+           * Let's pass in the path to the directory we most recently made so that we can use
+           * full paths in the other calls.
+           */
+          create_remove_directory_tree(1, 0, o.testdir, 0, progress);
+        }
+      } else {
+        if (rank == 0) {
+          VERBOSE(3,5,"main (create hierarchical directory loop-!unque_dir_per_task): Calling create_remove_directory_tree with '%s'", o.testdir );
 
-                /*
-                 * Let's pass in the path to the directory we most recently made so that we can use
-                 * full paths in the other calls.
-                 */
-                create_remove_directory_tree(1, 0 , o.testdir, 0, progress);
-            }
+          /*
+           * Let's pass in the path to the directory we most recently made so that we can use
+           * full paths in the other calls.
+           */
+          create_remove_directory_tree(1, 0 , o.testdir, 0, progress);
         }
       }
-      MPI_Barrier(testComm);
-      endCreate = GetTimeStamp();
-      summary_table->rate[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree / (endCreate - startCreate);
-      summary_table->time[MDTEST_TREE_CREATE_NUM] = (endCreate - startCreate);
-      summary_table->items[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree;
-      summary_table->stonewall_last_item[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree;
-      VERBOSE(1,-1,"V-1: main:   Tree creation     : %14.3f sec, %14.3f ops/sec", (endCreate - startCreate), summary_table->rate[MDTEST_TREE_CREATE_NUM]);
+    }
+    MPI_Barrier(testComm);
+    endCreate = GetTimeStamp();
+    summary_table->rate[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree / (endCreate - startCreate);
+    summary_table->time[MDTEST_TREE_CREATE_NUM] = (endCreate - startCreate);
+    summary_table->items[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree;
+    summary_table->stonewall_last_item[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree;
+    VERBOSE(1,-1,"V-1: main:   Tree creation     : %14.3f sec, %14.3f ops/sec", (endCreate - startCreate), summary_table->rate[MDTEST_TREE_CREATE_NUM]);
   }
 
   sprintf(o.unique_mk_dir, "%s.0", o.base_tree_name);
