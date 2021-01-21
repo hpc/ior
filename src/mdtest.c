@@ -1763,7 +1763,7 @@ void create_remove_directory_tree(int create,
         if (create) {
             VERBOSE(2,5,"Making directory '%s'", dir);
             if (-1 == o.backend->mkdir (dir, DIRMODE, o.backend_options)) {
-                EWARNF("unable to create tree directory '%s'\n", dir);
+                EWARNF("unable to create tree directory '%s'", dir);
             }
 #ifdef HAVE_LUSTRE_LUSTREAPI
             /* internal node for branching, can be non-striped for children */
@@ -1833,6 +1833,9 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   if(rank == 0 && o.create_only){
     for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
+      if (rank >= o.path_count) {
+        continue;
+      }
       prep_testdir(j, dir_iter);
 
       VERBOSE(2,5,"main (for j loop): making o.testdir, '%s'", o.testdir );
@@ -2314,7 +2317,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     /*   if directory does not exist, create it */
-    if ((rank == 0) && o.backend->access(o.testdirpath, F_OK, o.backend_options) != 0) {
+    if ((rank < o.path_count) && o.backend->access(o.testdirpath, F_OK, o.backend_options) != 0) {
         if (o.backend->mkdir(o.testdirpath, DIRMODE, o.backend_options) != 0) {
             EWARNF("Unable to create test directory path %s", o.testdirpath);
         }
