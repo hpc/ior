@@ -115,6 +115,7 @@ struct benchmark_options{
   int ignore_precreate_errors;
   int rank;
   int size;
+  int verify_read;
 
   float relative_waiting_factor;
   int adaptive_waiting_mode;
@@ -549,7 +550,7 @@ void run_precreate(phase_stat_t * s, int current_index){
   }
 
   char * buf = malloc(o.file_size);
-  memset(buf, o.rank % 256, o.file_size);
+  generate_memory_pattern(buf, o.file_size, 0, o.rank);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   double op_time;
@@ -565,6 +566,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       if (NULL == aiori_fh){
         FAIL("Unable to open file %s", obj_name);
       }
+      update_write_memory_pattern(f * o.dset_count + d, buf, o.file_size, 0, o.rank);
       if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
         s->obj_create.suc++;
       }else{
@@ -643,11 +645,19 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       if (NULL == aiori_fh){
         FAIL("Unable to open file %s", obj_name);
       }
-      if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
-        s->obj_read.suc++;
+      if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options) ) {
+        if(o.verify_read){
+            if(verify_memory_pattern(f * o.dset_count + d, buf, o.file_size, 0, readRank) == 0){
+              s->obj_read.suc++;
+            }else{
+              s->obj_read.err++;
+            }
+        }else{
+          s->obj_read.suc++;
+        }
       }else{
         s->obj_read.err++;
-        ERRF("%d: Error while reading the obj: %s\n", o.rank, obj_name);
+        EWARNF("%d: Error while reading the obj: %s", o.rank, obj_name);
       }
       o.backend->close(aiori_fh, o.backend_options);
 
@@ -676,19 +686,23 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       op_timer = GetTimeStamp();
       aiori_fh = o.backend->create(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
-      if (NULL == aiori_fh){
-        FAIL("Unable to open file %s", obj_name);
-      }
-      if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
-        s->obj_create.suc++;
-      }else{
-        s->obj_create.err++;
-        if (! o.ignore_precreate_errors){
-         ERRF("%d: Error while creating the obj: %s\n", o.rank, obj_name);
+      if (NULL != aiori_fh){
+        if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
+          s->obj_create.suc++;
+        }else{
+          s->obj_create.err++;
+          if (! o.ignore_precreate_errors){
+            ERRF("%d: Error while creating the obj: %s\n", o.rank, obj_name);
+          }
         }
+        o.backend->close(aiori_fh, o.backend_options);
+      }else{
+        if (! o.ignore_precreate_errors){
+          ERRF("Unable to open file %s", obj_name);
+        }
+        EWARNF("Unable to open file %s", obj_name);
+        s->obj_create.err++;
       }
-      o.backend->close(aiori_fh, o.backend_options);
-
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_create, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
         mdw_wait(op_time);
@@ -800,6 +814,7 @@ static option_help options [] = {
   {'3', "run-cleanup", "Run cleanup phase (only run explicit phases)", OPTION_FLAG, 'd', & o.phase_cleanup},
   {'w', "stonewall-timer", "Stop each benchmark iteration after the specified seconds (if not used with -W this leads to process-specific progress!)", OPTION_OPTIONAL_ARGUMENT, 'd', & o.stonewall_timer},
   {'W', "stonewall-wear-out", "Stop with stonewall after specified time and use a soft wear-out phase -- all processes perform the same number of iterations", OPTION_FLAG, 'd', & o.stonewall_timer_wear_out},
+  {'X', "verify-read", "Verify the data on read", OPTION_FLAG, 'd', & o.verify_read},
   {0, "start-item", "The iteration number of the item to start with, allowing to offset the operations", OPTION_OPTIONAL_ARGUMENT, 'l', & o.start_item_number},
   {0, "print-detailed-stats", "Print detailed machine parsable statistics.", OPTION_FLAG, 'd', & o.print_detailed_stats},
   {0, "read-only", "Run read-only during benchmarking phase (no deletes/writes), probably use with -2", OPTION_FLAG, 'd', & o.read_only},

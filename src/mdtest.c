@@ -220,23 +220,9 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
     }
 }
 
-void generate_memory_pattern(char * buf, size_t bytes){
-  uint64_t * buffi = (uint64_t*) buf;
-  // first half of 64 bits use the rank
-  uint64_t ranki = (uint64_t)(rank + 1) << 32 + o.random_buffer_offset;
-  // the first 8 bytes are set to item number
-  for(size_t i=1; i < bytes/8; i++){
-    buffi[i] = (i + 1) + ranki;
-  }
-  for(size_t i=(bytes/8)*8; i < bytes; i++){
-    buf[i] = (char) i;
-  }
-}
-
 void offset_timers(double * t, int tcount) {
     double toffset;
     int i;
-
 
     VERBOSE(1,-1,"V-1: Entering offset_timers..." );
 
@@ -356,33 +342,6 @@ static void remove_file (const char *path, uint64_t itemNum) {
     }
 }
 
-void mdtest_verify_data(int item, char * buffer, size_t bytes, int pretendRank){
-  if((bytes >= 8 && ((uint64_t*) buffer)[0] != item) || (bytes < 8 && buffer[0] != (char) item)){
-    VERBOSE(2, -1, "Error verifying first element for item: %d", item);
-    o.verification_error++;
-    return;
-  }
-
-  uint64_t * buffi = (uint64_t*) buffer;
-  // first half of 64 bits use the rank, here need to apply rank shifting
-  uint64_t rank_mod = (uint64_t)(pretendRank + 1) << 32 + o.random_buffer_offset;
-  // the first 8 bytes are set to item number
-  for(size_t i=1; i < bytes/8; i++){
-    uint64_t exp = (i + 1) + rank_mod;
-    if(buffi[i] != exp){
-      VERBOSE(5, -1, "Error verifying offset %zu for item %d", i*8, item);
-      o.verification_error++;
-      return;
-    }
-  }
-  for(size_t i=(bytes/8)*8; i < bytes; i++){
-    if(buffer[i] != (char) i){
-      VERBOSE(5, -1, "Error verifying byte %zu for item %d", i, item);
-      o.verification_error++;
-      return;
-    }
-  }
-}
 
 static void create_file (const char *path, uint64_t itemNum) {
     char curr_item[MAX_PATHLEN];
@@ -436,11 +395,8 @@ static void create_file (const char *path, uint64_t itemNum) {
          * offset 0 (zero).
          */
         o.hints.fsyncPerWrite = o.sync_file;
-        if(o.write_bytes >= 8){ // set the item number as first element of the buffer to be as much unique as possible
-          ((uint64_t*) o.write_buffer)[0] = itemNum;
-        }else{
-          o.write_buffer[0] = (char) itemNum;
-        }
+        update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
+
         if ( o.write_bytes != (size_t) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
             EWARNF("unable to write file %s", curr_item);
         }
@@ -450,7 +406,7 @@ static void create_file (const char *path, uint64_t itemNum) {
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
                 EWARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            mdtest_verify_data(itemNum, o.write_buffer, o.write_bytes, rank);
+            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
         }
     }
 
@@ -775,7 +731,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
               if (o.shared_file) {
                 pretend_rank = rank;
               }
-              mdtest_verify_data(item_num, read_buffer, o.read_bytes, pretend_rank);
+              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank);
             }else if((o.read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != item_num) || (o.read_bytes < 8 && read_buffer[0] != (char) item_num)){
               // do a lightweight check, which cost is neglectable
               o.verification_error++;
@@ -2333,7 +2289,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         if (alloc_res) {
             FAIL("out of memory");
         }
-        generate_memory_pattern(o.write_buffer, o.write_bytes);
+        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
     }
 
     /* setup directory path to work in */
