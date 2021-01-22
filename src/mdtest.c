@@ -124,6 +124,7 @@ typedef struct {
   int leaf_only;
   unsigned branch_factor;
   int depth;
+  int random_buffer_offset; /* user settable value, otherwise random */
 
   /*
    * This is likely a small value, but it's sometimes computed by
@@ -222,7 +223,7 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
 void generate_memory_pattern(char * buf, size_t bytes){
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
-  uint64_t ranki = (uint64_t)(rank + 1) << 32;
+  uint64_t ranki = (uint64_t)(rank + 1) << 32 + o.random_buffer_offset;
   // the first 8 bytes are set to item number
   for(size_t i=1; i < bytes/8; i++){
     buffi[i] = (i + 1) + ranki;
@@ -364,13 +365,12 @@ void mdtest_verify_data(int item, char * buffer, size_t bytes, int pretendRank){
 
   uint64_t * buffi = (uint64_t*) buffer;
   // first half of 64 bits use the rank, here need to apply rank shifting
-  uint64_t rank_mod = (uint64_t)(pretendRank + 1) << 32;
+  uint64_t rank_mod = (uint64_t)(pretendRank + 1) << 32 + o.random_buffer_offset;
   // the first 8 bytes are set to item number
   for(size_t i=1; i < bytes/8; i++){
     uint64_t exp = (i + 1) + rank_mod;
     if(buffi[i] != exp){
       VERBOSE(5, -1, "Error verifying offset %zu for item %d", i*8, item);
-      printf("%lld != %lld\n", exp, buffi[i]);
       o.verification_error++;
       return;
     }
@@ -2062,7 +2062,8 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 void mdtest_init_args(){
   o = (mdtest_options_t) {
      .barriers = 1,
-     .branch_factor = 1
+     .branch_factor = 1,
+     .random_buffer_offset = -1
   };
 }
 
@@ -2116,6 +2117,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 #ifdef HAVE_LUSTRE_LUSTREAPI
       {'g', NULL,        "global default directory layout for test subdirectories (deletes inherited striping layout)", OPTION_FLAG, 'd', & o.global_dir_layout},
 #endif /* HAVE_LUSTRE_LUSTREAPI */
+      {'G', NULL,        "Offset for the data in the read/write buffer, if not set, a random value is used", OPTION_OPTIONAL_ARGUMENT, 'd', & o.random_buffer_offset},
       {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & iterations},
       {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & o.items_per_dir},
       {'k', NULL,        "use mknod to create file", OPTION_FLAG, 'd', & o.make_node},
@@ -2201,6 +2203,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
           MPI_Bcast(& o.random_seed, 1, MPI_INT, 0, testComm);
       }
       o.random_seed += rank;
+    }
+    if( o.random_buffer_offset == -1 ){
+        o.random_buffer_offset = time(NULL);
+        MPI_Bcast(& o.random_buffer_offset, 1, MPI_INT, 0, testComm);
     }
     if ((o.items > 0) && (o.items_per_dir > 0) && (! o.unique_dir_per_task)) {
       o.directory_loops = o.items / o.items_per_dir;
