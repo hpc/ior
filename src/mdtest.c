@@ -110,6 +110,7 @@ typedef struct {
   char unique_rm_uni_dir[MAX_PATHLEN];
   char *write_buffer;
   char *stoneWallingStatusFile;
+  int gpu_memory_flags;
 
 
   int barriers;
@@ -666,7 +667,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
     /* allocate read buffer */
     if (o.read_bytes > 0) {
-        read_buffer = aligned_buffer_alloc(o.read_bytes, 0);
+        read_buffer = aligned_buffer_alloc(o.read_bytes, o.gpu_memory_flags);
         memset(read_buffer, -1, o.read_bytes);
     }
 
@@ -761,7 +762,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         o.backend->close (aiori_fh, o.backend_options);
     }
     if(o.read_bytes){
-      aligned_buffer_free(read_buffer, 0);
+      aligned_buffer_free(read_buffer, o.gpu_memory_flags);
     }
 }
 
@@ -2119,6 +2120,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & o.call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & o.print_time},
+      {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       LAST_OPTION
     };
@@ -2298,7 +2300,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     /* allocate and initialize write buffer with # */
     if (o.write_bytes > 0) {
-        o.write_buffer = aligned_buffer_alloc(o.write_bytes, 0);
+        o.write_buffer = aligned_buffer_alloc(o.write_bytes, o.gpu_memory_flags);
         generate_memory_pattern(o.write_buffer, o.write_bytes);
     }
 
@@ -2439,7 +2441,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     if (o.write_bytes > 0) {
-      aligned_buffer_free(o.write_buffer, 0);
+      aligned_buffer_free(o.write_buffer, o.gpu_memory_flags);
     }
 
     return o.summary_table;
