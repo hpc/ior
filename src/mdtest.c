@@ -219,10 +219,16 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
     }
 }
 
-void generate_memory_pattern(char * buffer, size_t bytes){
-  // the first byte is set to the item number
-  for(int i=1; i < bytes; i++){
-    buffer[i] = i + 1;
+void generate_memory_pattern(char * buf, size_t bytes){
+  uint64_t * buffi = (uint64_t*) buf;
+  // first half of 64 bits use the rank
+  uint64_t ranki = (uint64_t)(rank + 1) << 32;
+  // the first 8 bytes are set to item number
+  for(size_t i=1; i < bytes/8; i++){
+    buffi[i] = (i + 1) + ranki;
+  }
+  for(size_t i=(bytes/8)*8; i < bytes; i++){
+    buf[i] = (char) i;
   }
 }
 
@@ -349,19 +355,31 @@ static void remove_file (const char *path, uint64_t itemNum) {
     }
 }
 
-void mdtest_verify_data(int item, char * buffer, size_t bytes){
+void mdtest_verify_data(int item, char * buffer, size_t bytes, int pretendRank){
   if((bytes >= 8 && ((uint64_t*) buffer)[0] != item) || (bytes < 8 && buffer[0] != (char) item)){
     VERBOSE(2, -1, "Error verifying first element for item: %d", item);
     o.verification_error++;
+    return;
   }
 
-  size_t i = bytes < 8 ? 1 : 8; // the first byte
-
-  for( ; i < bytes; i++){
-    if(buffer[i] != (char) (i + 1)){
+  uint64_t * buffi = (uint64_t*) buffer;
+  // first half of 64 bits use the rank, here need to apply rank shifting
+  uint64_t rank_mod = (uint64_t)(pretendRank + 1) << 32;
+  // the first 8 bytes are set to item number
+  for(size_t i=1; i < bytes/8; i++){
+    uint64_t exp = (i + 1) + rank_mod;
+    if(buffi[i] != exp){
+      VERBOSE(5, -1, "Error verifying offset %zu for item %d", i*8, item);
+      printf("%lld != %lld\n", exp, buffi[i]);
+      o.verification_error++;
+      return;
+    }
+  }
+  for(size_t i=(bytes/8)*8; i < bytes; i++){
+    if(buffer[i] != (char) i){
       VERBOSE(5, -1, "Error verifying byte %zu for item %d", i, item);
       o.verification_error++;
-      break;
+      return;
     }
   }
 }
@@ -432,7 +450,7 @@ static void create_file (const char *path, uint64_t itemNum) {
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
                 EWARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            mdtest_verify_data(itemNum, o.write_buffer, o.write_bytes);
+            mdtest_verify_data(itemNum, o.write_buffer, o.write_bytes, rank);
         }
     }
 
@@ -753,7 +771,11 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
                 continue;
             }
             if(o.verify_read){
-              mdtest_verify_data(item_num, read_buffer, o.read_bytes);
+              int pretend_rank = (2 * o.nstride + rank) % o.size;
+              if (o.shared_file) {
+                pretend_rank = rank;
+              }
+              mdtest_verify_data(item_num, read_buffer, o.read_bytes, pretend_rank);
             }else if((o.read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != item_num) || (o.read_bytes < 8 && read_buffer[0] != (char) item_num)){
               // do a lightweight check, which cost is neglectable
               o.verification_error++;
@@ -2431,8 +2453,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         FAIL("Unable to remove test directory path %s", o.testdirpath);
     }
 
-    if(o.verification_error){
-      VERBOSE(0, -1, "\nERROR: verifying the data read! Take the performance values with care!\n");
+    int total_errors;
+    MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
+    if(total_errors){
+      VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
     }
     VERBOSE(0,-1,"-- finished at %s --\n", PrintTimestamp());
 
