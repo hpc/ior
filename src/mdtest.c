@@ -125,6 +125,7 @@ typedef struct {
   int leaf_only;
   unsigned branch_factor;
   int depth;
+  int random_buffer_offset; /* user settable value, otherwise random */
 
   /*
    * This is likely a small value, but it's sometimes computed by
@@ -220,17 +221,9 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
     }
 }
 
-void generate_memory_pattern(char * buffer, size_t bytes){
-  // the first byte is set to the item number
-  for(int i=1; i < bytes; i++){
-    buffer[i] = i + 1;
-  }
-}
-
 void offset_timers(double * t, int tcount) {
     double toffset;
     int i;
-
 
     VERBOSE(1,-1,"V-1: Entering offset_timers..." );
 
@@ -350,22 +343,6 @@ static void remove_file (const char *path, uint64_t itemNum) {
     }
 }
 
-void mdtest_verify_data(int item, char * buffer, size_t bytes){
-  if((bytes >= 8 && ((uint64_t*) buffer)[0] != item) || (bytes < 8 && buffer[0] != (char) item)){
-    VERBOSE(2, -1, "Error verifying first element for item: %d", item);
-    o.verification_error++;
-  }
-
-  size_t i = bytes < 8 ? 1 : 8; // the first byte
-
-  for( ; i < bytes; i++){
-    if(buffer[i] != (char) (i + 1)){
-      VERBOSE(5, -1, "Error verifying byte %zu for item %d", i, item);
-      o.verification_error++;
-      break;
-    }
-  }
-}
 
 static void create_file (const char *path, uint64_t itemNum) {
     char curr_item[MAX_PATHLEN];
@@ -419,11 +396,8 @@ static void create_file (const char *path, uint64_t itemNum) {
          * offset 0 (zero).
          */
         o.hints.fsyncPerWrite = o.sync_file;
-        if(o.write_bytes >= 8){ // set the item number as first element of the buffer to be as much unique as possible
-          ((uint64_t*) o.write_buffer)[0] = itemNum;
-        }else{
-          o.write_buffer[0] = (char) itemNum;
-        }
+        update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
+
         if ( o.write_bytes != (size_t) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
             EWARNF("unable to write file %s", curr_item);
         }
@@ -433,7 +407,7 @@ static void create_file (const char *path, uint64_t itemNum) {
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
                 EWARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            mdtest_verify_data(itemNum, o.write_buffer, o.write_bytes);
+            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
         }
     }
 
@@ -751,7 +725,11 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
                 continue;
             }
             if(o.verify_read){
-              mdtest_verify_data(item_num, read_buffer, o.read_bytes);
+              int pretend_rank = (2 * o.nstride + rank) % o.size;
+              if (o.shared_file) {
+                pretend_rank = rank;
+              }
+              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank);
             }else if((o.read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != item_num) || (o.read_bytes < 8 && read_buffer[0] != (char) item_num)){
               // do a lightweight check, which cost is neglectable
               o.verification_error++;
@@ -2038,7 +2016,8 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 void mdtest_init_args(){
   o = (mdtest_options_t) {
      .barriers = 1,
-     .branch_factor = 1
+     .branch_factor = 1,
+     .random_buffer_offset = -1
   };
 }
 
@@ -2092,6 +2071,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 #ifdef HAVE_LUSTRE_LUSTREAPI
       {'g', NULL,        "global default directory layout for test subdirectories (deletes inherited striping layout)", OPTION_FLAG, 'd', & o.global_dir_layout},
 #endif /* HAVE_LUSTRE_LUSTREAPI */
+      {'G', NULL,        "Offset for the data in the read/write buffer, if not set, a random value is used", OPTION_OPTIONAL_ARGUMENT, 'd', & o.random_buffer_offset},
       {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & iterations},
       {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & o.items_per_dir},
       {'k', NULL,        "use mknod to create file", OPTION_FLAG, 'd', & o.make_node},
@@ -2178,6 +2158,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
           MPI_Bcast(& o.random_seed, 1, MPI_INT, 0, testComm);
       }
       o.random_seed += rank;
+    }
+    if( o.random_buffer_offset == -1 ){
+        o.random_buffer_offset = time(NULL);
+        MPI_Bcast(& o.random_buffer_offset, 1, MPI_INT, 0, testComm);
     }
     if ((o.items > 0) && (o.items_per_dir > 0) && (! o.unique_dir_per_task)) {
       o.directory_loops = o.items / o.items_per_dir;
@@ -2301,7 +2285,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /* allocate and initialize write buffer with # */
     if (o.write_bytes > 0) {
         o.write_buffer = aligned_buffer_alloc(o.write_bytes, o.gpu_memory_flags);
-        generate_memory_pattern(o.write_buffer, o.write_bytes);
+        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
     }
 
     /* setup directory path to work in */
@@ -2427,8 +2411,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         FAIL("Unable to remove test directory path %s", o.testdirpath);
     }
 
-    if(o.verification_error){
-      VERBOSE(0, -1, "\nERROR: verifying the data read! Take the performance values with care!\n");
+    int total_errors;
+    MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
+    if(total_errors){
+      VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
     }
     VERBOSE(0,-1,"-- finished at %s --\n", PrintTimestamp());
 

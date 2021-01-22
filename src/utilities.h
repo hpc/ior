@@ -35,6 +35,11 @@ extern enum OutputFormat_t outputFormat;  /* format of the output */
 void* safeMalloc(uint64_t size);
 void set_o_direct_flag(int *fd);
 
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int buff_offset, int rank);
+void generate_memory_pattern(char * buf, size_t bytes, int buff_offset, int rank);
+/* check a data buffer, @return 0 if all is correct, otherwise 1 */
+int verify_memory_pattern(int item, char * buffer, size_t bytes, int buff_offset, int pretendRank);
+
 char *CurrentTimeString(void);
 int Regex(char *, char *);
 void ShowFileSystemSize(char * filename, const struct ior_aiori * backend, void * backend_options);
