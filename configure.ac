@@ -86,11 +86,31 @@ AS_IF([test "x$with_cuda" != xno], [
                 fi
         ])
 AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
-        AC_SEARCH_LIBS([cudaMalloc], [cudart], [],
+        AC_SEARCH_LIBS([cudaMalloc], [cudart cudart_static], [],
         [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
     ])
 ])
 AM_CONDITIONAL([USE_CUDA], [test x$with_cuda = xyes])
+
+# Check for GPUDirect
+AC_ARG_WITH([gpuDirect],
+        [AS_HELP_STRING([--with-gpuDirect],
+                [support configurable GPUDirect @<:@default=check@:>@])],
+        [], [with_gpuDirect=check])
+
+AS_IF([test "x$with_gpuDirect" != xno], [
+        AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [
+                if test "x$with_gpuDirect" != xcheck; then
+                        AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])
+                fi
+        ])
+AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
+        AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [],
+        [AC_MSG_ERROR([Library containing cuFileDriverOpen symbol not found])])
+    ])
+])
+AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect = xyes])
+
 
 
 # Check for system capabilities
