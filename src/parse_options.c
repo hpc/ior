@@ -62,7 +62,17 @@ static void CheckRunSettings(IOR_test_t *tests)
                 }
 
                 if(params->dualMount && !params->filePerProc) {
-                        MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "Dual Mount can only be used with File Per Process");
+                  ERR("Dual Mount can only be used with File Per Process");
+                }
+
+                if(params->gpuDirect){
+                  if(params->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_MANAGED){
+                    ERR("GPUDirect cannot be used with managed memory");
+                  }
+                  params->gpuMemoryFlags = IOR_MEMORY_TYPE_GPU_DEVICE_ONLY;
+                  if(params->checkRead || params->checkWrite){
+                    ERR("GPUDirect data cannot yet be checked");
+                  }
                 }
         }
 }
@@ -124,7 +134,9 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
         } else if (strcasecmp(option, "dualmount") == 0){
                 params->dualMount = atoi(value);
         } else if (strcasecmp(option, "allocateBufferOnGPU") == 0) {
-                params->gpuMemoryFlags = atoi(value);                
+                params->gpuMemoryFlags = atoi(value);
+        } else if (strcasecmp(option, "GPUDirect") == 0) {
+                params->gpuDirect  = atoi(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
                 params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
@@ -400,7 +412,12 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timeout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
-    {.help="  -O allocateBufferOnGPU=1                     -- allocate I/O buffers on the GPU", .arg = OPTION_OPTIONAL_ARGUMENT},
+#ifdef HAVE_CUDA
+    {.help="  -O allocateBufferOnGPU=X           -- allocate I/O buffers on the GPU: X=1 uses managed memory, X=2 device memory.", .arg = OPTION_OPTIONAL_ARGUMENT},
+#ifdef HAVE_GPU_DIRECT
+    {0, "gpuDirect",        "allocate I/O buffers on the GPU and use gpuDirect to store data; this option is incompatible with any option requiring CPU access to data.", OPTION_FLAG, 'd', & params->gpuDirect},
+#endif
+#endif
     {'e', NULL,        "fsync -- perform a fsync() operation at the end of each read/write phase", OPTION_FLAG, 'd', & params->fsync},
     {'E', NULL,        "useExistingTestFile -- do not remove test file before write access", OPTION_FLAG, 'd', & params->useExistingTestFile},
     {'f', NULL,        "scriptFile -- test script name", OPTION_OPTIONAL_ARGUMENT, 's', & params->testscripts},

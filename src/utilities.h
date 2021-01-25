@@ -63,6 +63,6 @@ void init_clock(MPI_Comm com);
 double GetTimeStamp(void);
 char * PrintTimestamp(); // TODO remove this function
 unsigned long GetProcessorAndCore(int *chip, int *core);
-void *aligned_buffer_alloc(size_t size, int gpu);
-void aligned_buffer_free(void *buf, int gpu);
+void *aligned_buffer_alloc(size_t size, ior_memory_flags type);
+void aligned_buffer_free(void *buf, ior_memory_flags type);
 #endif  /* !_UTILITIES_H */
