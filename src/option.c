@@ -264,7 +264,7 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
       return;
   }
   txt++;
-
+  int parsed = 0;
   // support groups of multiple flags like -vvv or -vq
   for(int flag_index = 0; flag_index < strlen(txt); ++flag_index){
     // don't loop looking for multiple flags if we already processed a long option
@@ -370,12 +370,13 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
             (*requiredArgsSeen)++;
           }
 
-          return;
+          parsed = 1;
         }
       }
     }
   }
-
+  if(parsed) return;
+  
   if(strcmp(txt, "h") == 0 || strcmp(txt, "-help") == 0){
     *print_help = 1;
   }else{
