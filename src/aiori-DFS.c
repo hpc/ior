@@ -255,7 +255,7 @@ HandleDistribute(enum handleType type)
                 DCHECK(rc, "Failed to get global handle size");
         }
 
-        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0, testComm),
+        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD),
                   "Failed to bcast global handle buffer size");
 
 	global.iov_len = global.iov_buf_len;
@@ -273,7 +273,7 @@ HandleDistribute(enum handleType type)
                 DCHECK(rc, "Failed to create global handle");
         }
 
-        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0, testComm),
+        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0, MPI_COMM_WORLD),
                   "Failed to bcast global pool handle");
 
         if (rank != 0) {
@@ -555,16 +555,16 @@ DFS_Finalize(aiori_mod_opt_t *options)
         DFS_options_t *o = (DFS_options_t *)options;
         int rc;
 
-	MPI_Barrier(testComm);
+	MPI_Barrier(MPI_COMM_WORLD);
         d_hash_table_destroy(dir_hash, true /* force */);
 
 	rc = dfs_umount(dfs);
         DCHECK(rc, "Failed to umount DFS namespace");
-	MPI_Barrier(testComm);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = daos_cont_close(coh, NULL);
         DCHECK(rc, "Failed to close container %s (%d)", o->cont, rc);
-	MPI_Barrier(testComm);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (o->destroy) {
                 if (rank == 0) {
@@ -580,7 +580,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
                                 INFO(VERBOSE_1, "Container Destroy time = %f secs", t2-t1);
                 }
 
-                MPI_Bcast(&rc, 1, MPI_INT, 0, testComm);
+                MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
                 if (rc) {
 			if (rank == 0)
 				DCHECK(rc, "Failed to destroy container %s (%d)", o->cont, rc);
@@ -594,7 +594,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
         rc = daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
 
-	MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+	MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
 
         if (rank == 0)
                 INFO(VERBOSE_1, "Finalizing DAOS..\n");
