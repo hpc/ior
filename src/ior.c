@@ -80,9 +80,39 @@ static void ior_set_xfer_hints(IOR_param_t * p){
 
 int aiori_warning_as_errors = 0;
 
-static void test_initialize(IOR_test_t * test){
+/*
+ Returns 1 if the process participates in the test
+ */
+static int test_initialize(IOR_test_t * test){
+  int range[3];
+  IOR_param_t *params = &test->params;
+  MPI_Group orig_group, new_group;
+
+  /* set up communicator for test */
+  MPI_CHECK(MPI_Comm_group(params->mpi_comm_world, &orig_group),
+            "MPI_Comm_group() error");
+  range[0] = 0;                     /* first rank */
+  range[1] = params->numTasks - 1;  /* last rank */
+  range[2] = 1;                     /* stride */
+  MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
+            "MPI_Group_range_incl() error");
+  MPI_CHECK(MPI_Comm_create(params->mpi_comm_world, new_group, & params->testComm),
+            "MPI_Comm_create() error");
+  MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
+  MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
+
+
+  if (params->testComm == MPI_COMM_NULL) {
+    /* tasks not in the group do not participate in this test */
+    MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
+    return 0;
+  }
+
+  /* Setup global variables */
+  testComm = params->testComm;
   verbose = test->params.verbose;
   backend = test->params.backend;
+
   if(backend->initialize){
     backend->initialize(test->params.backend_options);
   }
@@ -92,6 +122,7 @@ static void test_initialize(IOR_test_t * test){
   if (rank == 0 && verbose >= VERBOSE_0) {
     ShowTestStart(& test->params);
   }
+  return 1;
 }
 
 static void test_finalize(IOR_test_t * test){
@@ -99,6 +130,7 @@ static void test_finalize(IOR_test_t * test){
   if(backend->finalize){
     backend->finalize(test->params.backend_options);
   }
+  MPI_CHECK(MPI_Comm_free(& testComm), "MPI_Comm_free() error");
 }
 
 
@@ -118,7 +150,8 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
         /* perform each test */
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-                test_initialize(tptr);
+                int participate = test_initialize(tptr);
+                if( ! participate ) continue;
                 totalErrorCount = 0;
                 TestIoSys(tptr);
                 tptr->results->errors = totalErrorCount;
@@ -164,7 +197,8 @@ int ior_main(int argc, char **argv)
 
     /* perform each test */
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-            test_initialize(tptr);
+            int participate = test_initialize(tptr);
+            if( ! participate ) continue;
 
             // This is useful for trapping a running MPI process.  While
             // this is sleeping, run the script 'testing/hdfs/gdb.attach'
@@ -1221,30 +1255,10 @@ static void TestIoSys(IOR_test_t *test)
         int pretendRank;
         int rep;
         aiori_fd_t *fd;
-        MPI_Group orig_group, new_group;
-        int range[3];
         IOR_offset_t dataMoved; /* for data rate calculation */
         void *hog_buf;
         IOR_io_buffers ioBuffers;
 
-        /* set up communicator for test */
-        MPI_CHECK(MPI_Comm_group(params->mpi_comm_world, &orig_group),
-                  "MPI_Comm_group() error");
-        range[0] = 0;                     /* first rank */
-        range[1] = params->numTasks - 1;  /* last rank */
-        range[2] = 1;                     /* stride */
-        MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
-                  "MPI_Group_range_incl() error");
-        MPI_CHECK(MPI_Comm_create(params->mpi_comm_world, new_group, &testComm),
-                  "MPI_Comm_create() error");
-        MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
-        MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
-        params->testComm = testComm;
-        if (testComm == MPI_COMM_NULL) {
-                /* tasks not in the group do not participate in this test */
-                MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
-                return;
-        }
         if (rank == 0 && verbose >= VERBOSE_1) {
                 fprintf(out_logfile, "Participating tasks : %d\n", params->numTasks);
                 fflush(out_logfile);
@@ -1524,8 +1538,6 @@ static void TestIoSys(IOR_test_t *test)
         }
         PrintRepeatEnd();
 
-        MPI_CHECK(MPI_Comm_free(&testComm), "MPI_Comm_free() error");
-
         if (params->summary_every_test) {
                 PrintLongSummaryHeader();
                 PrintLongSummaryOneTest(test);
@@ -1537,9 +1549,6 @@ static void TestIoSys(IOR_test_t *test)
 
         if (hog_buf != NULL)
                 free(hog_buf);
-
-        /* Sync with the tasks that did not participate in this test */
-        MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
 }
 
 /*
