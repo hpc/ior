@@ -81,8 +81,28 @@ static void ior_set_xfer_hints(IOR_param_t * p){
 int aiori_warning_as_errors = 0;
 
 static void test_initialize(IOR_test_t * test){
+  int range[3];
+  IOR_param_t *params = &test->params;
+  MPI_Group orig_group, new_group;
+
+  /* set up communicator for test */
+  MPI_CHECK(MPI_Comm_group(params->mpi_comm_world, &orig_group),
+            "MPI_Comm_group() error");
+  range[0] = 0;                     /* first rank */
+  range[1] = params->numTasks - 1;  /* last rank */
+  range[2] = 1;                     /* stride */
+  MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
+            "MPI_Group_range_incl() error");
+  MPI_CHECK(MPI_Comm_create(params->mpi_comm_world, new_group, & params->testComm),
+            "MPI_Comm_create() error");
+  MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
+  MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
+
+  /* Setup global variables */
+  testComm = params->testComm;
   verbose = test->params.verbose;
   backend = test->params.backend;
+
   if(backend->initialize){
     backend->initialize(test->params.backend_options);
   }
@@ -1221,26 +1241,11 @@ static void TestIoSys(IOR_test_t *test)
         int pretendRank;
         int rep;
         aiori_fd_t *fd;
-        MPI_Group orig_group, new_group;
-        int range[3];
         IOR_offset_t dataMoved; /* for data rate calculation */
         void *hog_buf;
         IOR_io_buffers ioBuffers;
 
-        /* set up communicator for test */
-        MPI_CHECK(MPI_Comm_group(params->mpi_comm_world, &orig_group),
-                  "MPI_Comm_group() error");
-        range[0] = 0;                     /* first rank */
-        range[1] = params->numTasks - 1;  /* last rank */
-        range[2] = 1;                     /* stride */
-        MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
-                  "MPI_Group_range_incl() error");
-        MPI_CHECK(MPI_Comm_create(params->mpi_comm_world, new_group, &testComm),
-                  "MPI_Comm_create() error");
-        MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
-        MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
-        params->testComm = testComm;
-        if (testComm == MPI_COMM_NULL) {
+        if (params->testComm == MPI_COMM_NULL) {
                 /* tasks not in the group do not participate in this test */
                 MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
                 return;
