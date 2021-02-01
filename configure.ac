@@ -80,6 +80,9 @@ AC_ARG_WITH([cuda],
         [], [with_cuda=check])
 
 AS_IF([test "x$with_cuda" != xno], [
+        LDFLAGS="$LDFLAGS -L$with_cuda/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64"
+        CPPFLAGS="$CPPFLAGS -I$with_cuda/include"
+
         AC_CHECK_HEADERS([cuda_runtime.h], [AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])], [
                 if test "x$with_cuda" != xcheck; then
                         AC_MSG_FAILURE([--with-cuda was given, <cuda_runtime.h> not found])
@@ -99,6 +102,9 @@ AC_ARG_WITH([gpuDirect],
         [], [with_gpuDirect=check])
 
 AS_IF([test "x$with_gpuDirect" != xno], [
+        LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64"
+        CPPFLAGS="$CPPFLAGS -I$with_gpuDirect/include"
+
         AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [
                 if test "x$with_gpuDirect" != xcheck; then
                         AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])
