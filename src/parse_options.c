@@ -135,6 +135,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->dualMount = atoi(value);
         } else if (strcasecmp(option, "allocateBufferOnGPU") == 0) {
                 params->gpuMemoryFlags = atoi(value);
+        } else if (strcasecmp(option, "GPUid") == 0) {
+                params->gpuID = atoi(value);
         } else if (strcasecmp(option, "GPUDirect") == 0) {
                 params->gpuDirect  = atoi(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
@@ -414,6 +416,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
 #ifdef HAVE_CUDA
     {.help="  -O allocateBufferOnGPU=X           -- allocate I/O buffers on the GPU: X=1 uses managed memory, X=2 device memory.", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O GPUid=X                         -- select the GPU to use.", .arg = OPTION_OPTIONAL_ARGUMENT},
 #ifdef HAVE_GPU_DIRECT
     {0, "gpuDirect",        "allocate I/O buffers on the GPU and use gpuDirect to store data; this option is incompatible with any option requiring CPU access to data.", OPTION_FLAG, 'd', & params->gpuDirect},
 #endif

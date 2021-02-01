@@ -33,6 +33,10 @@
 # include <sys/utsname.h>        /* uname() */
 #endif
 
+#ifdef HAVE_CUDA
+#include <cuda_runtime.h>
+#endif
+
 #include <assert.h>
 
 #include "ior.h"
@@ -83,6 +87,14 @@ int aiori_warning_as_errors = 0;
 static void test_initialize(IOR_test_t * test){
   verbose = test->params.verbose;
   backend = test->params.backend;
+
+#ifdef HAVE_CUDA
+  cudaError_t cret = cudaSetDevice(test->params.gpuID);
+  if(cret != cudaSuccess){
+    EWARNF("cudaSetDevice(%d) error: %s", test->params.gpuID, cudaGetErrorString(cret));
+  }
+#endif
+
   if(backend->initialize){
     backend->initialize(test->params.backend_options);
   }
