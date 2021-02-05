@@ -11,7 +11,7 @@ if ${IOR_MPIRUN} 1 --oversubscribe true ; then
   IOR_MPIRUN="mpiexec --oversubscribe -np"
 fi
 IOR_BIN_DIR=${IOR_BIN_DIR:-./src}
-IOR_OUT=${IOR_OUT:-./test_logs}
+IOR_OUT=${IOR_OUT:-./test_logs/$TYPE}
 IOR_TMP=${IOR_TMP:-/dev/shm}
 IOR_EXTRA=${IOR_EXTRA:-} # Add global options like verbosity
 MDTEST_EXTRA=${MDTEST_EXTRA:-}
