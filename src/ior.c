@@ -103,7 +103,7 @@ static int test_initialize(IOR_test_t * test){
 
 
   if (params->testComm == MPI_COMM_NULL) {
-    /* tasks not in the group do not participate in this test */
+    /* tasks not in the group do not participate in this test, this matches the proceses in test_finalize() that participate */
     MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
     return 0;
   }
@@ -130,6 +130,7 @@ static void test_finalize(IOR_test_t * test){
   if(backend->finalize){
     backend->finalize(test->params.backend_options);
   }
+  MPI_CHECK(MPI_Barrier(test->params.mpi_comm_world), "barrier error");
   MPI_CHECK(MPI_Comm_free(& testComm), "MPI_Comm_free() error");
 }
 

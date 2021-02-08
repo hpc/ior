@@ -164,7 +164,7 @@ GENERAL:
 
   * numTasks             - number of tasks that should participate in the test
                            [0]
-                           NOTE: 0 denotes all tasks
+                           NOTE: -1 denotes all tasks
 
   * interTestDelay       - this is the time in seconds to delay before
                            beginning a write or read in a series of tests [0]
