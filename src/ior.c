@@ -843,6 +843,58 @@ static char *PrependDir(IOR_param_t * test, char *rootDir)
 
 /******************************************************************************/
 /*
+ * Dump histogram of operation times from every process
+ */
+static void
+PrintHistogram(IOR_test_t *test, double *timer, const int rep, const int access)
+{
+        double access_time, min, max, step;
+        int i, nprocs;
+        int bins[] = {0, 0, 0, 0, 0, 0};
+        int nr_bins = sizeof(bins)/sizeof(bins[0]);
+
+        /* do these indicies have names I could use? */
+        access_time = timer[3] - timer[2];
+        /* i am most interested in seeing how tight the write times are.  I
+         * expect most of the times to be quite a bit larger than zero.  I can
+         * see an argument for starting the bins at zero though... */
+
+        double *all_times;
+        MPI_Comm_size(testComm, &nprocs);
+        all_times = malloc(nprocs*sizeof(*all_times));
+        MPI_Gather(&access_time, 1, MPI_DOUBLE,
+            all_times, 1, MPI_DOUBLE,
+            0, testComm);
+
+        if(rank != 0) {
+                free (all_times);
+                return; /* only rank 0 prints */
+        }
+        min = max = all_times[0];
+        for(i=1; i<nprocs; i++) {
+            if (all_times[i] > max)
+                max = all_times[i];
+            if (all_times[i] < min)
+                min = all_times[i];
+        }
+
+        step = (max-min)/(double)nr_bins;
+        if (nprocs == 1)
+                bins[0]++;
+        else {
+            for (i=0; i< nprocs; i++) {
+                int bin = (all_times[i] - min)/step;
+                if (bin == nr_bins) bin--;
+                bins[bin]++;
+            }
+        }
+        for(i=0; i< nr_bins; i++)
+            printf("%f-%f : %d\n" , min+step*i, min+step*i+step, bins[i]);
+        free(all_times);
+}
+
+/******************************************************************************/
+/*
  * Reduce test results, and show if verbose set.
  */
 static void
@@ -1372,6 +1424,7 @@ static void TestIoSys(IOR_test_t *test)
 
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, WRITE);
+                        PrintHistogram(test, timer, rep, WRITE);
                         ReduceIterResults(test, timer, rep, WRITE);
                         if (params->outlierThreshold) {
                                 CheckForOutliers(params, timer, WRITE);
@@ -1511,6 +1564,7 @@ static void TestIoSys(IOR_test_t *test)
                            use actual amount of byte moved */
                         CheckFileSize(test, dataMoved, rep, READ);
 
+                        PrintHistogram(test, timer, rep, WRITE);
                         if (verbose >= VERBOSE_3)
                                 WriteTimes(params, timer, rep, READ);
                         ReduceIterResults(test, timer, rep, READ);
