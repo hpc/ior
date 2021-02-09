@@ -103,6 +103,21 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
             }
             printf("Writing output to %s\n", value);
           }
+        } else if (strcasecmp(option, "saveRankPerformanceDetailsCSV") == 0){
+          if (rank == 0){
+            // check that the file is writeable, truncate it and add header
+            FILE* fd = fopen(value, "w");
+            if (fd == NULL){
+              FAIL("Cannot open saveRankPerformanceDetailsCSV file for write!");
+            }
+            char buff[] = "access,rank,runtime-with-openclose,runtime\n";
+            int ret = fwrite(buff, strlen(buff), 1, fd);
+            if(ret != 1){
+              FAIL("Cannot write header to saveRankPerformanceDetailsCSV file");
+            }
+            fclose(fd);
+          }
+          params->saveRankDetailsCSV = strdup(value);
         } else if (strcasecmp(option, "summaryFormat") == 0) {
                 if(strcasecmp(value, "default") == 0){
                   outputFormat = OUTPUT_DEFAULT;
@@ -439,6 +454,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & params->warningAsErrors},
     {.help="  -O summaryFile=FILE                 -- store result data into this file", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputting the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O saveRankPerformanceDetailsCSV=<FILE> -- store the performance of each rank into the named CSV file.", .arg = OPTION_OPTIONAL_ARGUMENT},
     {0, "dryRun",      "do not perform any I/Os just run evtl. inputs print dummy output", OPTION_FLAG, 'd', & params->dryRun},
     LAST_OPTION,
   };
