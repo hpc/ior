@@ -130,6 +130,7 @@ typedef struct
     IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
     IOR_offset_t randomPrefillBlocksize;   /* prefill option for random IO, the amount of data used for prefill */
 
+    char * saveRankDetailsCSV;       /* save the details about the performance to a file */
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
     int useExistingTestFile;         /* do not delete test file before access */
