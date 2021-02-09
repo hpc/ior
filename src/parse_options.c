@@ -110,7 +110,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
             if (fd == NULL){
               FAIL("Cannot open saveRankPerformanceDetailsCSV file for write!");
             }
-            char buff[] = "access,rank,runtime-with-openclose,runtime\n";
+            char buff[] = "access,rank,runtime-with-openclose,runtime,throughput-withopenclose,throughput\n";
             int ret = fwrite(buff, strlen(buff), 1, fd);
             if(ret != 1){
               FAIL("Cannot write header to saveRankPerformanceDetailsCSV file");

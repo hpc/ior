@@ -1259,9 +1259,12 @@ static void StoreRankInformation(IOR_test_t *test, double *timer, const int rep,
     MPI_Comm_size(params->testComm, & size);
     double *all_times = malloc(2* size * sizeof(double));
     MPI_Gather(times, 2, MPI_DOUBLE, all_times, 2, MPI_DOUBLE, 0, params->testComm);
+    IOR_point_t *point = (access == WRITE) ? &test->results[rep].write : &test->results[rep].read;
+    double file_size = ((double) point->aggFileSizeForBW) / size;
+
     for(int i=0; i < size; i++){
       char buff[1024];
-      sprintf(buff, "%s,%d,%.10e,%.10e\n", access==WRITE ? "write" : "read", i, all_times[i*2], all_times[i*2+1]);
+      sprintf(buff, "%s,%d,%.10e,%.10e,%.10e,%.10e\n", access==WRITE ? "write" : "read", i, all_times[i*2], all_times[i*2+1], file_size/all_times[i*2], file_size/all_times[i*2+1] );
       int ret = fwrite(buff, strlen(buff), 1, fd);
       if(ret != 1){
         WARN("Couln't append to saveRankPerformanceDetailsCSV file\n");
