@@ -163,6 +163,7 @@ typedef struct {
   #ifdef HAVE_LUSTRE_LUSTREAPI
   int global_dir_layout;
   #endif /* HAVE_LUSTRE_LUSTREAPI */
+  char * saveRankDetailsCSV;       /* save the details about the performance to a file */
 
   mdtest_results_t * summary_table;
   pid_t pid;
@@ -1353,17 +1354,17 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
 char const * mdtest_test_name(int i){
   switch (i) {
-  case MDTEST_DIR_CREATE_NUM: return "Directory creation        :";
-  case MDTEST_DIR_STAT_NUM: return "Directory stat            :";
-  case MDTEST_DIR_READ_NUM: return NULL;
-  case MDTEST_DIR_REMOVE_NUM: return "Directory removal         :";
-  case MDTEST_DIR_RENAME_NUM: return "Directory rename          :";
-  case MDTEST_FILE_CREATE_NUM: return "File creation             :";
-  case MDTEST_FILE_STAT_NUM: return "File stat                 :";
-  case MDTEST_FILE_READ_NUM: return "File read                 :";
-  case MDTEST_FILE_REMOVE_NUM: return "File removal              :";
-  case MDTEST_TREE_CREATE_NUM: return "Tree creation             :";
-  case MDTEST_TREE_REMOVE_NUM: return "Tree removal              :";
+  case MDTEST_DIR_CREATE_NUM: return "Directory creation";
+  case MDTEST_DIR_STAT_NUM:   return "Directory stat";
+  case MDTEST_DIR_READ_NUM:   return "Directory read";
+  case MDTEST_DIR_REMOVE_NUM: return "Directory removal";
+  case MDTEST_DIR_RENAME_NUM: return "Directory rename";
+  case MDTEST_FILE_CREATE_NUM: return "File creation";
+  case MDTEST_FILE_STAT_NUM:   return "File stat";
+  case MDTEST_FILE_READ_NUM:   return "File read";
+  case MDTEST_FILE_REMOVE_NUM: return "File removal";
+  case MDTEST_TREE_CREATE_NUM: return "Tree creation";
+  case MDTEST_TREE_REMOVE_NUM: return "Tree removal";
   default: return "ERR INVALID TESTNAME      :";
   }
   return NULL;
@@ -1372,6 +1373,44 @@ char const * mdtest_test_name(int i){
 int calc_allreduce_index(int iter, int rank, int op){
   int tableSize = MDTEST_LAST_NUM;
   return iter * tableSize * o.size + rank * tableSize + op;
+}
+
+/*
+ * Store the results of each process in a file
+ */
+static void StoreRankInformation(int iterations){
+  const size_t size = sizeof(mdtest_results_t) * iterations;
+  if(rank == 0){
+    FILE* fd = fopen(o.saveRankDetailsCSV, "a");
+    if (fd == NULL){
+      FAIL("Cannot open saveRankPerformanceDetails file for writes!");
+    }
+
+    mdtest_results_t * results = malloc(size * o.size);
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+
+    for(int iter = 0; iter < iterations; iter++){
+      for(int i=0; i < o.size; i++){
+        mdtest_results_t * cur = & results[i * iterations + iter];
+        char buff[4096];
+        char * cpos = buff;
+        cpos += sprintf(cpos, "%d", i);
+        for(int e = 0; (e < MDTEST_TREE_CREATE_NUM) || (i == 0 && e < MDTEST_LAST_NUM); e++){
+          cpos += sprintf(cpos, ",%.10e,%.10e,%llu,%llu,%.10e", cur->rate[e], cur->time[e], (long long unsigned) cur->items[e], (long long unsigned)  cur->stonewall_last_item[e], cur->stonewall_time[e]);
+        }
+        cpos += sprintf(cpos, "\n");
+        int ret = fwrite(buff, cpos - buff, 1, fd);
+        if(ret != 1){
+          WARN("Couln't append to saveRankPerformanceDetailsCSV file\n");
+          break;
+        }
+      }
+    }
+    fclose(fd);
+  }else{
+    /* this is a hack for now assuming all datatypes in the structure are double */
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+  }
 }
 
 void summarize_results(int iterations, int print_time) {
@@ -1404,7 +1443,7 @@ void summarize_results(int iterations, int print_time) {
             continue;
           }
           curr = o.summary_table[j].rate[i];
-          fprintf(out_logfile, "Rank %d Iter %d Test %s Rate: %e\n", rank, j, access, curr);
+          fprintf(out_logfile, "Rank %d Iter %d Test %-20s Rate: %e\n", rank, j, access, curr);
         }
       }
     }
@@ -1452,8 +1491,8 @@ void summarize_results(int iterations, int print_time) {
     }
 
     VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
-    VERBOSE(0,-1,"   Operation         per Rank:      Max            Min           Mean          Std Dev     per Iteration: Max            Min           Mean");
-    VERBOSE(0,-1,"   ---------                        ---            ---           ----          -------                    ---            ---           ----");
+    VERBOSE(0,-1,"   Operation         per Rank: Max            Min           Mean          Std Dev     per Iteration: Max            Min           Mean");
+    VERBOSE(0,-1,"   ---------                   ---            ---           ----          -------                    ---            ---           ----");
 
     for (i = start; i < stop; i++) {
             min = max = all[i];
@@ -1500,7 +1539,7 @@ void summarize_results(int iterations, int print_time) {
             sd = sqrt(var);
             access = mdtest_test_name(i);
             if (i != 2) {
-                fprintf(out_logfile, "   %s ", access);
+                fprintf(out_logfile, "   %-22s ", access);
                 fprintf(out_logfile, "%14.3f ", max);
                 fprintf(out_logfile, "%14.3f ", min);
                 fprintf(out_logfile, "%14.3f ", mean);
@@ -1522,8 +1561,8 @@ void summarize_results(int iterations, int print_time) {
       }
     }
     if(stonewall_items != 0){
-      fprintf(out_logfile, "   File create (stonewall)   : ");
-      fprintf(out_logfile, "%14s %14s %14.3f %14s\n", "NA", "NA", print_time ? stonewall_time :  stonewall_items / stonewall_time, "NA");
+      fprintf(out_logfile, "   File create (stonewall) ");
+      fprintf(out_logfile, "%13s %14s %14.3f %14s\n", "NA", "NA", print_time ? stonewall_time :  stonewall_items / stonewall_time, "NA");
     }
 
     /* calculate tree create/remove rates, applies only to Rank 0 */
@@ -1565,7 +1604,7 @@ void summarize_results(int iterations, int print_time) {
         var = var / (iterations);
         sd = sqrt(var);
         access = mdtest_test_name(i);
-        fprintf(out_logfile, "   %s ", access);
+        fprintf(out_logfile, "   %-22s ", access);
         fprintf(out_logfile, "%14.3f ", max);
         fprintf(out_logfile, "%14.3f ", min);
         fprintf(out_logfile, "%14.3f ", mean);
@@ -1673,6 +1712,27 @@ void md_validate_tests() {
 
     if(o.create_only && o.read_only && o.read_bytes > o.write_bytes)
       FAIL("When writing and reading files, read bytes must be smaller than write bytes");
+
+    if (rank == 0 && o.saveRankDetailsCSV){
+      // check that the file is writeable, truncate it and add header
+      FILE* fd = fopen(o.saveRankDetailsCSV, "w");
+      if (fd == NULL){
+        FAIL("Cannot open saveRankPerformanceDetails file for write!");
+      }
+      int ret = fwrite("rank", 4, 1, fd);
+      for(int e = 0; e < MDTEST_LAST_NUM; e++){
+        char buf[1024];
+        const char * str = mdtest_test_name(e);
+
+        sprintf(buf, ",rate-%s,time-%s,items-%s,stonewall-items-%s,stonewall-time%s", str, str, str, str, str);
+        ret = fwrite(buf, strlen(buf), 1, fd);
+        if(ret != 1){
+          FAIL("Cannot write header to saveRankPerformanceDetails file");
+        }
+      }
+      fwrite("\n", 1, 1, fd);
+      fclose(fd);
+    }
 }
 
 void show_file_system_size(char *file_system) {
@@ -2103,6 +2163,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & o.print_time},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
+      {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
@@ -2405,6 +2466,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
           summarize_results(iterations, 1);
         }else{
           summarize_results(iterations, o.print_time);
+        }
+        if(o.saveRankDetailsCSV){
+          StoreRankInformation(iterations);
         }
         if (i == 1 && stride > 1) {
             i = 0;
