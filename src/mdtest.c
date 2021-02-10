@@ -1395,7 +1395,11 @@ static void StoreRankInformation(int iterations){
         char * cpos = buff;
         cpos += sprintf(cpos, "%d", i);
         for(int e = 0; (e < MDTEST_TREE_CREATE_NUM) || (i == 0 && e < MDTEST_LAST_NUM); e++){
-          cpos += sprintf(cpos, ",%.10e,%.10e,%llu,%llu,%.10e", cur->rate[e], cur->time[e], (long long unsigned) cur->items[e], (long long unsigned)  cur->stonewall_last_item[e], cur->stonewall_time[e]);
+          if(cur->items[e] == 0){
+            cpos += sprintf(cpos, ",,,,,");
+          }else{
+            cpos += sprintf(cpos, ",%.10e,%.10e,%llu,%llu,%.10e", cur->items[e] / cur->time_before_barrier[e], cur->time_before_barrier[e], (long long unsigned) cur->items[e], (long long unsigned)  cur->stonewall_last_item[e], cur->stonewall_time[e]);
+          }
         }
         cpos += sprintf(cpos, "\n");
         int ret = fwrite(buff, cpos - buff, 1, fd);
