@@ -898,9 +898,20 @@ void rename_dir_test(const int dirs, const long dir_iter, const char *path, rank
     }
 }
 
+static void updateResult(mdtest_results_t * res, mdtest_test_num_t test, uint64_t item_count, int t, double * times, double * tBefore){
+  res->rate[test] = item_count/(times[t] - times[t-1]);
+  res->time[test] = times[t] - times[t-1];
+  if(tBefore){
+    res->time_before_barrier[test] = tBefore[t] - times[t-1];
+  }
+  res->items[test] = item_count;
+  res->stonewall_last_item[test] = o.items;
+}
+
 void directory_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
     double t[6] = {0};
+    double tBefore[6] = {0};
     char temp_path[MAX_PATHLEN];
     mdtest_results_t * res = & o.summary_table[iteration];
 
@@ -908,6 +919,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     VERBOSE(1,-1,"Entering directory_test on %s", path );
 
+    tBefore[0] = GetTimeStamp();
     MPI_Barrier(testComm);
     t[0] = GetTimeStamp();
 
@@ -942,6 +954,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       progress->stone_wall_timer_seconds = 0;
     }
 
+    tBefore[1] = GetTimeStamp();
     phase_end();
     t[1] = GetTimeStamp();
 
@@ -968,6 +981,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         }
       }
     }
+    tBefore[2] = GetTimeStamp();
     phase_end();
     t[2] = GetTimeStamp();
 
@@ -994,6 +1008,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         }
       }
     }
+    tBefore[3] = GetTimeStamp();
     phase_end();
 
     t[3] = GetTimeStamp();
@@ -1014,6 +1029,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         rename_dir_test(1, dir_iter, temp_path, progress);
       }
     }
+    tBefore[4] = GetTimeStamp();
     phase_end();
 
     t[4] = GetTimeStamp();
@@ -1049,6 +1065,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       }
     }
 
+    tBefore[5] = GetTimeStamp();
     phase_end();
     t[5] = GetTimeStamp();
 
@@ -1068,28 +1085,16 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* calculate times */
     if (o.create_only) {
-        res->rate[MDTEST_DIR_CREATE_NUM] = o.items*size/(t[1] - t[0]);
-        res->time[MDTEST_DIR_CREATE_NUM] = t[1] - t[0];
-        res->items[MDTEST_DIR_CREATE_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_CREATE_NUM] = o.items;
+      updateResult(res, MDTEST_DIR_CREATE_NUM, o.items*size, 1, t, tBefore);
     }
     if (o.stat_only) {
-        res->rate[MDTEST_DIR_STAT_NUM] = o.items*size/(t[2] - t[1]);
-        res->time[MDTEST_DIR_STAT_NUM] = t[2] - t[1];
-        res->items[MDTEST_DIR_STAT_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_STAT_NUM] = o.items;
+      updateResult(res, MDTEST_DIR_STAT_NUM, o.items*size, 2, t, tBefore);
     }
     if (o.read_only) {
-        res->rate[MDTEST_DIR_READ_NUM] = o.items*size/(t[3] - t[2]);
-        res->time[MDTEST_DIR_READ_NUM] = t[3] - t[2];
-        res->items[MDTEST_DIR_READ_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_READ_NUM] = o.items;
+      updateResult(res, MDTEST_DIR_READ_NUM, o.items*size, 3, t, tBefore);
     }
     if (o.remove_only) {
-        res->rate[MDTEST_DIR_REMOVE_NUM] = o.items*size/(t[5] - t[4]);
-        res->time[MDTEST_DIR_REMOVE_NUM] = t[5] - t[4];
-        res->items[MDTEST_DIR_REMOVE_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_REMOVE_NUM] = o.items;
+      updateResult(res, MDTEST_DIR_REMOVE_NUM, o.items*size, 5, t, tBefore);
     }
     VERBOSE(1,-1,"   Directory creation: %14.3f sec, %14.3f ops/sec", t[1] - t[0], o.summary_table[iteration].rate[0]);
     VERBOSE(1,-1,"   Directory stat    : %14.3f sec, %14.3f ops/sec", t[2] - t[1], o.summary_table[iteration].rate[1]);
@@ -1178,11 +1183,13 @@ void file_test_create(const int iteration, const int ntasks, const char *path, r
 void file_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
     double t[5] = {0};
+    double tBefore[5] = {0};
     char temp_path[MAX_PATHLEN];
     MPI_Comm_size(testComm, &size);
 
     VERBOSE(3,5,"Entering file_test on %s", path);
 
+    tBefore[0] = GetTimeStamp();
     MPI_Barrier(testComm);
     t[0] = GetTimeStamp();
 
@@ -1216,6 +1223,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
+    tBefore[1] = GetTimeStamp();
     phase_end();
     t[1] = GetTimeStamp();
 
@@ -1239,6 +1247,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
+    tBefore[2] = GetTimeStamp();
     phase_end();
     t[2] = GetTimeStamp();
 
@@ -1266,6 +1275,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
+    tBefore[3] = GetTimeStamp();
     phase_end();
     t[3] = GetTimeStamp();
 
@@ -1296,6 +1306,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
+    tBefore[4] = GetTimeStamp();
     phase_end();
     t[4] = GetTimeStamp();
     if (o.remove_only) {
@@ -1319,28 +1330,16 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     mdtest_results_t * res = & o.summary_table[iteration];
     /* calculate times */
     if (o.create_only) {
-        res->rate[MDTEST_FILE_CREATE_NUM] = o.items*size/(t[1] - t[0]);
-        res->time[MDTEST_FILE_CREATE_NUM] = t[1] - t[0];
-        res->items[MDTEST_FILE_CREATE_NUM] = o.items*o.size;
-        res->stonewall_last_item[MDTEST_FILE_CREATE_NUM] = o.items;
+      updateResult(res, MDTEST_FILE_CREATE_NUM, o.items*size, 1, t, tBefore);
     }
     if (o.stat_only) {
-        res->rate[MDTEST_FILE_STAT_NUM] = o.items*size/(t[2] - t[1]);
-        res->time[MDTEST_FILE_STAT_NUM] = t[2] - t[1];
-        res->items[MDTEST_FILE_STAT_NUM] = o.items*o.size;
-        res->stonewall_last_item[MDTEST_FILE_STAT_NUM] = o.items;
+      updateResult(res, MDTEST_FILE_STAT_NUM, o.items*size, 2, t, tBefore);
     }
     if (o.read_only) {
-        res->rate[MDTEST_FILE_READ_NUM] = o.items*o.size/(t[3] - t[2]);
-        res->time[MDTEST_FILE_READ_NUM] = t[3] - t[2];
-        res->items[MDTEST_FILE_READ_NUM] = o.items*o.size;
-        res->stonewall_last_item[MDTEST_FILE_READ_NUM] = o.items;
+      updateResult(res, MDTEST_FILE_READ_NUM, o.items*size, 3, t, tBefore);
     }
     if (o.remove_only) {
-        res->rate[MDTEST_FILE_REMOVE_NUM] = o.items*o.size/(t[4] - t[3]);
-        res->time[MDTEST_FILE_REMOVE_NUM] = t[4] - t[3];
-        res->items[MDTEST_FILE_REMOVE_NUM] = o.items*o.size;
-        res->stonewall_last_item[MDTEST_FILE_REMOVE_NUM] = o.items;
+      updateResult(res, MDTEST_FILE_REMOVE_NUM, o.items*size, 4, t, tBefore);
     }
 
     VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", t[1] - t[0], o.summary_table[iteration].rate[4]);
