@@ -2483,9 +2483,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         FAIL("Unable to remove test directory path %s", o.testdirpath);
     }
 
-    int total_errors;
+    int total_errors = 0;
     MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
-    if(total_errors){
+    if(rank == 0 && total_errors){
       VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
     }
     VERBOSE(0,-1,"-- finished at %s --\n", PrintTimestamp());
