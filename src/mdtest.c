@@ -1514,10 +1514,20 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
         imin = icur;
       }
       isum += icur;
-      iter_result[j] = icur * o.size;
+      if(print_time){
+        iter_result[j] = icur;
+      }else{
+        iter_result[j] = icur * o.size;
+      }
     }
     mean = sum / iterations / o.size;
-    imean = isum / iterations * o.size;
+    imean = isum / iterations;
+    if(! print_time){
+      imax *= o.size;
+      imin *= o.size;
+      isum *= o.size;
+      imean *= o.size;
+    }
     for (int j = 0; j < iterations; j++) {
       var += (imean - iter_result[j]) * (imean - iter_result[j]);
     }
@@ -1525,9 +1535,6 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
     sd = sqrt(var);
     access = mdtest_test_name(i);
     if (i != 2) {
-      imax *= o.size;
-      imin *= o.size;
-      isum *= o.size;
       fprintf(out_logfile, "   %-22s ", access);
       fprintf(out_logfile, "%14.3f ", max);
       fprintf(out_logfile, "%14.3f ", min);
@@ -1535,7 +1542,7 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
       fprintf(out_logfile, "%18.3f ", imax);
       fprintf(out_logfile, "%14.3f ", imin);
       fprintf(out_logfile, "%14.3f ", imean);
-      fprintf(out_logfile, "%14.3f\n", sd);
+      fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
       fflush(out_logfile);
     }
   }
@@ -1586,7 +1593,7 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
       fprintf(out_logfile, "%18.3f ", imax);
       fprintf(out_logfile, "%14.3f ", imin);
       fprintf(out_logfile, "%14.3f ", sum / iterations);
-      fprintf(out_logfile, "%14.3f\n", sd);
+      fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
       fflush(out_logfile);
   }
 }
