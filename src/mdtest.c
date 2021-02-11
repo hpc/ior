@@ -905,7 +905,8 @@ static void updateResult(mdtest_results_t * res, mdtest_test_num_t test, uint64_
   }else{
     res->time_before_barrier[test] = res->time[test];
   }
-  res->rate[test] = item_count/res->time_before_barrier[test];
+  res->rate[test] = item_count/res->time[test];
+  res->rate_before_barrier[test] = item_count/res->time_before_barrier[test];
   res->items[test] = item_count;
   res->stonewall_last_item[test] = o.items;
 }
@@ -1457,7 +1458,7 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
           if(print_time){
             curr = cur->time_before_barrier[i];
           }else{
-            curr = cur->rate[i];
+            curr = cur->rate_before_barrier[i];
           }
           fprintf(out_logfile, "%c%e", (k==0 ? ' ': ','), curr);
         }
@@ -1487,7 +1488,7 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
         if(print_time){
           curr = cur->time_before_barrier[i];
         }else{
-          curr = cur->rate[i];
+          curr = cur->rate_before_barrier[i];
         }
         if (min > curr) {
           min = curr;
@@ -1495,16 +1496,19 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
         if (max < curr) {
           max = curr;
         }
+        sum += curr;
+
         if (print_time) {
+          curr = cur->time[i];
           if (icur < curr) {
             icur = curr;
           }
         } else {
+          curr = cur->rate[i];
           if (icur > curr) {
             icur = curr;
           }
         }
-        sum += curr;
       }
 
       if (icur > imax) {
@@ -1606,6 +1610,7 @@ void summarize_results(int iterations, mdtest_results_t * results) {
   mdtest_results_t * all_results = NULL;
   if(rank == 0){
     all_results = safeMalloc(size * o.size);
+    memset(all_results, 0, size * o.size);
     MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, all_results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
     // calculate the aggregated values for all processes
     for(int j=0; j < iterations; j++){
