@@ -24,6 +24,7 @@ typedef struct
 {
     double rate[MDTEST_LAST_NUM]; /* Calculated throughput */
     double time[MDTEST_LAST_NUM]; /* Time */
+    double time_before_barrier[MDTEST_TREE_CREATE_NUM]; /* individual time before executing the barrier */
     uint64_t items[MDTEST_LAST_NUM]; /* Number of operations done */
 
     /* Statistics when hitting the stonewall */
