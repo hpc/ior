@@ -1393,12 +1393,12 @@ static void StoreRankInformation(int iterations){
         mdtest_results_t * cur = & results[i * iterations + iter];
         char buff[4096];
         char * cpos = buff;
-        cpos += sprintf(cpos, "%d", i);
+        cpos += sprintf(cpos, "%d,%llu", i, (long long unsigned) o.items);
         for(int e = 0; (e < MDTEST_TREE_CREATE_NUM) || (i == 0 && e < MDTEST_LAST_NUM); e++){
           if(cur->items[e] == 0){
-            cpos += sprintf(cpos, ",,,,,");
+            cpos += sprintf(cpos, ",,");
           }else{
-            cpos += sprintf(cpos, ",%.10e,%.10e,%llu,%llu,%.10e", cur->items[e] / cur->time_before_barrier[e], cur->time_before_barrier[e], (long long unsigned) cur->items[e], (long long unsigned)  cur->stonewall_last_item[e], cur->stonewall_time[e]);
+            cpos += sprintf(cpos, ",%.10e,%.10e", cur->items[e] / cur->time_before_barrier[e], cur->time_before_barrier[e]);
           }
         }
         cpos += sprintf(cpos, "\n");
@@ -1722,12 +1722,13 @@ void md_validate_tests() {
       if (fd == NULL){
         FAIL("Cannot open saveRankPerformanceDetails file for write!");
       }
-      int ret = fwrite("rank", 4, 1, fd);
+      char * head = "rank,items";
+      int ret = fwrite(head, strlen(head), 1, fd);
       for(int e = 0; e < MDTEST_LAST_NUM; e++){
         char buf[1024];
         const char * str = mdtest_test_name(e);
 
-        sprintf(buf, ",rate-%s,time-%s,items-%s,stonewall-items-%s,stonewall-time%s", str, str, str, str, str);
+        sprintf(buf, ",rate-%s,time-%s", str, str);
         ret = fwrite(buf, strlen(buf), 1, fd);
         if(ret != 1){
           FAIL("Cannot write header to saveRankPerformanceDetails file");
