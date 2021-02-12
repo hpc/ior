@@ -1375,7 +1375,7 @@ char const * mdtest_test_name(int i){
 /*
  * Store the results of each process in a file
  */
-static void StoreRankInformation(int iterations){
+static void StoreRankInformation(int iterations, mdtest_results_t * agg){
   const size_t size = sizeof(mdtest_results_t) * iterations;
   if(rank == 0){
     FILE* fd = fopen(o.saveRankDetailsCSV, "a");
@@ -1386,13 +1386,25 @@ static void StoreRankInformation(int iterations){
     mdtest_results_t * results = safeMalloc(size * o.size);
     MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
 
+    char buff[4096];
+    char * cpos = buff;
+    cpos += sprintf(cpos, "all,%llu", (long long unsigned) o.items);
+    for(int e = 0; e < MDTEST_LAST_NUM; e++){
+      if(agg->items[e] == 0){
+        cpos += sprintf(cpos, ",,");
+      }else{
+        cpos += sprintf(cpos, ",%.10e,%.10e", agg->items[e] / agg->time[e], agg->time[e]);
+      }
+    }
+    cpos += sprintf(cpos, "\n");
+    int ret = fwrite(buff, cpos - buff, 1, fd);
+
     for(int iter = 0; iter < iterations; iter++){
       for(int i=0; i < o.size; i++){
         mdtest_results_t * cur = & results[i * iterations + iter];
-        char buff[4096];
-        char * cpos = buff;
-        cpos += sprintf(cpos, "%d,%llu", i, (long long unsigned) o.items);
-        for(int e = 0; (e < MDTEST_TREE_CREATE_NUM) || (i == 0 && e < MDTEST_LAST_NUM); e++){
+        cpos = buff;
+        cpos += sprintf(cpos, "%d,", i);
+        for(int e = 0; e < MDTEST_TREE_CREATE_NUM; e++){
           if(cur->items[e] == 0){
             cpos += sprintf(cpos, ",,");
           }else{
@@ -1400,7 +1412,7 @@ static void StoreRankInformation(int iterations){
           }
         }
         cpos += sprintf(cpos, "\n");
-        int ret = fwrite(buff, cpos - buff, 1, fd);
+        ret = fwrite(buff, cpos - buff, 1, fd);
         if(ret != 1){
           WARN("Couln't append to saveRankPerformanceDetailsCSV file\n");
           break;
@@ -2521,7 +2533,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         }
         summarize_results(iterations, aggregated_results);
         if(o.saveRankDetailsCSV){
-          StoreRankInformation(iterations);
+          StoreRankInformation(iterations, aggregated_results);
         }
         if (i == 1 && stride > 1) {
             i = 0;
