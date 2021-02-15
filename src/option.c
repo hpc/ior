@@ -253,8 +253,10 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
   int i = 0;
   if(arg != NULL){
     arg[0] = 0;
-    arg++;
     replaced_equal = 1;
+
+    // Check empty value
+    arg = (arg[1] == 0) ? NULL : arg + 1;
   }
   *flag_parsed_next = 0;
 
@@ -296,7 +298,7 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
             case (OPTION_OPTIONAL_ARGUMENT):
             case (OPTION_REQUIRED_ARGUMENT):{
               // check if next is an argument
-              if(arg == NULL){
+              if(arg == NULL && replaced_equal != 1){
                 if(o->shortVar == txt[0] && txt[1] != 0){
                   arg = & txt[1];
                 }else{
