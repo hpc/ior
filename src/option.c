@@ -265,10 +265,12 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
   }
   txt++;
   int parsed = 0;
+  
+  // printf("Parsing: %s : %s\n", txt, arg);
   // support groups of multiple flags like -vvv or -vq
   for(int flag_index = 0; flag_index < strlen(txt); ++flag_index){
     // don't loop looking for multiple flags if we already processed a long option
-    if(txt[0] == '-' && flag_index > 0)
+    if(txt[flag_index] == '=' || (txt[0] == '-' && flag_index > 0))
         break;
 
     for(int m = 0; m < opt_all->module_count; m++ ){
@@ -281,6 +283,7 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
           continue;
         }
         if ( (o->shortVar == txt[flag_index]) || (strlen(txt) > 2 && txt[0] == '-' && o->longVar != NULL && strcmp(txt + 1, o->longVar) == 0)){
+          //  printf("Found %s %c=%c? %d %d\n", o->help, o->shortVar, txt[flag_index], (o->shortVar == txt[flag_index]), (strlen(txt) > 2 && txt[0] == '-' && o->longVar != NULL && strcmp(txt + 1, o->longVar) == 0));
           // now process the option.
           switch(o->arg){
             case (OPTION_FLAG):{
