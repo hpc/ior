@@ -26,12 +26,22 @@ IOR 2 -a POSIX -w    -z  -C             -F -k -e -i1 -m -t 100k -b 200k
 IOR 2 -a POSIX -w    -z  -C -Q 1        -F -k -e -i1 -m -t 100k -b 200k
 IOR 2 -a POSIX -r    -z  -Z -Q 2        -F -k -e -i1 -m -t 100k -b 200k
 IOR 2 -a POSIX -r    -z  -Z -Q 3 -X  13 -F -k -e -i1 -m -t 100k -b 200k
-IOR 2 -a POSIX -w    -z  -Z -Q 1 -X -13 -F    -e -i1 -m -t 100k -b 200k
+IOR 3 -a POSIX -w    -z  -Z -Q 1 -X -13 -F    -e -i1 -m -t 100k -b 200k
 
 IOR 2 -f "$ROOT/test_comments.ior"
 
 # Test for JSON output
 IOR 2 -a DUMMY -e -F -t 1m -b 1m -A 328883 -O summaryFormat=JSON -O summaryFile=OUT.json
 python -mjson.tool OUT.json >/dev/null  && echo "JSON OK"
+
+# MDWB
+MDWB 3 -a POSIX -O=1 -D=1 -G=10 -P=1 -I=1 -R=2 -X
+MDWB 3 -a POSIX -O=1 -D=4 -G=10 -P=4 -I=1 -R=2 -X -t=0.001 -L=latency.txt
+MDWB 3 -a POSIX -O=1 -D=2 -G=10 -P=4 -I=3 -R=2 -X -W -w 1
+MDWB 3 -a POSIX -O=1 -D=2 -G=10 -P=4 -I=3 -1 -W -w 1 --run-info-file=mdw.tst --print-detailed-stats
+MDWB 3 -a POSIX -O=1 -D=2 -G=10 -P=4 -I=3 -2 -W -w 1 --run-info-file=mdw.tst --print-detailed-stats
+MDWB 3 -a POSIX -O=1 -D=2 -G=10 -P=4 -I=3 -2 -W -w 1 --read-only --run-info-file=mdw.tst --print-detailed-stats
+MDWB 3 -a POSIX -O=1 -D=2 -G=10 -P=4 -I=3 -2 -W -w 1 --read-only --run-info-file=mdw.tst --print-detailed-stats
+MDWB 3 -a POSIX -O=1 -D=2 -G=10 -P=4 -I=3 -3 -W -w 1 --run-info-file=mdw.tst --print-detailed-stats
 
 END

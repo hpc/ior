@@ -22,15 +22,17 @@ typedef enum {
 
 typedef struct
 {
-    double rate[MDTEST_LAST_NUM]; /* Calculated throughput */
+    double rate[MDTEST_LAST_NUM]; /* Calculated throughput after the barrier */
+    double rate_before_barrier[MDTEST_LAST_NUM]; /* Calculated throughput before the barrier */
     double time[MDTEST_LAST_NUM]; /* Time */
-    uint64_t items[MDTEST_LAST_NUM]; /* Number of operations done */
+    double time_before_barrier[MDTEST_TREE_CREATE_NUM]; /* individual time before executing the barrier */
+    uint64_t items[MDTEST_LAST_NUM]; /* Number of operations done in this process*/
 
     /* Statistics when hitting the stonewall */
-    double   stonewall_time[MDTEST_LAST_NUM];     /* runtime until completion / hit of the stonewall */
-    uint64_t stonewall_last_item[MDTEST_LAST_NUM]; /* Max number of items a process has accessed */
-    uint64_t stonewall_item_min[MDTEST_LAST_NUM];  /* Min number of items a process has accessed */
-    uint64_t stonewall_item_sum[MDTEST_LAST_NUM];  /* Total number of items accessed until stonewall */
+    double   stonewall_time[MDTEST_LAST_NUM];     /* Max runtime of any process until completion / hit of the stonewall */
+    uint64_t stonewall_last_item[MDTEST_LAST_NUM]; /* The number of items a process has accessed */
+    uint64_t stonewall_item_min[MDTEST_LAST_NUM];  /* Min number of items any process has accessed */
+    uint64_t stonewall_item_sum[MDTEST_LAST_NUM];  /* Total number of items accessed by all processes until stonewall */
 } mdtest_results_t;
 
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * out_logfile);

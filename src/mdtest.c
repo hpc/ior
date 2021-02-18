@@ -164,6 +164,7 @@ typedef struct {
   #ifdef HAVE_LUSTRE_LUSTREAPI
   int global_dir_layout;
   #endif /* HAVE_LUSTRE_LUSTREAPI */
+  char * saveRankDetailsCSV;       /* save the details about the performance to a file */
 
   mdtest_results_t * summary_table;
   pid_t pid;
@@ -895,9 +896,23 @@ void rename_dir_test(const int dirs, const long dir_iter, const char *path, rank
     }
 }
 
+static void updateResult(mdtest_results_t * res, mdtest_test_num_t test, uint64_t item_count, int t, double * times, double * tBefore){
+  res->time[test] = times[t] - times[t-1];
+  if(tBefore){
+    res->time_before_barrier[test] = tBefore[t] - times[t-1];
+  }else{
+    res->time_before_barrier[test] = res->time[test];
+  }
+  res->rate[test] = item_count/res->time[test];
+  res->rate_before_barrier[test] = item_count/res->time_before_barrier[test];
+  res->items[test] = item_count;
+  res->stonewall_last_item[test] = o.items;
+}
+
 void directory_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
     double t[6] = {0};
+    double tBefore[6] = {0};
     char temp_path[MAX_PATHLEN];
     mdtest_results_t * res = & o.summary_table[iteration];
 
@@ -905,6 +920,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     VERBOSE(1,-1,"Entering directory_test on %s", path );
 
+    tBefore[0] = GetTimeStamp();
     MPI_Barrier(testComm);
     t[0] = GetTimeStamp();
 
@@ -939,6 +955,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       progress->stone_wall_timer_seconds = 0;
     }
 
+    tBefore[1] = GetTimeStamp();
     phase_end();
     t[1] = GetTimeStamp();
 
@@ -965,9 +982,12 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         }
       }
     }
+    tBefore[2] = GetTimeStamp();
     phase_end();
     t[2] = GetTimeStamp();
-
+    if (o.rename_dirs && o.items > 1) { // moved close to execution
+      updateResult(res, MDTEST_DIR_RENAME_NUM, o.items, 4, t, tBefore);
+    }
     /* read phase */
     if (o.read_only) {
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
@@ -991,6 +1011,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         }
       }
     }
+    tBefore[3] = GetTimeStamp();
     phase_end();
 
     t[3] = GetTimeStamp();
@@ -1011,14 +1032,12 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         rename_dir_test(1, dir_iter, temp_path, progress);
       }
     }
+    tBefore[4] = GetTimeStamp();
     phase_end();
 
     t[4] = GetTimeStamp();
     if (o.rename_dirs && o.items > 1) { // moved close to execution
-        res->rate[MDTEST_DIR_RENAME_NUM] = o.items*size/(t[4] - t[3]);
-        res->time[MDTEST_DIR_RENAME_NUM] = t[4] - t[3];
-        res->items[MDTEST_DIR_RENAME_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_RENAME_NUM] = o.items*size;
+      updateResult(res, MDTEST_DIR_RENAME_NUM, o.items, 4, t, tBefore);
     }
 
     if (o.remove_only) {
@@ -1046,6 +1065,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
       }
     }
 
+    tBefore[5] = GetTimeStamp();
     phase_end();
     t[5] = GetTimeStamp();
 
@@ -1065,28 +1085,16 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* calculate times */
     if (o.create_only) {
-        res->rate[MDTEST_DIR_CREATE_NUM] = o.items*size/(t[1] - t[0]);
-        res->time[MDTEST_DIR_CREATE_NUM] = t[1] - t[0];
-        res->items[MDTEST_DIR_CREATE_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_CREATE_NUM] = o.items;
+      updateResult(res, MDTEST_DIR_CREATE_NUM, o.items, 1, t, tBefore);
     }
     if (o.stat_only) {
-        res->rate[MDTEST_DIR_STAT_NUM] = o.items*size/(t[2] - t[1]);
-        res->time[MDTEST_DIR_STAT_NUM] = t[2] - t[1];
-        res->items[MDTEST_DIR_STAT_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_STAT_NUM] = o.items;
+      updateResult(res, MDTEST_DIR_STAT_NUM, o.items, 2, t, tBefore);
     }
     if (o.read_only) {
-        res->rate[MDTEST_DIR_READ_NUM] = o.items*size/(t[3] - t[2]);
-        res->time[MDTEST_DIR_READ_NUM] = t[3] - t[2];
-        res->items[MDTEST_DIR_READ_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_READ_NUM] = o.items;
+      updateResult(res, MDTEST_DIR_READ_NUM, o.items, 3, t, tBefore);
     }
     if (o.remove_only) {
-        res->rate[MDTEST_DIR_REMOVE_NUM] = o.items*size/(t[5] - t[4]);
-        res->time[MDTEST_DIR_REMOVE_NUM] = t[5] - t[4];
-        res->items[MDTEST_DIR_REMOVE_NUM] = o.items*size;
-        res->stonewall_last_item[MDTEST_DIR_REMOVE_NUM] = o.items;
+      updateResult(res, MDTEST_DIR_REMOVE_NUM, o.items, 5, t, tBefore);
     }
     VERBOSE(1,-1,"   Directory creation: %14.3f sec, %14.3f ops/sec", t[1] - t[0], o.summary_table[iteration].rate[0]);
     VERBOSE(1,-1,"   Directory stat    : %14.3f sec, %14.3f ops/sec", t[2] - t[1], o.summary_table[iteration].rate[1]);
@@ -1102,6 +1110,7 @@ int updateStoneWallIterations(int iteration, uint64_t items_done, double tstart,
   VERBOSE(1,1,"stonewall hit with %lld items", (long long) items_done );
   MPI_Allreduce(& items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
   o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = GetTimeStamp() - tstart;
+  o.summary_table[iteration].stonewall_last_item[MDTEST_FILE_CREATE_NUM] = items_done;
   *out_max_iter = max_iter;
 
   // continue to the maximum...
@@ -1175,11 +1184,13 @@ void file_test_create(const int iteration, const int ntasks, const char *path, r
 void file_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
     double t[5] = {0};
+    double tBefore[5] = {0};
     char temp_path[MAX_PATHLEN];
     MPI_Comm_size(testComm, &size);
 
     VERBOSE(3,5,"Entering file_test on %s", path);
 
+    tBefore[0] = GetTimeStamp();
     MPI_Barrier(testComm);
     t[0] = GetTimeStamp();
 
@@ -1213,6 +1224,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
+    tBefore[1] = GetTimeStamp();
     phase_end();
     t[1] = GetTimeStamp();
 
@@ -1236,6 +1248,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
+    tBefore[2] = GetTimeStamp();
     phase_end();
     t[2] = GetTimeStamp();
 
@@ -1263,6 +1276,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
+    tBefore[3] = GetTimeStamp();
     phase_end();
     t[3] = GetTimeStamp();
 
@@ -1293,6 +1307,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
+    tBefore[4] = GetTimeStamp();
     phase_end();
     t[4] = GetTimeStamp();
     if (o.remove_only) {
@@ -1316,28 +1331,16 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     mdtest_results_t * res = & o.summary_table[iteration];
     /* calculate times */
     if (o.create_only) {
-        res->rate[MDTEST_FILE_CREATE_NUM] = o.items*size/(t[1] - t[0]);
-        res->time[MDTEST_FILE_CREATE_NUM] = t[1] - t[0];
-        res->items[MDTEST_FILE_CREATE_NUM] = o.items*o.size;
-        res->stonewall_last_item[MDTEST_FILE_CREATE_NUM] = o.items;
+      updateResult(res, MDTEST_FILE_CREATE_NUM, o.items, 1, t, tBefore);
     }
     if (o.stat_only) {
-        res->rate[MDTEST_FILE_STAT_NUM] = o.items*size/(t[2] - t[1]);
-        res->time[MDTEST_FILE_STAT_NUM] = t[2] - t[1];
-        res->items[MDTEST_FILE_STAT_NUM] = o.items*o.size;
-        res->stonewall_last_item[MDTEST_FILE_STAT_NUM] = o.items;
+      updateResult(res, MDTEST_FILE_STAT_NUM, o.items, 2, t, tBefore);
     }
     if (o.read_only) {
-        res->rate[MDTEST_FILE_READ_NUM] = o.items*o.size/(t[3] - t[2]);
-        res->time[MDTEST_FILE_READ_NUM] = t[3] - t[2];
-        res->items[MDTEST_FILE_READ_NUM] = o.items*o.size;
-        res->stonewall_last_item[MDTEST_FILE_READ_NUM] = o.items;
+      updateResult(res, MDTEST_FILE_READ_NUM, o.items, 3, t, tBefore);
     }
     if (o.remove_only) {
-        res->rate[MDTEST_FILE_REMOVE_NUM] = o.items*o.size/(t[4] - t[3]);
-        res->time[MDTEST_FILE_REMOVE_NUM] = t[4] - t[3];
-        res->items[MDTEST_FILE_REMOVE_NUM] = o.items*o.size;
-        res->stonewall_last_item[MDTEST_FILE_REMOVE_NUM] = o.items;
+      updateResult(res, MDTEST_FILE_REMOVE_NUM, o.items, 4, t, tBefore);
     }
 
     VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", t[1] - t[0], o.summary_table[iteration].rate[4]);
@@ -1351,228 +1354,337 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
 char const * mdtest_test_name(int i){
   switch (i) {
-  case MDTEST_DIR_CREATE_NUM: return "Directory creation        :";
-  case MDTEST_DIR_STAT_NUM: return "Directory stat            :";
-  case MDTEST_DIR_READ_NUM: return NULL;
-  case MDTEST_DIR_REMOVE_NUM: return "Directory removal         :";
-  case MDTEST_DIR_RENAME_NUM: return "Directory rename          :";
-  case MDTEST_FILE_CREATE_NUM: return "File creation             :";
-  case MDTEST_FILE_STAT_NUM: return "File stat                 :";
-  case MDTEST_FILE_READ_NUM: return "File read                 :";
-  case MDTEST_FILE_REMOVE_NUM: return "File removal              :";
-  case MDTEST_TREE_CREATE_NUM: return "Tree creation             :";
-  case MDTEST_TREE_REMOVE_NUM: return "Tree removal              :";
+  case MDTEST_DIR_CREATE_NUM: return "Directory creation";
+  case MDTEST_DIR_STAT_NUM:   return "Directory stat";
+  case MDTEST_DIR_READ_NUM:   return "Directory read";
+  case MDTEST_DIR_REMOVE_NUM: return "Directory removal";
+  case MDTEST_DIR_RENAME_NUM: return "Directory rename";
+  case MDTEST_FILE_CREATE_NUM: return "File creation";
+  case MDTEST_FILE_STAT_NUM:   return "File stat";
+  case MDTEST_FILE_READ_NUM:   return "File read";
+  case MDTEST_FILE_REMOVE_NUM: return "File removal";
+  case MDTEST_TREE_CREATE_NUM: return "Tree creation";
+  case MDTEST_TREE_REMOVE_NUM: return "Tree removal";
   default: return "ERR INVALID TESTNAME      :";
   }
   return NULL;
 }
 
-int calc_allreduce_index(int iter, int rank, int op){
-  int tableSize = MDTEST_LAST_NUM;
-  return iter * tableSize * o.size + rank * tableSize + op;
+/*
+ * Store the results of each process in a file
+ */
+static void StoreRankInformation(int iterations, mdtest_results_t * agg){
+  const size_t size = sizeof(mdtest_results_t) * iterations;
+  if(rank == 0){
+    FILE* fd = fopen(o.saveRankDetailsCSV, "a");
+    if (fd == NULL){
+      FAIL("Cannot open saveRankPerformanceDetails file for writes!");
+    }
+
+    mdtest_results_t * results = safeMalloc(size * o.size);
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+
+    char buff[4096];
+    char * cpos = buff;
+    cpos += sprintf(cpos, "all,%llu", (long long unsigned) o.items);
+    for(int e = 0; e < MDTEST_LAST_NUM; e++){
+      if(agg->items[e] == 0){
+        cpos += sprintf(cpos, ",,");
+      }else{
+        cpos += sprintf(cpos, ",%.10e,%.10e", agg->items[e] / agg->time[e], agg->time[e]);
+      }
+    }
+    cpos += sprintf(cpos, "\n");
+    int ret = fwrite(buff, cpos - buff, 1, fd);
+
+    for(int iter = 0; iter < iterations; iter++){
+      for(int i=0; i < o.size; i++){
+        mdtest_results_t * cur = & results[i * iterations + iter];
+        cpos = buff;
+        cpos += sprintf(cpos, "%d,", i);
+        for(int e = 0; e < MDTEST_TREE_CREATE_NUM; e++){
+          if(cur->items[e] == 0){
+            cpos += sprintf(cpos, ",,");
+          }else{
+            cpos += sprintf(cpos, ",%.10e,%.10e", cur->items[e] / cur->time_before_barrier[e], cur->time_before_barrier[e]);
+          }
+        }
+        cpos += sprintf(cpos, "\n");
+        ret = fwrite(buff, cpos - buff, 1, fd);
+        if(ret != 1){
+          WARN("Couln't append to saveRankPerformanceDetailsCSV file\n");
+          break;
+        }
+      }
+    }
+    fclose(fd);
+    free(results);
+  }else{
+    /* this is a hack for now assuming all datatypes in the structure are double */
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+  }
 }
 
-void summarize_results(int iterations, int print_time) {
-    char const * access;
-    int i, j, k;
-    int start, stop, tableSize = MDTEST_LAST_NUM;
-    double min, max, mean, sd, sum, var, curr = 0;
-    double imin, imax, isum, icur; // calculation per iteration
+static mdtest_results_t* get_result_index(mdtest_results_t* all_results, int proc, int iter, int interation_count){
+  return & all_results[proc * interation_count + iter];
+}
 
-    double all[iterations * o.size * tableSize];
+static void summarize_results_rank0(int iterations,  mdtest_results_t * all_results, int print_time) {
+  int start, stop;
+  double min, max, mean, sd, sum, var, curr = 0;
+  double imin, imax, imean, isum, icur; // calculation per iteration
+  char const * access;
+  /* if files only access, skip entries 0-3 (the dir tests) */
+  if (o.files_only && ! o.dirs_only) {
+      start = MDTEST_FILE_CREATE_NUM;
+  } else {
+      start = 0;
+  }
 
+  /* if directories only access, skip entries 4-7 (the file tests) */
+  if (o.dirs_only && !o.files_only) {
+      stop = MDTEST_FILE_CREATE_NUM;
+  } else {
+      stop = MDTEST_TREE_CREATE_NUM;
+  }
 
-    VERBOSE(1,-1,"Entering summarize_results..." );
+  /* special case: if no directory or file tests, skip all */
+  if (!o.dirs_only && !o.files_only) {
+      start = stop = 0;
+  }
 
-    MPI_Barrier(testComm);
-    for(int i=0; i < iterations; i++){
-      if(print_time){
-        MPI_Gather(& o.summary_table[i].time[0], tableSize, MPI_DOUBLE, & all[i*tableSize * o.size], tableSize, MPI_DOUBLE, 0, testComm);
-      }else{
-        MPI_Gather(& o.summary_table[i].rate[0], tableSize, MPI_DOUBLE, & all[i*tableSize * o.size], tableSize, MPI_DOUBLE, 0, testComm);
-      }
-    }
-
-    if(o.print_all_proc && 0){
-      // This code prints the result table for debugging
-      for (i = 0; i < tableSize; i++) {
-        for (j = 0; j < iterations; j++) {
-          access = mdtest_test_name(i);
-          if(access == NULL){
-            continue;
-          }
-          curr = o.summary_table[j].rate[i];
-          fprintf(out_logfile, "Rank %d Iter %d Test %s Rate: %e\n", rank, j, access, curr);
-        }
-      }
-    }
-
-    if (rank != 0) {
-      return;
-    }
-
-    /* if files only access, skip entries 0-3 (the dir tests) */
-    if (o.files_only && ! o.dirs_only) {
-        start = MDTEST_FILE_CREATE_NUM;
-    } else {
-        start = 0;
-    }
-
-    /* if directories only access, skip entries 4-7 (the file tests) */
-    if (o.dirs_only && !o.files_only) {
-        stop = MDTEST_FILE_CREATE_NUM;
-    } else {
-        stop = MDTEST_TREE_CREATE_NUM;
-    }
-
-    /* special case: if no directory or file tests, skip all */
-    if (!o.dirs_only && !o.files_only) {
-        start = stop = 0;
-    }
-
-    if(o.print_all_proc){
-      fprintf(out_logfile, "\nPer process result (%s):\n", print_time ? "time" : "rate");
-      for (j = 0; j < iterations; j++) {
-        fprintf(out_logfile, "iteration: %d\n", j);
-        for (i = start; i < tableSize; i++) {
-          access = mdtest_test_name(i);
-          if(access == NULL){
-            continue;
-          }
-          fprintf(out_logfile, "Test %s", access);
-          for (k=0; k < o.size; k++) {
-            curr = all[calc_allreduce_index(j, k, i)];
-            fprintf(out_logfile, "%c%e", (k==0 ? ' ': ','), curr);
-          }
-          fprintf(out_logfile, "\n");
-        }
-      }
-    }
-
-    VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
-    VERBOSE(0,-1,"   Operation         per Rank:      Max            Min           Mean          Std Dev     per Iteration: Max            Min           Mean");
-    VERBOSE(0,-1,"   ---------                        ---            ---           ----          -------                    ---            ---           ----");
-
-    for (i = start; i < stop; i++) {
-            min = max = all[i];
-            sum = var = 0;
-            imin = 1e308;
-            isum = imax = 0;
-            for (j = 0; j < iterations; j++) {
-                icur = print_time ? 0 : 1e308;
-                for (k=0; k < o.size; k++) {
-                    curr = all[calc_allreduce_index(j, k, i)];
-                    if (min > curr) {
-                        min = curr;
-                    }
-                    if (max < curr) {
-                        max = curr;
-                    }
-                    if(print_time){
-                      if(icur < curr){
-                        icur = curr;
-                      }
-                    }else{
-                      if(icur > curr){
-                        icur = curr;
-                      }
-                    }
-                    sum += curr;
-                }
-                if(icur > imax){
-                  imax = icur;
-                }
-                if(icur < imin){
-                  imin = icur;
-                }
-                isum += icur;
-            }
-            mean = sum / (iterations * o.size);
-            for (k=0; k < o.size; k++) {
-                for (j = 0; j < iterations; j++) {
-                    var += pow((mean -  all[(k*tableSize*iterations)
-                                            + (j*tableSize) + i]), 2);
-                }
-            }
-            var = var / (iterations * o.size);
-            sd = sqrt(var);
-            access = mdtest_test_name(i);
-            if (i != 2) {
-                fprintf(out_logfile, "   %s ", access);
-                fprintf(out_logfile, "%14.3f ", max);
-                fprintf(out_logfile, "%14.3f ", min);
-                fprintf(out_logfile, "%14.3f ", mean);
-                fprintf(out_logfile, "%14.3f ", sd);
-                fprintf(out_logfile, "%18.3f ", imax);
-                fprintf(out_logfile, "%14.3f ", imin);
-                fprintf(out_logfile, "%14.3f\n", isum / iterations);
-                fflush(out_logfile);
-            }
-    }
-
-    // TODO generalize once more stonewall timers are supported
-    double stonewall_time = 0;
-    uint64_t stonewall_items = 0;
-    for(int i=0; i < iterations; i++){
-      if(o.summary_table[i].stonewall_time[MDTEST_FILE_CREATE_NUM]){
-        stonewall_time += o.summary_table[i].stonewall_time[MDTEST_FILE_CREATE_NUM];
-        stonewall_items += o.summary_table[i].stonewall_item_sum[MDTEST_FILE_CREATE_NUM];
-      }
-    }
-    if(stonewall_items != 0){
-      fprintf(out_logfile, "   File create (stonewall)   : ");
-      fprintf(out_logfile, "%14s %14s %14.3f %14s\n", "NA", "NA", print_time ? stonewall_time :  stonewall_items / stonewall_time, "NA");
-    }
-
-    /* calculate tree create/remove rates, applies only to Rank 0 */
-    for (i = MDTEST_TREE_CREATE_NUM; i < tableSize; i++) {
-        min = max = all[i];
-        sum = var = 0;
-        imin = imax = all[i];
-        isum = 0;
-        for (j = 0; j < iterations; j++) {
-            if(print_time){
-              curr = o.summary_table[j].time[i];
-            }else{
-              curr = o.summary_table[j].rate[i];
-            }
-            if (min > curr) {
-              min = curr;
-            }
-            if (max < curr) {
-              max =  curr;
-            }
-            sum += curr;
-            if(curr > imax){
-              imax = curr;
-            }
-            if(curr < imin){
-              imin = curr;
-            }
-        }
-        mean = sum / (iterations);
-        for (j = 0; j < iterations; j++) {
-            if(print_time){
-              curr = o.summary_table[j].time[i];
-            }else{
-              curr = o.summary_table[j].rate[i];
-            }
-
-            var += pow((mean -  curr), 2);
-        }
-        var = var / (iterations);
-        sd = sqrt(var);
+  if(o.print_all_proc){
+    fprintf(out_logfile, "\nPer process result (%s):\n", print_time ? "time" : "rate");
+    for (int j = 0; j < iterations; j++) {
+      fprintf(out_logfile, "iteration: %d\n", j);
+      for (int i = start; i < MDTEST_LAST_NUM; i++) {
         access = mdtest_test_name(i);
-        fprintf(out_logfile, "   %s ", access);
-        fprintf(out_logfile, "%14.3f ", max);
-        fprintf(out_logfile, "%14.3f ", min);
-        fprintf(out_logfile, "%14.3f ", mean);
-        fprintf(out_logfile, "%14.3f ", sd);
-        fprintf(out_logfile, "%18.3f ", imax);
-        fprintf(out_logfile, "%14.3f ", imin);
-        fprintf(out_logfile, "%14.3f\n", sum / iterations);
-        fflush(out_logfile);
+        if(access == NULL){
+          continue;
+        }
+        fprintf(out_logfile, "Test %s", access);
+        for (int k=0; k < o.size; k++) {
+          mdtest_results_t * cur = get_result_index(all_results, k, j, iterations);
+          if(print_time){
+            curr = cur->time_before_barrier[i];
+          }else{
+            curr = cur->rate_before_barrier[i];
+          }
+          fprintf(out_logfile, "%c%e", (k==0 ? ' ': ','), curr);
+        }
+        fprintf(out_logfile, "\n");
+      }
     }
+  }
+
+  VERBOSE(0, -1, "\nSUMMARY %s: (of %d iterations)", print_time ? "time" : "rate", iterations);
+  VERBOSE(0, -1,
+          "   Operation         per Rank: Max            Min           Mean    "
+          "   per Iteration: Max            Min           Mean         Std Dev");
+  VERBOSE(0, -1,
+          "   ---------                   ---            ---           ----    "
+          "                  ---            ---           ----         -------");
+  for (int i = start; i < stop; i++) {
+    min = 1e308;
+    max = 0;
+    sum = var = 0;
+    imin = 1e308;
+    isum = imax = 0;
+    double iter_result[iterations];
+    for (int j = 0; j < iterations; j++) {
+      icur = print_time ? 0 : 1e308;
+      for (int k = 0; k < o.size; k++) {
+        mdtest_results_t * cur = get_result_index(all_results, k, j, iterations);
+        if(print_time){
+          curr = cur->time_before_barrier[i];
+        }else{
+          curr = cur->rate_before_barrier[i];
+        }
+        if (min > curr) {
+          min = curr;
+        }
+        if (max < curr) {
+          max = curr;
+        }
+        sum += curr;
+
+        if (print_time) {
+          curr = cur->time[i];
+          if (icur < curr) {
+            icur = curr;
+          }
+        } else {
+          curr = cur->rate[i];
+          if (icur > curr) {
+            icur = curr;
+          }
+        }
+      }
+
+      if (icur > imax) {
+        imax = icur;
+      }
+      if (icur < imin) {
+        imin = icur;
+      }
+      isum += icur;
+      if(print_time){
+        iter_result[j] = icur;
+      }else{
+        iter_result[j] = icur * o.size;
+      }
+    }
+    mean = sum / iterations / o.size;
+    imean = isum / iterations;
+    if(! print_time){
+      imax *= o.size;
+      imin *= o.size;
+      isum *= o.size;
+      imean *= o.size;
+    }
+    for (int j = 0; j < iterations; j++) {
+      var += (imean - iter_result[j]) * (imean - iter_result[j]);
+    }
+    var = var / (iterations - 1);
+    sd = sqrt(var);
+    access = mdtest_test_name(i);
+    if (i != 2) {
+      fprintf(out_logfile, "   %-22s ", access);
+      fprintf(out_logfile, "%14.3f ", max);
+      fprintf(out_logfile, "%14.3f ", min);
+      fprintf(out_logfile, "%14.3f ", mean);
+      fprintf(out_logfile, "%18.3f ", imax);
+      fprintf(out_logfile, "%14.3f ", imin);
+      fprintf(out_logfile, "%14.3f ", imean);
+      fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
+      fflush(out_logfile);
+    }
+  }
+
+  /* calculate tree create/remove rates, applies only to Rank 0 */
+  for (int i = MDTEST_TREE_CREATE_NUM; i < MDTEST_LAST_NUM; i++) {
+      min = imin = 1e308;
+      max = imax = 0;
+      sum = var = 0;
+      for (int j = 0; j < iterations; j++) {
+          if(print_time){
+            curr = o.summary_table[j].time[i];
+          }else{
+            curr = o.summary_table[j].rate[i];
+          }
+          if (min > curr) {
+            min = curr;
+          }
+          if (max < curr) {
+            max =  curr;
+          }
+          sum += curr;
+          if(curr > imax){
+            imax = curr;
+          }
+          if(curr < imin){
+            imin = curr;
+          }
+      }
+
+      mean = sum / (iterations);
+
+      for (int j = 0; j < iterations; j++) {
+          if(print_time){
+            curr = o.summary_table[j].time[i];
+          }else{
+            curr = o.summary_table[j].rate[i];
+          }
+          var += (mean -  curr)*(mean -  curr);
+      }
+      var = var / (iterations - 1);
+      sd = sqrt(var);
+      access = mdtest_test_name(i);
+      fprintf(out_logfile, "   %-22s ", access);
+      fprintf(out_logfile, "%14.3f ", max);
+      fprintf(out_logfile, "%14.3f ", min);
+      fprintf(out_logfile, "%14.3f ", mean);
+      fprintf(out_logfile, "%18.3f ", imax);
+      fprintf(out_logfile, "%14.3f ", imin);
+      fprintf(out_logfile, "%14.3f ", sum / iterations);
+      fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
+      fflush(out_logfile);
+  }
+}
+
+/*
+ Output the results and summarize them into rank 0's o.summary_table
+ */
+void summarize_results(int iterations, mdtest_results_t * results) {
+  const size_t size = sizeof(mdtest_results_t) * iterations;
+  mdtest_results_t * all_results = NULL;
+  if(rank == 0){
+    all_results = safeMalloc(size * o.size);
+    memset(all_results, 0, size * o.size);
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, all_results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+    // calculate the aggregated values for all processes
+    for(int j=0; j < iterations; j++){
+      for(int i=0; i < MDTEST_LAST_NUM; i++){
+        //double sum_rate = 0;
+        double max_time = 0;
+        double max_stonewall_time = 0;
+        uint64_t sum_items = 0;
+
+        // reduce over the processes
+        for(int p=0; p < o.size; p++){
+          mdtest_results_t * cur = get_result_index(all_results, p, j, iterations);
+          //sum_rate += all_results[p + j*p]->rate[i];
+          double t = cur->time[i];
+          max_time = max_time < t ? t : max_time;
+
+          sum_items += cur->items[i];
+
+          t = cur->stonewall_time[i];
+          max_stonewall_time = max_stonewall_time < t ? t : max_stonewall_time;
+        }
+
+        results[j].items[i] = sum_items;
+        results[j].time[i] = max_time;
+        results[j].stonewall_time[i] = max_stonewall_time;
+        if(sum_items == 0){
+          results[j].rate[i] = 0.0;
+        }else{
+          results[j].rate[i] = sum_items / max_time;
+        }
+
+        /* These results have already been reduced to Rank 0 */
+        results[j].stonewall_item_sum[i] = o.summary_table[j].stonewall_item_sum[i];
+        results[j].stonewall_item_min[i] = o.summary_table[j].stonewall_item_min[i];
+        results[j].stonewall_time[i] = o.summary_table[j].stonewall_time[i];
+      }
+    }
+  }else{
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+  }
+
+  /* share global results across processes as these are returned by the API */
+  MPI_Bcast(results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+
+  /* update relevant result values with local values as these are returned by the API */
+  for(int j=0; j < iterations; j++){
+    for(int i=0; i < MDTEST_LAST_NUM; i++){
+      results[j].time_before_barrier[i] = o.summary_table[j].time_before_barrier[i];
+      results[j].stonewall_last_item[i] = o.summary_table[j].stonewall_last_item[i];
+    }
+  }
+
+  if(rank != 0){
+    return;
+  }
+
+  if (o.print_rate_and_time){
+    summarize_results_rank0(iterations, all_results, 0);
+    summarize_results_rank0(iterations, all_results, 1);
+  }else{
+    summarize_results_rank0(iterations, all_results, o.print_time);
+  }
+
+  free(all_results);
 }
 
 /* Checks to see if the test setup is valid.  If it isn't, fail. */
@@ -1671,6 +1783,28 @@ void md_validate_tests() {
 
     if(o.create_only && o.read_only && o.read_bytes > o.write_bytes)
       FAIL("When writing and reading files, read bytes must be smaller than write bytes");
+
+    if (rank == 0 && o.saveRankDetailsCSV){
+      // check that the file is writeable, truncate it and add header
+      FILE* fd = fopen(o.saveRankDetailsCSV, "w");
+      if (fd == NULL){
+        FAIL("Cannot open saveRankPerformanceDetails file for write!");
+      }
+      char * head = "rank,items";
+      int ret = fwrite(head, strlen(head), 1, fd);
+      for(int e = 0; e < MDTEST_LAST_NUM; e++){
+        char buf[1024];
+        const char * str = mdtest_test_name(e);
+
+        sprintf(buf, ",rate-%s,time-%s", str, str);
+        ret = fwrite(buf, strlen(buf), 1, fd);
+        if(ret != 1){
+          FAIL("Cannot write header to saveRankPerformanceDetails file");
+        }
+      }
+      fwrite("\n", 1, 1, fd);
+      fclose(fd);
+    }
 }
 
 void show_file_system_size(char *file_system) {
@@ -2102,6 +2236,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & o.print_time},
       {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
+      {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
@@ -2344,18 +2479,14 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /* setup summary table for recording results */
     o.summary_table = (mdtest_results_t *) safeMalloc(iterations * sizeof(mdtest_results_t));
     memset(o.summary_table, 0, iterations * sizeof(mdtest_results_t));
-    for(int i=0; i < iterations; i++){
-      for(int j=0; j < MDTEST_LAST_NUM; j++){
-        o.summary_table[i].rate[j] = 0.0;
-        o.summary_table[i].time[j] = 0.0;
-      }
-    }
 
     if (o.unique_dir_per_task) {
         sprintf(o.base_tree_name, "mdtest_tree.%d", rank);
     } else {
         sprintf(o.base_tree_name, "mdtest_tree");
     }
+
+    mdtest_results_t * aggregated_results = safeMalloc(iterations * sizeof(mdtest_results_t));
 
     /* default use shared directory */
     strcpy(o.mk_name, "mdtest.shared.");
@@ -2396,11 +2527,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
             // keep track of the current status for stonewalling
             mdtest_iteration(i, j, testgroup, & o.summary_table[j]);
         }
-        if (o.print_rate_and_time){
-          summarize_results(iterations, 0);
-          summarize_results(iterations, 1);
-        }else{
-          summarize_results(iterations, o.print_time);
+        summarize_results(iterations, aggregated_results);
+        if(o.saveRankDetailsCSV){
+          StoreRankInformation(iterations, aggregated_results);
         }
         if (i == 1 && stride > 1) {
             i = 0;
@@ -2411,9 +2540,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         FAIL("Unable to remove test directory path %s", o.testdirpath);
     }
 
-    int total_errors;
+    int total_errors = 0;
     MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
-    if(total_errors){
+    if(rank == 0 && total_errors){
       VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
     }
     VERBOSE(0,-1,"-- finished at %s --\n", PrintTimestamp());
@@ -2429,6 +2558,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (o.write_bytes > 0) {
       aligned_buffer_free(o.write_buffer, o.gpu_memory_flags);
     }
+    free(o.summary_table);
 
-    return o.summary_table;
+    return aggregated_results;
 }

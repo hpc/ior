@@ -84,7 +84,36 @@ static void ior_set_xfer_hints(IOR_param_t * p){
 
 int aiori_warning_as_errors = 0;
 
-static void test_initialize(IOR_test_t * test){
+/*
+ Returns 1 if the process participates in the test
+ */
+static int test_initialize(IOR_test_t * test){
+  int range[3];
+  IOR_param_t *params = &test->params;
+  MPI_Group orig_group, new_group;
+
+  /* set up communicator for test */
+  MPI_CHECK(MPI_Comm_group(params->mpi_comm_world, &orig_group),
+            "MPI_Comm_group() error");
+  range[0] = 0;                     /* first rank */
+  range[1] = params->numTasks - 1;  /* last rank */
+  range[2] = 1;                     /* stride */
+  MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
+            "MPI_Group_range_incl() error");
+  MPI_CHECK(MPI_Comm_create(params->mpi_comm_world, new_group, & params->testComm),
+            "MPI_Comm_create() error");
+  MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
+  MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
+
+
+  if (params->testComm == MPI_COMM_NULL) {
+    /* tasks not in the group do not participate in this test, this matches the proceses in test_finalize() that participate */
+    MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
+    return 0;
+  }
+
+  /* Setup global variables */
+  testComm = params->testComm;
   verbose = test->params.verbose;
   backend = test->params.backend;
 
@@ -104,6 +133,7 @@ static void test_initialize(IOR_test_t * test){
   if (rank == 0 && verbose >= VERBOSE_0) {
     ShowTestStart(& test->params);
   }
+  return 1;
 }
 
 static void test_finalize(IOR_test_t * test){
@@ -111,6 +141,8 @@ static void test_finalize(IOR_test_t * test){
   if(backend->finalize){
     backend->finalize(test->params.backend_options);
   }
+  MPI_CHECK(MPI_Barrier(test->params.mpi_comm_world), "barrier error");
+  MPI_CHECK(MPI_Comm_free(& testComm), "MPI_Comm_free() error");
 }
 
 
@@ -130,7 +162,8 @@ IOR_test_t * ior_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out
 
         /* perform each test */
         for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-                test_initialize(tptr);
+                int participate = test_initialize(tptr);
+                if( ! participate ) continue;
                 totalErrorCount = 0;
                 TestIoSys(tptr);
                 tptr->results->errors = totalErrorCount;
@@ -176,7 +209,8 @@ int ior_main(int argc, char **argv)
 
     /* perform each test */
     for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-            test_initialize(tptr);
+            int participate = test_initialize(tptr);
+            if( ! participate ) continue;
 
             // This is useful for trapping a running MPI process.  While
             // this is sleeping, run the script 'testing/hdfs/gdb.attach'
@@ -1182,6 +1216,55 @@ WriteTimes(IOR_param_t *test, const double *timer, const int iteration,
                         timerName);
         }
 }
+
+static void StoreRankInformation(IOR_test_t *test, double *timer, const int rep, const int access){
+  IOR_param_t *params = &test->params;
+  double totalTime = timer[5] - timer[0];
+  double accessTime = timer[3] - timer[2];
+  double times[] = {totalTime, accessTime};
+
+  if(rank == 0){
+    FILE* fd = fopen(params->saveRankDetailsCSV, "a");
+    if (fd == NULL){
+      FAIL("Cannot open saveRankPerformanceDetailsCSV file for writes!");
+    }
+    int size;
+    MPI_Comm_size(params->testComm, & size);
+    double *all_times = malloc(2* size * sizeof(double));
+    MPI_Gather(times, 2, MPI_DOUBLE, all_times, 2, MPI_DOUBLE, 0, params->testComm);
+    IOR_point_t *point = (access == WRITE) ? &test->results[rep].write : &test->results[rep].read;
+    double file_size = ((double) point->aggFileSizeForBW) / size;
+
+    for(int i=0; i < size; i++){
+      char buff[1024];
+      sprintf(buff, "%s,%d,%.10e,%.10e,%.10e,%.10e\n", access==WRITE ? "write" : "read", i, all_times[i*2], all_times[i*2+1], file_size/all_times[i*2], file_size/all_times[i*2+1] );
+      int ret = fwrite(buff, strlen(buff), 1, fd);
+      if(ret != 1){
+        WARN("Couln't append to saveRankPerformanceDetailsCSV file\n");
+        break;
+      }
+    }
+    fclose(fd);
+  }else{
+    MPI_Gather(& times, 2, MPI_DOUBLE, NULL, 2, MPI_DOUBLE, 0, testComm);
+  }
+}
+
+static void ProcessIterResults(IOR_test_t *test, double *timer, const int rep, const int access){
+  IOR_param_t *params = &test->params;
+
+  if (verbose >= VERBOSE_3)
+    WriteTimes(params, timer, rep, access);
+  ReduceIterResults(test, timer, rep, access);
+  if (params->outlierThreshold) {
+    CheckForOutliers(params, timer, access);
+  }
+
+  if(params->saveRankDetailsCSV){
+    StoreRankInformation(test, timer, rep, access);
+  }
+}
+
 /*
  * Using the test parameters, run iteration(s) of single test.
  */
@@ -1195,30 +1278,10 @@ static void TestIoSys(IOR_test_t *test)
         int pretendRank;
         int rep;
         aiori_fd_t *fd;
-        MPI_Group orig_group, new_group;
-        int range[3];
         IOR_offset_t dataMoved; /* for data rate calculation */
         void *hog_buf;
         IOR_io_buffers ioBuffers;
 
-        /* set up communicator for test */
-        MPI_CHECK(MPI_Comm_group(params->mpi_comm_world, &orig_group),
-                  "MPI_Comm_group() error");
-        range[0] = 0;                     /* first rank */
-        range[1] = params->numTasks - 1;  /* last rank */
-        range[2] = 1;                     /* stride */
-        MPI_CHECK(MPI_Group_range_incl(orig_group, 1, &range, &new_group),
-                  "MPI_Group_range_incl() error");
-        MPI_CHECK(MPI_Comm_create(params->mpi_comm_world, new_group, &testComm),
-                  "MPI_Comm_create() error");
-        MPI_CHECK(MPI_Group_free(&orig_group), "MPI_Group_Free() error");
-        MPI_CHECK(MPI_Group_free(&new_group), "MPI_Group_Free() error");
-        params->testComm = testComm;
-        if (testComm == MPI_COMM_NULL) {
-                /* tasks not in the group do not participate in this test */
-                MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
-                return;
-        }
         if (rank == 0 && verbose >= VERBOSE_1) {
                 fprintf(out_logfile, "Participating tasks : %d\n", params->numTasks);
                 fflush(out_logfile);
@@ -1342,12 +1405,7 @@ static void TestIoSys(IOR_test_t *test)
                            use actual amount of byte moved */
                         CheckFileSize(test, testFileName, dataMoved, rep, WRITE);
 
-                        if (verbose >= VERBOSE_3)
-                                WriteTimes(params, timer, rep, WRITE);
-                        ReduceIterResults(test, timer, rep, WRITE);
-                        if (params->outlierThreshold) {
-                                CheckForOutliers(params, timer, WRITE);
-                        }
+                        ProcessIterResults(test, timer, rep, WRITE);
 
                         /* check if in this round we run write with stonewalling */
                         if(params->deadlineForStonewalling > 0){
@@ -1472,12 +1530,7 @@ static void TestIoSys(IOR_test_t *test)
                            use actual amount of byte moved */
                         CheckFileSize(test, testFileName, dataMoved, rep, READ);
 
-                        if (verbose >= VERBOSE_3)
-                                WriteTimes(params, timer, rep, READ);
-                        ReduceIterResults(test, timer, rep, READ);
-                        if (params->outlierThreshold) {
-                                CheckForOutliers(params, timer, READ);
-                        }
+                        ProcessIterResults(test, timer, rep, READ);
                 }
 
                 if (!params->keepFile
@@ -1498,8 +1551,6 @@ static void TestIoSys(IOR_test_t *test)
         }
         PrintRepeatEnd();
 
-        MPI_CHECK(MPI_Comm_free(&testComm), "MPI_Comm_free() error");
-
         if (params->summary_every_test) {
                 PrintLongSummaryHeader();
                 PrintLongSummaryOneTest(test);
@@ -1511,9 +1562,6 @@ static void TestIoSys(IOR_test_t *test)
 
         if (hog_buf != NULL)
                 free(hog_buf);
-
-        /* Sync with the tasks that did not participate in this test */
-        MPI_CHECK(MPI_Barrier(params->mpi_comm_world), "barrier error");
 }
 
 /*

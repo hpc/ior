@@ -583,7 +583,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       add_timed_result(op_timer, s->phase_start_timer, s->time_create, pos, & s->max_op_time, & op_time);
 
       if (o.verbosity >= 2){
-        oprintf("%d: write %s:%s (%d)\n", o.rank, dset, obj_name, ret);
+        oprintf("%d: write %s:%s (%d) pretend: %d\n", o.rank, dset, obj_name, ret, o.rank);
       }
     }
   }
@@ -640,7 +640,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       s->obj_stat.suc++;
 
       if (o.verbosity >= 2){
-        oprintf("%d: read %s \n", o.rank, obj_name);
+        oprintf("%d: read %s pretend: %d\n", o.rank, obj_name, readRank);
       }
 
       op_timer = GetTimeStamp();
@@ -650,7 +650,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
       if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options) ) {
         if(o.verify_read){
-            if(verify_memory_pattern(f * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, readRank) == 0){
+            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, readRank) == 0){
               s->obj_read.suc++;
             }else{
               s->obj_read.err++;
@@ -685,11 +685,15 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       s->obj_delete.suc++;
 
       int writeRank = (o.rank + o.offset * (d+1)) % o.size;
-      def_obj_name(obj_name, writeRank, d, o.precreate + prevFile);
+      const int newFileIndex = o.precreate + prevFile;
+      def_obj_name(obj_name, writeRank, d, newFileIndex);
 
       op_timer = GetTimeStamp();
       aiori_fh = o.backend->create(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
       if (NULL != aiori_fh){
+        generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, writeRank);
+        update_write_memory_pattern(newFileIndex * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, writeRank);
+
         if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
           s->obj_create.suc++;
         }else{
@@ -712,7 +716,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       if (o.verbosity >= 2){
-        oprintf("%d: write %s (%d)\n", o.rank, obj_name, ret);
+        oprintf("%d: write %s (%d) pretend: %d\n", o.rank, obj_name, ret, writeRank);
       }
     } // end loop
 

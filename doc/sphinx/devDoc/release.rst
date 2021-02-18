@@ -42,7 +42,7 @@ Feature freezing for a new release
 2. Append the "rc1+dev" designator to the Version field in the META file, and
    update the NEWS file to have this new version as the topmost heading
 3. Commit and push this new branch
-2. Update the ``Version:`` field in META `of the master branch` to be the `next`
+2. Update the ``Version:`` field in META `of the main branch` to be the `next`
    release version, not the one whose features have just been frozen, and update
    the NEWS file as you did in step 2.
 
@@ -55,12 +55,12 @@ For example, to feature-freeze for version 3.2::
     $ git add NEWS META
     $ git commit -m "Update version for feature freeze"
     $ git push upstream 3.2
-    $ git checkout master
+    $ git checkout main 
     $ vim META # update the ``Version:`` field to 3.3.0+dev
     $ vim NEWS # update the topmost version number to 3.3.0+dev
     $ git add NEWS META
     $ git commit -m "Update version number"
-    $ git push upstream master
+    $ git push upstream main
 
 Creating a new release candidate
 --------------------------------
@@ -95,7 +95,7 @@ For example to release 3.2.0rc1::
 Applying patches to a new microrelease
 --------------------------------------
 
-If a released version 3.2.0 has bugs, cherry-pick the fixes from master into the
+If a released version 3.2.0 has bugs, cherry-pick the fixes from main into the
 3.2 branch::
 
     $ git checkout 3.2
@@ -108,19 +108,19 @@ Once you've accumulated enough bugs, move on to issuing a new release below.
 Creating a new release
 ----------------------
 
-This is a two-phase process because we need to ensure that NEWS in master
+This is a two-phase process because we need to ensure that NEWS in main
 contains a full history of releases, and we achieve this by always merging
-changes from master into a release branch.
+changes from main into a release branch.
 
-1. Check out master
+1. Check out main
 2. Ensure that the latest release notes for this release are reflected in NEWS
-3. Commit that to master
+3. Commit that to main
 
 Then work on the release branch:
 
 1. Check out the relevant `major.minor` branch
 2. Remove any "rcX" and "+dev" from the Version field in META
-3. Cherry-pick your NEWS update commit from master into this release branch.
+3. Cherry-pick your NEWS update commit from main into this release branch.
    Resolve conflicts and get rid of news that reflect future releases.
 4. Build a release package as described above
 5. Tag and commit the updated NEWS and META so one can easily recompile this
@@ -131,11 +131,11 @@ Then work on the release branch:
 
 For example to release 3.2.0::
 
-    $ git checkout master
+    $ git checkout main
     $ vim NEWS # add release notes from ``git log --oneline 3.2.0rc1..``
     $ git commit
 
-Let's say the above generated commit abc345e on master.  Then::
+Let's say the above generated commit abc345e on main.  Then::
 
     $ git checkout 3.2
     $ vim META # 3.2.0rc2+dev -> 3.2.0
@@ -150,7 +150,7 @@ Let's say the above generated commit abc345e on master.  Then::
     $ git add NEWS META
     $ git commit -m "Uptick version after release"
 
-Then push your master and your release branch and also push tags::
+Then push your main and your release branch and also push tags::
 
-    $ git checkout master && git push && git push --tags
+    $ git checkout main && git push && git push --tags
     $ git checkout 3.2 && git push && git push --tags
