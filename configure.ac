@@ -73,6 +73,52 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
     ])
 ])
 
+# Check for CUDA
+AC_ARG_WITH([cuda],
+        [AS_HELP_STRING([--with-cuda],
+                [support configurable CUDA @<:@default=check@:>@])],
+        [], [with_cuda=check])
+
+AS_IF([test "x$with_cuda" != xno], [
+        LDFLAGS="$LDFLAGS -L$with_cuda/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64"
+        CPPFLAGS="$CPPFLAGS -I$with_cuda/include"
+
+        AC_CHECK_HEADERS([cuda_runtime.h], [AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])], [
+                if test "x$with_cuda" != xcheck; then
+                        AC_MSG_FAILURE([--with-cuda was given, <cuda_runtime.h> not found])
+                fi
+        ])
+AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
+        AC_SEARCH_LIBS([cudaMalloc], [cudart cudart_static], [],
+        [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
+    ])
+])
+AM_CONDITIONAL([USE_CUDA], [test x$with_cuda = xyes])
+
+# Check for GPUDirect
+AC_ARG_WITH([gpuDirect],
+        [AS_HELP_STRING([--with-gpuDirect],
+                [support configurable GPUDirect @<:@default=check@:>@])],
+        [], [with_gpuDirect=check])
+
+AS_IF([test "x$with_gpuDirect" != xno], [
+        LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64"
+        CPPFLAGS="$CPPFLAGS -I$with_gpuDirect/include"
+
+        AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [
+                if test "x$with_gpuDirect" != xcheck; then
+                        AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])
+                fi
+        ])
+AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
+        AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [],
+        [AC_MSG_ERROR([Library containing cuFileDriverOpen symbol not found])])
+    ])
+])
+AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect = xyes])
+
+
+
 # Check for system capabilities
 AC_SYS_LARGEFILE
 

@@ -92,6 +92,7 @@ struct benchmark_options{
   int read_only;
   int stonewall_timer;
   int stonewall_timer_wear_out;
+  int gpu_memory_flags;              /* use the GPU to store the data */
 
   char * latency_file_prefix;
   int latency_keep_all;
@@ -381,7 +382,7 @@ static void compute_histogram(const char * name, time_result_t * times, time_sta
     sprintf(file, "%s-%.2f-%d-%s.csv", o.latency_file_prefix, o.relative_waiting_factor, o.global_iteration, name);
     FILE * f = fopen(file, "w+");
     if(f == NULL){
-      ERRF("%d: Error writing to latency file: %s\n", o.rank, file);
+      ERRF("%d: Error writing to latency file: %s", o.rank, file);
       return;
     }
     fprintf(f, "time,runtime\n");
@@ -546,12 +547,12 @@ void run_precreate(phase_stat_t * s, int current_index){
     }else{
       s->dset_create.err++;
       if (! o.ignore_precreate_errors){
-        ERRF("%d: Error while creating the dset: %s\n", o.rank, dset);
+        ERRF("%d: Error while creating the dset: %s", o.rank, dset);
       }
     }
   }
 
-  char * buf = malloc(o.file_size);
+  char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
   generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, o.rank);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
@@ -574,7 +575,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       }else{
         s->obj_create.err++;
         if (! o.ignore_precreate_errors){
-         ERRF("%d: Error while creating the obj: %s\n", o.rank, obj_name);
+         ERRF("%d: Error while creating the obj: %s", o.rank, obj_name);
         }
       }
       o.backend->close(aiori_fh, o.backend_options);
@@ -586,14 +587,14 @@ void run_precreate(phase_stat_t * s, int current_index){
       }
     }
   }
-  free(buf);
+  aligned_buffer_free(buf, o.gpu_memory_flags);
 }
 
 /* FIFO: create a new file, write to it. Then read from the first created file, delete it... */
 void run_benchmark(phase_stat_t * s, int * current_index_p){
   char obj_name[MAX_PATHLEN];
   int ret;
-  char * buf = malloc(o.file_size);
+  char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
   memset(buf, o.rank % 256, o.file_size);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
@@ -632,7 +633,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
 
       if(ret != 0){
         if (o.verbosity)
-          ERRF("%d: Error while stating the obj: %s\n", o.rank, obj_name);
+          ERRF("%d: Error while stating the obj: %s", o.rank, obj_name);
         s->obj_stat.err++;
         continue;
       }
@@ -704,7 +705,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
         o.backend->close(aiori_fh, o.backend_options);
       }else{
         if (! o.ignore_precreate_errors){
-          ERRF("Unable to open file %s", obj_name);
+         ERRF("%d: Error while creating the obj: %s", o.rank, obj_name);
         }
         EWARNF("Unable to open file %s", obj_name);
         s->obj_create.err++;
@@ -761,7 +762,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
     *current_index_p += f;
   }
   s->repeats = pos + 1;
-  free(buf);
+  aligned_buffer_free(buf, o.gpu_memory_flags);
 }
 
 void run_cleanup(phase_stat_t * s, int start_index){
@@ -822,6 +823,7 @@ static option_help options [] = {
   {'w', "stonewall-timer", "Stop each benchmark iteration after the specified seconds (if not used with -W this leads to process-specific progress!)", OPTION_OPTIONAL_ARGUMENT, 'd', & o.stonewall_timer},
   {'W', "stonewall-wear-out", "Stop with stonewall after specified time and use a soft wear-out phase -- all processes perform the same number of iterations", OPTION_FLAG, 'd', & o.stonewall_timer_wear_out},
   {'X', "verify-read", "Verify the data on read", OPTION_FLAG, 'd', & o.verify_read},
+  {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
   {0, "start-item", "The iteration number of the item to start with, allowing to offset the operations", OPTION_OPTIONAL_ARGUMENT, 'l', & o.start_item_number},
   {0, "print-detailed-stats", "Print detailed machine parsable statistics.", OPTION_FLAG, 'd', & o.print_detailed_stats},
   {0, "read-only", "Run read-only during benchmarking phase (no deletes/writes), probably use with -2", OPTION_FLAG, 'd', & o.read_only},
@@ -844,12 +846,12 @@ static int return_position(){
   if( o.rank == 0){
     FILE * f = fopen(o.run_info_file, "r");
     if(! f){
-      ERRF("[ERROR] Could not open %s for restart\n", o.run_info_file);
+      ERRF("[ERROR] Could not open %s for restart", o.run_info_file);
       exit(1);
     }
     ret = fscanf(f, "pos: %d", & position);
     if (ret != 1){
-      ERRF("Could not read from %s for restart\n", o.run_info_file);
+      ERRF("Could not read from %s for restart", o.run_info_file);
       exit(1);
     }
     fclose(f);
@@ -864,7 +866,7 @@ static void store_position(int position){
   }
   FILE * f = fopen(o.run_info_file, "w");
   if(! f){
-    ERRF("[ERROR] Could not open %s for saving data\n", o.run_info_file);
+    ERRF("[ERROR] Could not open %s for saving data", o.run_info_file);
     exit(1);
   }
   fprintf(f, "pos: %d\n", position);

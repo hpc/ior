@@ -22,7 +22,7 @@ typedef struct{
   /* beegfs variables */
   int beegfs_numTargets;           /* number storage targets to use */
   int beegfs_chunkSize;            /* srtipe pattern for new files */
-
+  int gpuDirect;
 } posix_options_t;
 
 void POSIX_Sync(aiori_mod_opt_t * param);

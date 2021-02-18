@@ -58,6 +58,11 @@ enum PACKET_TYPE
 
 };
 
+typedef enum{
+    IOR_MEMORY_TYPE_CPU = 0,
+    IOR_MEMORY_TYPE_GPU_MANAGED = 1,
+    IOR_MEMORY_TYPE_GPU_DEVICE_ONLY = 2,
+} ior_memory_flags;
 
 
 /***************** IOR_BUFFERS *************************************************/
@@ -101,7 +106,10 @@ typedef struct
     MPI_Comm     testComm;           /* Current MPI communicator */
     MPI_Comm     mpi_comm_world;           /* The global MPI communicator */
     int dryRun;                      /* do not perform any I/Os just run evtl. inputs print dummy output */
-  int dualMount;                   /* dual mount points */
+    int dualMount;                   /* dual mount points */
+    ior_memory_flags gpuMemoryFlags;  /* use the GPU to store the data */
+    int gpuDirect;                /* use gpuDirect, this influences gpuMemoryFlags as well */
+    int gpuID;                       /* the GPU to use for gpuDirect or memory options */
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */
     int numTasksOnNode0;             /* number of tasks on node 0 (usually all the same, but don't have to be, use with caution) */

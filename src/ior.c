@@ -33,6 +33,10 @@
 # include <sys/utsname.h>        /* uname() */
 #endif
 
+#ifdef HAVE_CUDA
+#include <cuda_runtime.h>
+#endif
+
 #include <assert.h>
 
 #include "ior.h"
@@ -112,6 +116,13 @@ static int test_initialize(IOR_test_t * test){
   testComm = params->testComm;
   verbose = test->params.verbose;
   backend = test->params.backend;
+
+#ifdef HAVE_CUDA
+  cudaError_t cret = cudaSetDevice(test->params.gpuID);
+  if(cret != cudaSuccess){
+    EWARNF("cudaSetDevice(%d) error: %s", test->params.gpuID, cudaGetErrorString(cret));
+  }
+#endif
 
   if(backend->initialize){
     backend->initialize(test->params.backend_options);
@@ -505,44 +516,6 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
                 }
         }
         return (allErrors);
-}
-
-/*
- * Allocate a page-aligned (required by O_DIRECT) buffer.
- */
-static void *aligned_buffer_alloc(size_t size)
-{
-        size_t pageMask;
-        char *buf, *tmp;
-        char *aligned;
-
-#ifdef HAVE_SYSCONF
-        long pageSize = sysconf(_SC_PAGESIZE);
-#else
-        size_t pageSize = getpagesize();
-#endif
-
-        pageMask = pageSize - 1;
-        buf = malloc(size + pageSize + sizeof(void *));
-        if (buf == NULL)
-                ERR("out of memory");
-        /* find the alinged buffer */
-        tmp = buf + sizeof(char *);
-        aligned = tmp + pageSize - ((size_t) tmp & pageMask);
-        /* write a pointer to the original malloc()ed buffer into the bytes
-           preceding "aligned", so that the aligned buffer can later be free()ed */
-        tmp = aligned - sizeof(void *);
-        *(void **)tmp = buf;
-
-        return (void *)aligned;
-}
-
-/*
- * Free a buffer allocated by aligned_buffer_alloc().
- */
-static void aligned_buffer_free(void *buf)
-{
-        free(*(void **)((char *)buf - sizeof(char *)));
 }
 
 void AllocResults(IOR_test_t *test)
@@ -1053,7 +1026,7 @@ static void InitTests(IOR_test_t *tests)
 static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
                              int pretendRank)
 {
-        ioBuffers->buffer = aligned_buffer_alloc(test->transferSize);
+        ioBuffers->buffer = aligned_buffer_alloc(test->transferSize, test->gpuMemoryFlags);
 }
 
 /*
@@ -1062,7 +1035,7 @@ static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
 static void XferBuffersFree(IOR_io_buffers* ioBuffers, IOR_param_t* test)
 
 {
-        aligned_buffer_free(ioBuffers->buffer);
+        aligned_buffer_free(ioBuffers->buffer, test->gpuMemoryFlags);
 }
 
 
@@ -1878,7 +1851,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
 
         void * randomPrefillBuffer = NULL;
         if(test->randomPrefillBlocksize && (access == WRITE || access == WRITECHECK)){
-          randomPrefillBuffer = aligned_buffer_alloc(test->randomPrefillBlocksize);
+          randomPrefillBuffer = aligned_buffer_alloc(test->randomPrefillBlocksize, test->gpuMemoryFlags);
           // store invalid data into the buffer
           memset(randomPrefillBuffer, -1, test->randomPrefillBlocksize);
         }
@@ -2000,7 +1973,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                 backend->fsync(fd, test->backend_options);       /*fsync after all accesses */
         }
         if(randomPrefillBuffer){
-          aligned_buffer_free(randomPrefillBuffer);
+          aligned_buffer_free(randomPrefillBuffer, test->gpuMemoryFlags);
         }
 
         return (dataMoved);
