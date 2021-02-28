@@ -86,7 +86,7 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int bu
 void generate_memory_pattern(char * buf, size_t bytes, int buff_offset, int rank){
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
-  const uint64_t ranki = (uint64_t)(rank + 1) << 32 + buff_offset;
+  const uint64_t ranki = ((uint64_t)(rank + 1) << 32) + buff_offset;
   const size_t size = bytes / 8;
   // the first 8 bytes are set to item number
   for(size_t i=1; i < size; i++){
@@ -106,7 +106,7 @@ int verify_memory_pattern(int item, char * buffer, size_t bytes, int buff_offset
 
   uint64_t * buffi = (uint64_t*) buffer;
   // first half of 64 bits use the rank, here need to apply rank shifting
-  uint64_t rank_mod = (uint64_t)(pretendRank + 1) << 32 + buff_offset;
+  uint64_t rank_mod = ((uint64_t)(pretendRank + 1) << 32) + buff_offset;
   // the first 8 bytes are set to item number
   for(size_t i=1; i < bytes/8; i++){
     uint64_t exp = (i + 1) + rank_mod;

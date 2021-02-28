@@ -93,7 +93,8 @@ AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
         [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
     ])
 ])
-AM_CONDITIONAL([USE_CUDA], [test x$with_cuda = xyes])
+AM_CONDITIONAL([HAVE_CUDA], [test x$with_cuda = xyes])
+AM_COND_IF([HAVE_CUDA],[AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])])
 
 # Check for GPUDirect
 AC_ARG_WITH([gpuDirect],
@@ -116,7 +117,7 @@ AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
     ])
 ])
 AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect = xyes])
-
+AM_COND_IF([HAVE_GPU_DIRECT],[AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])])
 
 
 # Check for system capabilities
