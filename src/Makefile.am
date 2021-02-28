@@ -41,8 +41,12 @@ extraLDFLAGS  += -L/opt/hadoop-2.2.0/lib/native
 extraLDADD    += -lhdfs
 endif
 
-if USE_CUDA
+if HAVE_CUDA
 extraLDADD    += -lcudart
+endif
+
+if HAVE_GPU_DIRECT
+extraLDADD    += -lcufile
 endif
 
 if USE_HDF5_AIORI
@@ -164,5 +168,5 @@ libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
 .PHONY: build.conf
 all-local: build.conf
 build.conf:
-	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) > build.conf
+	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) $(LIBS) > build.conf
 	@echo CFLAGS=$(CFLAGS) $(extraCPPFLAGS) >> build.conf
