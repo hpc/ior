@@ -72,7 +72,7 @@ static option_help * MPIIO_options(aiori_mod_opt_t ** init_backend_options, aior
     {0, "mpiio.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->hintsFileName},
     {0, "mpiio.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->showHints},
     {0, "mpiio.preallocate",   "Preallocate file size", OPTION_FLAG, 'd', & o->preallocate},
-    {0, "mpiio.useStridedDatatype", "put strided access into datatype [not working]", OPTION_FLAG, 'd', & o->useStridedDatatype},
+    {0, "mpiio.useStridedDatatype", "put strided access into datatype", OPTION_FLAG, 'd', & o->useStridedDatatype},
     //{'P', NULL,        "useSharedFilePointer -- use shared file pointer [not working]", OPTION_FLAG, 'd', & params->useSharedFilePointer},
     {0, "mpiio.useFileView",  "Use MPI_File_set_view", OPTION_FLAG, 'd', & o->useFileView},
       LAST_OPTION
@@ -120,8 +120,6 @@ static int MPIIO_check_params(aiori_mod_opt_t * module_options){
         ERR("segment size must be < 2GiB");
   if (param->useSharedFilePointer)
         ERR("shared file pointer not implemented");
-  if (param->useStridedDatatype)
-        ERR("strided datatype not implemented");
   if (param->useStridedDatatype && (hints->blockSize < sizeof(IOR_size_t)
                                       || hints->transferSize <
                                       sizeof(IOR_size_t)))
@@ -414,7 +412,12 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                                            mfd->transferType, &status),
                                           "cannot access noncollective");
                         }
-                        length *= hints->transferSize;  /* for return value in bytes */
+                        /* MPI-IO driver does "nontcontiguous" by transfering
+                         * 'segment' regions of 'transfersize' bytes, but
+                         * our caller WriteOrReadSingle does not know how to
+                         * deal with us reporting that we wrote N times more
+                         * data than requested. */
+                        length = hints->transferSize;
                 }
         } else {
                 /*
