@@ -2534,17 +2534,23 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         if (i == 1 && stride > 1) {
             i = 0;
         }
+
+        int total_errors = 0;
+        MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
+        if(rank == 0 && total_errors){
+            VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
+        }
+
+        MPI_Comm_free(&testComm);
+        MPI_Group_free(&testgroup);
     }
+
+    MPI_Group_free(&worldgroup);
 
     if (created_root_dir && o.remove_only && o.backend->rmdir(o.testdirpath, o.backend_options) != 0) {
         FAIL("Unable to remove test directory path %s", o.testdirpath);
     }
 
-    int total_errors = 0;
-    MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
-    if(rank == 0 && total_errors){
-      VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
-    }
     VERBOSE(0,-1,"-- finished at %s --\n", PrintTimestamp());
 
     if (o.random_seed > 0) {
