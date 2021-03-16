@@ -47,6 +47,7 @@ static int MPIIO_check_params(aiori_mod_opt_t * options);
 typedef struct{
   MPI_File     fd;
   MPI_Datatype transferType;       /* datatype for transfer */
+  MPI_Datatype contigType;         /* elem datatype */
   MPI_Datatype fileType;           /* filetype for file view */
 } mpiio_fd_t;
 
@@ -182,9 +183,7 @@ static aiori_fd_t *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * m
             offsetFactor,
             tasksPerFile,
             transfersPerBlock = hints->blockSize / hints->transferSize;
-        struct fileTypeStruct {
-                int globalSizes[2], localSizes[2], startIndices[2];
-        } fileTypeStruct;
+
 
         mpiio_fd_t * mfd = malloc(sizeof(mpiio_fd_t));
         memset(mfd, 0, sizeof(mpiio_fd_t));
@@ -269,15 +268,18 @@ static aiori_fd_t *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * m
                                                              hints->numTasks)),
                           "cannot preallocate file");
         }
+
+
         /* create file view */
         if (param->useFileView) {
+                /* Create in-memory datatype */
+                MPI_CHECK(MPI_Type_contiguous (hints->transferSize / sizeof(IOR_size_t), MPI_LONG_LONG_INT, & mfd->contigType), "cannot create contiguous datatype");
+                MPI_CHECK(MPI_Type_create_resized( mfd->contigType, 0, 0, & mfd->transferType), "cannot create resized type");
+                MPI_CHECK(MPI_Type_commit(& mfd->contigType), "cannot commit datatype");
+                MPI_CHECK(MPI_Type_commit(& mfd->transferType), "cannot commit datatype");
+
                 /* create contiguous transfer datatype */
-                MPI_CHECK(MPI_Type_contiguous
-                          (hints->transferSize / sizeof(IOR_size_t),
-                           MPI_LONG_LONG_INT, & mfd->transferType),
-                          "cannot create contiguous datatype");
-                MPI_CHECK(MPI_Type_commit(& mfd->transferType),
-                          "cannot commit datatype");
+
                 if (hints->filePerProc) {
                         offsetFactor = 0;
                         tasksPerFile = 1;
@@ -286,33 +288,39 @@ static aiori_fd_t *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * m
                         tasksPerFile = hints->numTasks;
                 }
 
-                /*
-                 * create file type using subarray
-                 */
-                fileTypeStruct.globalSizes[0] = 1;
-                fileTypeStruct.globalSizes[1] =
-                    transfersPerBlock * tasksPerFile;
-                fileTypeStruct.localSizes[0] = 1;
-                fileTypeStruct.localSizes[1] = transfersPerBlock;
-                fileTypeStruct.startIndices[0] = 0;
-                fileTypeStruct.startIndices[1] =
-                    transfersPerBlock * offsetFactor;
+                if(! hints->dryRun) {
+                  if(! param->useStridedDatatype){
+                    struct fileTypeStruct {
+                        int globalSizes[2], localSizes[2], startIndices[2];
+                    } fileTypeStruct;
 
-                MPI_CHECK(MPI_Type_create_subarray
-                          (2, fileTypeStruct.globalSizes,
-                           fileTypeStruct.localSizes,
-                           fileTypeStruct.startIndices, MPI_ORDER_C,
-                           mfd->transferType, & mfd->fileType),
-                          "cannot create subarray");
-                MPI_CHECK(MPI_Type_commit(& mfd->fileType),
-                          "cannot commit datatype");
-
-                if(! hints->dryRun){
-                    MPI_CHECK(MPI_File_set_view(mfd->fd, (MPI_Offset) 0,
-                                            mfd->transferType,
-                                            mfd->fileType, "native",
+                    /*
+                    * create file type using subarray
+                    */
+                    fileTypeStruct.globalSizes[0] = 1;
+                    fileTypeStruct.globalSizes[1] = transfersPerBlock * tasksPerFile;
+                    fileTypeStruct.localSizes[0] = 1;
+                    fileTypeStruct.localSizes[1] = transfersPerBlock;
+                    fileTypeStruct.startIndices[0] = 0;
+                    fileTypeStruct.startIndices[1] = transfersPerBlock * offsetFactor;
+                    
+                    MPI_CHECK(MPI_Type_create_subarray
+                            (2, fileTypeStruct.globalSizes,
+                              fileTypeStruct.localSizes,
+                              fileTypeStruct.startIndices, MPI_ORDER_C,
+                              mfd->contigType, & mfd->fileType),
+                              "cannot create subarray");
+                    MPI_CHECK(MPI_Type_commit(& mfd->fileType), "cannot commit datatype");
+                    MPI_CHECK(MPI_File_set_view(mfd->fd, 0,
+                                            mfd->contigType, 
+                                            mfd->fileType,
+                                            "native",
                                             (MPI_Info) MPI_INFO_NULL),
                           "cannot set file view");
+                  }else{
+                    MPI_CHECK(MPI_Type_create_resized(mfd->contigType, 0, tasksPerFile * hints->blockSize, & mfd->fileType), "cannot create MPI_Type_create_hvector");
+                    MPI_CHECK(MPI_Type_commit(& mfd->fileType), "cannot commit datatype");
+                  }
                 }
         }
         if (mpiHints != MPI_INFO_NULL)
@@ -377,7 +385,7 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                  *   Access_ordered = MPI_File_read_ordered;
                  */
         }
-
+        
         /*
          * 'useFileView' uses derived datatypes and individual file pointers
          */
@@ -388,16 +396,28 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                         /* if unsuccessful */
                         length = -1;
                 } else {
+
                         /*
-                         * 'useStridedDatatype' fits multi-strided pattern into a datatype;
-                         * must use 'length' to determine repetitions (fix this for
-                         * multi-segments someday, WEL):
-                         * e.g.,  'IOR -s 2 -b 32K -t 32K -a MPIIO -S'
-                         */
+                        * 'useStridedDatatype' fits multi-strided pattern into a datatype;
+                        * must use 'length' to determine repetitions (fix this for
+                        * multi-segments someday, WEL):
+                        * e.g.,  'IOR -s 2 -b 32K -t 32K -a MPIIO --mpiio.useStridedDatatype --mpiio.useFileView'
+                        */
                         if (param->useStridedDatatype) {
-                                length = hints->segmentCount;
-                        } else {
-                                length = 1;
+                          if(offset >= (rank+1) * hints->blockSize){
+                            /* we shall write only once per transferSize */
+                            /* printf("FAKE access %d %lld\n", rank, offset); */
+                            return hints->transferSize;
+                          }
+                          length = hints->segmentCount;
+                          MPI_CHECK(MPI_File_set_view(mfd->fd, offset,
+                                                  mfd->contigType, 
+                                                  mfd->fileType,
+                                                  "native",
+                                                  (MPI_Info) MPI_INFO_NULL), "cannot set file view");                  
+                          /* printf("ACCESS %d %lld -> %lld\n", rank, offset, length); */
+                        }else{
+                          length = 1;
                         }
                         if (hints->collective) {
                                 /* individual, collective call */
@@ -458,7 +478,7 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                         }
                 }
         }
-        return (length);
+        return hints->transferSize;
 }
 
 /*
@@ -485,11 +505,12 @@ static void MPIIO_Close(aiori_fd_t *fdp, aiori_mod_opt_t * module_options)
               MPI_CHECK(MPI_File_close(& mfd->fd), "cannot close file");
         }
         if (param->useFileView == TRUE) {
-                /*
-                 * need to free the datatype, so done in the close process
-                 */
-                MPI_CHECK(MPI_Type_free(& mfd->fileType), "cannot free MPI file datatype");
-                MPI_CHECK(MPI_Type_free(& mfd->transferType), "cannot free MPI transfer datatype");
+          /*
+           * need to free the datatype, so done in the close process
+           */
+          MPI_CHECK(MPI_Type_free(& mfd->fileType), "cannot free MPI file datatype");
+          MPI_CHECK(MPI_Type_free(& mfd->transferType), "cannot free MPI transfer datatype");
+          MPI_CHECK(MPI_Type_free(& mfd->contigType), "cannot free type");
         }
         free(fdp);
 }

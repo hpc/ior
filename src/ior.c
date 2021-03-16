@@ -1026,9 +1026,7 @@ static void InitTests(IOR_test_t *tests)
 static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
                              int pretendRank)
 {
-        /* MPI-IO driver when doing noncontiguous I/O will construct an access
-         * pattern that describes the entire strided access in a single go */
-        ioBuffers->buffer = aligned_buffer_alloc(test->transferSize*test->segmentCount, test->gpuMemoryFlags);
+        ioBuffers->buffer = aligned_buffer_alloc(test->transferSize, test->gpuMemoryFlags);
 }
 
 /*
