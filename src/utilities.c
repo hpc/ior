@@ -77,42 +77,69 @@ enum OutputFormat_t outputFormat;
 
 void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int buff_offset, int rank){
   if(bytes >= 8){ // set the item number as first element of the buffer to be as much unique as possible
-    ((uint64_t*) buf)[0] = item;
+    int k=1;
+    uint64_t * buffi = (uint64_t*) buf;
+    for(size_t i=0; i < bytes/sizeof(uint64_t); i+=512, k++){
+      buffi[i] = item * k + buff_offset * rank;
+    }
   }else{
     buf[0] = (char) item;
   }
 }
 
-void generate_memory_pattern(char * buf, size_t bytes, int buff_offset, int rank){
+void generate_memory_pattern(char * buf, size_t bytes, int buff_offset, int rank, int incompressible){
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
-  const uint64_t ranki = ((uint64_t)(rank + 1) << 32) + buff_offset;
   const size_t size = bytes / 8;
-  // the first 8 bytes are set to item number
-  for(size_t i=1; i < size; i++){
-    buffi[i] = (i + 1) + ranki;
-  }
-  for(size_t i=(bytes/8)*8; i < bytes; i++){
-    buf[i] = (char) i;
+  // the first 8 bytes of a 4k block are set to item number at runtime
+  unsigned seed = buff_offset + rank;
+  for(size_t i=0; i < size; i++){
+    if(incompressible){
+      unsigned long long hi = ((unsigned long long) rand_r(& seed) << 32);
+      unsigned long long lo = (unsigned long long) rand_r(& seed);
+      buffi[i] = hi | lo;      
+    }else{
+      buffi[i] = ((uint64_t) rank) << 32 | buff_offset + i;
+    }
   }
 }
 
-int verify_memory_pattern(int item, char * buffer, size_t bytes, int buff_offset, int pretendRank){
+int verify_memory_pattern(int item, char * buffer, size_t bytes, int buff_offset, int pretendRank, int incompressible){
   int error = 0;
   // always read all data to ensure that performance numbers stay the same
-  if((bytes >= 8 && ((uint64_t*) buffer)[0] != item) || (bytes < 8 && buffer[0] != (char) item)){
-    error = 1;
-  }
-
   uint64_t * buffi = (uint64_t*) buffer;
-  // first half of 64 bits use the rank, here need to apply rank shifting
-  uint64_t rank_mod = ((uint64_t)(pretendRank + 1) << 32) + buff_offset;
+  
+  if(bytes < 8 && buffer[0] != (char) item){
+    error = 1;
+    // ensure that all data is always read to prevent performance inconsistencies
+  }
+  
   // the first 8 bytes are set to item number
-  for(size_t i=1; i < bytes/8; i++){
-    uint64_t exp = (i + 1) + rank_mod;
+  uint64_t last = 0;
+  int k=1;  
+  unsigned seed = buff_offset + pretendRank;
+  
+  for(size_t i=0; i < bytes/8; i++){
+    uint64_t exp;
+    
+    if(incompressible){
+      unsigned long long hi = ((unsigned long long) rand_r(& seed) << 32);
+      unsigned long long lo = (unsigned long long) rand_r(& seed);
+      buffi[i] = hi | lo;      
+    }else{
+      buffi[i] = ((uint64_t) rank) << 32 | buff_offset + i;
+    }
+    
+    if(i % 512 == 0){
+      last = 0;
+      exp = item * k + buff_offset * pretendRank;
+      k++;
+    }
+
     if(buffi[i] != exp){
       error = 1;
     }
+    last = exp;
   }
   for(size_t i=(bytes/8)*8; i < bytes; i++){
     if(buffer[i] != (char) i){

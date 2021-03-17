@@ -85,6 +85,7 @@ struct benchmark_options{
 
   mdworkbench_results_t * results; // the results
 
+  int incompressible_data;
   int offset;
   int iterations;
   int global_iteration;
@@ -553,7 +554,7 @@ void run_precreate(phase_stat_t * s, int current_index){
   }
 
   char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
-  generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, o.rank);
+  generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, o.rank, o.incompressible_data);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   double op_time;
@@ -650,7 +651,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
       if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options) ) {
         if(o.verify_read){
-            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, readRank) == 0){
+            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, readRank, o.incompressible_data) == 0){
               s->obj_read.suc++;
             }else{
               s->obj_read.err++;
@@ -691,7 +692,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       op_timer = GetTimeStamp();
       aiori_fh = o.backend->create(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
       if (NULL != aiori_fh){
-        generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, writeRank);
+        generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, writeRank, o.incompressible_data);
         update_write_memory_pattern(newFileIndex * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, writeRank);
 
         if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
@@ -823,6 +824,7 @@ static option_help options [] = {
   {'w', "stonewall-timer", "Stop each benchmark iteration after the specified seconds (if not used with -W this leads to process-specific progress!)", OPTION_OPTIONAL_ARGUMENT, 'd', & o.stonewall_timer},
   {'W', "stonewall-wear-out", "Stop with stonewall after specified time and use a soft wear-out phase -- all processes perform the same number of iterations", OPTION_FLAG, 'd', & o.stonewall_timer_wear_out},
   {'X', "verify-read", "Verify the data on read", OPTION_FLAG, 'd', & o.verify_read},
+  {0, "incompressible-data", "fill the buffer with random data", OPTION_FLAG, 'd', & o.incompressible_data},  
   {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
   {0, "start-item", "The iteration number of the item to start with, allowing to offset the operations", OPTION_OPTIONAL_ARGUMENT, 'l', & o.start_item_number},
   {0, "print-detailed-stats", "Print detailed machine parsable statistics.", OPTION_FLAG, 'd', & o.print_detailed_stats},

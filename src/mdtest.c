@@ -145,6 +145,7 @@ typedef struct {
   int print_time;
   int print_rate_and_time;
   int print_all_proc;
+  int incompressible_data;
   int random_seed;
   int shared_file;
   int files_only;
@@ -408,7 +409,7 @@ static void create_file (const char *path, uint64_t itemNum) {
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
                 EWARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
+            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.incompressible_data);
         }
     }
 
@@ -730,7 +731,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
               if (o.shared_file) {
                 pretend_rank = rank;
               }
-              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank);
+              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.incompressible_data);
             }else if((o.read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != item_num) || (o.read_bytes < 8 && read_buffer[0] != (char) item_num)){
               // do a lightweight check, which cost is neglectable
               o.verification_error++;
@@ -2234,6 +2235,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & o.call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & o.print_time},
+      {0, "incompressible-data", "fill the buffer with random data", OPTION_FLAG, 'd', & o.incompressible_data},
       {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
@@ -2420,7 +2422,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /* allocate and initialize write buffer with # */
     if (o.write_bytes > 0) {
         o.write_buffer = aligned_buffer_alloc(o.write_bytes, o.gpu_memory_flags);
-        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
+        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.incompressible_data);
     }
 
     /* setup directory path to work in */
