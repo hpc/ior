@@ -90,6 +90,9 @@ function MDTEST(){
 function MDWB(){
   RANKS=$1
   shift
+  if [[ "$DELETE" != "0" ]] ; then
+    rm -rf "${IOR_TMP}/md-workbench"
+  fi
   WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/md-workbench ${@} -o ${IOR_TMP}/md-workbench ${MDWB_EXTRA}"
   LOG="${IOR_OUT}/test_out.$I"
   $WHAT 1>"$LOG" 2>&1
