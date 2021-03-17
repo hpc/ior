@@ -554,7 +554,7 @@ void run_precreate(phase_stat_t * s, int current_index){
   }
 
   char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
-  generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, o.rank, o.incompressible_data);
+  generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, o.rank, o.incompressible_data ? DATA_INCOMPRESSIBLE : DATA_REGULAR);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   double op_time;
@@ -651,7 +651,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
       if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options) ) {
         if(o.verify_read){
-            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, readRank, o.incompressible_data) == 0){
+            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, readRank, o.incompressible_data ? DATA_INCOMPRESSIBLE : DATA_REGULAR) == 0){
               s->obj_read.suc++;
             }else{
               s->obj_read.err++;

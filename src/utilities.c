@@ -75,71 +75,68 @@ enum OutputFormat_t outputFormat;
 
 /***************************** F U N C T I O N S ******************************/
 
-void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int buff_offset, int rank){
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank){
   if(bytes >= 8){ // set the item number as first element of the buffer to be as much unique as possible
     int k=1;
     uint64_t * buffi = (uint64_t*) buf;
     for(size_t i=0; i < bytes/sizeof(uint64_t); i+=512, k++){
-      buffi[i] = item * k + buff_offset * rank;
+      buffi[i] = ((uint32_t) item * k) | ((uint64_t) rank) << 32;
     }
-  }else{
-    buf[0] = (char) item;
   }
 }
 
-void generate_memory_pattern(char * buf, size_t bytes, int buff_offset, int rank, int incompressible){
+void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType){
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
   const size_t size = bytes / 8;
-  // the first 8 bytes of a 4k block are set to item number at runtime
-  unsigned seed = buff_offset + rank;
+  // the first 8 bytes of each 4k block are updated at runtime
+  unsigned seed = rand_seed + rank;
   for(size_t i=0; i < size; i++){
-    if(incompressible){
-      unsigned long long hi = ((unsigned long long) rand_r(& seed) << 32);
-      unsigned long long lo = (unsigned long long) rand_r(& seed);
-      buffi[i] = hi | lo;      
-    }else{
-      buffi[i] = ((uint64_t) rank) << 32 | buff_offset + i;
+    switch(dataPacketType){
+      case(DATA_INCOMPRESSIBLE):{
+        uint64_t hi = ((uint64_t) rand_r(& seed) << 32);
+        uint64_t lo = (uint64_t) rand_r(& seed);
+        buffi[i] = hi | lo;
+        break;
+      }case(DATA_REGULAR):{
+        buffi[i] = ((uint64_t) rank) << 32 | rand_seed + i;
+        break;
+      }
     }
   }
 }
 
-int verify_memory_pattern(int item, char * buffer, size_t bytes, int buff_offset, int pretendRank, int incompressible){
+int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
   int error = 0;
   // always read all data to ensure that performance numbers stay the same
   uint64_t * buffi = (uint64_t*) buffer;
   
-  if(bytes < 8 && buffer[0] != (char) item){
-    error = 1;
-    // ensure that all data is always read to prevent performance inconsistencies
-  }
-  
   // the first 8 bytes are set to item number
-  uint64_t last = 0;
   int k=1;  
-  unsigned seed = buff_offset + pretendRank;
-  
-  for(size_t i=0; i < bytes/8; i++){
+  unsigned seed = rand_seed + pretendRank;
+
+  const size_t size = bytes / 8;
+  for(size_t i=0; i < size; i++){
     uint64_t exp;
-    
-    if(incompressible){
-      unsigned long long hi = ((unsigned long long) rand_r(& seed) << 32);
-      unsigned long long lo = (unsigned long long) rand_r(& seed);
-      buffi[i] = hi | lo;      
-    }else{
-      buffi[i] = ((uint64_t) rank) << 32 | buff_offset + i;
+        
+    switch(dataPacketType){
+      case(DATA_INCOMPRESSIBLE):{
+        uint64_t hi = ((uint64_t) rand_r(& seed) << 32);
+        uint64_t lo = (uint64_t) rand_r(& seed);
+        exp = hi | lo;
+        break;
+      }case(DATA_REGULAR):{
+        exp = ((uint64_t) rank) << 32 | rand_seed + i;
+        break;
+      }
     }
-    
     if(i % 512 == 0){
-      last = 0;
-      exp = item * k + buff_offset * pretendRank;
+      exp = ((uint32_t) item * k) | ((uint64_t) rank) << 32;
       k++;
     }
-
     if(buffi[i] != exp){
       error = 1;
     }
-    last = exp;
   }
   for(size_t i=(bytes/8)*8; i < bytes; i++){
     if(buffer[i] != (char) i){

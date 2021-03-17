@@ -393,10 +393,6 @@ static void create_file (const char *path, uint64_t itemNum) {
     if (o.write_bytes > 0) {
         VERBOSE(3,5,"create_remove_items_helper: write..." );
 
-        /*
-         * According to Bill Loewe, writes are only done one time, so they are always at
-         * offset 0 (zero).
-         */
         o.hints.fsyncPerWrite = o.sync_file;
         update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
 
@@ -409,7 +405,7 @@ static void create_file (const char *path, uint64_t itemNum) {
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
                 EWARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.incompressible_data);
+            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.incompressible_data ? DATA_INCOMPRESSIBLE : DATA_REGULAR);
         }
     }
 
@@ -726,13 +722,13 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
                 EWARNF("unable to read file %s", item);
                 continue;
             }
+            int pretend_rank = (2 * o.nstride + rank) % o.size;
             if(o.verify_read){
-              int pretend_rank = (2 * o.nstride + rank) % o.size;
               if (o.shared_file) {
                 pretend_rank = rank;
               }
-              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.incompressible_data);
-            }else if((o.read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != item_num) || (o.read_bytes < 8 && read_buffer[0] != (char) item_num)){
+              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.incompressible_data ? DATA_INCOMPRESSIBLE : DATA_REGULAR);
+            }else if((o.read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != (item_num | ((uint64_t) pretend_rank) << 32)) || (o.read_bytes < 8 && read_buffer[0] != (char) item_num)){
               // do a lightweight check, which cost is neglectable
               o.verification_error++;
             }
