@@ -75,12 +75,12 @@ enum OutputFormat_t outputFormat;
 
 /***************************** F U N C T I O N S ******************************/
 
-void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType){
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
   if(dataPacketType == DATA_TIMESTAMP || bytes < 8) return;
   int k=1;
   uint64_t * buffi = (uint64_t*) buf;
   for(size_t i=0; i < bytes/sizeof(uint64_t); i+=512, k++){
-    buffi[i] = ((uint32_t) item * k) | ((uint64_t) rank) << 32;
+    buffi[i] = ((uint32_t) item * k) | ((uint64_t) pretendRank) << 32;
   }
 }
 
@@ -103,6 +103,10 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
         break;
       }
     }
+  }
+  
+  for(size_t i=size*8; i < bytes; i++){
+    buf[i] = (char) i;
   }
 }
 
@@ -131,14 +135,14 @@ int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_s
       }
     }
     if(i % 512 == 0 && dataPacketType != DATA_TIMESTAMP){
-      exp = ((uint32_t) item * k) | ((uint64_t) rank) << 32;
+      exp = ((uint32_t) item * k) | ((uint64_t) pretendRank) << 32;
       k++;
     }
     if(buffi[i] != exp){
       error = 1;
     }
   }
-  for(size_t i=(bytes/8)*8; i < bytes; i++){
+  for(size_t i=size*8; i < bytes; i++){
     if(buffer[i] != (char) i){
       error = 1;
     }
