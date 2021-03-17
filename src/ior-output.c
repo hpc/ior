@@ -370,7 +370,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("randomOffset", test->randomOffset);
     PrintKeyValInt("checkWrite", test->checkWrite);
     PrintKeyValInt("checkRead", test->checkRead);
-    PrintKeyValInt("storeFileOffset", test->storeFileOffset);
+    PrintKeyValInt("dataPacketType", test->dataPacketType);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);
     PrintKeyValInt("warningAsErrors", test->warningAsErrors);

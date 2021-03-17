@@ -46,17 +46,6 @@
 #endif /* not MPI_FILE_NULL */
 
 #define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
-/******************** DATA Packet Type ***************************************/
-/* Holds the types of data packets: generic, offset, timestamp, incompressible */
-
-enum PACKET_TYPE
-{
-    generic = 0,                /* No packet type specified */
-    timestamp=1,                  /* Timestamp packet set with -l */
-    offset=2,                     /* Offset packet set with -l */
-    incompressible=3              /* Incompressible packet set with -l */
-
-};
 
 typedef enum{
     IOR_MEMORY_TYPE_CPU = 0,
@@ -142,7 +131,6 @@ typedef struct
     int summary_every_test;          /* flag to print summary every test, not just at end */
     int uniqueDir;                   /* use unique directory for each fpp */
     int useExistingTestFile;         /* do not delete test file before access */
-    int storeFileOffset;             /* use file offset as stored signature */
     int deadlineForStonewalling;     /* max time in seconds to run any test phase */
     int stoneWallingWearOut;         /* wear out the stonewalling, once the timeout is over, each process has to write the same amount */
     uint64_t stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
@@ -161,7 +149,7 @@ typedef struct
     char * memoryPerNodeStr;         /* for parsing */
     char * testscripts;              /* for parsing */
     char * buffer_type;              /* for parsing */
-    enum PACKET_TYPE dataPacketType; /* The type of data packet.  */
+    ior_dataPacketType_e dataPacketType; /* The type of data packet.  */
 
     void * backend_options;          /* Backend-specific options */
 

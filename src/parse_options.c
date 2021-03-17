@@ -222,8 +222,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->verbose = atoi(value);
         } else if (strcasecmp(option, "settimestampsignature") == 0) {
                 params->setTimeStampSignature = atoi(value);
-        } else if (strcasecmp(option, "storefileoffset") == 0) {
-                params->storeFileOffset = atoi(value);
+        } else if (strcasecmp(option, "dataPacketType") == 0) {
+                params->dataPacketType = parsePacketType(value[0]);
         } else if (strcasecmp(option, "uniqueDir") == 0) {
                 params->uniqueDir = atoi(value);
         } else if (strcasecmp(option, "useexistingtestfile") == 0) {

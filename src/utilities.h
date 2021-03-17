@@ -35,12 +35,8 @@ extern enum OutputFormat_t outputFormat;  /* format of the output */
 void* safeMalloc(uint64_t size);
 void set_o_direct_flag(int *fd);
 
-typedef enum {
-  DATA_REGULAR,
-  DATA_INCOMPRESSIBLE
-} ior_dataPacketType_e;
-
-void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank);
+ior_dataPacketType_e parsePacketType(char t);
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType);
 void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType);
 /* check a data buffer, @return 0 if all is correct, otherwise 1 */
 int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType);
