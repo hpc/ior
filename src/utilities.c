@@ -75,46 +75,74 @@ enum OutputFormat_t outputFormat;
 
 /***************************** F U N C T I O N S ******************************/
 
-void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int buff_offset, int rank){
-  if(bytes >= 8){ // set the item number as first element of the buffer to be as much unique as possible
-    ((uint64_t*) buf)[0] = item;
-  }else{
-    buf[0] = (char) item;
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+  if(dataPacketType == DATA_TIMESTAMP || bytes < 8) return;
+  int k=1;
+  uint64_t * buffi = (uint64_t*) buf;
+  for(size_t i=0; i < bytes/sizeof(uint64_t); i+=512, k++){
+    buffi[i] = ((uint32_t) item * k) | ((uint64_t) pretendRank) << 32;
   }
 }
 
-void generate_memory_pattern(char * buf, size_t bytes, int buff_offset, int rank){
+void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
-  const uint64_t ranki = ((uint64_t)(rank + 1) << 32) + buff_offset;
   const size_t size = bytes / 8;
-  // the first 8 bytes are set to item number
-  for(size_t i=1; i < size; i++){
-    buffi[i] = (i + 1) + ranki;
+  // the first 8 bytes of each 4k block are updated at runtime
+  unsigned seed = rand_seed + pretendRank;
+  for(size_t i=0; i < size; i++){
+    switch(dataPacketType){
+      case(DATA_INCOMPRESSIBLE):{
+        uint64_t hi = ((uint64_t) rand_r(& seed) << 32);
+        uint64_t lo = (uint64_t) rand_r(& seed);
+        buffi[i] = hi | lo;
+        break;
+      }case(DATA_OFFSET):{
+      }case(DATA_TIMESTAMP):{
+        buffi[i] = ((uint64_t) pretendRank) << 32 | rand_seed + i;
+        break;
+      }
+    }
   }
-  for(size_t i=(bytes/8)*8; i < bytes; i++){
+  
+  for(size_t i=size*8; i < bytes; i++){
     buf[i] = (char) i;
   }
 }
 
-int verify_memory_pattern(int item, char * buffer, size_t bytes, int buff_offset, int pretendRank){
+int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
   int error = 0;
   // always read all data to ensure that performance numbers stay the same
-  if((bytes >= 8 && ((uint64_t*) buffer)[0] != item) || (bytes < 8 && buffer[0] != (char) item)){
-    error = 1;
-  }
-
   uint64_t * buffi = (uint64_t*) buffer;
-  // first half of 64 bits use the rank, here need to apply rank shifting
-  uint64_t rank_mod = ((uint64_t)(pretendRank + 1) << 32) + buff_offset;
+  
   // the first 8 bytes are set to item number
-  for(size_t i=1; i < bytes/8; i++){
-    uint64_t exp = (i + 1) + rank_mod;
+  int k=1;  
+  unsigned seed = rand_seed + pretendRank;
+  const size_t size = bytes / 8;
+  for(size_t i=0; i < size; i++){
+    uint64_t exp;
+        
+    switch(dataPacketType){
+      case(DATA_INCOMPRESSIBLE):{
+        uint64_t hi = ((uint64_t) rand_r(& seed) << 32);
+        uint64_t lo = (uint64_t) rand_r(& seed);
+        exp = hi | lo;
+        break;
+      }case(DATA_OFFSET):{
+      }case(DATA_TIMESTAMP):{
+        exp = ((uint64_t) pretendRank) << 32 | rand_seed + i;
+        break;
+      }
+    }
+    if(i % 512 == 0 && dataPacketType != DATA_TIMESTAMP){
+      exp = ((uint32_t) item * k) | ((uint64_t) pretendRank) << 32;
+      k++;
+    }
     if(buffi[i] != exp){
       error = 1;
     }
   }
-  for(size_t i=(bytes/8)*8; i < bytes; i++){
+  for(size_t i=size*8; i < bytes; i++){
     if(buffer[i] != (char) i){
       error = 1;
     }
@@ -175,28 +203,28 @@ size_t NodeMemoryStringToBytes(char *size_str)
         return mem / 100 * percent;
 }
 
+ior_dataPacketType_e parsePacketType(char t){
+    switch(t) {
+    case '\0': return DATA_TIMESTAMP;
+    case 'i': /* Incompressible */
+            return DATA_INCOMPRESSIBLE;
+    case 't': /* timestamp */
+            return DATA_TIMESTAMP;
+    case 'o': /* offset packet */
+            return DATA_OFFSET;
+    default:
+      ERRF("Unknown packet type \"%c\"; generic assumed\n", t);
+      return DATA_OFFSET;
+    }
+}
+
 void updateParsedOptions(IOR_param_t * options, options_all_t * global_options){
     if (options->setTimeStampSignature){
       options->incompressibleSeed = options->setTimeStampSignature;
     }
 
     if (options->buffer_type && options->buffer_type[0] != 0){
-      switch(options->buffer_type[0]) {
-      case 'i': /* Incompressible */
-              options->dataPacketType = incompressible;
-              break;
-      case 't': /* timestamp */
-              options->dataPacketType = timestamp;
-              break;
-      case 'o': /* offset packet */
-              options->storeFileOffset = TRUE;
-              options->dataPacketType = offset;
-              break;
-      default:
-              fprintf(out_logfile,
-                      "Unknown argument for -l %s; generic assumed\n", options->buffer_type);
-              break;
-      }
+      options->dataPacketType = parsePacketType(options->buffer_type[0]);
     }
     if (options->memoryPerNodeStr){
       options->memoryPerNode = NodeMemoryStringToBytes(options->memoryPerNodeStr);

@@ -222,8 +222,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->verbose = atoi(value);
         } else if (strcasecmp(option, "settimestampsignature") == 0) {
                 params->setTimeStampSignature = atoi(value);
-        } else if (strcasecmp(option, "storefileoffset") == 0) {
-                params->storeFileOffset = atoi(value);
+        } else if (strcasecmp(option, "dataPacketType") == 0) {
+                params->dataPacketType = parsePacketType(value[0]);
         } else if (strcasecmp(option, "uniqueDir") == 0) {
                 params->uniqueDir = atoi(value);
         } else if (strcasecmp(option, "useexistingtestfile") == 0) {
@@ -450,7 +450,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'j', NULL,        "outlierThreshold -- warn on outlier N seconds from mean", OPTION_OPTIONAL_ARGUMENT, 'd', & params->outlierThreshold},
     {'k', NULL,        "keepFile -- don't remove the test file(s) on program exit", OPTION_FLAG, 'd', & params->keepFile},
     {'K', NULL,        "keepFileWithError  -- keep error-filled file(s) after data-checking", OPTION_FLAG, 'd', & params->keepFileWithError},
-    {'l', NULL,        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
+    {'l', "dataPacketType",        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
     {'m', NULL,        "multiFile -- use number of reps (-i) for multiple file count", OPTION_FLAG, 'd', & params->multiFile},
     {'M', NULL,        "memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)", OPTION_OPTIONAL_ARGUMENT, 's', & params->memoryPerNodeStr},
     {'N', NULL,        "numTasks -- number of tasks that are participating in the test (overrides MPI)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},

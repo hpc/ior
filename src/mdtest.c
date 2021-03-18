@@ -145,6 +145,7 @@ typedef struct {
   int print_time;
   int print_rate_and_time;
   int print_all_proc;
+  ior_dataPacketType_e dataPacketType;
   int random_seed;
   int shared_file;
   int files_only;
@@ -392,12 +393,8 @@ static void create_file (const char *path, uint64_t itemNum) {
     if (o.write_bytes > 0) {
         VERBOSE(3,5,"create_remove_items_helper: write..." );
 
-        /*
-         * According to Bill Loewe, writes are only done one time, so they are always at
-         * offset 0 (zero).
-         */
         o.hints.fsyncPerWrite = o.sync_file;
-        update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
+        update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
 
         if ( o.write_bytes != (size_t) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
             EWARNF("unable to write file %s", curr_item);
@@ -408,7 +405,7 @@ static void create_file (const char *path, uint64_t itemNum) {
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
                 EWARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
+            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
         }
     }
 
@@ -725,15 +722,12 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
                 EWARNF("unable to read file %s", item);
                 continue;
             }
+            int pretend_rank = (2 * o.nstride + rank) % o.size;
             if(o.verify_read){
-              int pretend_rank = (2 * o.nstride + rank) % o.size;
               if (o.shared_file) {
                 pretend_rank = rank;
               }
-              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank);
-            }else if((o.read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != item_num) || (o.read_bytes < 8 && read_buffer[0] != (char) item_num)){
-              // do a lightweight check, which cost is neglectable
-              o.verification_error++;
+              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.dataPacketType);
             }
         }
 
@@ -2188,6 +2182,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
     memset(& o.hints, 0, sizeof(o.hints));
+    
+    char * packetType = "t";
 
     option_help options [] = {
       {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & o.api},
@@ -2234,6 +2230,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & o.call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & o.print_time},
+      {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', & packetType},
       {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
@@ -2250,6 +2247,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     free(global_options->modules);
     free(global_options);
+    
+    o.dataPacketType = parsePacketType(packetType[0]);
 
     MPI_Comm_rank(testComm, &rank);
     MPI_Comm_size(testComm, &o.size);
@@ -2420,7 +2419,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /* allocate and initialize write buffer with # */
     if (o.write_bytes > 0) {
         o.write_buffer = aligned_buffer_alloc(o.write_bytes, o.gpu_memory_flags);
-        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank);
+        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
     }
 
     /* setup directory path to work in */

@@ -85,6 +85,8 @@ struct benchmark_options{
 
   mdworkbench_results_t * results; // the results
 
+  ior_dataPacketType_e dataPacketType;
+  char * packetTypeStr;
   int offset;
   int iterations;
   int global_iteration;
@@ -117,7 +119,7 @@ struct benchmark_options{
   int rank;
   int size;
   int verify_read;
-  int random_buffer_offset;
+  int random_seed;
 
   float relative_waiting_factor;
   int adaptive_waiting_mode;
@@ -140,12 +142,13 @@ void init_options(){
   .interface = "POSIX",
   .prefix = "./out",
   .num = 1000,
-  .random_buffer_offset = -1,
+  .random_seed = -1,
   .precreate = 3000,
   .dset_count = 10,
   .offset = 1,
   .iterations = 3,
   .file_size = 3901,
+  .packetTypeStr = "t",
   .run_info_file = "md-workbench.status"};
 }
 
@@ -553,7 +556,7 @@ void run_precreate(phase_stat_t * s, int current_index){
   }
 
   char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
-  generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, o.rank);
+  generate_memory_pattern(buf, o.file_size, o.random_seed, o.rank, o.dataPacketType);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   double op_time;
@@ -569,7 +572,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       if (NULL == aiori_fh){
         FAIL("Unable to open file %s", obj_name);
       }
-      update_write_memory_pattern(f * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, o.rank);
+      update_write_memory_pattern(f * o.dset_count + d, buf, o.file_size, o.random_seed, o.rank, o.dataPacketType);
       if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
         s->obj_create.suc++;
       }else{
@@ -650,7 +653,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
       if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options) ) {
         if(o.verify_read){
-            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, readRank) == 0){
+            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_seed, readRank, o.dataPacketType) == 0){
               s->obj_read.suc++;
             }else{
               s->obj_read.err++;
@@ -691,9 +694,9 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       op_timer = GetTimeStamp();
       aiori_fh = o.backend->create(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
       if (NULL != aiori_fh){
-        generate_memory_pattern(buf, o.file_size, o.random_buffer_offset, writeRank);
-        update_write_memory_pattern(newFileIndex * o.dset_count + d, buf, o.file_size, o.random_buffer_offset, writeRank);
-
+        generate_memory_pattern(buf, o.file_size, o.random_seed, writeRank, o.dataPacketType);
+        update_write_memory_pattern(newFileIndex * o.dset_count + d, buf, o.file_size, o.random_seed, writeRank, o.dataPacketType);
+        
         if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
           s->obj_create.suc++;
         }else{
@@ -808,7 +811,7 @@ static option_help options [] = {
   {0, "latency-all", "Keep the latency files from all ranks.", OPTION_FLAG, 'd', & o.latency_keep_all},
   {'P', "precreate-per-set", "Number of object to precreate per data set.", OPTION_OPTIONAL_ARGUMENT, 'd', & o.precreate},
   {'D', "data-sets", "Number of data sets covered per process and iteration.", OPTION_OPTIONAL_ARGUMENT, 'd', & o.dset_count},
-  {'G', NULL,        "Offset for the data in the read/write buffer, if not set, a random value is used", OPTION_OPTIONAL_ARGUMENT, 'd', & o.random_buffer_offset},
+  {'G', NULL,        "Timestamp/Random seed for access pattern, if not set, a random value is used", OPTION_OPTIONAL_ARGUMENT, 'd', & o.random_seed},
   {'o', NULL, "Output directory", OPTION_OPTIONAL_ARGUMENT, 's', & o.prefix},
   {'q', "quiet", "Avoid irrelevant printing.", OPTION_FLAG, 'd', & o.quiet_output},
   //{'m', "lim-free-mem", "Allocate memory until this limit (in MiB) is reached.", OPTION_OPTIONAL_ARGUMENT, 'd', & o.limit_memory},
@@ -823,6 +826,7 @@ static option_help options [] = {
   {'w', "stonewall-timer", "Stop each benchmark iteration after the specified seconds (if not used with -W this leads to process-specific progress!)", OPTION_OPTIONAL_ARGUMENT, 'd', & o.stonewall_timer},
   {'W', "stonewall-wear-out", "Stop with stonewall after specified time and use a soft wear-out phase -- all processes perform the same number of iterations", OPTION_FLAG, 'd', & o.stonewall_timer_wear_out},
   {'X', "verify-read", "Verify the data on read", OPTION_FLAG, 'd', & o.verify_read},
+  {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', & o.packetTypeStr},
   {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
   {0, "start-item", "The iteration number of the item to start with, allowing to offset the operations", OPTION_OPTIONAL_ARGUMENT, 'l', & o.start_item_number},
   {0, "print-detailed-stats", "Print detailed machine parsable statistics.", OPTION_FLAG, 'd', & o.print_detailed_stats},
@@ -905,6 +909,8 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
       ERR("Backend doesn't support MDWorbench");
   }
   o.backend_options = airoi_update_module_options(o.backend, global_options);
+  
+  o.dataPacketType = parsePacketType(o.packetTypeStr[0]);
 
   if (!(o.phase_cleanup || o.phase_precreate || o.phase_benchmark)){
     // enable all phases
@@ -915,9 +921,9 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
       ERR("Invalid options, if running only the benchmark phase using -2 with stonewall option then use stonewall wear-out");
     exit(1);
   }
-  if( o.random_buffer_offset == -1 ){
-      o.random_buffer_offset = time(NULL);
-      MPI_Bcast(& o.random_buffer_offset, 1, MPI_INT, 0, o.com);
+  if( o.random_seed == -1 ){
+      o.random_seed = time(NULL);
+      MPI_Bcast(& o.random_seed, 1, MPI_INT, 0, o.com);
   }
 
   if(o.backend->xfer_hints){
