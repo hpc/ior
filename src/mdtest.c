@@ -223,18 +223,6 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
     }
 }
 
-void offset_timers(double * t, int tcount) {
-    double toffset;
-    int i;
-
-    VERBOSE(1,-1,"V-1: Entering offset_timers..." );
-
-    toffset = GetTimeStamp() - t[tcount];
-    for (i = 0; i < tcount+1; i++) {
-        t[i] += toffset;
-    }
-}
-
 void parse_dirpath(char *dirpath_arg) {
     char * tmp, * token;
     char delimiter_string[3] = { '@', '\n', '\0' };
@@ -890,10 +878,10 @@ void rename_dir_test(const int dirs, const long dir_iter, const char *path, rank
     }
 }
 
-static void updateResult(mdtest_results_t * res, mdtest_test_num_t test, uint64_t item_count, int t, double * times, double * tBefore){
-  res->time[test] = times[t] - times[t-1];
-  if(tBefore){
-    res->time_before_barrier[test] = tBefore[t] - times[t-1];
+static void updateResult(mdtest_results_t * res, mdtest_test_num_t test, uint64_t item_count, double t_start, double t_end, double t_end_before_barrier){
+  res->time[test] = t_end - t_start;
+  if(isfinite(t_end_before_barrier)){
+    res->time_before_barrier[test] = t_end_before_barrier - t_start;
   }else{
     res->time_before_barrier[test] = res->time[test];
   }
@@ -905,8 +893,7 @@ static void updateResult(mdtest_results_t * res, mdtest_test_num_t test, uint64_
 
 void directory_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
-    double t[6] = {0};
-    double tBefore[6] = {0};
+    double t_start, t_end, t_end_before_barrier;
     char temp_path[MAX_PATHLEN];
     mdtest_results_t * res = & o.summary_table[iteration];
 
@@ -914,12 +901,11 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     VERBOSE(1,-1,"Entering directory_test on %s", path );
 
-    tBefore[0] = GetTimeStamp();
     MPI_Barrier(testComm);
-    t[0] = GetTimeStamp();
 
     /* create phase */
     if(o.create_only) {
+      t_start = GetTimeStamp();
       progress->stone_wall_timer_seconds = o.stone_wall_timer_seconds;
       progress->items_done = 0;
       progress->start_time = GetTimeStamp();
@@ -928,7 +914,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         if (o.unique_dir_per_task) {
             unique_dir_access(MK_UNI_DIR, temp_path);
             if (! o.time_unique_dir_overhead) {
-                offset_timers(t, 0);
+                t_start = GetTimeStamp();
             }
         } else {
             sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -947,20 +933,21 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         }
       }
       progress->stone_wall_timer_seconds = 0;
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_CREATE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
-
-    tBefore[1] = GetTimeStamp();
-    phase_end();
-    t[1] = GetTimeStamp();
 
     /* stat phase */
     if (o.stat_only) {
+      t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
             unique_dir_access(STAT_SUB_DIR, temp_path);
             if (! o.time_unique_dir_overhead) {
-                offset_timers(t, 1);
+                t_start = GetTimeStamp();
             }
         } else {
             sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -975,21 +962,21 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             mdtest_stat(0, 1, dir_iter, temp_path, progress);
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_STAT_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
-    tBefore[2] = GetTimeStamp();
-    phase_end();
-    t[2] = GetTimeStamp();
-    if (o.rename_dirs && o.items > 1) { // moved close to execution
-      updateResult(res, MDTEST_DIR_RENAME_NUM, o.items, 4, t, tBefore);
-    }
+
     /* read phase */
     if (o.read_only) {
+      t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
             unique_dir_access(READ_SUB_DIR, temp_path);
             if (! o.time_unique_dir_overhead) {
-                offset_timers(t, 2);
+                t_start = GetTimeStamp();
             }
         } else {
             sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -1004,18 +991,21 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             ;        /* N/A */
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_READ_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
-    tBefore[3] = GetTimeStamp();
-    phase_end();
 
-    t[3] = GetTimeStamp();
-    if(o.rename_dirs){
+    /* rename phase */
+    if(o.rename_dirs && o.items > 1){
+      t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
             unique_dir_access(STAT_SUB_DIR, temp_path);
             if (! o.time_unique_dir_overhead) {
-                offset_timers(t, 1);
+                t_start = GetTimeStamp();
             }
         } else {
             sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -1025,22 +1015,21 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
         rename_dir_test(1, dir_iter, temp_path, progress);
       }
-    }
-    tBefore[4] = GetTimeStamp();
-    phase_end();
-
-    t[4] = GetTimeStamp();
-    if (o.rename_dirs && o.items > 1) { // moved close to execution
-      updateResult(res, MDTEST_DIR_RENAME_NUM, o.items, 4, t, tBefore);
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_RENAME_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
+    /* remove phase */
     if (o.remove_only) {
+      t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
             unique_dir_access(RM_SUB_DIR, temp_path);
             if (!o.time_unique_dir_overhead) {
-                offset_timers(t, 3);
+                t_start = GetTimeStamp();
             }
         } else {
             sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -1057,11 +1046,11 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             create_remove_items(0, 1, 0, 0, temp_path, 0, progress);
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_REMOVE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
-
-    tBefore[5] = GetTimeStamp();
-    phase_end();
-    t[5] = GetTimeStamp();
 
     if (o.remove_only) {
         if (o.unique_dir_per_task) {
@@ -1073,27 +1062,10 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         VERBOSE(3,5,"directory_test: remove unique directories path is '%s'\n", temp_path );
     }
 
-    if (o.unique_dir_per_task && ! o.time_unique_dir_overhead) {
-        offset_timers(t, 5);
-    }
-
-    /* calculate times */
-    if (o.create_only) {
-      updateResult(res, MDTEST_DIR_CREATE_NUM, o.items, 1, t, tBefore);
-    }
-    if (o.stat_only) {
-      updateResult(res, MDTEST_DIR_STAT_NUM, o.items, 2, t, tBefore);
-    }
-    if (o.read_only) {
-      updateResult(res, MDTEST_DIR_READ_NUM, o.items, 3, t, tBefore);
-    }
-    if (o.remove_only) {
-      updateResult(res, MDTEST_DIR_REMOVE_NUM, o.items, 5, t, tBefore);
-    }
-    VERBOSE(1,-1,"   Directory creation: %14.3f sec, %14.3f ops/sec", t[1] - t[0], o.summary_table[iteration].rate[0]);
-    VERBOSE(1,-1,"   Directory stat    : %14.3f sec, %14.3f ops/sec", t[2] - t[1], o.summary_table[iteration].rate[1]);
-    VERBOSE(1,-1,"   Directory rename : %14.3f sec, %14.3f ops/sec", t[4] - t[3], o.summary_table[iteration].rate[MDTEST_DIR_RENAME_NUM]);
-    VERBOSE(1,-1,"   Directory removal : %14.3f sec, %14.3f ops/sec", t[5] - t[4], o.summary_table[iteration].rate[4]);
+    VERBOSE(1,-1,"   Directory creation: %14.3f sec, %14.3f ops/sec", res->time[MDTEST_DIR_CREATE_NUM], o.summary_table[iteration].rate[MDTEST_DIR_CREATE_NUM]);
+    VERBOSE(1,-1,"   Directory stat    : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_DIR_STAT_NUM], o.summary_table[iteration].rate[MDTEST_DIR_STAT_NUM]);
+    VERBOSE(1,-1,"   Directory rename : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_DIR_RENAME_NUM], o.summary_table[iteration].rate[MDTEST_DIR_RENAME_NUM]);
+    VERBOSE(1,-1,"   Directory removal : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_DIR_REMOVE_NUM], o.summary_table[iteration].rate[MDTEST_DIR_REMOVE_NUM]);
 }
 
 /* Returns if the stonewall was hit */
@@ -1123,7 +1095,7 @@ int updateStoneWallIterations(int iteration, uint64_t items_done, double tstart,
   return hit;
 }
 
-void file_test_create(const int iteration, const int ntasks, const char *path, rank_progress_t * progress, double *t){
+void file_test_create(const int iteration, const int ntasks, const char *path, rank_progress_t * progress, double *t_start){
   char temp_path[MAX_PATHLEN];
   for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
     prep_testdir(iteration, dir_iter);
@@ -1132,7 +1104,7 @@ void file_test_create(const int iteration, const int ntasks, const char *path, r
         unique_dir_access(MK_UNI_DIR, temp_path);
         VERBOSE(5,5,"operating on %s", temp_path);
         if (! o.time_unique_dir_overhead) {
-            offset_timers(t, 0);
+            *t_start = GetTimeStamp();
         }
     } else {
         sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -1153,7 +1125,7 @@ void file_test_create(const int iteration, const int ntasks, const char *path, r
       // hit the stonewall
       uint64_t max_iter = 0;
       uint64_t items_done = progress->items_done + dir_iter * o.items_per_dir;
-      int hit = updateStoneWallIterations(iteration, items_done, t[0], & max_iter);
+      int hit = updateStoneWallIterations(iteration, items_done, *t_start, & max_iter);
       progress->items_start = items_done;
       progress->items_per_dir = max_iter;
       if (hit){
@@ -1177,23 +1149,27 @@ void file_test_create(const int iteration, const int ntasks, const char *path, r
 
 void file_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
-    double t[5] = {0};
-    double tBefore[5] = {0};
+    double t_start, t_end, t_end_before_barrier;
     char temp_path[MAX_PATHLEN];
+    mdtest_results_t * res = & o.summary_table[iteration];
+
     MPI_Comm_size(testComm, &size);
 
     VERBOSE(3,5,"Entering file_test on %s", path);
 
-    tBefore[0] = GetTimeStamp();
     MPI_Barrier(testComm);
-    t[0] = GetTimeStamp();
 
     /* create phase */
     if (o.create_only ) {
+      t_start = GetTimeStamp();
       progress->stone_wall_timer_seconds = o.stone_wall_timer_seconds;
       progress->items_done = 0;
       progress->start_time = GetTimeStamp();
-      file_test_create(iteration, ntasks, path, progress, t);
+      file_test_create(iteration, ntasks, path, progress, &t_start);
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_FILE_CREATE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }else{
       if (o.stoneWallingStatusFile){
         int64_t expected_items;
@@ -1218,18 +1194,15 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
     }
 
-    tBefore[1] = GetTimeStamp();
-    phase_end();
-    t[1] = GetTimeStamp();
-
     /* stat phase */
     if (o.stat_only ) {
+      t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
             unique_dir_access(STAT_SUB_DIR, temp_path);
             if (!o.time_unique_dir_overhead) {
-                offset_timers(t, 1);
+                t_start = GetTimeStamp();
             }
         } else {
             sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -1240,20 +1213,21 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         /* stat files */
         mdtest_stat((o.random_seed > 0 ? 1 : 0), 0, dir_iter, temp_path, progress);
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_FILE_STAT_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
-
-    tBefore[2] = GetTimeStamp();
-    phase_end();
-    t[2] = GetTimeStamp();
 
     /* read phase */
     if (o.read_only ) {
+      t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
             unique_dir_access(READ_SUB_DIR, temp_path);
             if (! o.time_unique_dir_overhead) {
-                offset_timers(t, 2);
+                t_start = GetTimeStamp();
             }
         } else {
             sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -1268,13 +1242,15 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
                 mdtest_read(0,0, dir_iter, temp_path);
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_FILE_READ_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
-    tBefore[3] = GetTimeStamp();
-    phase_end();
-    t[3] = GetTimeStamp();
-
+    /* remove phase */
     if (o.remove_only) {
+      t_start = GetTimeStamp();
       progress->items_start = 0;
 
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
@@ -1282,7 +1258,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         if (o.unique_dir_per_task) {
             unique_dir_access(RM_SUB_DIR, temp_path);
             if (! o.time_unique_dir_overhead) {
-                offset_timers(t, 3);
+                t_start = GetTimeStamp();
             }
         } else {
             sprintf( temp_path, "%s/%s", o.testdir, path );
@@ -1299,11 +1275,12 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             create_remove_items(0, 0, 0, 0, temp_path, 0, progress);
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_FILE_REMOVE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
-    tBefore[4] = GetTimeStamp();
-    phase_end();
-    t[4] = GetTimeStamp();
     if (o.remove_only) {
         if (o.unique_dir_per_task) {
             unique_dir_access(RM_UNI_DIR, temp_path);
@@ -1314,36 +1291,17 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         VERBOSE(3,5,"file_test: rm unique directories path is '%s'", temp_path );
     }
 
-    if (o.unique_dir_per_task && ! o.time_unique_dir_overhead) {
-        offset_timers(t, 4);
-    }
-
     if(o.num_dirs_in_tree_calc){ /* this is temporary fix needed when using -n and -i together */
       o.items *= o.num_dirs_in_tree_calc;
     }
 
-    mdtest_results_t * res = & o.summary_table[iteration];
-    /* calculate times */
-    if (o.create_only) {
-      updateResult(res, MDTEST_FILE_CREATE_NUM, o.items, 1, t, tBefore);
-    }
-    if (o.stat_only) {
-      updateResult(res, MDTEST_FILE_STAT_NUM, o.items, 2, t, tBefore);
-    }
-    if (o.read_only) {
-      updateResult(res, MDTEST_FILE_READ_NUM, o.items, 3, t, tBefore);
-    }
-    if (o.remove_only) {
-      updateResult(res, MDTEST_FILE_REMOVE_NUM, o.items, 4, t, tBefore);
-    }
-
-    VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", t[1] - t[0], o.summary_table[iteration].rate[4]);
+    VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_CREATE_NUM], o.summary_table[iteration].rate[4]);
     if(o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM]){
       VERBOSE(1,-1,"  File creation (stonewall): %14.3f sec, %14.3f ops/sec", o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM], o.summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM]);
     }
-    VERBOSE(1,-1,"  File stat         : %14.3f sec, %14.3f ops/sec", t[2] - t[1], o.summary_table[iteration].rate[5]);
-    VERBOSE(1,-1,"  File read         : %14.3f sec, %14.3f ops/sec", t[3] - t[2], o.summary_table[iteration].rate[6]);
-    VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", t[4] - t[3], o.summary_table[iteration].rate[7]);
+    VERBOSE(1,-1,"  File stat         : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_STAT_NUM], o.summary_table[iteration].rate[5]);
+    VERBOSE(1,-1,"  File read         : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_READ_NUM], o.summary_table[iteration].rate[6]);
+    VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_REMOVE_NUM], o.summary_table[iteration].rate[7]);
 }
 
 char const * mdtest_test_name(int i){
