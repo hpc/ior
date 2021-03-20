@@ -166,6 +166,8 @@ typedef struct {
   int global_dir_layout;
   #endif /* HAVE_LUSTRE_LUSTREAPI */
   char * saveRankDetailsCSV;       /* save the details about the performance to a file */
+  const char *prologue;
+  const char *epilogue;
 
   mdtest_results_t * summary_table;
   pid_t pid;
@@ -261,12 +263,26 @@ static void prep_testdir(int j, int dir_iter){
   pos += sprintf(& o.testdir[pos], ".%d-%d", j, dir_iter);
 }
 
+static void phase_prepare(){
+  if (*o.prologue){
+    VERBOSE(0,5,"calling prologue: \"%s\"", o.prologue);
+    system(o.prologue);
+    if (o.barriers) {
+      MPI_Barrier(testComm);
+    }
+  }
+}
+
 static void phase_end(){
   if (o.call_sync){
     if(! o.backend->sync){
       FAIL("Error, backend does not provide the sync method, but you requested to use sync.\n");
     }
     o.backend->sync(o.backend_options);
+  }
+  if (*o.epilogue){
+    VERBOSE(0,5,"calling epilogue: \"%s\"", o.epilogue);
+    system(o.epilogue);
   }
 
   if (o.barriers) {
@@ -905,6 +921,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* create phase */
     if(o.create_only) {
+      phase_prepare();
       t_start = GetTimeStamp();
       progress->stone_wall_timer_seconds = o.stone_wall_timer_seconds;
       progress->items_done = 0;
@@ -941,6 +958,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* stat phase */
     if (o.stat_only) {
+      phase_prepare();
       t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
@@ -970,6 +988,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* read phase */
     if (o.read_only) {
+      phase_prepare();
       t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
@@ -999,6 +1018,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* rename phase */
     if(o.rename_dirs && o.items > 1){
+      phase_prepare();
       t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
@@ -1023,6 +1043,7 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
 
     /* remove phase */
     if (o.remove_only) {
+      phase_prepare();
       t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
@@ -1161,6 +1182,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
     /* create phase */
     if (o.create_only ) {
+      phase_prepare();
       t_start = GetTimeStamp();
       progress->stone_wall_timer_seconds = o.stone_wall_timer_seconds;
       progress->items_done = 0;
@@ -1196,6 +1218,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
     /* stat phase */
     if (o.stat_only ) {
+      phase_prepare();
       t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
@@ -1221,6 +1244,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
     /* read phase */
     if (o.read_only ) {
+      phase_prepare();
       t_start = GetTimeStamp();
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
@@ -1250,6 +1274,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
     /* remove phase */
     if (o.remove_only) {
+      phase_prepare();
       t_start = GetTimeStamp();
       progress->items_start = 0;
 
@@ -2103,7 +2128,9 @@ void mdtest_init_args(){
   o = (mdtest_options_t) {
      .barriers = 1,
      .branch_factor = 1,
-     .random_buffer_offset = -1
+     .random_buffer_offset = -1,
+     .prologue = "",
+     .epilogue = "",
   };
 }
 
@@ -2188,6 +2215,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & o.call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & o.print_time},
+      {'^', NULL,        "call this external command before each phase (excluded from the timing)", OPTION_OPTIONAL_ARGUMENT, 's', & o.prologue},
+      {'$', NULL,        "call this external command after each phase (included in the timing)", OPTION_OPTIONAL_ARGUMENT, 's', & o.epilogue},
       {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', & packetType},
       {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
