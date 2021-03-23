@@ -808,14 +808,8 @@ static IOR_offset_t
 DFS_GetFileSize(IOR_param_t * test, MPI_Comm comm, char *testFileName)
 {
         dfs_obj_t *obj;
-        daos_size_t fsize;
+        daos_size_t fsize, tmpMin, tmpMax, tmpSum;
         int rc;
-
-        if (test->filePerProc == TRUE) {
-                comm = MPI_COMM_SELF;
-        } else {
-                comm = testComm;
-        }
 
 	if (test->filePerProc || rank == 0) {
                 rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
@@ -830,10 +824,25 @@ DFS_GetFileSize(IOR_param_t * test, MPI_Comm comm, char *testFileName)
                         return -1;
         }
 
-        if (!test->filePerProc) {
-                rc = MPI_Bcast(&fsize, 1, MPI_UINT64_T, 0, comm);
-                if (rc)
-                        return rc;
+        if (test->filePerProc == TRUE) {
+                MPI_CHECK(MPI_Allreduce(&fsize, &tmpSum, 1,
+                                        MPI_LONG_LONG_INT, MPI_SUM, comm),
+                          "cannot total data moved");
+                fsize = tmpSum;
+        } else {
+                MPI_CHECK(MPI_Allreduce(&fsize, &tmpMin, 1,
+                                        MPI_LONG_LONG_INT, MPI_MIN, comm),
+                          "cannot total data moved");
+                MPI_CHECK(MPI_Allreduce(&fsize, &tmpMax, 1,
+                                        MPI_LONG_LONG_INT, MPI_MAX, comm),
+                          "cannot total data moved");
+                if (tmpMin != tmpMax) {
+                        if (rank == 0) {
+                                WARN("inconsistent file size by different tasks");
+                        }
+                        /* incorrect, but now consistent across tasks */
+                        fsize = tmpMin;
+                }
         }
 
         return (fsize);
