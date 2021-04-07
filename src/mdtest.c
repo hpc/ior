@@ -145,6 +145,7 @@ typedef struct {
   int print_time;
   int print_rate_and_time;
   int print_all_proc;
+  int show_perrank_statistics;
   ior_dataPacketType_e dataPacketType;
   int random_seed;
   int shared_file;
@@ -199,6 +200,8 @@ typedef struct{
 
 /* for making/removing unique directory && stating/deleting subdirectory */
 enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
+
+#define PRINT(...) fprintf(out_logfile, __VA_ARGS__);
 
 /* a helper function for passing debug and verbose messages.
    use the MACRO as it will insert __LINE__ for you.
@@ -901,8 +904,13 @@ static void updateResult(mdtest_results_t * res, mdtest_test_num_t test, uint64_
   }else{
     res->time_before_barrier[test] = res->time[test];
   }
-  res->rate[test] = item_count/res->time[test];
-  res->rate_before_barrier[test] = item_count/res->time_before_barrier[test];
+  if(item_count == 0){
+    res->rate[test] = 0.0;
+    res->rate_before_barrier[test] = 0.0;
+  }else{
+    res->rate[test] = item_count/res->time[test];
+    res->rate_before_barrier[test] = item_count/res->time_before_barrier[test];
+  }
   res->items[test] = item_count;
   res->stonewall_last_item[test] = o.items;
 }
@@ -1455,12 +1463,19 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
   }
 
   VERBOSE(0, -1, "\nSUMMARY %s: (of %d iterations)", print_time ? "time" : "rate", iterations);
-  VERBOSE(0, -1,
-          "   Operation         per Rank: Max            Min           Mean    "
-          "   per Iteration: Max            Min           Mean         Std Dev");
-  VERBOSE(0, -1,
-          "   ---------                   ---            ---           ----    "
-          "                  ---            ---           ----         -------");
+  PRINT("   Operation     ");
+  if(o.show_perrank_statistics){
+    PRINT("per Rank: Max            Min           Mean      per Iteration:");
+  }else{
+    PRINT("               ");
+  }
+  PRINT(" Max            Min           Mean        Std Dev\n");
+  PRINT("   ---------      ");
+
+  if(o.show_perrank_statistics){
+    PRINT("         ---            ---           ----       ");
+  }  
+  PRINT("               ---            ---           ----        -------\n");
   for (int i = start; i < stop; i++) {
     min = 1e308;
     max = 0;
@@ -1526,11 +1541,16 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
     sd = sqrt(var);
     access = mdtest_test_name(i);
     if (i != 2) {
-      fprintf(out_logfile, "   %-22s ", access);
-      fprintf(out_logfile, "%14.3f ", max);
-      fprintf(out_logfile, "%14.3f ", min);
-      fprintf(out_logfile, "%14.3f ", mean);
-      fprintf(out_logfile, "%18.3f ", imax);
+      fprintf(out_logfile, "   %-18s ", access);
+      
+      if(o.show_perrank_statistics){
+        fprintf(out_logfile, "%14.3f ", max);
+        fprintf(out_logfile, "%14.3f ", min);
+        fprintf(out_logfile, "%14.3f ", mean);
+        fprintf(out_logfile, "    ");        
+      }      
+      fprintf(out_logfile, "    ");
+      fprintf(out_logfile, "%14.3f ", imax);
       fprintf(out_logfile, "%14.3f ", imin);
       fprintf(out_logfile, "%14.3f ", imean);
       fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
@@ -1578,10 +1598,13 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
       sd = sqrt(var);
       access = mdtest_test_name(i);
       fprintf(out_logfile, "   %-22s ", access);
-      fprintf(out_logfile, "%14.3f ", max);
-      fprintf(out_logfile, "%14.3f ", min);
-      fprintf(out_logfile, "%14.3f ", mean);
-      fprintf(out_logfile, "%18.3f ", imax);
+      if(o.show_perrank_statistics){
+        fprintf(out_logfile, "%14.3f ", max);
+        fprintf(out_logfile, "%14.3f ", min);
+        fprintf(out_logfile, "%14.3f ", mean);
+        fprintf(out_logfile, "    ");
+      }
+      fprintf(out_logfile, "%14.3f ", imax);
       fprintf(out_logfile, "%14.3f ", imin);
       fprintf(out_logfile, "%14.3f ", sum / iterations);
       fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
@@ -2221,6 +2244,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
+      {0, "showRankStatistics", "Include statistics per rank", OPTION_FLAG, 'd', & o.show_perrank_statistics},
+
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
