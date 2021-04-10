@@ -99,16 +99,18 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
   uint64_t * buffi = (uint64_t*) buf;
 
   if (dataPacketType == DATA_RANDOM) {
+      uint64_t rand_state_local = rand_state;
       if (!rand_state_init) {
           unsigned seed = rand_seed + pretendRank;
           rand_state_init = 1;
-          rand_state = rand_r(&seed);
+          rand_state_local = rand_r(&seed);
       }
       for (size_t i = 0; i < size; i++) {
-          rand_state *= RANDALGO_GOLDEN_RATIO_PRIME;
-          rand_state >>= 3;
-          buffi[i] = rand_state;
+          rand_state_local *= RANDALGO_GOLDEN_RATIO_PRIME;
+          rand_state_local >>= 3;
+          buffi[i] = rand_state_local;
       }
+      rand_state = rand_state_local;
       return;
   }
 
