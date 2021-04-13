@@ -1442,6 +1442,14 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
         IOR_param_t defaults;
         init_IOR_Param_t(&defaults, com);
 
+        if (test->stoneWallingStatusFile && test->keepFile == 0)
+          ERR("a StoneWallingStatusFile is only sensible when splitting write/read into multiple executions of ior, please use -k");
+        if (test->stoneWallingStatusFile && test->stoneWallingWearOut == 0 && test->writeFile)
+          ERR("the StoneWallingStatusFile is only sensible for a write test when using  stoneWallingWearOut");
+        if (test->deadlineForStonewalling == 0 && test->stoneWallingWearOut > 0)
+          ERR("the stoneWallingWearOut is only sensible when setting a stonewall deadline with -D");
+        if (test->stoneWallingStatusFile && test->testscripts)
+          WARN("the StoneWallingStatusFile only preserves the last experiment, make sure that each run uses a separate status file!");
         if (test->repetitions <= 0)
                 WARN_RESET("too few test repetitions",
                            test, &defaults, repetitions);
