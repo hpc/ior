@@ -171,7 +171,7 @@ static void S3_Sync(aiori_mod_opt_t * options)
 
 static S3Status S3ListResponseCallback(const char *ownerId, const char *ownerDisplayName, const char *bucketName, int64_t creationDateSeconds, void *callbackData){
   uint64_t * count = (uint64_t*) callbackData;
-  *count++;
+  *count += 1;
   return S3StatusOK;
 }
 
@@ -381,11 +381,37 @@ static void S3_Delete(char *path, aiori_mod_opt_t * options)
     }while(req.truncated);
     S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
   }else{
-    s3_delete_req req = {0, o, 0, NULL};
-    do{
-      S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
-    }while(req.truncated);
-    S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
+    char * del_heuristics = getenv("S3LIB_DELETE_HEURISTICS");
+    if(del_heuristics){
+      struct stat buf;
+      S3_head_object(& o->bucket_context, p, NULL, o->timeout, & statResponseHandler, & buf);
+      if(s3status != S3StatusOK){
+        // As the file does not exist, can return safely
+        CHECK_ERROR(p);
+        return;
+      } 
+      int threshold = atoi(del_heuristics);
+      if (buf.st_size > threshold){
+        // there may exist fragments, so try to delete them
+        s3_delete_req req = {0, o, 0, NULL};
+        do{
+          S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
+        }while(req.truncated);
+      }
+      S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
+    }else{    
+      // Regular deletion, must remove all created fragments
+      S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
+      if(s3status != S3StatusOK){
+        // As the file does not exist, can return savely
+        CHECK_ERROR(p);
+        return;
+      }
+      s3_delete_req req = {0, o, 0, NULL};
+      do{
+        S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
+      }while(req.truncated);
+    }
   }
   CHECK_ERROR(p);
 }
