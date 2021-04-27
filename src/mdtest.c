@@ -1933,7 +1933,7 @@ void create_remove_directory_tree(int create,
     }
 }
 
-static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t * summary_table){
+static void mdtest_iteration(int i, int j, mdtest_results_t * summary_table){
   rank_progress_t progress_o;
   memset(& progress_o, 0 , sizeof(progress_o));
   progress_o.stone_wall_timer_seconds = 0;
@@ -2168,7 +2168,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     int i, j;
     int numNodes;
     int numTasksOnNode0 = 0;
-    MPI_Group worldgroup, testgroup;
+    MPI_Group worldgroup;
     struct {
         int first;
         int last;
@@ -2486,6 +2486,12 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         first = o.size;
         last = o.size;
     }
+    if(first > last){
+      FAIL("process number: first > last doesn't make sense");
+    }
+    if(last > o.size){
+      FAIL("process number: last > number of processes doesn't make sense");
+    }
 
     /* setup summary table for recording results */
     o.summary_table = (mdtest_results_t *) safeMalloc(iterations * sizeof(mdtest_results_t));
@@ -2506,12 +2512,27 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     strcpy(o.rm_name, "mdtest.shared.");
 
     MPI_Comm_group(testComm, &worldgroup);
+    
+    last = o.size < last ? o.size : last;
+    
+    /* Run the tests */    
+    for (i = first; i <= last; i += stride) {
+        sleep(1);
+        
+        if(i < last){
+          MPI_Group testgroup;
+          range.last = i - 1;
+          MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
+          MPI_Comm_create(world_com, testgroup, &testComm);
+          MPI_Group_free(&testgroup);
+          if(testComm == MPI_COMM_NULL){
+            continue;
+          }
+        }else{
+          MPI_Comm_dup(world_com, & testComm);
+        }
+        MPI_Comm_size(testComm, &o.size);
 
-    /* Run the tests */
-    for (i = first; i <= last && i <= o.size; i += stride) {
-        range.last = i - 1;
-        MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
-        MPI_Comm_create(testComm, testgroup, &testComm);
         if (rank == 0) {
             uint64_t items_all = i * o.items;
             if(o.num_dirs_in_tree_calc){
@@ -2536,16 +2557,12 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
         for (j = 0; j < iterations; j++) {
             // keep track of the current status for stonewalling
-            mdtest_iteration(i, j, testgroup, & o.summary_table[j]);
+            mdtest_iteration(i, j, & o.summary_table[j]);
         }
         summarize_results(iterations, aggregated_results);
         if(o.saveRankDetailsCSV){
           StoreRankInformation(iterations, aggregated_results);
         }
-        if (i == 1 && stride > 1) {
-            i = 0;
-        }
-
         int total_errors = 0;
         MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
         if(rank == 0 && total_errors){
@@ -2553,9 +2570,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         }
 
         MPI_Comm_free(&testComm);
-        MPI_Group_free(&testgroup);
     }
-
+    
     MPI_Group_free(&worldgroup);
     testComm = world_com;
 
