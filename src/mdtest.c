@@ -412,7 +412,11 @@ static void create_file (const char *path, uint64_t itemNum) {
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
                 EWARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            o.verification_error += verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
+            int error = verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
+            o.verification_error += error;
+            if(error){
+                VERBOSE(1,1,"verification error in file: %s", curr_item);
+            }
         }
     }
 
@@ -734,7 +738,11 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
               if (o.shared_file) {
                 pretend_rank = rank;
               }
-              o.verification_error += verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.dataPacketType);
+              int error = verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.dataPacketType);
+              o.verification_error += error;
+              if(error){
+                VERBOSE(1,1,"verification error in file: %s", item);
+              }
             }
         }
 

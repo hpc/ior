@@ -92,6 +92,12 @@ static void def_file_name(s3_options_t * o, char * out_name, char const * path){
     }else if(c == '/'){
       *out_name = '_';
       out_name++;
+    }else{
+      // encode special characters
+      *out_name = 'a' + (c / 26);
+      out_name++;
+      *out_name = 'a' + (c % 26);
+      out_name++;
     }
     path++;
   }
