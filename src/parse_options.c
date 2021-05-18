@@ -220,6 +220,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->intraTestBarriers = atoi(value);
         } else if (strcasecmp(option, "verbose") == 0) {
                 params->verbose = atoi(value);
+        } else if (strcasecmp(option, "collective") == 0) {
+                params->collective = atoi(value);
         } else if (strcasecmp(option, "settimestampsignature") == 0) {
                 params->setTimeStampSignature = atoi(value);
         } else if (strcasecmp(option, "dataPacketType") == 0) {
