@@ -302,7 +302,7 @@ GPFS-SPECIFIC
 
   * ``gpfsReleaseToken`` - release all locks immediately after opening or
     creating file.  Might help mitigate lock-revocation traffic when many
-    proceses write/read to same file. (default: 0)
+    processes write/read to same file. (default: 0)
 
 Verbosity levels
 ----------------
@@ -338,7 +338,7 @@ bzip.
 
 3)  bzip2: For bziped files a transfer size of 1k is insufficient (~50% compressed).
     To avoid compression a transfer size of greater than the bzip block size is required
-    (default = 900KB). I suggest a transfer size of greather than 1MB to avoid bzip2 compression.
+    (default = 900KB). I suggest a transfer size of greater than 1MB to avoid bzip2 compression.
 
 Be aware of the block size your compression algorithm will look at, and adjust
 the transfer size accordingly.

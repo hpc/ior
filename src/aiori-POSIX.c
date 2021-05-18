@@ -34,7 +34,7 @@
 
 #ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
 #  include <linux/lustre/lustre_user.h>
-#elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
+#elif defined(HAVE_LUSTRE_USER)
 #  include <lustre/lustre_user.h>
 #endif
 #ifdef HAVE_GPFS_H
@@ -55,6 +55,22 @@
 #include "iordef.h"
 #include "utilities.h"
 
+#include "aiori-POSIX.h"
+
+#ifdef HAVE_GPU_DIRECT
+typedef long long loff_t;
+#include <cuda_runtime.h>
+#include <cufile.h>
+#endif
+
+typedef struct {
+  int fd;
+#ifdef HAVE_GPU_DIRECT
+  CUfileHandle_t cf_handle;
+#endif
+} posix_fd;
+
+
 #ifndef   open64                /* necessary for TRU64 -- */
 #  define open64  open            /* unlikely, but may pose */
 #endif  /* not open64 */                        /* conflicting prototypes */
@@ -67,35 +83,32 @@
 #  define O_BINARY 0
 #endif
 
+#ifdef HAVE_GPU_DIRECT
+static const char* cuFileGetErrorString(CUfileError_t status){
+  if(IS_CUDA_ERR(status)){
+    return cudaGetErrorString(status.err);
+  }
+  return strerror(status.err);
+}
+
+static void init_cufile(posix_fd * pfd){
+  CUfileDescr_t cf_descr = (CUfileDescr_t){
+    .handle.fd = pfd->fd,
+    .type = CU_FILE_HANDLE_TYPE_OPAQUE_FD
+  };
+  CUfileError_t status = cuFileHandleRegister(& pfd->cf_handle, & cf_descr);
+  if(status.err != CU_FILE_SUCCESS){
+    EWARNF("Could not register handle %s", cuFileGetErrorString(status));
+  }
+}
+#endif
+
 /**************************** P R O T O T Y P E S *****************************/
+static void POSIX_Initialize(aiori_mod_opt_t * options);
+static void POSIX_Finalize(aiori_mod_opt_t * options);
+
 static IOR_offset_t POSIX_Xfer(int, aiori_fd_t *, IOR_size_t *,
                                IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
-static void POSIX_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static void POSIX_Sync(aiori_mod_opt_t * );
-static int POSIX_check_params(aiori_mod_opt_t * options);
-
-/************************** O P T I O N S *****************************/
-typedef struct{
-  /* in case of a change, please update depending MMAP module too */
-  int direct_io;
-
-  /* Lustre variables */
-  int lustre_set_striping;         /* flag that we need to set lustre striping */
-  int lustre_stripe_count;
-  int lustre_stripe_size;
-  int lustre_start_ost;
-  int lustre_ignore_locks;
-
-  /* gpfs variables */
-  int gpfs_hint_access;          /* use gpfs "access range" hint */
-  int gpfs_release_token;        /* immediately release GPFS tokens after
-                                    creating or opening a file */
-  /* beegfs variables */
-  int beegfs_numTargets;           /* number storage targets to use */
-  int beegfs_chunkSize;            /* srtipe pattern for new files */
-
-} posix_options_t;
-
 
 option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   posix_options_t * o = malloc(sizeof(posix_options_t));
@@ -105,6 +118,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
   }else{
     memset(o, 0, sizeof(posix_options_t));
     o->direct_io = 0;
+    o->lustre_stripe_count = -1;
     o->lustre_start_ost = -1;
     o->beegfs_numTargets = -1;
     o->beegfs_chunkSize = -1;
@@ -123,11 +137,14 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     {0, "posix.gpfs.releasetoken", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->gpfs_release_token},
 
 #endif
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
     {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
     {0, "posix.lustre.startost", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_start_ost},
     {0, "posix.lustre.ignorelocks", "", OPTION_FLAG, 'd', & o->lustre_ignore_locks},
+#endif
+#ifdef HAVE_GPU_DIRECT
+    {0, "gpuDirect",        "allocate I/O buffers on the GPU", OPTION_FLAG, 'd', & o->gpuDirect},
 #endif
     LAST_OPTION
   };
@@ -143,19 +160,22 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
 ior_aiori_t posix_aiori = {
         .name = "POSIX",
         .name_legacy = NULL,
+        .initialize = POSIX_Initialize,
+        .finalize = POSIX_Finalize,
         .create = POSIX_Create,
         .mknod = POSIX_Mknod,
         .open = POSIX_Open,
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
         .delete = POSIX_Delete,
-        .xfer_hints = aiori_posix_xfer_hints,
+        .xfer_hints = POSIX_xfer_hints,
         .get_version = aiori_get_version,
         .fsync = POSIX_Fsync,
         .get_file_size = POSIX_GetFileSize,
         .statfs = aiori_posix_statfs,
         .mkdir = aiori_posix_mkdir,
         .rmdir = aiori_posix_rmdir,
+        .rename = POSIX_Rename,
         .access = aiori_posix_access,
         .stat = aiori_posix_stat,
         .get_options = POSIX_options,
@@ -168,16 +188,24 @@ ior_aiori_t posix_aiori = {
 
 static aiori_xfer_hint_t * hints = NULL;
 
-void aiori_posix_xfer_hints(aiori_xfer_hint_t * params){
+void POSIX_xfer_hints(aiori_xfer_hint_t * params){
   hints = params;
 }
 
-static int POSIX_check_params(aiori_mod_opt_t * param){
+int POSIX_check_params(aiori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
   if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
         ERR("beegfsChunkSize must be a power of two and >64k");
   if(o->lustre_stripe_count != -1 || o->lustre_stripe_size != 0)
     o->lustre_set_striping = 1;
+  if(o->gpuDirect && ! o->direct_io){
+    ERR("GPUDirect required direct I/O to be used!");
+  }
+#ifndef HAVE_GPU_DIRECT
+  if(o->gpuDirect){
+    ERR("GPUDirect support is not compiled");
+  }
+#endif
   return 0;
 }
 
@@ -203,7 +231,7 @@ void gpfs_free_all_locks(int fd)
                 EWARNF("gpfs_fcntl(%d, ...) release all locks hint failed.", fd);
         }
 }
-void gpfs_access_start(int fd, IOR_offset_t length, int access)
+void gpfs_access_start(int fd, IOR_offset_t length, IOR_offset_t offset, int access)
 {
         int rc;
         struct {
@@ -217,7 +245,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, int access)
 
         take_locks.access.structLen = sizeof(take_locks.access);
         take_locks.access.structType = GPFS_ACCESS_RANGE;
-        take_locks.access.start = hints->offset;
+        take_locks.access.start = offset;
         take_locks.access.length = length;
         take_locks.access.isWrite = (access == WRITE);
 
@@ -227,7 +255,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, int access)
         }
 }
 
-void gpfs_access_end(int fd, IOR_offset_t length, int access)
+void gpfs_access_end(int fd, IOR_offset_t length, IOR_offset_t offset,  int access)
 {
         int rc;
         struct {
@@ -242,7 +270,7 @@ void gpfs_access_end(int fd, IOR_offset_t length, int access)
 
         free_locks.free.structLen = sizeof(free_locks.free);
         free_locks.free.structType = GPFS_FREE_RANGE;
-        free_locks.free.start = hints->offset;
+        free_locks.free.start = offset;
         free_locks.free.length = length;
 
         rc = gpfs_fcntl(fd, &free_locks);
@@ -368,42 +396,39 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 
 
 /*
- * Creat and open a file through the POSIX interface.
+ * Create and open a file through the POSIX interface.
  */
 aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
         int mode = 0664;
-        int *fd;
-
-        fd = (int *)malloc(sizeof(int));
-        if (fd == NULL)
-                ERR("Unable to malloc file descriptor");
+        posix_fd * pfd = safeMalloc(sizeof(posix_fd));
         posix_options_t * o = (posix_options_t*) param;
         if (o->direct_io == TRUE){
-          set_o_direct_flag(&fd_oflag);
+          set_o_direct_flag(& fd_oflag);
         }
 
         if(hints->dryRun)
           return (aiori_fd_t*) 0;
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
 /* Add a #define for FASYNC if not available, as it forms part of
  * the Lustre O_LOV_DELAY_CREATE definition. */
 #ifndef FASYNC
 #define FASYNC          00020000   /* fcntl, for BSD compatibility */
 #endif
         if (o->lustre_set_striping) {
-                /* In the single-shared-file case, task 0 has to creat the
-                   file with the Lustre striping options before any other processes
-                   open the file */
+                /* In the single-shared-file case, task 0 has to create the
+                   file with the Lustre striping options before any other
+                   processes open the file */
                 if (!hints->filePerProc && rank != 0) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         fd_oflag |= O_RDWR;
-                        *fd = open64(testFileName, fd_oflag, mode);
-                        if (*fd < 0)
-                                ERRF("open64(\"%s\", %d, %#o) failed",
-                                        testFileName, fd_oflag, mode);
+                        pfd->fd = open64(testFileName, fd_oflag, mode);
+                        if (pfd->fd < 0){
+                                ERRF("open64(\"%s\", %d, %#o) failed. Error: %s",
+                                        testFileName, fd_oflag, mode, strerror(errno));
+                        }
                 } else {
                         struct lov_user_md opts = { 0 };
 
@@ -416,30 +441,24 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         /* File needs to be opened O_EXCL because we cannot set
                          * Lustre striping information on a pre-existing file.*/
 
-                        fd_oflag |=
-                            O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
-                        *fd = open64(testFileName, fd_oflag, mode);
-                        if (*fd < 0) {
-                                fprintf(stdout, "\nUnable to open '%s': %s\n",
+                        fd_oflag |= O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
+                        pfd->fd = open64(testFileName, fd_oflag, mode);
+                        if (pfd->fd < 0) {
+                                ERRF("Unable to open '%s': %s\n",
                                         testFileName, strerror(errno));
-                                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
-                                          "MPI_Abort() error");
-                        } else if (ioctl(*fd, LL_IOC_LOV_SETSTRIPE, &opts)) {
+                        } else if (ioctl(pfd->fd, LL_IOC_LOV_SETSTRIPE, &opts)) {
                                 char *errmsg = "stripe already set";
                                 if (errno != EEXIST && errno != EALREADY)
                                         errmsg = strerror(errno);
-                                fprintf(stdout,
-                                        "\nError on ioctl for '%s' (%d): %s\n",
-                                        testFileName, *fd, errmsg);
-                                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
-                                          "MPI_Abort() error");
+                                ERRF("Error on ioctl for '%s' (%d): %s\n",
+                                        testFileName, pfd->fd, errmsg);
                         }
                         if (!hints->filePerProc)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
                 }
         } else {
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
                 fd_oflag |= O_CREAT | O_RDWR;
 
@@ -458,34 +477,40 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                  }
 #endif /* HAVE_BEEGFS_BEEGFS_H */
 
-                *fd = open64(testFileName, fd_oflag, mode);
-                if (*fd < 0)
-                        ERRF("open64(\"%s\", %d, %#o) failed",
-                                testFileName, fd_oflag, mode);
+                pfd->fd = open64(testFileName, fd_oflag, mode);
+                if (pfd->fd < 0){
+                        ERRF("open64(\"%s\", %d, %#o) failed. Error: %s",
+                                testFileName, fd_oflag, mode, strerror(errno));
+                }
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
         }
 
         if (o->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
-                if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
-                        ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
+                if (ioctl(pfd->fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
+                        ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", pfd->fd);
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         /* in the single shared file case, immediately release all locks, with
          * the intent that we can avoid some byte range lock revocation:
          * everyone will be writing/reading from individual regions */
         if (o->gpfs_release_token ) {
-                gpfs_free_all_locks(*fd);
+                gpfs_free_all_locks(pfd->fd);
         }
 #endif
-        return (aiori_fd_t*) fd;
+#ifdef HAVE_GPU_DIRECT
+  if(o->gpuDirect){
+    init_cufile(pfd);
+  }
+#endif
+        return (aiori_fd_t*) pfd;
 }
 
 /*
- * Creat a file through mknod interface.
+ * Create a file through mknod interface.
  */
 int POSIX_Mknod(char *testFileName)
 {
@@ -504,43 +529,48 @@ int POSIX_Mknod(char *testFileName)
 aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
-        int *fd;
-
-        fd = (int *)malloc(sizeof(int));
-        if (fd == NULL)
-                ERR("Unable to malloc file descriptor");
-
+        if(flags & IOR_RDONLY){
+          fd_oflag |= O_RDONLY;
+        }else if(flags & IOR_WRONLY){
+          fd_oflag |= O_WRONLY;
+        }else{
+          fd_oflag |= O_RDWR;
+        }
+        posix_fd * pfd = safeMalloc(sizeof(posix_fd));
         posix_options_t * o = (posix_options_t*) param;
-        if (o->direct_io == TRUE)
+        if (o->direct_io == TRUE){
                 set_o_direct_flag(&fd_oflag);
-
-        fd_oflag |= O_RDWR;
+        }
 
         if(hints->dryRun)
           return (aiori_fd_t*) 0;
 
-        *fd = open64(testFileName, fd_oflag);
-        if (*fd < 0)
-                ERRF("open64(\"%s\", %d) failed", testFileName, fd_oflag);
+        pfd->fd = open64(testFileName, fd_oflag);
+        if (pfd->fd < 0)
+                ERRF("open64(\"%s\", %d) failed: %s", testFileName, fd_oflag, strerror(errno));
 
-#ifdef HAVE_LUSTRE_LUSTRE_USER_H
+#ifdef HAVE_LUSTRE_USER
         if (o->lustre_ignore_locks) {
                 int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
                 if (verbose >= VERBOSE_1) {
-                        fprintf(stdout,
-                                "** Disabling lustre range locking **\n");
+                        EINFO("** Disabling lustre range locking **\n");
                 }
-                if (ioctl(*fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
-                        ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", *fd);
+                if (ioctl(pfd->fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
+                        ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", pfd->fd);
         }
-#endif                          /* HAVE_LUSTRE_LUSTRE_USER_H */
+#endif                          /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         if(o->gpfs_release_token) {
-                gpfs_free_all_locks(*fd);
+                gpfs_free_all_locks(pfd->fd);
         }
 #endif
-        return (aiori_fd_t*) fd;
+#ifdef HAVE_GPU_DIRECT
+        if(o->gpuDirect){
+          init_cufile(pfd);
+        }
+#endif
+        return (aiori_fd_t*) pfd;
 }
 
 /*
@@ -559,11 +589,12 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
         if(hints->dryRun)
           return length;
 
-        fd = *(int *)file;
+        posix_fd * pfd = (posix_fd *) file;
+        fd = pfd->fd;
 
 #ifdef HAVE_GPFS_FCNTL_H
         if (o->gpfs_hint_access) {
-                gpfs_access_start(fd, length, access);
+          gpfs_access_start(fd, length, offset, access);
         }
 #endif
 
@@ -571,17 +602,24 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
         /* seek to offset */
         if (lseek64(fd, offset, SEEK_SET) == -1)
                 ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, offset);
-
+        off_t mem_offset = 0;
         while (remaining > 0) {
                 /* write/read file */
                 if (access == WRITE) {  /* WRITE */
                         if (verbose >= VERBOSE_4) {
-                                fprintf(stdout,
-                                        "task %d writing to offset %lld\n",
+                                EINFO("task %d writing to offset %lld\n",
                                         rank,
                                         offset + length - remaining);
                         }
-                        rc = write(fd, ptr, remaining);
+#ifdef HAVE_GPU_DIRECT
+                        if(o->gpuDirect){
+                          rc = cuFileWrite(pfd->cf_handle, ptr, remaining, offset + mem_offset, mem_offset);
+                        }else{
+#endif
+                          rc = write(fd, ptr, remaining);
+#ifdef HAVE_GPU_DIRECT
+                        }
+#endif
                         if (rc == -1)
                                 ERRF("write(%d, %p, %lld) failed",
                                         fd, (void*)ptr, remaining);
@@ -590,12 +628,19 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                         }
                 } else {        /* READ or CHECK */
                         if (verbose >= VERBOSE_4) {
-                                fprintf(stdout,
-                                        "task %d reading from offset %lld\n",
+                                EINFO("task %d reading from offset %lld\n",
                                         rank,
                                         offset + length - remaining);
                         }
-                        rc = read(fd, ptr, remaining);
+#ifdef HAVE_GPU_DIRECT
+                        if(o->gpuDirect){
+                          rc = cuFileRead(pfd->cf_handle, ptr, remaining, offset + mem_offset, mem_offset);
+                        }else{
+#endif
+                          rc = read(fd, ptr, remaining);
+#ifdef HAVE_GPU_DIRECT
+                        }
+#endif
                         if (rc == 0)
                                 ERRF("read(%d, %p, %lld) returned EOF prematurely",
                                         fd, (void*)ptr, remaining);
@@ -604,43 +649,38 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                         fd, (void*)ptr, remaining);
                 }
                 if (rc < remaining) {
-                        fprintf(stdout,
-                                "WARNING: Task %d, partial %s, %lld of %lld bytes at offset %lld\n",
+                        EWARNF("task %d, partial %s, %lld of %lld bytes at offset %lld\n",
                                 rank,
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
                                 offset + length - remaining);
-                        if (hints->singleXferAttempt == TRUE)
-                                MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1),
-                                          "barrier error");
-                        if (xferRetries > MAX_RETRY)
+                        if (xferRetries > MAX_RETRY || hints->singleXferAttempt)
                                 ERR("too many retries -- aborting");
                 }
                 assert(rc >= 0);
                 assert(rc <= remaining);
                 remaining -= rc;
                 ptr += rc;
+                mem_offset += rc;
                 xferRetries++;
         }
 #ifdef HAVE_GPFS_FCNTL_H
         if (o->gpfs_hint_access) {
-                gpfs_access_end(fd, length, param, access);
+            gpfs_access_end(fd, length, offset, access);
         }
 #endif
         return (length);
 }
 
-/*
- * Perform fsync().
- */
-static void POSIX_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
+void POSIX_Fsync(aiori_fd_t *afd, aiori_mod_opt_t * param)
 {
-        if (fsync(*(int *)fd) != 0)
-                EWARNF("fsync(%d) failed", *(int *)fd);
+    int fd = ((posix_fd*) afd)->fd;
+    if (fsync(fd) != 0)
+        EWARNF("fsync(%d) failed", fd);
 }
 
 
-static void POSIX_Sync(aiori_mod_opt_t * param)
+void POSIX_Sync(aiori_mod_opt_t * param)
 {
   int ret = system("sync");
   if (ret != 0){
@@ -652,13 +692,21 @@ static void POSIX_Sync(aiori_mod_opt_t * param)
 /*
  * Close a file through the POSIX interface.
  */
-void POSIX_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
+void POSIX_Close(aiori_fd_t *afd, aiori_mod_opt_t * param)
 {
         if(hints->dryRun)
           return;
-        if (close(*(int *)fd) != 0)
-                ERRF("close(%d) failed", *(int *)fd);
-        free(fd);
+        posix_options_t * o = (posix_options_t*) param;
+        int fd = ((posix_fd*) afd)->fd;
+#ifdef HAVE_GPU_DIRECT
+        if(o->gpuDirect){
+          cuFileHandleDeregister(((posix_fd*) afd)->cf_handle);
+        }
+#endif
+        if (close(fd) != 0){
+                ERRF("close(%d) failed", fd);
+        }
+        free(afd);
 }
 
 /*
@@ -669,16 +717,25 @@ void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
         if(hints->dryRun)
           return;
         if (unlink(testFileName) != 0){
-                EWARNF("[RANK %03d]: unlink() of file \"%s\" failed\n",
-                       rank, testFileName);
+                EWARNF("[RANK %03d]: unlink() of file \"%s\" failed", rank, testFileName);
         }
+}
+
+int POSIX_Rename(const char * oldfile, const char * newfile, aiori_mod_opt_t * module_options){
+  if(hints->dryRun)
+    return 0;
+
+  if(rename(oldfile, newfile) != 0){
+    EWARNF("[RANK %03d]: rename() of file \"%s\" to  \"%s\" failed", rank, oldfile, newfile);
+    return -1;
+  }
+  return 0;
 }
 
 /*
  * Use POSIX stat() to return aggregate file size.
  */
-IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
-                                      char *testFileName)
+IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 {
         if(hints->dryRun)
           return 0;
@@ -690,26 +747,17 @@ IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, MPI_Comm testComm,
         }
         aggFileSizeFromStat = stat_buf.st_size;
 
-        if (hints->filePerProc == TRUE) {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, testComm),
-                          "cannot total data moved");
-                aggFileSizeFromStat = tmpSum;
-        } else {
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, testComm),
-                          "cannot total data moved");
-                MPI_CHECK(MPI_Allreduce(&aggFileSizeFromStat, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, testComm),
-                          "cannot total data moved");
-                if (tmpMin != tmpMax) {
-                        if (rank == 0) {
-                                WARN("inconsistent file size by different tasks");
-                        }
-                        /* incorrect, but now consistent across tasks */
-                        aggFileSizeFromStat = tmpMin;
-                }
-        }
-
         return (aggFileSizeFromStat);
+}
+
+void POSIX_Initialize(aiori_mod_opt_t * options){
+#ifdef HAVE_GPU_DIRECT
+  CUfileError_t err = cuFileDriverOpen();
+#endif
+}
+
+void POSIX_Finalize(aiori_mod_opt_t * options){
+#ifdef HAVE_GPU_DIRECT
+  CUfileError_t err = cuFileDriverClose();
+#endif
 }

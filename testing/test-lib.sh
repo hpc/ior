@@ -7,12 +7,17 @@
 # Example: export IOR_EXTRA="-v -v -v"
 
 IOR_MPIRUN=${IOR_MPIRUN:-mpiexec -np}
+if ${IOR_MPIRUN} 1 --oversubscribe true ; then
+  IOR_MPIRUN="mpiexec --oversubscribe -np"
+fi
 IOR_BIN_DIR=${IOR_BIN_DIR:-./src}
-IOR_OUT=${IOR_OUT:-./test_logs}
+IOR_OUT=${IOR_OUT:-./test_logs/$TYPE}
 IOR_TMP=${IOR_TMP:-/dev/shm}
 IOR_EXTRA=${IOR_EXTRA:-} # Add global options like verbosity
 MDTEST_EXTRA=${MDTEST_EXTRA:-}
 MDTEST_TEST_PATTERNS=${MDTEST_TEST_PATTERNS:-../testing/mdtest-patterns/$TYPE}
+MDWB_EXTRA=${MDWB_EXTRA:-}
+
 
 ################################################################################
 mkdir -p ${IOR_OUT}
@@ -40,7 +45,7 @@ I=0
 function IOR(){
   RANKS=$1
   shift
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} ${IOR_EXTRA} -o ${IOR_TMP}/ior"
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/ior ${@} -o ${IOR_TMP}/ior ${IOR_EXTRA}"
   $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
@@ -56,15 +61,15 @@ function MDTEST(){
   RANKS=$1
   shift
   rm -rf ${IOR_TMP}/mdest
-  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} ${MDTEST_EXTRA} -d ${IOR_TMP}/mdest -V=4"
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/mdtest ${@} -d ${IOR_TMP}/mdest ${MDTEST_EXTRA} -V=4"
   $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
   if [[ $? != 0 ]]; then
     echo -n "ERR"
     ERRORS=$(($ERRORS + 1))
   else
     # compare basic pattern
+    grep "V-3" "${IOR_OUT}/test_out.$I" | sed "s/Line *[0-9]*//" > "${IOR_OUT}/tmp"
     if [[ -r ${MDTEST_TEST_PATTERNS}/$I.txt ]] ; then
-      grep "V-3" "${IOR_OUT}/test_out.$I" > "${IOR_OUT}/tmp"
       cmp -s "${IOR_OUT}/tmp" ${MDTEST_TEST_PATTERNS}/$I.txt
       if [[ $? != 0 ]]; then
         mv "${IOR_OUT}/tmp" ${IOR_OUT}/tmp.$I
@@ -74,8 +79,27 @@ function MDTEST(){
       if [[ ! -e ${MDTEST_TEST_PATTERNS} ]] ; then
         mkdir -p ${MDTEST_TEST_PATTERNS}
       fi
-      grep "V-3" "${IOR_OUT}/test_out.$I" > ${MDTEST_TEST_PATTERNS}/$I.txt
+      mv "${IOR_OUT}/tmp" ${MDTEST_TEST_PATTERNS}/$I.txt
     fi
+    echo -n "OK "
+  fi
+  echo " $WHAT"
+  I=$((${I}+1))
+}
+
+function MDWB(){
+  RANKS=$1
+  shift
+  if [[ "$DELETE" != "0" ]] ; then
+    rm -rf "${IOR_TMP}/md-workbench"
+  fi
+  WHAT="${IOR_MPIRUN} $RANKS ${IOR_BIN_DIR}/md-workbench ${@} -o ${IOR_TMP}/md-workbench ${MDWB_EXTRA}"
+  LOG="${IOR_OUT}/test_out.$I"
+  $WHAT 1>"$LOG" 2>&1
+  if [[ $? != 0 ]] || grep '!!!' "$LOG" ; then
+    echo -n "ERR"
+    ERRORS=$(($ERRORS + 1))
+  else
     echo -n "OK "
   fi
   echo " $WHAT"

@@ -18,8 +18,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <mpi.h>
+
+typedef enum {
+  DATA_TIMESTAMP, /* Will not include any offset, hence each buffer will be the same */
+  DATA_OFFSET,
+  DATA_INCOMPRESSIBLE /* Will include the offset as well */
+} ior_dataPacketType_e;
 
 #ifdef _WIN32
 #   define _CRT_SECURE_NO_WARNINGS
@@ -51,13 +55,6 @@
 #   include <unistd.h>
 #   include <limits.h>
 #endif
-
-/************************** D E C L A R A T I O N S ***************************/
-
-extern int numTasks;                           /* MPI variables */
-extern int rank;
-extern int rankOffset;
-extern int verbose;                            /* verbose output */
 
 /*************************** D E F I N I T I O N S ****************************/
 
@@ -115,116 +112,10 @@ enum OutputFormat_t{
 #define DELIMITERS         " \t\r\n="          /* ReadScript() */
 #define FILENAME_DELIMITER '@'                 /* ParseFileName() */
 
-/* MACROs for debugging */
-#define HERE               fprintf(stdout, "** LINE %d (TASK=%d) **\n", \
-                                   __LINE__, rank);
-
 typedef long long int      IOR_offset_t;
 typedef long long int      IOR_size_t;
 
 #define                    IOR_format "%016llx"
-
-
-/******************************** M A C R O S *********************************/
-
-/******************************************************************************/
-/*
- * WARN_RESET will display a custom error message and set value to default
- */
-#define WARN_RESET(MSG, TO_STRUCT_PTR, FROM_STRUCT_PTR, MEMBER) do {     \
-        (TO_STRUCT_PTR)->MEMBER = (FROM_STRUCT_PTR)->MEMBER;             \
-        if (rank == 0) {                                                 \
-            fprintf(stdout, "ior WARNING: %s.  Using value of %d.\n",    \
-                    MSG, (TO_STRUCT_PTR)->MEMBER);                       \
-        }                                                                \
-        fflush(stdout);                                                  \
-} while (0)
-
-
-#define WARN(MSG) do {                                                   \
-        if (verbose > VERBOSE_2) {                                       \
-            fprintf(stdout, "ior WARNING: %s, (%s:%d).\n",               \
-                    MSG, __FILE__, __LINE__);                            \
-        } else {                                                         \
-            fprintf(stdout, "ior WARNING: %s.\n", MSG);                  \
-        }                                                                \
-        fflush(stdout);                                                  \
-} while (0)
-
-
-/* warning with format string and errno printed */
-#define EWARNF(FORMAT, ...) do {                                         \
-        if (verbose > VERBOSE_2) {                                       \
-            fprintf(stdout, "ior WARNING: " FORMAT ", errno %d, %s (%s:%d).\n", \
-                    __VA_ARGS__, errno, strerror(errno), __FILE__, __LINE__); \
-        } else {                                                         \
-            fprintf(stdout, "ior WARNING: " FORMAT ", errno %d, %s \n",  \
-                    __VA_ARGS__, errno, strerror(errno));                \
-        }                                                                \
-        fflush(stdout);                                                  \
-} while (0)
-
-
-/* warning with errno printed */
-#define EWARN(MSG) do {                                                  \
-        EWARNF("%s", MSG);                                               \
-} while (0)
-
-
-/* display error message with format string and terminate execution */
-#define ERRF(FORMAT, ...) do {                                           \
-        fprintf(stdout, "ior ERROR: " FORMAT ", errno %d, %s (%s:%d)\n", \
-                __VA_ARGS__, errno, strerror(errno), __FILE__, __LINE__); \
-        fflush(stdout);                                                  \
-        MPI_Abort(MPI_COMM_WORLD, -1);                                   \
-} while (0)
-
-
-/* display error message and terminate execution */
-#define ERR_ERRNO(MSG) do {                                                    \
-        ERRF("%s", MSG);                                                 \
-} while (0)
-
-
-/* display a simple error message (i.e. errno is not set) and terminate execution */
-#define ERR(MSG) do {                                            \
-        fprintf(stdout, "ior ERROR: %s, (%s:%d)\n",                     \
-                MSG, __FILE__, __LINE__);                               \
-        fflush(stdout);                                                 \
-        MPI_Abort(MPI_COMM_WORLD, -1);                                  \
-} while (0)
-
-
-/******************************************************************************/
-/*
- * MPI_CHECKF will display a custom format string as well as an error string
- * from the MPI_STATUS and then exit the program
- */
-
-#define MPI_CHECKF(MPI_STATUS, FORMAT, ...) do {                         \
-    char resultString[MPI_MAX_ERROR_STRING];                             \
-    int resultLength;                                                    \
-                                                                         \
-    if (MPI_STATUS != MPI_SUCCESS) {                                     \
-        MPI_Error_string(MPI_STATUS, resultString, &resultLength);       \
-        fprintf(stdout, "ior ERROR: " FORMAT ", MPI %s, (%s:%d)\n",      \
-                __VA_ARGS__, resultString, __FILE__, __LINE__);          \
-        fflush(stdout);                                                  \
-        MPI_Abort(MPI_COMM_WORLD, -1);                                   \
-    }                                                                    \
-} while(0)
-
-
-/******************************************************************************/
-/*
- * MPI_CHECK will display a custom error message as well as an error string
- * from the MPI_STATUS and then exit the program
- */
-
-#define MPI_CHECK(MPI_STATUS, MSG) do {                                  \
-    MPI_CHECKF(MPI_STATUS, "%s", MSG);                                   \
-} while(0)
-
 
 /******************************************************************************/
 /*

@@ -22,6 +22,7 @@
 
 #include "ior.h"
 #include "aiori.h"
+#include "aiori-POSIX.h"
 #include "iordef.h"
 #include "utilities.h"
 
@@ -86,7 +87,7 @@ static aiori_xfer_hint_t * hints = NULL;
 
 static void MMAP_xfer_hints(aiori_xfer_hint_t * params){
   hints = params;
-  aiori_posix_xfer_hints(params);
+  POSIX_xfer_hints(params);
 }
 
 static int MMAP_check_params(aiori_mod_opt_t * options){
@@ -128,7 +129,7 @@ static void ior_mmap_file(int *file, int mflags, void *param)
 }
 
 /*
- * Creat and open a file through the POSIX interface, then setup mmap.
+ * Create and open a file through the POSIX interface, then setup mmap.
  */
 static aiori_fd_t *MMAP_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {

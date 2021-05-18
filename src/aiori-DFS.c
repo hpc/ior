@@ -39,8 +39,8 @@
 
 dfs_t *dfs;
 static daos_handle_t poh, coh;
-static daos_oclass_id_t objectClass = OC_SX;
-static daos_oclass_id_t dir_oclass = OC_SX;
+static daos_oclass_id_t objectClass;
+static daos_oclass_id_t dir_oclass;
 static struct d_hash_table *dir_hash;
 static bool dfs_init;
 
@@ -59,7 +59,9 @@ enum handleType {
 /************************** O P T I O N S *****************************/
 typedef struct {
         char	*pool;
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
         char	*svcl;
+#endif
         char	*group;
         char	*cont;
 	int	chunk_size;
@@ -85,7 +87,9 @@ static option_help * DFS_options(aiori_mod_opt_t ** init_backend_options,
 
         option_help h [] = {
                 {0, "dfs.pool", "pool uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->pool},
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
                 {0, "dfs.svcl", "pool SVCL", OPTION_OPTIONAL_ARGUMENT, 's', &o->svcl},
+#endif
                 {0, "dfs.group", "server group", OPTION_OPTIONAL_ARGUMENT, 's', &o->group},
                 {0, "dfs.cont", "DFS container uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->cont},
                 {0, "dfs.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o->chunk_size},
@@ -114,7 +118,7 @@ static void DFS_Delete(char *, aiori_mod_opt_t *);
 static char* DFS_GetVersion();
 static void DFS_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static void DFS_Sync(aiori_mod_opt_t *);
-static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, MPI_Comm, char *);
+static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, char *);
 static int DFS_Statfs (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t *);
 static int DFS_Stat (const char *, struct stat *, aiori_mod_opt_t *);
 static int DFS_Mkdir (const char *, mode_t, aiori_mod_opt_t *);
@@ -188,9 +192,13 @@ void DFS_init_xfer_options(aiori_xfer_hint_t * params)
 static int DFS_check_params(aiori_mod_opt_t * options){
         DFS_options_t *o = (DFS_options_t *) options;
 
-        if (o->pool == NULL || o->svcl == NULL || o->cont == NULL)
+        if (o->pool == NULL || o->cont == NULL)
                 ERR("Invalid pool or container options\n");
 
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
+        if (o->svcl == NULL)
+                ERR("Invalid SVCL\n");
+#endif
         return 0;
 }
 
@@ -247,8 +255,7 @@ HandleDistribute(enum handleType type)
                 DCHECK(rc, "Failed to get global handle size");
         }
 
-        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0,
-                            MPI_COMM_WORLD),
+        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0, testComm),
                   "Failed to bcast global handle buffer size");
 
 	global.iov_len = global.iov_buf_len;
@@ -266,8 +273,7 @@ HandleDistribute(enum handleType type)
                 DCHECK(rc, "Failed to create global handle");
         }
 
-        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0,
-                            MPI_COMM_WORLD),
+        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0, testComm),
                   "Failed to bcast global pool handle");
 
         if (rank != 0) {
@@ -374,6 +380,45 @@ out:
 	return rc;
 }
 
+static void
+share_file_handle(dfs_obj_t **file, MPI_Comm comm)
+{
+        d_iov_t global;
+        int        rc;
+
+        global.iov_buf = NULL;
+        global.iov_buf_len = 0;
+        global.iov_len = 0;
+
+        if (rank == 0) {
+                rc = dfs_obj_local2global(dfs, *file, &global);
+                DCHECK(rc, "Failed to get global handle size");
+        }
+
+        MPI_CHECK(MPI_Bcast(&global.iov_buf_len, 1, MPI_UINT64_T, 0, testComm),
+                  "Failed to bcast global handle buffer size");
+
+	global.iov_len = global.iov_buf_len;
+        global.iov_buf = malloc(global.iov_buf_len);
+        if (global.iov_buf == NULL)
+                ERR("Failed to allocate global handle buffer");
+
+        if (rank == 0) {
+                rc = dfs_obj_local2global(dfs, *file, &global);
+                DCHECK(rc, "Failed to create global handle");
+        }
+
+        MPI_CHECK(MPI_Bcast(global.iov_buf, global.iov_buf_len, MPI_BYTE, 0, testComm),
+                  "Failed to bcast global pool handle");
+
+        if (rank != 0) {
+                rc = dfs_obj_global2local(dfs, 0, global, file);
+                DCHECK(rc, "Failed to get local handle");
+        }
+
+        free(global.iov_buf);
+}
+
 static dfs_obj_t *
 lookup_insert_dir(const char *name, mode_t *mode)
 {
@@ -418,8 +463,13 @@ DFS_Init(aiori_mod_opt_t * options)
                 return;
 
         /** shouldn't be fatal since it can be called with POSIX backend selection */
-        if (o->pool == NULL || o->svcl == NULL || o->cont == NULL)
+        if (o->pool == NULL || o->cont == NULL)
                 return;
+
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
+        if (o->svcl == NULL)
+                return;
+#endif
 
 	rc = daos_init();
         DCHECK(rc, "Failed to initialize daos");
@@ -441,7 +491,6 @@ DFS_Init(aiori_mod_opt_t * options)
 
         if (rank == 0) {
                 uuid_t pool_uuid, co_uuid;
-                d_rank_list_t *svcl = NULL;
                 daos_pool_info_t pool_info;
                 daos_cont_info_t co_info;
 
@@ -451,17 +500,25 @@ DFS_Init(aiori_mod_opt_t * options)
                 rc = uuid_parse(o->cont, co_uuid);
                 DCHECK(rc, "Failed to parse 'Cont uuid': %s", o->cont);
 
+                INFO(VERBOSE_1, "Pool uuid = %s", o->pool);
+                INFO(VERBOSE_1, "DFS Container namespace uuid = %s", o->cont);
+
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
+                d_rank_list_t *svcl = NULL;
+
                 svcl = daos_rank_list_parse(o->svcl, ":");
                 if (svcl == NULL)
                         ERR("Failed to allocate svcl");
-
-                INFO(VERBOSE_1, "Pool uuid = %s, SVCL = %s\n", o->pool, o->svcl);
-                INFO(VERBOSE_1, "DFS Container namespace uuid = %s\n", o->cont);
+                INFO(VERBOSE_1, "Pool svcl = %s", o->svcl);
 
                 /** Connect to DAOS pool */
                 rc = daos_pool_connect(pool_uuid, o->group, svcl, DAOS_PC_RW,
                                        &poh, &pool_info, NULL);
                 d_rank_list_free(svcl);
+#else
+                rc = daos_pool_connect(pool_uuid, o->group, DAOS_PC_RW,
+                                       &poh, &pool_info, NULL);
+#endif
                 DCHECK(rc, "Failed to connect to pool");
 
                 rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
@@ -498,23 +555,23 @@ DFS_Finalize(aiori_mod_opt_t *options)
         DFS_options_t *o = (DFS_options_t *)options;
         int rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(testComm);
         d_hash_table_destroy(dir_hash, true /* force */);
 
 	rc = dfs_umount(dfs);
         DCHECK(rc, "Failed to umount DFS namespace");
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(testComm);
 
 	rc = daos_cont_close(coh, NULL);
         DCHECK(rc, "Failed to close container %s (%d)", o->cont, rc);
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(testComm);
 
 	if (o->destroy) {
                 if (rank == 0) {
                         uuid_t uuid;
                         double t1, t2;
 
-                        INFO(VERBOSE_1, "Destorying DFS Container: %s\n", o->cont);
+                        INFO(VERBOSE_1, "Destroying DFS Container: %s\n", o->cont);
                         uuid_parse(o->cont, uuid);
                         t1 = MPI_Wtime();
                         rc = daos_cont_destroy(poh, uuid, 1, NULL);
@@ -523,7 +580,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
                                 INFO(VERBOSE_1, "Container Destroy time = %f secs", t2-t1);
                 }
 
-                MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                MPI_Bcast(&rc, 1, MPI_INT, 0, testComm);
                 if (rc) {
 			if (rank == 0)
 				DCHECK(rc, "Failed to destroy container %s (%d)", o->cont, rc);
@@ -537,7 +594,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
         rc = daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
 
-	MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD), "barrier error");
+	MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
         if (rank == 0)
                 INFO(VERBOSE_1, "Finalizing DAOS..\n");
@@ -547,21 +604,23 @@ DFS_Finalize(aiori_mod_opt_t *options)
 
         /** reset tunables */
 	o->pool		= NULL;
+#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
 	o->svcl		= NULL;
-	o->group		= NULL;
+#endif
+	o->group	= NULL;
 	o->cont		= NULL;
 	o->chunk_size	= 1048576;
 	o->oclass	= NULL;
 	o->dir_oclass	= NULL;
 	o->prefix	= NULL;
 	o->destroy	= 0;
-	objectClass	= OC_SX;
-	dir_oclass	= OC_SX;
+	objectClass	= 0;
+	dir_oclass	= 0;
 	dfs_init	= false;
 }
 
 /*
- * Creat and open a file through the DFS interface.
+ * Create and open a file through the DFS interface.
  */
 static aiori_fd_t *
 DFS_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
@@ -578,26 +637,21 @@ DFS_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
 	assert(dir_name);
 	assert(name);
 
-        parent = lookup_insert_dir(dir_name, NULL);
-        if (parent == NULL)
-                GERR("Failed to lookup parent dir");
-
         mode = S_IFREG | mode;
 	if (hints->filePerProc || rank == 0) {
                 fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
+
+                parent = lookup_insert_dir(dir_name, NULL);
+                if (parent == NULL)
+                        GERR("Failed to lookup parent dir");
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                               objectClass, o->chunk_size, NULL, &obj);
                 DCHECK(rc, "dfs_open() of %s Failed", name);
         }
+
         if (!hints->filePerProc) {
-                MPI_Barrier(MPI_COMM_WORLD);
-                if (rank != 0) {
-                        fd_oflag |= O_RDWR;
-                        rc = dfs_open(dfs, parent, name, mode, fd_oflag,
-                                      objectClass, o->chunk_size, NULL, &obj);
-                        DCHECK(rc, "dfs_open() of %s Failed", name);
-                }
+                share_file_handle(&obj, testComm);
         }
 
 	if (name)
@@ -629,13 +683,19 @@ DFS_Open(char *testFileName, int flags, aiori_mod_opt_t *param)
 	assert(dir_name);
 	assert(name);
 
-        parent = lookup_insert_dir(dir_name, NULL);
-        if (parent == NULL)
-                GERR("Failed to lookup parent dir");
+	if (hints->filePerProc || rank == 0) {
+                parent = lookup_insert_dir(dir_name, NULL);
+                if (parent == NULL)
+                        GERR("Failed to lookup parent dir");
 
-	rc = dfs_open(dfs, parent, name, mode, fd_oflag, objectClass,
-                      o->chunk_size, NULL, &obj);
-        DCHECK(rc, "dfs_open() of %s Failed", name);
+                rc = dfs_open(dfs, parent, name, mode, fd_oflag, objectClass,
+                              o->chunk_size, NULL, &obj);
+                DCHECK(rc, "dfs_open() of %s Failed", name);
+        }
+
+        if (!hints->filePerProc) {
+                share_file_handle(&obj, testComm);
+        }
 
 	if (name)
 		free(name);
@@ -675,14 +735,14 @@ DFS_Xfer(int access, aiori_fd_t *file, IOR_size_t *buffer, IOR_offset_t length,
                 if (access == WRITE) {
                         rc = dfs_write(dfs, obj, &sgl, off, NULL);
                         if (rc) {
-                                fprintf(stderr, "dfs_write() failed (%d)", rc);
+                                fprintf(stderr, "dfs_write() failed (%d)\n", rc);
                                 return -1;
                         }
                         ret = remaining;
                 } else {
                         rc = dfs_read(dfs, obj, &sgl, off, &ret, NULL);
                         if (rc || ret == 0)
-                                fprintf(stderr, "dfs_read() failed(%d)", rc);
+                                fprintf(stderr, "dfs_read() failed(%d)\n", rc);
                 }
 
                 if (ret < remaining) {
@@ -774,43 +834,36 @@ static char* DFS_GetVersion()
  * Use DFS stat() to return aggregate file size.
  */
 static IOR_offset_t
-DFS_GetFileSize(aiori_mod_opt_t * test, MPI_Comm comm, char *testFileName)
+DFS_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 {
         dfs_obj_t *obj;
-        daos_size_t fsize, tmpMin, tmpMax, tmpSum;
+        MPI_Comm comm;
+        daos_size_t fsize;
         int rc;
 
-	rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
-        if (rc) {
-                fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
-                return -1;
+        if (hints->filePerProc == TRUE) {
+                comm = MPI_COMM_SELF;
+        } else {
+                comm = testComm;
         }
 
-        rc = dfs_get_size(dfs, obj, &fsize);
-        if (rc)
-                return -1;
-
-        dfs_release(obj);
-
-        if (hints->filePerProc == TRUE) {
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpSum, 1,
-                                        MPI_LONG_LONG_INT, MPI_SUM, comm),
-                          "cannot total data moved");
-                fsize = tmpSum;
-        } else {
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpMin, 1,
-                                        MPI_LONG_LONG_INT, MPI_MIN, comm),
-                          "cannot total data moved");
-                MPI_CHECK(MPI_Allreduce(&fsize, &tmpMax, 1,
-                                        MPI_LONG_LONG_INT, MPI_MAX, comm),
-                          "cannot total data moved");
-                if (tmpMin != tmpMax) {
-                        if (rank == 0) {
-                                WARN("inconsistent file size by different tasks");
-                        }
-                        /* incorrect, but now consistent across tasks */
-                        fsize = tmpMin;
+	if (hints->filePerProc || rank == 0) {
+                rc = dfs_lookup(dfs, testFileName, O_RDONLY, &obj, NULL, NULL);
+                if (rc) {
+                        fprintf(stderr, "dfs_lookup() of %s Failed (%d)", testFileName, rc);
+                        return -1;
                 }
+
+                rc = dfs_get_size(dfs, obj, &fsize);
+                dfs_release(obj);
+                if (rc)
+                        return -1;
+        }
+
+        if (!hints->filePerProc) {
+                rc = MPI_Bcast(&fsize, 1, MPI_UINT64_T, 0, comm);
+                if (rc)
+                        return rc;
         }
 
         return (fsize);
@@ -914,7 +967,6 @@ DFS_Stat(const char *path, struct stat *buf, aiori_mod_opt_t * param)
                 GERR("Failed to lookup parent dir");
 
 	rc = dfs_stat(dfs, parent, name, buf);
-        DCHECK(rc, "dfs_stat() of Failed (%d)", rc);
 
 	if (name)
 		free(name);

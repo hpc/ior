@@ -42,11 +42,13 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_POSIX_AIORI
         &posix_aiori,
 #endif
+#ifdef USE_AIO_AIORI
+        &aio_aiori,
+#endif
 #ifdef USE_PMDK_AIORI
         &pmdk_aiori,
 #endif
 #ifdef USE_DAOS_AIORI
-        &daos_aiori,
         &dfs_aiori,
 #endif
         & dummy_aiori,
@@ -68,8 +70,11 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_MMAP_AIORI
         &mmap_aiori,
 #endif
-#ifdef USE_S3_AIORI
-        &s3_aiori,
+#ifdef USE_S3_LIBS3_AIORI
+        &S3_libS3_aiori,
+#endif
+#ifdef USE_S3_4C_AIORI
+        &s3_4c_aiori,
         &s3_plus_aiori,
         &s3_emc_aiori,
 #endif
@@ -100,6 +105,7 @@ void * airoi_update_module_options(const ior_aiori_t * backend, options_all_t * 
 }
 
 options_all_t * airoi_create_all_module_options(option_help * global_options){
+  if(! out_logfile) out_logfile = stdout;
   int airoi_c = aiori_count();
   options_all_t * opt = malloc(sizeof(options_all_t));
   opt->module_count = airoi_c + 1;
@@ -122,6 +128,8 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
 {
         ior_aiori_t **tmp = available_aiori;
         char delimiter = ' ';
+        *APIs = 0;
+        *APIs_legacy = 0;
 
         while (*tmp != NULL)
         {
@@ -130,7 +138,6 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
                     tmp++;
                     continue;
                 }
-
                 if (delimiter == ' ')
                 {
                         APIs += sprintf(APIs, "%s", (*tmp)->name);
@@ -142,6 +149,7 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
                 if ((*tmp)->name_legacy != NULL)
                         APIs_legacy += sprintf(APIs_legacy, "%c%s",
                                                delimiter, (*tmp)->name_legacy);
+
                 tmp++;
         }
 }

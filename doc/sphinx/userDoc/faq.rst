@@ -146,7 +146,7 @@ HOW DO I USE HINTS?
     'setenv IOR_HINT__MPI__<hint> <value>'
 
 
-HOW DO I EXPLICITY SET THE FILE DATA SIGNATURE?
+HOW DO I EXPLICITLY SET THE FILE DATA SIGNATURE?
 
   The data signature for a transfer contains the MPI task number, transfer-
   buffer offset, and also timestamp for the start of iteration.  As IOR works

@@ -108,7 +108,7 @@ static char * DUMMY_getVersion()
   return "0.5";
 }
 
-static IOR_offset_t DUMMY_GetFileSize(aiori_mod_opt_t * options, MPI_Comm testComm, char *testFileName)
+static IOR_offset_t DUMMY_GetFileSize(aiori_mod_opt_t * options, char *testFileName)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY getFileSize: %s\n", testFileName);
@@ -156,6 +156,11 @@ static int DUMMY_stat (const char *path, struct stat *buf, aiori_mod_opt_t * opt
   return 0;
 }
 
+static int DUMMY_rename (const char *path, const char *path2, aiori_mod_opt_t * options){
+  return 0;
+}
+
+
 static int DUMMY_check_params(aiori_mod_opt_t * options){
   return 0;
 }
@@ -188,6 +193,7 @@ ior_aiori_t dummy_aiori = {
         .statfs = DUMMY_statfs,
         .mkdir = DUMMY_mkdir,
         .rmdir = DUMMY_rmdir,
+        .rename = DUMMY_rename,
         .access = DUMMY_access,
         .stat = DUMMY_stat,
         .initialize = DUMMY_init,

@@ -45,20 +45,57 @@
 
 /**************************** P R O T O T Y P E S *****************************/
 
-static int GetFileMode(IOR_param_t *);
+static int GetFileMode(int flags);
 
-static void *NCMPI_Create(char *, IOR_param_t *);
-static void *NCMPI_Open(char *, IOR_param_t *);
-static IOR_offset_t NCMPI_Xfer(int, void *, IOR_size_t *,
-                               IOR_offset_t, IOR_param_t *);
-static void NCMPI_Close(void *, IOR_param_t *);
-static void NCMPI_Delete(char *, IOR_param_t *);
+static aiori_fd_t *NCMPI_Create(char *, int iorflags, aiori_mod_opt_t *);
+static aiori_fd_t *NCMPI_Open(char *, int iorflags, aiori_mod_opt_t *);
+static IOR_offset_t NCMPI_Xfer(int, aiori_fd_t *, IOR_size_t *,
+                               IOR_offset_t, IOR_offset_t, aiori_mod_opt_t *);
+static void NCMPI_Close(aiori_fd_t *, aiori_mod_opt_t *);
+static void NCMPI_Delete(char *, aiori_mod_opt_t *);
 static char *NCMPI_GetVersion();
-static void NCMPI_Fsync(void *, IOR_param_t *);
-static IOR_offset_t NCMPI_GetFileSize(IOR_param_t *, MPI_Comm, char *);
-static int NCMPI_Access(const char *, int, IOR_param_t *);
+static void NCMPI_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
+static IOR_offset_t NCMPI_GetFileSize(aiori_mod_opt_t *, char *);
+static int NCMPI_Access(const char *, int, aiori_mod_opt_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
+static aiori_xfer_hint_t * hints = NULL;
+
+static void NCMPI_xfer_hints(aiori_xfer_hint_t * params){
+  hints = params;
+
+  MPIIO_xfer_hints(params);
+}
+
+typedef struct {
+  int showHints;                   /* show hints */
+  char * hintsFileName;            /* full name for hints file */
+
+  /* runtime variables */
+  int var_id;                      /* variable id handle for data set */
+  int firstReadCheck;
+  int startDataSet;
+} ncmpi_options_t;
+
+
+static option_help * NCMPI_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
+  ncmpi_options_t * o = malloc(sizeof(ncmpi_options_t));
+  if (init_values != NULL){
+    memcpy(o, init_values, sizeof(ncmpi_options_t));
+  }else{
+    memset(o, 0, sizeof(ncmpi_options_t));
+  }
+  *init_backend_options = (aiori_mod_opt_t*) o;
+
+  option_help h [] = {
+    {0, "mpiio.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->hintsFileName},
+    {0, "mpiio.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->showHints},
+    LAST_OPTION
+  };
+  option_help * help = malloc(sizeof(h));
+  memcpy(help, h, sizeof(h));
+  return help;
+}
 
 ior_aiori_t ncmpi_aiori = {
         .name = "NCMPI",
@@ -76,6 +113,8 @@ ior_aiori_t ncmpi_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = NCMPI_Access,
         .stat = aiori_posix_stat,
+        .get_options = NCMPI_options,
+        .xfer_hints = NCMPI_xfer_hints,
 };
 
 /***************************** F U N C T I O N S ******************************/
@@ -83,15 +122,16 @@ ior_aiori_t ncmpi_aiori = {
 /*
  * Create and open a file through the NCMPI interface.
  */
-static void *NCMPI_Create(char *testFileName, IOR_param_t * param)
+static aiori_fd_t *NCMPI_Create(char *testFileName, int iorflags, aiori_mod_opt_t * param)
 {
         int *fd;
         int fd_mode;
         MPI_Info mpiHints = MPI_INFO_NULL;
+        ncmpi_options_t * o = (ncmpi_options_t*) param;
 
         /* read and set MPI file hints from hintsFile */
-        SetHints(&mpiHints, param->hintsFileName);
-        if (rank == 0 && param->showHints) {
+        SetHints(&mpiHints, o->hintsFileName);
+        if (rank == 0 && o->showHints) {
                 fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
                 ShowHints(&mpiHints);
                 fprintf(stdout, "}\n");
@@ -101,7 +141,7 @@ static void *NCMPI_Create(char *testFileName, IOR_param_t * param)
         if (fd == NULL)
                 ERR("malloc() failed");
 
-        fd_mode = GetFileMode(param);
+        fd_mode = GetFileMode(iorflags);
         NCMPI_CHECK(ncmpi_create(testComm, testFileName, fd_mode,
                                  mpiHints, fd), "cannot create file");
 
@@ -111,7 +151,7 @@ static void *NCMPI_Create(char *testFileName, IOR_param_t * param)
 
 #if defined(PNETCDF_VERSION_MAJOR) && (PNETCDF_VERSION_MAJOR > 1 || PNETCDF_VERSION_MINOR >= 2)
         /* ncmpi_get_file_info is first available in 1.2.0 */
-        if (rank == 0 && param->showHints) {
+        if (rank == 0 && o->showHints) {
             MPI_Info info_used;
             MPI_CHECK(ncmpi_get_file_info(*fd, &info_used),
                       "cannot inquire file info");
@@ -123,21 +163,22 @@ static void *NCMPI_Create(char *testFileName, IOR_param_t * param)
         }
 #endif
 
-        return (fd);
+        return (aiori_fd_t*)(fd);
 }
 
 /*
  * Open a file through the NCMPI interface.
  */
-static void *NCMPI_Open(char *testFileName, IOR_param_t * param)
+static aiori_fd_t *NCMPI_Open(char *testFileName, int iorflags, aiori_mod_opt_t * param)
 {
         int *fd;
         int fd_mode;
         MPI_Info mpiHints = MPI_INFO_NULL;
+        ncmpi_options_t * o = (ncmpi_options_t*) param;
 
         /* read and set MPI file hints from hintsFile */
-        SetHints(&mpiHints, param->hintsFileName);
-        if (rank == 0 && param->showHints) {
+        SetHints(&mpiHints, o->hintsFileName);
+        if (rank == 0 && o->showHints) {
                 fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
                 ShowHints(&mpiHints);
                 fprintf(stdout, "}\n");
@@ -147,7 +188,7 @@ static void *NCMPI_Open(char *testFileName, IOR_param_t * param)
         if (fd == NULL)
                 ERR("malloc() failed");
 
-        fd_mode = GetFileMode(param);
+        fd_mode = GetFileMode(iorflags);
         NCMPI_CHECK(ncmpi_open(testComm, testFileName, fd_mode,
                                mpiHints, fd), "cannot open file");
 
@@ -157,7 +198,7 @@ static void *NCMPI_Open(char *testFileName, IOR_param_t * param)
 
 #if defined(PNETCDF_VERSION_MAJOR) && (PNETCDF_VERSION_MAJOR > 1 || PNETCDF_VERSION_MINOR >= 2)
         /* ncmpi_get_file_info is first available in 1.2.0 */
-        if (rank == 0 && param->showHints) {
+        if (rank == 0 && o->showHints) {
             MPI_Info info_used;
             MPI_CHECK(ncmpi_get_file_info(*fd, &info_used),
                       "cannot inquire file info");
@@ -169,51 +210,43 @@ static void *NCMPI_Open(char *testFileName, IOR_param_t * param)
         }
 #endif
 
-        return (fd);
+        return (aiori_fd_t*)(fd);
 }
 
 /*
  * Write or read access to file using the NCMPI interface.
  */
-static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
-                               IOR_offset_t length, IOR_param_t * param)
+static IOR_offset_t NCMPI_Xfer(int access, aiori_fd_t *fd, IOR_size_t * buffer, IOR_offset_t transferSize, IOR_offset_t offset, aiori_mod_opt_t * param)
 {
         signed char *bufferPtr = (signed char *)buffer;
-        static int firstReadCheck = FALSE, startDataSet;
+        ncmpi_options_t * o = (ncmpi_options_t*) param;
         int var_id, dim_id[NUM_DIMS];
-        MPI_Offset bufSize[NUM_DIMS], offset[NUM_DIMS];
+        MPI_Offset bufSize[NUM_DIMS], offsets[NUM_DIMS];
         IOR_offset_t segmentPosition;
         int segmentNum, transferNum;
 
         /* determine by offset if need to start data set */
-        if (param->filePerProc == TRUE) {
+        if (hints->filePerProc == TRUE) {
                 segmentPosition = (IOR_offset_t) 0;
         } else {
-                segmentPosition =
-                    (IOR_offset_t) ((rank + rankOffset) % param->numTasks)
-                    * param->blockSize;
+                segmentPosition = (IOR_offset_t) ((rank + rankOffset) % hints->numTasks) * hints->blockSize;
         }
-        if ((int)(param->offset - segmentPosition) == 0) {
-                startDataSet = TRUE;
+        if ((int)(offset - segmentPosition) == 0) {
+                o->startDataSet = TRUE;
                 /*
                  * this toggle is for the read check operation, which passes through
                  * this function twice; note that this function will open a data set
                  * only on the first read check and close only on the second
                  */
                 if (access == READCHECK) {
-                        if (firstReadCheck == TRUE) {
-                                firstReadCheck = FALSE;
-                        } else {
-                                firstReadCheck = TRUE;
-                        }
+                  o->firstReadCheck = ! o->firstReadCheck;
                 }
         }
 
-        if (startDataSet == TRUE &&
-            (access != READCHECK || firstReadCheck == TRUE)) {
+        if (o->startDataSet == TRUE &&
+            (access != READCHECK || o->firstReadCheck == TRUE)) {
                 if (access == WRITE) {
-                        int numTransfers =
-                            param->blockSize / param->transferSize;
+                        int numTransfers = hints->blockSize / hints->transferSize;
 
                         /* reshape 1D array to 3D array:
                            [segmentCount*numTasks][numTransfers][transferSize]
@@ -229,7 +262,7 @@ static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
                                     "cannot define data set dimensions");
                         NCMPI_CHECK(ncmpi_def_dim
                                     (*(int *)fd, "transfer_size",
-                                     param->transferSize, &dim_id[2]),
+                                     hints->transferSize, &dim_id[2]),
                                     "cannot define data set dimensions");
                         NCMPI_CHECK(ncmpi_def_var
                                     (*(int *)fd, "data_var", NC_BYTE, NUM_DIMS,
@@ -244,77 +277,72 @@ static IOR_offset_t NCMPI_Xfer(int access, void *fd, IOR_size_t * buffer,
                                     "cannot retrieve data set variable");
                 }
 
-                if (param->collective == FALSE) {
+                if (hints->collective == FALSE) {
                         NCMPI_CHECK(ncmpi_begin_indep_data(*(int *)fd),
                                     "cannot enable independent data mode");
                 }
 
-                param->var_id = var_id;
-                startDataSet = FALSE;
+                o->var_id = var_id;
+                o->startDataSet = FALSE;
         }
 
-        var_id = param->var_id;
+        var_id = o->var_id;
 
         /* calculate the segment number */
-        segmentNum = param->offset / (param->numTasks * param->blockSize);
+        segmentNum = offset / (hints->numTasks * hints->blockSize);
 
         /* calculate the transfer number in each block */
-        transferNum = param->offset % param->blockSize / param->transferSize;
+        transferNum = offset % hints->blockSize / hints->transferSize;
 
         /* read/write the 3rd dim of the dataset, each is of
            amount param->transferSize */
         bufSize[0] = 1;
         bufSize[1] = 1;
-        bufSize[2] = param->transferSize;
+        bufSize[2] = transferSize;
 
-        offset[0] = segmentNum * param->numTasks + rank;
-        offset[1] = transferNum;
-        offset[2] = 0;
+        offsets[0] = segmentNum * hints->numTasks + rank;
+        offsets[1] = transferNum;
+        offsets[2] = 0;
 
         /* access the file */
         if (access == WRITE) {  /* WRITE */
-                if (param->collective) {
+                if (hints->collective) {
                         NCMPI_CHECK(ncmpi_put_vara_schar_all
-                                    (*(int *)fd, var_id, offset, bufSize,
-                                     bufferPtr),
+                                    (*(int *)fd, var_id, offsets, bufSize, bufferPtr),
                                     "cannot write to data set");
                 } else {
                         NCMPI_CHECK(ncmpi_put_vara_schar
-                                    (*(int *)fd, var_id, offset, bufSize,
-                                     bufferPtr),
+                                    (*(int *)fd, var_id, offsets, bufSize, bufferPtr),
                                     "cannot write to data set");
                 }
         } else {                /* READ or CHECK */
-                if (param->collective == TRUE) {
+                if (hints->collective == TRUE) {
                         NCMPI_CHECK(ncmpi_get_vara_schar_all
-                                    (*(int *)fd, var_id, offset, bufSize,
-                                     bufferPtr),
+                                    (*(int *)fd, var_id, offsets, bufSize, bufferPtr),
                                     "cannot read from data set");
                 } else {
                         NCMPI_CHECK(ncmpi_get_vara_schar
-                                    (*(int *)fd, var_id, offset, bufSize,
-                                     bufferPtr),
+                                    (*(int *)fd, var_id, offsets, bufSize, bufferPtr),
                                     "cannot read from data set");
                 }
         }
 
-        return (length);
+        return (transferSize);
 }
 
 /*
  * Perform fsync().
  */
-static void NCMPI_Fsync(void *fd, IOR_param_t * param)
+static void NCMPI_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
-        ;
 }
 
 /*
  * Close a file through the NCMPI interface.
  */
-static void NCMPI_Close(void *fd, IOR_param_t * param)
+static void NCMPI_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
-        if (param->collective == FALSE) {
+        if (hints->collective == FALSE) {
                 NCMPI_CHECK(ncmpi_end_indep_data(*(int *)fd),
                             "cannot disable independent data mode");
         }
@@ -325,7 +353,7 @@ static void NCMPI_Close(void *fd, IOR_param_t * param)
 /*
  * Delete a file through the NCMPI interface.
  */
-static void NCMPI_Delete(char *testFileName, IOR_param_t * param)
+static void NCMPI_Delete(char *testFileName, aiori_mod_opt_t * param)
 {
         return(MPIIO_Delete(testFileName, param));
 }
@@ -341,35 +369,35 @@ static char* NCMPI_GetVersion()
 /*
  * Return the correct file mode for NCMPI.
  */
-static int GetFileMode(IOR_param_t * param)
+static int GetFileMode(int flags)
 {
         int fd_mode = 0;
 
         /* set IOR file flags to NCMPI flags */
         /* -- file open flags -- */
-        if (param->openFlags & IOR_RDONLY) {
+        if (flags & IOR_RDONLY) {
                 fd_mode |= NC_NOWRITE;
         }
-        if (param->openFlags & IOR_WRONLY) {
-                fprintf(stdout, "File write only not implemented in NCMPI\n");
+        if (flags & IOR_WRONLY) {
+            WARN("File write only not implemented in NCMPI");
         }
-        if (param->openFlags & IOR_RDWR) {
+        if (flags & IOR_RDWR) {
                 fd_mode |= NC_WRITE;
         }
-        if (param->openFlags & IOR_APPEND) {
-                fprintf(stdout, "File append not implemented in NCMPI\n");
+        if (flags & IOR_APPEND) {
+            WARN("File append not implemented in NCMPI");
         }
-        if (param->openFlags & IOR_CREAT) {
+        if (flags & IOR_CREAT) {
                 fd_mode |= NC_CLOBBER;
         }
-        if (param->openFlags & IOR_EXCL) {
-                fprintf(stdout, "Exclusive access not implemented in NCMPI\n");
+        if (flags & IOR_EXCL) {
+            WARN("Exclusive access not implemented in NCMPI");
         }
-        if (param->openFlags & IOR_TRUNC) {
-                fprintf(stdout, "File truncation not implemented in NCMPI\n");
+        if (flags & IOR_TRUNC) {
+            WARN("File truncation not implemented in NCMPI");
         }
-        if (param->openFlags & IOR_DIRECT) {
-                fprintf(stdout, "O_DIRECT not implemented in NCMPI\n");
+        if (flags & IOR_DIRECT) {
+            WARN("O_DIRECT not implemented in NCMPI");
         }
 
         /* to enable > 4GB file size */
@@ -381,16 +409,16 @@ static int GetFileMode(IOR_param_t * param)
 /*
  * Use MPIIO call to get file size.
  */
-static IOR_offset_t NCMPI_GetFileSize(IOR_param_t * test, MPI_Comm testComm,
+static IOR_offset_t NCMPI_GetFileSize(aiori_mod_opt_t * opt,
                                       char *testFileName)
 {
-        return(MPIIO_GetFileSize(test, testComm, testFileName));
+        return(MPIIO_GetFileSize(opt, testFileName));
 }
 
 /*
  * Use MPIIO call to check for access.
  */
-static int NCMPI_Access(const char *path, int mode, IOR_param_t *param)
+static int NCMPI_Access(const char *path, int mode, aiori_mod_opt_t *param)
 {
         return(MPIIO_Access(path, mode, param));
 }
