@@ -872,6 +872,21 @@ DFS_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 static int
 DFS_Statfs(const char *path, ior_aiori_statfs_t *sfs, aiori_mod_opt_t * param)
 {
+        daos_pool_info_t info = {.pi_bits = DPI_SPACE};
+        int rc;
+
+        rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
+        DCHECK(rc, "Failed to query pool");
+
+        sfs->f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM]
+                + info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
+        sfs->f_bfree = info.pi_space.ps_space.s_free[DAOS_MEDIA_SCM]
+                + info.pi_space.ps_space.s_free[DAOS_MEDIA_NVME];
+        sfs->f_bsize = 1;
+        sfs->f_files = -1;
+        sfs->f_ffree = -1;
+        sfs->f_bavail = sfs->f_bfree;
+
         return 0;
 }
 
