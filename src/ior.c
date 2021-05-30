@@ -1679,7 +1679,7 @@ static void prefillSegment(IOR_param_t *test, void * randomPrefillBuffer, int pr
   IOR_offset_t transferCount;
   int errors;
   ioBuffers->buffer = randomPrefillBuffer;
-  for (int i = startSegment; i < endSegment; i++){
+  for (IOR_offset_t i = startSegment; i < endSegment; i++){
     for (int j = 0; j < offsets; j++) {
       IOR_offset_t offset = j * test->randomPrefillBlocksize;
       if (test->filePerProc) {
@@ -1707,7 +1707,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
         double startForStonewall;
         int hitStonewall;
-        int i, j;
+        IOR_offset_t i, j;
         IOR_point_t *point = ((access == WRITE) || (access == WRITECHECK)) ?
                              &results->write : &results->read;
 
