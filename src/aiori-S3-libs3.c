@@ -56,6 +56,7 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
 
   *init_backend_options = (aiori_mod_opt_t*) o;
   o->bucket_prefix = "ior";
+  o->bucket_prefix_cur = "b";
 
   option_help h [] = {
   {0, "S3-libs3.bucket-per-file", "Use one bucket to map one file/directory, otherwise one bucket is used to store all dirs/files.", OPTION_FLAG, 'd', & o->bucket_per_file},
@@ -66,6 +67,8 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
   {0, "S3-libs3.host", "The host optionally followed by:port.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
   {0, "S3-libs3.secret-key", "The secret key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->secret_key},
   {0, "S3-libs3.access-key", "The access key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->access_key},
+  {0, "S3-libs3.region", "The region used for the authorization signature.", OPTION_OPTIONAL_ARGUMENT, 's', & o->authRegion},
+  {0, "S3-libs3.location", "The bucket geographic location.", OPTION_OPTIONAL_ARGUMENT, 's', & o->locationConstraint},
   LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
@@ -86,9 +89,20 @@ static void def_file_name(s3_options_t * o, char * out_name, char const * path){
     }else if(c >= 'A' && c <= 'Z'){
       *out_name = *path + ('a' - 'A');
       out_name++;
+    }else if(c == '/'){
+      *out_name = '_';
+      out_name++;
+    }else{
+      // encode special characters
+      *out_name = 'a' + (c / 26);
+      out_name++;
+      *out_name = 'a' + (c % 26);
+      out_name++;
     }
     path++;
   }
+  *out_name = 'b';
+  out_name++;
   *out_name = '\0';
 }
 
@@ -163,7 +177,7 @@ static void S3_Sync(aiori_mod_opt_t * options)
 
 static S3Status S3ListResponseCallback(const char *ownerId, const char *ownerDisplayName, const char *bucketName, int64_t creationDateSeconds, void *callbackData){
   uint64_t * count = (uint64_t*) callbackData;
-  *count++;
+  *count += 1;
   return S3StatusOK;
 }
 
@@ -373,11 +387,37 @@ static void S3_Delete(char *path, aiori_mod_opt_t * options)
     }while(req.truncated);
     S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
   }else{
-    s3_delete_req req = {0, o, 0, NULL};
-    do{
-      S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
-    }while(req.truncated);
-    S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
+    char * del_heuristics = getenv("S3LIB_DELETE_HEURISTICS");
+    if(del_heuristics){
+      struct stat buf;
+      S3_head_object(& o->bucket_context, p, NULL, o->timeout, & statResponseHandler, & buf);
+      if(s3status != S3StatusOK){
+        // As the file does not exist, can return safely
+        CHECK_ERROR(p);
+        return;
+      } 
+      int threshold = atoi(del_heuristics);
+      if (buf.st_size > threshold){
+        // there may exist fragments, so try to delete them
+        s3_delete_req req = {0, o, 0, NULL};
+        do{
+          S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
+        }while(req.truncated);
+      }
+      S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
+    }else{    
+      // Regular deletion, must remove all created fragments
+      S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
+      if(s3status != S3StatusOK){
+        // As the file does not exist, can return savely
+        CHECK_ERROR(p);
+        return;
+      }
+      s3_delete_req req = {0, o, 0, NULL};
+      do{
+        S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
+      }while(req.truncated);
+    }
   }
   CHECK_ERROR(p);
 }
@@ -451,6 +491,16 @@ static IOR_offset_t S3_GetFileSize(aiori_mod_opt_t * options, char *testFileName
 
 
 static int S3_check_params(aiori_mod_opt_t * options){
+  s3_options_t * o = (s3_options_t*) options;
+  if(o->access_key == NULL){
+    o->access_key = "";
+  }
+  if(o->secret_key == NULL){
+    o->secret_key = "";
+  }
+  if(o->host == NULL){
+    WARN("The S3 hostname should be specified");
+  }
   return 0;
 }
 

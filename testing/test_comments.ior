@@ -2,16 +2,16 @@
 IOR START
 api=posix
 writeFile =1
-    randomOffset=1
+   randomOffset=1
 reorderTasks=1
-  filePerProc=1
+   filePerProc=1
 		keepFile=1
 fsync=1
 	repetitions=1
 multiFile=1
 		# tab-prefixed comment
-transferSize=100k
-blockSize=100k
+transferSize=10k
+blockSize=20k
     # space-prefixed comment
 run
 --dummy.delay-create=1000

@@ -19,6 +19,8 @@
 /************************** O P T I O N S *****************************/
 typedef struct {
   uint64_t delay_creates;
+  uint64_t delay_close;
+  uint64_t delay_sync;
   uint64_t delay_xfer;
   int delay_rank_0_only;
 } dummy_options_t;
@@ -37,6 +39,8 @@ static option_help * DUMMY_options(aiori_mod_opt_t ** init_backend_options, aior
 
   option_help h [] = {
       {0, "dummy.delay-create",        "Delay per create in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o->delay_creates},
+      {0, "dummy.delay-close",         "Delay per close in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o->delay_close},
+      {0, "dummy.delay-sync",          "Delay for sync in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o->delay_sync},
       {0, "dummy.delay-xfer",          "Delay per xfer in usec", OPTION_OPTIONAL_ARGUMENT, 'l', & o->delay_xfer},
       {0, "dummy.delay-only-rank0",    "Delay only Rank0", OPTION_FLAG, 'd', & o->delay_rank_0_only},
       LAST_OPTION
@@ -87,12 +91,27 @@ static void DUMMY_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * options)
 
 static void DUMMY_Sync(aiori_mod_opt_t * options)
 {
+  dummy_options_t * o = (dummy_options_t*) options;
+  if (o->delay_sync){
+    if (! o->delay_rank_0_only || (o->delay_rank_0_only && rank == 0)){
+      struct timespec wait = { o->delay_sync / 1000 / 1000, 1000l * (o->delay_sync % 1000000)};
+      nanosleep( & wait, NULL);
+    }
+  }
 }
 
 static void DUMMY_Close(aiori_fd_t *fd, aiori_mod_opt_t * options)
 {
   if(verbose > 4){
     fprintf(out_logfile, "DUMMY close %p\n", fd);
+  }
+  
+  dummy_options_t * o = (dummy_options_t*) options;
+  if (o->delay_close){
+    if (! o->delay_rank_0_only || (o->delay_rank_0_only && rank == 0)){
+      struct timespec wait = { o->delay_close / 1000 / 1000, 1000l * (o->delay_close % 1000000)};
+      nanosleep( & wait, NULL);
+    }
   }
 }
 
@@ -156,6 +175,11 @@ static int DUMMY_stat (const char *path, struct stat *buf, aiori_mod_opt_t * opt
   return 0;
 }
 
+static int DUMMY_rename (const char *path, const char *path2, aiori_mod_opt_t * options){
+  return 0;
+}
+
+
 static int DUMMY_check_params(aiori_mod_opt_t * options){
   return 0;
 }
@@ -188,6 +212,7 @@ ior_aiori_t dummy_aiori = {
         .statfs = DUMMY_statfs,
         .mkdir = DUMMY_mkdir,
         .rmdir = DUMMY_rmdir,
+        .rename = DUMMY_rename,
         .access = DUMMY_access,
         .stat = DUMMY_stat,
         .initialize = DUMMY_init,

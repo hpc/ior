@@ -1,19 +1,24 @@
 SUBDIRS = . test
 
-bin_PROGRAMS = ior mdtest
+bin_PROGRAMS = ior mdtest md-workbench
 if USE_CAPS
-bin_PROGRAMS += IOR MDTEST
+bin_PROGRAMS += IOR MDTEST MD-WORKBENCH
 endif
 
-noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h mdtest.h aiori-debug.h aiori-POSIX.h
+noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h mdtest.h aiori-debug.h aiori-POSIX.h md-workbench.h
 
 lib_LIBRARIES = libaiori.a
-libaiori_a_SOURCES = ior.c mdtest.c utilities.c parse_options.c ior-output.c option.c
+libaiori_a_SOURCES = ior.c mdtest.c utilities.c parse_options.c ior-output.c option.c md-workbench.c
 
 extraSOURCES = aiori.c aiori-DUMMY.c
 extraLDADD =
 extraLDFLAGS =
 extraCPPFLAGS =
+
+md_workbench_SOURCES = md-workbench-main.c
+md_workbench_LDFLAGS =
+md_workbench_LDADD = libaiori.a
+md_workbench_CPPFLAGS =
 
 ior_SOURCES = ior-main.c
 ior_LDFLAGS =
@@ -34,6 +39,14 @@ extraSOURCES  += aiori-HDFS.c
 extraCPPFLAGS += -I/opt/hadoop-2.2.0/include
 extraLDFLAGS  += -L/opt/hadoop-2.2.0/lib/native
 extraLDADD    += -lhdfs
+endif
+
+if HAVE_CUDA
+extraLDADD    += -lcudart
+endif
+
+if HAVE_GPU_DIRECT
+extraLDADD    += -lcufile
 endif
 
 if USE_HDF5_AIORI
@@ -87,7 +100,8 @@ endif
 
 
 if USE_DAOS_AIORI
-extraSOURCES += aiori-DAOS.c aiori-DFS.c
+extraSOURCES += aiori-DFS.c
+extraLDADD   += -lgurt -ldaos_common -ldaos -ldfs -luuid
 endif
 
 if USE_GFARM_AIORI
@@ -133,6 +147,16 @@ mdtest_LDFLAGS  += $(extraLDFLAGS)
 mdtest_LDADD    += $(extraLDADD)
 mdtest_CPPFLAGS += $(extraCPPFLAGS)
 
+md_workbench_SOURCES  += $(extraSOURCES)
+md_workbench_LDFLAGS  += $(extraLDFLAGS)
+md_workbench_LDADD    += $(extraLDADD)
+md_workbench_CPPFLAGS += $(extraCPPFLAGS)
+
+MD_WORKBENCH_SOURCES  = $(md_workbench_SOURCES)
+MD_WORKBENCH_LDFLAGS  = $(md_workbench_LDFLAGS)
+MD_WORKBENCH_LDADD    = $(md_workbench_LDADD)
+MD_WORKBENCH_CPPFLAGS = $(md_workbench_CPPFLAGS)
+
 IOR_SOURCES  = $(ior_SOURCES)
 IOR_LDFLAGS  = $(ior_LDFLAGS)
 IOR_LDADD    = $(ior_LDADD)
@@ -146,8 +170,9 @@ MDTEST_CPPFLAGS = $(mdtest_CPPFLAGS)
 libaiori_a_SOURCES += $(extraSOURCES)
 libaiori_a_CPPFLAGS = $(extraCPPFLAGS)
 
-# Generate config file with build flags to allow reuse of library
+# Generate a config file with the build flags to allow the reuse of library
+.PHONY: build.conf
 all-local: build.conf
 build.conf:
-	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) > build.conf
+	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) $(LIBS) > build.conf
 	@echo CFLAGS=$(CFLAGS) $(extraCPPFLAGS) >> build.conf

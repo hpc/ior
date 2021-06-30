@@ -73,6 +73,53 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
     ])
 ])
 
+# Check for CUDA
+AC_ARG_WITH([cuda],
+        [AS_HELP_STRING([--with-cuda],
+                [support configurable CUDA @<:@default=check@:>@])],
+        [], [with_cuda=check])
+
+AS_IF([test "x$with_cuda" != xno], [
+        LDFLAGS="$LDFLAGS -L$with_cuda/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64"
+        CPPFLAGS="$CPPFLAGS -I$with_cuda/include"
+
+        AC_CHECK_HEADERS([cuda_runtime.h], [AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])], [
+                if test "x$with_cuda" != xcheck; then
+                        AC_MSG_FAILURE([--with-cuda was given, <cuda_runtime.h> not found])
+                fi
+        ])
+AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
+        AC_SEARCH_LIBS([cudaMalloc], [cudart cudart_static], [],
+        [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
+    ])
+])
+AM_CONDITIONAL([HAVE_CUDA], [test x$with_cuda = xyes])
+AM_COND_IF([HAVE_CUDA],[AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])])
+
+# Check for GPUDirect
+AC_ARG_WITH([gpuDirect],
+        [AS_HELP_STRING([--with-gpuDirect],
+                [support configurable GPUDirect @<:@default=check@:>@])],
+        [], [with_gpuDirect=check])
+
+AS_IF([test "x$with_gpuDirect" != xno], [
+        LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64"
+        CPPFLAGS="$CPPFLAGS -I$with_gpuDirect/include"
+
+        AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [
+                if test "x$with_gpuDirect" != xcheck; then
+                        AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])
+                fi
+        ])
+AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
+        AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [],
+        [AC_MSG_ERROR([Library containing cuFileDriverOpen symbol not found])])
+    ])
+])
+AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect = xyes])
+AM_COND_IF([HAVE_GPU_DIRECT],[AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])])
+
+
 # Check for system capabilities
 AC_SYS_LARGEFILE
 
@@ -160,8 +207,10 @@ AC_ARG_WITH([ncmpi],
         [],
         [with_ncmpi=no])
 AM_CONDITIONAL([USE_NCMPI_AIORI], [test x$with_ncmpi = xyes])
-AM_COND_IF([USE_NCMPI_AIORI],[
-        AC_DEFINE([USE_NCMPI_AIORI], [], [Build NCMPI backend AIORI])
+AS_IF([test "x$with_ncmpi" = xyes ], [
+        AC_CHECK_HEADERS([pnetcdf.h], [AC_DEFINE([USE_NCMPI_AIORI], [], [PNetCDF available])], [
+            AC_MSG_FAILURE([--with-ncmpi was given but pnetcdf.h not found])
+        ])
 ])
 
 # MMAP IO support
@@ -239,40 +288,25 @@ AM_COND_IF([USE_CEPHFS_AIORI],[
         AC_DEFINE([USE_CEPHFS_AIORI], [], [Build CEPHFS backend AIORI])
 ])
 
-# DAOS Backends (DAOS and DFS) IO support require DAOS and CART/GURT
-AC_ARG_WITH([cart],
-    [AS_HELP_STRING([--with-cart],
-	    [support IO with DAOS backends @<:@default=no@:>@])],
-    [], [with_daos=no])
-
-AS_IF([test "x$with_cart" != xno], [
-    CART="yes"
-    LDFLAGS="$LDFLAGS -L$with_cart/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cart/lib64"
-    LDFLAGS="$LDFLAGS -L$with_cart/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_cart/lib"
-    CPPFLAGS="$CPPFLAGS -I$with_cart/include/"
-    AC_CHECK_HEADERS(gurt/common.h,, [unset CART])
-    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset CART])
-])
-
+# DAOS-FS Backend (DFS)
 AC_ARG_WITH([daos],
     [AS_HELP_STRING([--with-daos],
-	    [support IO with DAOS backends @<:@default=no@:>@])],
+	    [support IO with DAOS backend @<:@default=no@:>@])],
     [], [with_daos=no])
-
 AS_IF([test "x$with_daos" != xno], [
     DAOS="yes"
     LDFLAGS="$LDFLAGS -L$with_daos/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_daos/lib64"
     CPPFLAGS="$CPPFLAGS -I$with_daos/include"
-    AC_CHECK_HEADERS(daos_types.h,, [unset DAOS])
+    AC_CHECK_HEADERS(gurt/common.h,, [unset DAOS])
+    AC_CHECK_HEADERS(daos.h,, [unset DAOS])
+    AC_CHECK_LIB([gurt], [d_hash_murmur64],, [unset DAOS])
     AC_CHECK_LIB([uuid], [uuid_generate],, [unset DAOS])
-    AC_CHECK_LIB([daos_common], [daos_sgl_init],, [unset DAOS])
     AC_CHECK_LIB([daos], [daos_init],, [unset DAOS])
     AC_CHECK_LIB([dfs], [dfs_mkdir],, [unset DAOS])
 ])
-
 AM_CONDITIONAL([USE_DAOS_AIORI], [test x$DAOS = xyes])
 AM_COND_IF([USE_DAOS_AIORI],[
-        AC_DEFINE([USE_DAOS_AIORI], [], [Build DAOS backends AIORI])
+        AC_DEFINE([USE_DAOS_AIORI], [], [Build DAOS-FS backend AIORI])
 ])
 
 # Gfarm support

@@ -32,7 +32,7 @@
 #include "option.h"
 #include "aiori.h"
 
-IOR_param_t initialTestParams;
+static IOR_param_t initialTestParams;
 
 option_help * createGlobalOptions(IOR_param_t * params);
 
@@ -62,7 +62,17 @@ static void CheckRunSettings(IOR_test_t *tests)
                 }
 
                 if(params->dualMount && !params->filePerProc) {
-                        MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "Dual Mount can only be used with File Per Process");
+                  ERR("Dual Mount can only be used with File Per Process");
+                }
+
+                if(params->gpuDirect){
+                  if(params->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_MANAGED){
+                    ERR("GPUDirect cannot be used with managed memory");
+                  }
+                  params->gpuMemoryFlags = IOR_MEMORY_TYPE_GPU_DEVICE_ONLY;
+                  if(params->checkRead || params->checkWrite){
+                    ERR("GPUDirect data cannot yet be checked");
+                  }
                 }
         }
 }
@@ -103,6 +113,21 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
             }
             printf("Writing output to %s\n", value);
           }
+        } else if (strcasecmp(option, "saveRankPerformanceDetailsCSV") == 0){
+          if (rank == 0){
+            // check that the file is writeable, truncate it and add header
+            FILE* fd = fopen(value, "w");
+            if (fd == NULL){
+              FAIL("Cannot open saveRankPerformanceDetailsCSV file for write!");
+            }
+            char buff[] = "access,rank,runtime-with-openclose,runtime,throughput-withopenclose,throughput\n";
+            int ret = fwrite(buff, strlen(buff), 1, fd);
+            if(ret != 1){
+              FAIL("Cannot write header to saveRankPerformanceDetailsCSV file");
+            }
+            fclose(fd);
+          }
+          params->saveRankDetailsCSV = strdup(value);
         } else if (strcasecmp(option, "summaryFormat") == 0) {
                 if(strcasecmp(value, "default") == 0){
                   outputFormat = OUTPUT_DEFAULT;
@@ -123,6 +148,12 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->testFileName  = strdup(value);
         } else if (strcasecmp(option, "dualmount") == 0){
                 params->dualMount = atoi(value);
+        } else if (strcasecmp(option, "allocateBufferOnGPU") == 0) {
+                params->gpuMemoryFlags = atoi(value);
+        } else if (strcasecmp(option, "GPUid") == 0) {
+                params->gpuID = atoi(value);
+        } else if (strcasecmp(option, "GPUDirect") == 0) {
+                params->gpuDirect  = atoi(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
                 params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
@@ -189,10 +220,12 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->intraTestBarriers = atoi(value);
         } else if (strcasecmp(option, "verbose") == 0) {
                 params->verbose = atoi(value);
+        } else if (strcasecmp(option, "collective") == 0) {
+                params->collective = atoi(value);
         } else if (strcasecmp(option, "settimestampsignature") == 0) {
                 params->setTimeStampSignature = atoi(value);
-        } else if (strcasecmp(option, "storefileoffset") == 0) {
-                params->storeFileOffset = atoi(value);
+        } else if (strcasecmp(option, "dataPacketType") == 0) {
+                params->dataPacketType = parsePacketType(value[0]);
         } else if (strcasecmp(option, "uniqueDir") == 0) {
                 params->uniqueDir = atoi(value);
         } else if (strcasecmp(option, "useexistingtestfile") == 0) {
@@ -384,7 +417,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
   char APIs[1024];
   char APIs_legacy[1024];
   aiori_supported_apis(APIs, APIs_legacy, IOR);
-  char apiStr[1024];
+  char * apiStr = safeMalloc(1024);
   sprintf(apiStr, "API for I/O [%s]", APIs);
 
   option_help o [] = {
@@ -398,6 +431,13 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timeout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
+#ifdef HAVE_CUDA
+    {.help="  -O allocateBufferOnGPU=X           -- allocate I/O buffers on the GPU: X=1 uses managed memory, X=2 device memory.", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O GPUid=X                         -- select the GPU to use.", .arg = OPTION_OPTIONAL_ARGUMENT},
+#ifdef HAVE_GPU_DIRECT
+    {0, "gpuDirect",        "allocate I/O buffers on the GPU and use gpuDirect to store data; this option is incompatible with any option requiring CPU access to data.", OPTION_FLAG, 'd', & params->gpuDirect},
+#endif
+#endif
     {'e', NULL,        "fsync -- perform a fsync() operation at the end of each read/write phase", OPTION_FLAG, 'd', & params->fsync},
     {'E', NULL,        "useExistingTestFile -- do not remove test file before write access", OPTION_FLAG, 'd', & params->useExistingTestFile},
     {'f', NULL,        "scriptFile -- test script name", OPTION_OPTIONAL_ARGUMENT, 's', & params->testscripts},
@@ -412,7 +452,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'j', NULL,        "outlierThreshold -- warn on outlier N seconds from mean", OPTION_OPTIONAL_ARGUMENT, 'd', & params->outlierThreshold},
     {'k', NULL,        "keepFile -- don't remove the test file(s) on program exit", OPTION_FLAG, 'd', & params->keepFile},
     {'K', NULL,        "keepFileWithError  -- keep error-filled file(s) after data-checking", OPTION_FLAG, 'd', & params->keepFileWithError},
-    {'l', NULL,        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
+    {'l', "dataPacketType",        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
     {'m', NULL,        "multiFile -- use number of reps (-i) for multiple file count", OPTION_FLAG, 'd', & params->multiFile},
     {'M', NULL,        "memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)", OPTION_OPTIONAL_ARGUMENT, 's', & params->memoryPerNodeStr},
     {'N', NULL,        "numTasks -- number of tasks that are participating in the test (overrides MPI)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},
@@ -433,10 +473,13 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'y', NULL,        "dualMount -- use dual mount points for a filesystem", OPTION_FLAG, 'd', & params->dualMount},
     {'Y', NULL,        "fsyncPerWrite -- perform sync operation after every write operation", OPTION_FLAG, 'd', & params->fsyncPerWrite},
     {'z', NULL,        "randomOffset -- access is to random, not sequential, offsets within a file", OPTION_FLAG, 'd', & params->randomOffset},
+    {0, "randomPrefill", "For random -z access only: Prefill the file with this blocksize, e.g., 2m", OPTION_OPTIONAL_ARGUMENT, 'l', & params->randomPrefillBlocksize},
+    {0, "random-offset-seed",        "The seed for -z", OPTION_OPTIONAL_ARGUMENT, 'd', & params->randomSeed},
     {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random ordering for readback", OPTION_FLAG, 'd', & params->reorderTasksRandom},
     {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & params->warningAsErrors},
     {.help="  -O summaryFile=FILE                 -- store result data into this file", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputting the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O saveRankPerformanceDetailsCSV=<FILE> -- store the performance of each rank into the named CSV file.", .arg = OPTION_OPTIONAL_ARGUMENT},
     {0, "dryRun",      "do not perform any I/Os just run evtl. inputs print dummy output", OPTION_FLAG, 'd', & params->dryRun},
     LAST_OPTION,
   };
@@ -449,9 +492,9 @@ option_help * createGlobalOptions(IOR_param_t * params){
 /*
  * Parse Commandline.
  */
-IOR_test_t *ParseCommandLine(int argc, char **argv)
+IOR_test_t *ParseCommandLine(int argc, char **argv, MPI_Comm com)
 {
-    init_IOR_Param_t(& initialTestParams);
+    init_IOR_Param_t(& initialTestParams, com);
 
     IOR_test_t *tests = NULL;
 

@@ -49,7 +49,6 @@ ior_aiori_t *available_aiori[] = {
         &pmdk_aiori,
 #endif
 #ifdef USE_DAOS_AIORI
-        &daos_aiori,
         &dfs_aiori,
 #endif
         & dummy_aiori,
@@ -132,6 +131,8 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
 {
         ior_aiori_t **tmp = available_aiori;
         char delimiter = ' ';
+        *APIs = 0;
+        *APIs_legacy = 0;
 
         while (*tmp != NULL)
         {
@@ -140,7 +141,6 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
                     tmp++;
                     continue;
                 }
-
                 if (delimiter == ' ')
                 {
                         APIs += sprintf(APIs, "%s", (*tmp)->name);
@@ -152,6 +152,7 @@ void aiori_supported_apis(char * APIs, char * APIs_legacy, enum bench_type type)
                 if ((*tmp)->name_legacy != NULL)
                         APIs_legacy += sprintf(APIs_legacy, "%c%s",
                                                delimiter, (*tmp)->name_legacy);
+
                 tmp++;
         }
 }

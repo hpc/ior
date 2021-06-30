@@ -19,6 +19,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef enum {
+  DATA_TIMESTAMP, /* Will not include any offset, hence each buffer will be the same */
+  DATA_OFFSET,
+  DATA_INCOMPRESSIBLE /* Will include the offset as well */
+} ior_dataPacketType_e;
+
 #ifdef _WIN32
 #   define _CRT_SECURE_NO_WARNINGS
 #   define _CRT_RAND_S

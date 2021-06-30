@@ -76,6 +76,8 @@
 
 #include <mpi.h>
 
+#pragma GCC diagnostic ignored "-Wformat-overflow"
+
 #ifdef HAVE_LUSTRE_LUSTREAPI
 #include <lustre/lustreapi.h>
 #endif /* HAVE_LUSTRE_LUSTREAPI */
@@ -88,86 +90,99 @@
 
 #define LLU "%lu"
 
-static int size;
-static uint64_t *rand_array;
-static char testdir[MAX_PATHLEN];
-static char testdirpath[MAX_PATHLEN];
-static char base_tree_name[MAX_PATHLEN];
-static char **filenames;
-static char hostname[MAX_PATHLEN];
-static char mk_name[MAX_PATHLEN];
-static char stat_name[MAX_PATHLEN];
-static char read_name[MAX_PATHLEN];
-static char rm_name[MAX_PATHLEN];
-static char unique_mk_dir[MAX_PATHLEN];
-static char unique_chdir_dir[MAX_PATHLEN];
-static char unique_stat_dir[MAX_PATHLEN];
-static char unique_read_dir[MAX_PATHLEN];
-static char unique_rm_dir[MAX_PATHLEN];
-static char unique_rm_uni_dir[MAX_PATHLEN];
-static char *write_buffer;
-static char *stoneWallingStatusFile;
+typedef struct {
+  int size;
+  uint64_t *rand_array;
+  char testdir[MAX_PATHLEN];
+  char testdirpath[MAX_PATHLEN];
+  char base_tree_name[MAX_PATHLEN];
+  char **filenames;
+  char hostname[MAX_PATHLEN];
+  char mk_name[MAX_PATHLEN];
+  char stat_name[MAX_PATHLEN];
+  char read_name[MAX_PATHLEN];
+  char rm_name[MAX_PATHLEN];
+  char unique_mk_dir[MAX_PATHLEN];
+  char unique_chdir_dir[MAX_PATHLEN];
+  char unique_stat_dir[MAX_PATHLEN];
+  char unique_read_dir[MAX_PATHLEN];
+  char unique_rm_dir[MAX_PATHLEN];
+  char unique_rm_uni_dir[MAX_PATHLEN];
+  char *write_buffer;
+  char *stoneWallingStatusFile;
+  int gpu_memory_flags;
 
 
-static int barriers;
-static int create_only;
-static int stat_only;
-static int read_only;
-static int verify_read;
-static int verify_write;
-static int verification_error;
-static int remove_only;
-static int leaf_only;
-static unsigned branch_factor;
-static int depth;
+  int barriers;
+  int create_only;
+  int stat_only;
+  int read_only;
+  int verify_read;
+  int verify_write;
+  int verification_error;
+  int remove_only;
+  int rename_dirs;
+  int leaf_only;
+  unsigned branch_factor;
+  int depth;
+  int random_buffer_offset; /* user settable value, otherwise random */
 
-/*
- * This is likely a small value, but it's sometimes computed by
- * branch_factor^(depth+1), so we'll make it a larger variable,
- * just in case.
- */
-static uint64_t num_dirs_in_tree;
-/*
- * As we start moving towards Exascale, we could have billions
- * of files in a directory. Make room for that possibility with
- * a larger variable.
- */
-static uint64_t items;
-static uint64_t items_per_dir;
-static uint64_t num_dirs_in_tree_calc; /* this is a workaround until the overal code is refactored */
-static int directory_loops;
-static int print_time;
-static int print_rate_and_time;
-static int random_seed;
-static int shared_file;
-static int files_only;
-static int dirs_only;
-static int pre_delay;
-static int unique_dir_per_task;
-static int time_unique_dir_overhead;
-static int throttle;
-static int collective_creates;
-static size_t write_bytes;
-static int stone_wall_timer_seconds;
-static size_t read_bytes;
-static int sync_file;
-static int call_sync;
-static int path_count;
-static int nstride; /* neighbor stride */
-static int make_node = 0;
-#ifdef HAVE_LUSTRE_LUSTREAPI
-static int global_dir_layout;
-#endif /* HAVE_LUSTRE_LUSTREAPI */
+  /*
+   * This is likely a small value, but it's sometimes computed by
+   * branch_factor^(depth+1), so we'll make it a larger variable,
+   * just in case.
+   */
+  uint64_t num_dirs_in_tree;
+  /*
+   * As we start moving towards Exascale, we could have billions
+   * of files in a directory. Make room for that possibility with
+   * a larger variable.
+   */
+  uint64_t items;
+  uint64_t items_per_dir;
+  uint64_t num_dirs_in_tree_calc; /* this is a workaround until the overal code is refactored */
+  int directory_loops;
+  int print_time;
+  int print_rate_and_time;
+  int print_all_proc;
+  int show_perrank_statistics;
+  ior_dataPacketType_e dataPacketType;
+  int random_seed;
+  int shared_file;
+  int files_only;
+  int dirs_only;
+  int pre_delay;
+  int unique_dir_per_task;
+  int time_unique_dir_overhead;
+  int collective_creates;
+  size_t write_bytes;
+  int stone_wall_timer_seconds;
+  size_t read_bytes;
+  int sync_file;
+  int call_sync;
+  int path_count;
+  int nstride; /* neighbor stride */
+  int make_node;
+  #ifdef HAVE_LUSTRE_LUSTREAPI
+  int global_dir_layout;
+  #endif /* HAVE_LUSTRE_LUSTREAPI */
+  char * saveRankDetailsCSV;       /* save the details about the performance to a file */
+  const char *prologue;
+  const char *epilogue;
 
-static mdtest_results_t * summary_table;
-static pid_t pid;
-static uid_t uid;
+  mdtest_results_t * summary_table;
+  pid_t pid;
+  uid_t uid;
 
-/* Use the POSIX backend by default */
-static const ior_aiori_t *backend;
-static void * backend_options;
-static aiori_xfer_hint_t hints;
-static char * api = NULL;
+  /* Use the POSIX backend by default */
+  const ior_aiori_t *backend;
+  void * backend_options;
+  aiori_xfer_hint_t hints;
+  char * api;
+} mdtest_options_t;
+
+static mdtest_options_t o;
+
 
 /* This structure describes the processing status for stonewalling */
 typedef struct{
@@ -185,6 +200,8 @@ typedef struct{
 
 /* for making/removing unique directory && stating/deleting subdirectory */
 enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
+
+#define PRINT(...) fprintf(out_logfile, __VA_ARGS__);
 
 /* a helper function for passing debug and verbose messages.
    use the MACRO as it will insert __LINE__ for you.
@@ -211,26 +228,6 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
     }
 }
 
-void generate_memory_pattern(char * buffer, size_t bytes){
-  // the first byte is set to the item number
-  for(int i=1; i < bytes; i++){
-    buffer[i] = i + 1;
-  }
-}
-
-void offset_timers(double * t, int tcount) {
-    double toffset;
-    int i;
-
-
-    VERBOSE(1,-1,"V-1: Entering offset_timers..." );
-
-    toffset = GetTimeStamp() - t[tcount];
-    for (i = 0; i < tcount+1; i++) {
-        t[i] += toffset;
-    }
-}
-
 void parse_dirpath(char *dirpath_arg) {
     char * tmp, * token;
     char delimiter_string[3] = { '@', '\n', '\0' };
@@ -241,46 +238,57 @@ void parse_dirpath(char *dirpath_arg) {
 
     tmp = dirpath_arg;
 
-    if (* tmp != '\0') path_count++;
+    if (* tmp != '\0') o.path_count++;
     while (* tmp != '\0') {
         if (* tmp == '@') {
-            path_count++;
+            o.path_count++;
         }
         tmp++;
     }
     // prevent changes to the original dirpath_arg
     dirpath_arg = strdup(dirpath_arg);
-    filenames = (char **)malloc(path_count * sizeof(char **));
-    if (filenames == NULL || dirpath_arg == NULL) {
-        FAIL("out of memory");
-    }
+    o.filenames = (char **) safeMalloc(o.path_count * sizeof(char **));
 
     token = strtok(dirpath_arg, delimiter_string);
     while (token != NULL) {
-        filenames[i] = token;
+        o.filenames[i] = token;
         token = strtok(NULL, delimiter_string);
         i++;
     }
 }
 
 static void prep_testdir(int j, int dir_iter){
-  int pos = sprintf(testdir, "%s", testdirpath);
-  if ( testdir[strlen( testdir ) - 1] != '/' ) {
-      pos += sprintf(& testdir[pos], "/");
+  int pos = sprintf(o.testdir, "%s", o.testdirpath);
+  if ( o.testdir[strlen( o.testdir ) - 1] != '/' ) {
+      pos += sprintf(& o.testdir[pos], "/");
   }
-  pos += sprintf(& testdir[pos], "%s", TEST_DIR);
-  pos += sprintf(& testdir[pos], ".%d-%d", j, dir_iter);
+  pos += sprintf(& o.testdir[pos], "%s", TEST_DIR);
+  pos += sprintf(& o.testdir[pos], ".%d-%d", j, dir_iter);
+}
+
+static void phase_prepare(){
+  if (*o.prologue){
+    VERBOSE(0,5,"calling prologue: \"%s\"", o.prologue);
+    system(o.prologue);
+    if (o.barriers) {
+      MPI_Barrier(testComm);
+    }
+  }
 }
 
 static void phase_end(){
-  if (call_sync){
-    if(! backend->sync){
+  if (o.call_sync){
+    if(! o.backend->sync){
       FAIL("Error, backend does not provide the sync method, but you requested to use sync.\n");
     }
-    backend->sync(backend_options);
+    o.backend->sync(o.backend_options);
+  }
+  if (*o.epilogue){
+    VERBOSE(0,5,"calling epilogue: \"%s\"", o.epilogue);
+    system(o.epilogue);
   }
 
-  if (barriers) {
+  if (o.barriers) {
     MPI_Barrier(testComm);
   }
 }
@@ -293,15 +301,15 @@ static void phase_end(){
 void unique_dir_access(int opt, char *to) {
     if (opt == MK_UNI_DIR) {
         MPI_Barrier(testComm);
-        sprintf( to, "%s/%s", testdir, unique_chdir_dir );
+        sprintf( to, "%s/%s", o.testdir, o.unique_chdir_dir );
     } else if (opt == STAT_SUB_DIR) {
-        sprintf( to, "%s/%s", testdir, unique_stat_dir );
+        sprintf( to, "%s/%s", o.testdir, o.unique_stat_dir );
     } else if (opt == READ_SUB_DIR) {
-        sprintf( to, "%s/%s", testdir, unique_read_dir );
+        sprintf( to, "%s/%s", o.testdir, o.unique_read_dir );
     } else if (opt == RM_SUB_DIR) {
-        sprintf( to, "%s/%s", testdir, unique_rm_dir );
+        sprintf( to, "%s/%s", o.testdir, o.unique_rm_dir );
     } else if (opt == RM_UNI_DIR) {
-        sprintf( to, "%s/%s", testdir, unique_rm_uni_dir );
+        sprintf( to, "%s/%s", o.testdir, o.unique_rm_uni_dir );
     }
     VERBOSE(1,-1,"Entering unique_dir_access, set it to %s", to );
 }
@@ -315,16 +323,16 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
     }
 
     //create dirs
-    sprintf(curr_item, "%s/dir.%s%" PRIu64, path, create ? mk_name : rm_name, itemNum);
+    sprintf(curr_item, "%s/dir.%s%" PRIu64, path, create ? o.mk_name : o.rm_name, itemNum);
     VERBOSE(3,5,"create_remove_items_helper (dirs %s): curr_item is '%s'", operation, curr_item);
 
     if (create) {
-        if (backend->mkdir(curr_item, DIRMODE, backend_options) == -1) {
-            FAIL("unable to create directory %s", curr_item);
+        if (o.backend->mkdir(curr_item, DIRMODE, o.backend_options) == -1) {
+            EWARNF("unable to create directory %s", curr_item);
         }
     } else {
-        if (backend->rmdir(curr_item, backend_options) == -1) {
-            FAIL("unable to remove directory %s", curr_item);
+        if (o.backend->rmdir(curr_item, o.backend_options) == -1) {
+            EWARNF("unable to remove directory %s", curr_item);
         }
     }
 }
@@ -337,29 +345,13 @@ static void remove_file (const char *path, uint64_t itemNum) {
     }
 
     //remove files
-    sprintf(curr_item, "%s/file.%s"LLU"", path, rm_name, itemNum);
+    sprintf(curr_item, "%s/file.%s"LLU"", path, o.rm_name, itemNum);
     VERBOSE(3,5,"create_remove_items_helper (non-dirs remove): curr_item is '%s'", curr_item);
-    if (!(shared_file && rank != 0)) {
-        backend->delete (curr_item, backend_options);
+    if (!(o.shared_file && rank != 0)) {
+        o.backend->delete (curr_item, o.backend_options);
     }
 }
 
-void mdtest_verify_data(int item, char * buffer, size_t bytes){
-  if((bytes >= 8 && ((uint64_t*) buffer)[0] != item) || (bytes < 8 && buffer[0] != (char) item)){
-    VERBOSE(2, -1, "Error verifying first element for item: %d", item);
-    verification_error++;
-  }
-
-  size_t i = bytes < 8 ? 1 : 8; // the first byte
-
-  for( ; i < bytes; i++){
-    if(buffer[i] != (char) (i + 1)){
-      VERBOSE(5, -1, "Error verifying byte %zu for item %d", i, item);
-      verification_error++;
-      break;
-    }
-  }
-}
 
 static void create_file (const char *path, uint64_t itemNum) {
     char curr_item[MAX_PATHLEN];
@@ -370,65 +362,66 @@ static void create_file (const char *path, uint64_t itemNum) {
     }
 
     //create files
-    sprintf(curr_item, "%s/file.%s"LLU"", path, mk_name, itemNum);
+    sprintf(curr_item, "%s/file.%s"LLU"", path, o.mk_name, itemNum);
     VERBOSE(3,5,"create_remove_items_helper (non-dirs create): curr_item is '%s'", curr_item);
 
-    if (make_node) {
+    if (o.make_node) {
         int ret;
         VERBOSE(3,5,"create_remove_items_helper : mknod..." );
 
-        ret = backend->mknod (curr_item);
+        ret = o.backend->mknod (curr_item);
         if (ret != 0)
-            FAIL("unable to mknode file %s", curr_item);
+            EWARNF("unable to mknode file %s", curr_item);
 
         return;
-    } else if (collective_creates) {
+    } else if (o.collective_creates) {
         VERBOSE(3,5,"create_remove_items_helper (collective): open..." );
 
-        aiori_fh = backend->open (curr_item, IOR_WRONLY | IOR_CREAT, backend_options);
-        if (NULL == aiori_fh)
-            FAIL("unable to open file %s", curr_item);
+        aiori_fh = o.backend->open (curr_item, IOR_WRONLY | IOR_CREAT, o.backend_options);
+        if (NULL == aiori_fh){
+            EWARNF("unable to open file %s", curr_item);
+            return;
+        }
 
         /*
          * !collective_creates
          */
     } else {
-        hints.filePerProc = !shared_file;
+        o.hints.filePerProc = ! o.shared_file;
         VERBOSE(3,5,"create_remove_items_helper (non-collective, shared): open..." );
 
-        aiori_fh = backend->create (curr_item, IOR_WRONLY | IOR_CREAT, backend_options);
-        if (NULL == aiori_fh)
-            FAIL("unable to create file %s", curr_item);
+        aiori_fh = o.backend->create (curr_item, IOR_WRONLY | IOR_CREAT, o.backend_options);
+        if (NULL == aiori_fh){
+          EWARNF("unable to create file %s", curr_item);
+          return;
+        }
     }
 
-    if (write_bytes > 0) {
+    if (o.write_bytes > 0) {
         VERBOSE(3,5,"create_remove_items_helper: write..." );
 
-        /*
-         * According to Bill Loewe, writes are only done one time, so they are always at
-         * offset 0 (zero).
-         */
-        hints.fsyncPerWrite = sync_file;
-        if(write_bytes >= 8){ // set the item number as first element of the buffer to be as much unique as possible
-          ((uint64_t*) write_buffer)[0] = itemNum;
-        }else{
-          write_buffer[0] = (char) itemNum;
-        }
-        if ( write_bytes != (size_t) backend->xfer(WRITE, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, 0, backend_options)) {
-            FAIL("unable to write file %s", curr_item);
+        o.hints.fsyncPerWrite = o.sync_file;
+        update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
+
+        if ( o.write_bytes != (size_t) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
+            EWARNF("unable to write file %s", curr_item);
         }
 
-        if (verify_write) {
-            write_buffer[0] = 42;
-            if (write_bytes != (size_t) backend->xfer(READ, aiori_fh, (IOR_size_t *) write_buffer, write_bytes, 0, backend_options)) {
-                FAIL("unable to verify write (read/back) file %s", curr_item);
+        if (o.verify_write) {
+            o.write_buffer[0] = 42;
+            if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
+                EWARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            mdtest_verify_data(itemNum, write_buffer, write_bytes);
+            int error = verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
+            o.verification_error += error;
+            if(error){
+                VERBOSE(1,1,"verification error in file: %s", curr_item);
+            }
         }
     }
 
     VERBOSE(3,5,"create_remove_items_helper: close..." );
-    backend->close (aiori_fh, backend_options);
+    o.backend->close (aiori_fh, o.backend_options);
 }
 
 /* helper for creating/removing items */
@@ -468,22 +461,22 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
             continue;
         }
 
-        sprintf(curr_item, "%s/file.%s"LLU"", path, create ? mk_name : rm_name, itemNum+i);
+        sprintf(curr_item, "%s/file.%s"LLU"", path, create ? o.mk_name : o.rm_name, itemNum+i);
         VERBOSE(3,5,"create file: %s", curr_item);
 
         if (create) {
             aiori_fd_t *aiori_fh;
 
             //create files
-            aiori_fh = backend->create (curr_item, IOR_WRONLY | IOR_CREAT, backend_options);
+            aiori_fh = o.backend->create (curr_item, IOR_WRONLY | IOR_CREAT, o.backend_options);
             if (NULL == aiori_fh) {
-                FAIL("unable to create file %s", curr_item);
+                EWARNF("unable to create file %s", curr_item);
+            }else{
+              o.backend->close (aiori_fh, o.backend_options);
             }
-
-            backend->close (aiori_fh, backend_options);
-        } else if (!(shared_file && rank != 0)) {
+        } else if (!(o.shared_file && rank != 0)) {
             //remove files
-            backend->delete (curr_item, backend_options);
+            o.backend->delete (curr_item, o.backend_options);
         }
         if(CHECK_STONE_WALL(progress)){
           progress->items_done = i + 1;
@@ -512,7 +505,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
 
     if (currDepth == 0) {
         /* create items at this depth */
-        if (!leaf_only || (depth == 0 && leaf_only)) {
+        if (! o.leaf_only || (o.depth == 0 && o.leaf_only)) {
             if (collective) {
                 collective_helper(dirs, create, temp_path, 0, progress);
             } else {
@@ -520,28 +513,28 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
             }
         }
 
-        if (depth > 0) {
+        if (o.depth > 0) {
             create_remove_items(++currDepth, dirs, create,
                                 collective, temp_path, ++dirNum, progress);
         }
 
-    } else if (currDepth <= depth) {
+    } else if (currDepth <= o.depth) {
         /* iterate through the branches */
-        for (i=0; i<branch_factor; i++) {
+        for (i=0; i< o.branch_factor; i++) {
 
             /* determine the current branch and append it to the path */
-            sprintf(dir, "%s.%llu/", base_tree_name, currDir);
+            sprintf(dir, "%s.%llu/", o.base_tree_name, currDir);
             strcat(temp_path, "/");
             strcat(temp_path, dir);
 
             VERBOSE(3,5,"create_remove_items (for loop): temp_path is '%s'", temp_path );
 
             /* create the items in this branch */
-            if (!leaf_only || (leaf_only && currDepth == depth)) {
+            if (! o.leaf_only || (o.leaf_only && currDepth == o.depth)) {
                 if (collective) {
-                    collective_helper(dirs, create, temp_path, currDir*items_per_dir, progress);
+                    collective_helper(dirs, create, temp_path, currDir* o.items_per_dir, progress);
                 } else {
-                    create_remove_items_helper(dirs, create, temp_path, currDir*items_per_dir, progress);
+                    create_remove_items_helper(dirs, create, temp_path, currDir*o.items_per_dir, progress);
                 }
             }
 
@@ -552,7 +545,7 @@ void create_remove_items(int currDepth, const int dirs, const int create, const 
                 create,
                 collective,
                 temp_path,
-                ( currDir * ( unsigned long long )branch_factor ) + 1,
+                ( currDir * ( unsigned long long ) o.branch_factor ) + 1,
                 progress
                );
             currDepth--;
@@ -572,10 +565,10 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
     VERBOSE(1,-1,"Entering mdtest_stat on %s", path );
 
-    uint64_t stop_items = items;
+    uint64_t stop_items = o.items;
 
-    if( directory_loops != 1 ){
-      stop_items = items_per_dir;
+    if( o.directory_loops != 1 ){
+      stop_items = o.items_per_dir;
     }
 
     /* iterate over all of the item IDs */
@@ -593,15 +586,15 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
         /* determine the item number to stat */
         if (random) {
-            item_num = rand_array[i];
+            item_num = o.rand_array[i];
         } else {
             item_num = i;
         }
 
         /* make adjustments if in leaf only mode*/
-        if (leaf_only) {
-            item_num += items_per_dir *
-                (num_dirs_in_tree - (uint64_t) pow( branch_factor, depth ));
+        if (o.leaf_only) {
+            item_num += o.items_per_dir *
+                (o.num_dirs_in_tree - (uint64_t) pow( o.branch_factor, o.depth ));
         }
 
         /* create name of file/dir to stat */
@@ -609,27 +602,27 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
             if ( (i % ITEM_COUNT == 0) && (i != 0)) {
                 VERBOSE(3,5,"stat dir: "LLU"", i);
             }
-            sprintf(item, "dir.%s"LLU"", stat_name, item_num);
+            sprintf(item, "dir.%s"LLU"", o.stat_name, item_num);
         } else {
             if ( (i % ITEM_COUNT == 0) && (i != 0)) {
                 VERBOSE(3,5,"stat file: "LLU"", i);
             }
-            sprintf(item, "file.%s"LLU"", stat_name, item_num);
+            sprintf(item, "file.%s"LLU"", o.stat_name, item_num);
         }
 
         /* determine the path to the file/dir to be stat'ed */
-        parent_dir = item_num / items_per_dir;
+        parent_dir = item_num / o.items_per_dir;
 
         if (parent_dir > 0) {        //item is not in tree's root directory
 
             /* prepend parent directory to item's path */
-            sprintf(temp, "%s."LLU"/%s", base_tree_name, parent_dir, item);
+            sprintf(temp, "%s."LLU"/%s", o.base_tree_name, parent_dir, item);
             strcpy(item, temp);
 
             //still not at the tree's root dir
-            while (parent_dir > branch_factor) {
-                parent_dir = (uint64_t) ((parent_dir-1) / branch_factor);
-                sprintf(temp, "%s."LLU"/%s", base_tree_name, parent_dir, item);
+            while (parent_dir > o.branch_factor) {
+                parent_dir = (uint64_t) ((parent_dir-1) / o.branch_factor);
+                sprintf(temp, "%s."LLU"/%s", o.base_tree_name, parent_dir, item);
                 strcpy(item, temp);
             }
         }
@@ -640,8 +633,8 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
         /* below temp used to be hiername */
         VERBOSE(3,5,"mdtest_stat %4s: %s", (dirs ? "dir" : "file"), item);
-        if (-1 == backend->stat (item, &buf, backend_options)) {
-            FAIL("unable to stat %s %s", dirs ? "directory" : "file", item);
+        if (-1 == o.backend->stat (item, &buf, o.backend_options)) {
+            EWARNF("unable to stat %s %s", dirs ? "directory" : "file", item);
         }
     }
 }
@@ -656,17 +649,15 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     char *read_buffer;
 
     /* allocate read buffer */
-    if (read_bytes > 0) {
-        int alloc_res = posix_memalign((void**)&read_buffer, sysconf(_SC_PAGESIZE), read_bytes);
-        if (alloc_res) {
-            FAIL("out of memory");
-        }
+    if (o.read_bytes > 0) {
+        read_buffer = aligned_buffer_alloc(o.read_bytes, o.gpu_memory_flags);
+        memset(read_buffer, -1, o.read_bytes);
     }
 
-    uint64_t stop_items = items;
+    uint64_t stop_items = o.items;
 
-    if( directory_loops != 1 ){
-      stop_items = items_per_dir;
+    if( o.directory_loops != 1 ){
+      stop_items = o.items_per_dir;
     }
 
     /* iterate over all of the item IDs */
@@ -685,15 +676,15 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* determine the item number to read */
         if (random) {
-            item_num = rand_array[i];
+            item_num = o.rand_array[i];
         } else {
             item_num = i;
         }
 
         /* make adjustments if in leaf only mode*/
-        if (leaf_only) {
-            item_num += items_per_dir *
-                (num_dirs_in_tree - (uint64_t) pow (branch_factor, depth));
+        if (o.leaf_only) {
+            item_num += o.items_per_dir *
+                (o.num_dirs_in_tree - (uint64_t) pow (o.branch_factor, o.depth));
         }
 
         /* create name of file to read */
@@ -701,22 +692,22 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
             if ((i%ITEM_COUNT == 0) && (i != 0)) {
                 VERBOSE(3,5,"read file: "LLU"", i);
             }
-            sprintf(item, "file.%s"LLU"", read_name, item_num);
+            sprintf(item, "file.%s"LLU"", o.read_name, item_num);
         }
 
         /* determine the path to the file/dir to be read'ed */
-        parent_dir = item_num / items_per_dir;
+        parent_dir = item_num / o.items_per_dir;
 
         if (parent_dir > 0) {        //item is not in tree's root directory
 
             /* prepend parent directory to item's path */
-            sprintf(temp, "%s."LLU"/%s", base_tree_name, parent_dir, item);
+            sprintf(temp, "%s."LLU"/%s", o.base_tree_name, parent_dir, item);
             strcpy(item, temp);
 
             /* still not at the tree's root dir */
-            while (parent_dir > branch_factor) {
-                parent_dir = (unsigned long long) ((parent_dir-1) / branch_factor);
-                sprintf(temp, "%s."LLU"/%s", base_tree_name, parent_dir, item);
+            while (parent_dir > o.branch_factor) {
+                parent_dir = (unsigned long long) ((parent_dir-1) / o.branch_factor);
+                sprintf(temp, "%s."LLU"/%s", o.base_tree_name, parent_dir, item);
                 strcpy(item, temp);
             }
         }
@@ -729,30 +720,37 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         VERBOSE(3,5,"mdtest_read file: %s", item);
 
         /* open file for reading */
-        aiori_fh = backend->open (item, O_RDONLY, backend_options);
+        aiori_fh = o.backend->open (item, O_RDONLY, o.backend_options);
         if (NULL == aiori_fh) {
-            FAIL("unable to open file %s", item);
+            EWARNF("unable to open file %s", item);
+            continue;
         }
 
         /* read file */
-        if (read_bytes > 0) {
+        if (o.read_bytes > 0) {
             read_buffer[0] = 42;
-            if (read_bytes != (size_t) backend->xfer(READ, aiori_fh, (IOR_size_t *) read_buffer, read_bytes, 0, backend_options)) {
-                FAIL("unable to read file %s", item);
+            if (o.read_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) read_buffer, o.read_bytes, 0, o.backend_options)) {
+                EWARNF("unable to read file %s", item);
+                continue;
             }
-            if(verify_read){
-              mdtest_verify_data(item_num, read_buffer, read_bytes);
-            }else if((read_bytes >= 8 && ((uint64_t*) read_buffer)[0] != item_num) || (read_bytes < 8 && read_buffer[0] != (char) item_num)){
-              // do a lightweight check, which cost is neglectable
-              verification_error++;
+            int pretend_rank = (2 * o.nstride + rank) % o.size;
+            if(o.verify_read){
+              if (o.shared_file) {
+                pretend_rank = rank;
+              }
+              int error = verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.dataPacketType);
+              o.verification_error += error;
+              if(error){
+                VERBOSE(1,1,"verification error in file: %s", item);
+              }
             }
         }
 
         /* close file */
-        backend->close (aiori_fh, backend_options);
+        o.backend->close (aiori_fh, o.backend_options);
     }
-    if(read_bytes){
-      free(read_buffer);
+    if(o.read_bytes){
+      aligned_buffer_free(read_buffer, o.gpu_memory_flags);
     }
 }
 
@@ -767,40 +765,40 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
     for (int i = 0 ; i < ntasks ; ++i) {
         memset(temp, 0, MAX_PATHLEN);
 
-        strcpy(temp, testdir);
+        strcpy(temp, o.testdir);
         strcat(temp, "/");
 
         /* set the base tree name appropriately */
-        if (unique_dir_per_task) {
-            sprintf(base_tree_name, "mdtest_tree.%d", i);
+        if (o.unique_dir_per_task) {
+            sprintf(o.base_tree_name, "mdtest_tree.%d", i);
         } else {
-            sprintf(base_tree_name, "mdtest_tree");
+            sprintf(o.base_tree_name, "mdtest_tree");
         }
 
         /* Setup to do I/O to the appropriate test dir */
-        strcat(temp, base_tree_name);
+        strcat(temp, o.base_tree_name);
         strcat(temp, ".0");
 
         /* set all item names appropriately */
-        if (!shared_file) {
-            sprintf(mk_name, "mdtest.%d.", (i+(0*nstride))%ntasks);
-            sprintf(stat_name, "mdtest.%d.", (i+(1*nstride))%ntasks);
-            sprintf(read_name, "mdtest.%d.", (i+(2*nstride))%ntasks);
-            sprintf(rm_name, "mdtest.%d.", (i+(3*nstride))%ntasks);
+        if (! o.shared_file) {
+            sprintf(o.mk_name, "mdtest.%d.", (i+(0*o.nstride))%ntasks);
+            sprintf(o.stat_name, "mdtest.%d.", (i+(1*o.nstride))%ntasks);
+            sprintf(o.read_name, "mdtest.%d.", (i+(2*o.nstride))%ntasks);
+            sprintf(o.rm_name, "mdtest.%d.", (i+(3*o.nstride))%ntasks);
         }
-        if (unique_dir_per_task) {
-            VERBOSE(3,5,"i %d nstride %d ntasks %d", i, nstride, ntasks);
-            sprintf(unique_mk_dir, "%s/mdtest_tree.%d.0", testdir,
-                    (i+(0*nstride))%ntasks);
-            sprintf(unique_chdir_dir, "%s/mdtest_tree.%d.0", testdir,
-                    (i+(1*nstride))%ntasks);
-            sprintf(unique_stat_dir, "%s/mdtest_tree.%d.0", testdir,
-                    (i+(2*nstride))%ntasks);
-            sprintf(unique_read_dir, "%s/mdtest_tree.%d.0", testdir,
-                    (i+(3*nstride))%ntasks);
-            sprintf(unique_rm_dir, "%s/mdtest_tree.%d.0", testdir,
-                    (i+(4*nstride))%ntasks);
-            sprintf(unique_rm_uni_dir, "%s", testdir);
+        if (o.unique_dir_per_task) {
+            VERBOSE(3,5,"i %d nstride %d ntasks %d", i, o.nstride, ntasks);
+            sprintf(o.unique_mk_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                    (i+(0*o.nstride))%ntasks);
+            sprintf(o.unique_chdir_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                    (i+(1*o.nstride))%ntasks);
+            sprintf(o.unique_stat_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                    (i+(2*o.nstride))%ntasks);
+            sprintf(o.unique_read_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                    (i+(3*o.nstride))%ntasks);
+            sprintf(o.unique_rm_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                    (i+(4*o.nstride))%ntasks);
+            sprintf(o.unique_rm_uni_dir, "%s", o.testdir);
         }
 
         /* Now that everything is set up as it should be, do the create or remove */
@@ -810,64 +808,155 @@ void collective_create_remove(const int create, const int dirs, const int ntasks
     }
 
     /* reset all of the item names */
-    if (unique_dir_per_task) {
-        sprintf(base_tree_name, "mdtest_tree.0");
+    if (o.unique_dir_per_task) {
+        sprintf(o.base_tree_name, "mdtest_tree.0");
     } else {
-        sprintf(base_tree_name, "mdtest_tree");
+        sprintf(o.base_tree_name, "mdtest_tree");
     }
-    if (!shared_file) {
-        sprintf(mk_name, "mdtest.%d.", (0+(0*nstride))%ntasks);
-        sprintf(stat_name, "mdtest.%d.", (0+(1*nstride))%ntasks);
-        sprintf(read_name, "mdtest.%d.", (0+(2*nstride))%ntasks);
-        sprintf(rm_name, "mdtest.%d.", (0+(3*nstride))%ntasks);
+    if (! o.shared_file) {
+        sprintf(o.mk_name, "mdtest.%d.", (0+(0*o.nstride))%ntasks);
+        sprintf(o.stat_name, "mdtest.%d.", (0+(1*o.nstride))%ntasks);
+        sprintf(o.read_name, "mdtest.%d.", (0+(2*o.nstride))%ntasks);
+        sprintf(o.rm_name, "mdtest.%d.", (0+(3*o.nstride))%ntasks);
     }
-    if (unique_dir_per_task) {
-        sprintf(unique_mk_dir, "%s/mdtest_tree.%d.0", testdir,
-                (0+(0*nstride))%ntasks);
-        sprintf(unique_chdir_dir, "%s/mdtest_tree.%d.0", testdir,
-                (0+(1*nstride))%ntasks);
-        sprintf(unique_stat_dir, "%s/mdtest_tree.%d.0", testdir,
-                (0+(2*nstride))%ntasks);
-        sprintf(unique_read_dir, "%s/mdtest_tree.%d.0", testdir,
-                (0+(3*nstride))%ntasks);
-        sprintf(unique_rm_dir, "%s/mdtest_tree.%d.0", testdir,
-                (0+(4*nstride))%ntasks);
-        sprintf(unique_rm_uni_dir, "%s", testdir);
+    if (o.unique_dir_per_task) {
+        sprintf(o.unique_mk_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                (0+(0*o.nstride))%ntasks);
+        sprintf(o.unique_chdir_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                (0+(1*o.nstride))%ntasks);
+        sprintf(o.unique_stat_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                (0+(2*o.nstride))%ntasks);
+        sprintf(o.unique_read_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                (0+(3*o.nstride))%ntasks);
+        sprintf(o.unique_rm_dir, "%s/mdtest_tree.%d.0", o.testdir,
+                (0+(4*o.nstride))%ntasks);
+        sprintf(o.unique_rm_uni_dir, "%s", o.testdir);
     }
+}
+
+void rename_dir_test(const int dirs, const long dir_iter, const char *path, rank_progress_t * progress) {
+    uint64_t parent_dir, item_num = 0;
+    char item[MAX_PATHLEN], temp[MAX_PATHLEN];
+    char item_last[MAX_PATHLEN];
+
+    if(o.backend->rename == NULL){
+      WARN("Backend doesn't support rename\n");
+      return;
+    }
+
+    VERBOSE(1,-1,"Entering mdtest_rename on %s", path );
+
+    uint64_t stop_items = o.items;
+
+    if( o.directory_loops != 1 ){
+      stop_items = o.items_per_dir;
+    }
+
+    if(stop_items == 1) return;
+
+    /* iterate over all of the item IDs */
+    char first_item_name[MAX_PATHLEN];
+    for (uint64_t i = 0 ; i < stop_items; ++i) {
+        item_num = i;
+        /* make adjustments if in leaf only mode*/
+        if (o.leaf_only) {
+            item_num += o.items_per_dir * (o.num_dirs_in_tree - (uint64_t) pow( o.branch_factor, o.depth ));
+        }
+
+        /* create name of file/dir to stat */
+        if (dirs) {
+            sprintf(item, "dir.%s"LLU"", o.stat_name, item_num);
+        } else {
+            sprintf(item, "file.%s"LLU"", o.stat_name, item_num);
+        }
+
+        /* determine the path to the file/dir to be stat'ed */
+        parent_dir = item_num / o.items_per_dir;
+
+        if (parent_dir > 0) {        //item is not in tree's root directory
+            /* prepend parent directory to item's path */
+            sprintf(temp, "%s."LLU"/%s", o.base_tree_name, parent_dir, item);
+            strcpy(item, temp);
+
+            //still not at the tree's root dir
+            while (parent_dir > o.branch_factor) {
+                parent_dir = (uint64_t) ((parent_dir-1) / o.branch_factor);
+                sprintf(temp, "%s."LLU"/%s", o.base_tree_name, parent_dir, item);
+                strcpy(item, temp);
+            }
+        }
+
+        /* Now get item to have the full path */
+        sprintf( temp, "%s/%s", path, item );
+        strcpy( item, temp );
+
+        VERBOSE(3,5,"mdtest_rename %4s: %s", (dirs ? "dir" : "file"), item);
+        if(i == 0){
+          sprintf(first_item_name, "%s-XX", item);
+          strcpy(item_last, first_item_name);
+        }else if(i == stop_items - 1){
+          strcpy(item, first_item_name);
+        }
+        if (-1 == o.backend->rename(item, item_last, o.backend_options)) {
+            EWARNF("unable to rename %s %s", dirs ? "directory" : "file", item);
+        }
+
+        strcpy(item_last, item);
+    }
+}
+
+static void updateResult(mdtest_results_t * res, mdtest_test_num_t test, uint64_t item_count, double t_start, double t_end, double t_end_before_barrier){
+  res->time[test] = t_end - t_start;
+  if(isfinite(t_end_before_barrier)){
+    res->time_before_barrier[test] = t_end_before_barrier - t_start;
+  }else{
+    res->time_before_barrier[test] = res->time[test];
+  }
+  if(item_count == 0){
+    res->rate[test] = 0.0;
+    res->rate_before_barrier[test] = 0.0;
+  }else{
+    res->rate[test] = item_count/res->time[test];
+    res->rate_before_barrier[test] = item_count/res->time_before_barrier[test];
+  }
+  res->items[test] = item_count;
+  res->stonewall_last_item[test] = o.items;
 }
 
 void directory_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
-    double t[5] = {0};
+    double t_start, t_end, t_end_before_barrier;
     char temp_path[MAX_PATHLEN];
+    mdtest_results_t * res = & o.summary_table[iteration];
 
     MPI_Comm_size(testComm, &size);
 
     VERBOSE(1,-1,"Entering directory_test on %s", path );
 
     MPI_Barrier(testComm);
-    t[0] = GetTimeStamp();
 
     /* create phase */
-    if(create_only) {
-      progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
+    if(o.create_only) {
+      phase_prepare();
+      t_start = GetTimeStamp();
+      progress->stone_wall_timer_seconds = o.stone_wall_timer_seconds;
       progress->items_done = 0;
       progress->start_time = GetTimeStamp();
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
-        if (unique_dir_per_task) {
+        if (o.unique_dir_per_task) {
             unique_dir_access(MK_UNI_DIR, temp_path);
-            if (!time_unique_dir_overhead) {
-                offset_timers(t, 0);
+            if (! o.time_unique_dir_overhead) {
+                t_start = GetTimeStamp();
             }
         } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
+            sprintf( temp_path, "%s/%s", o.testdir, path );
         }
 
         VERBOSE(3,-1,"directory_test: create path is '%s'", temp_path );
 
         /* "touch" the files */
-        if (collective_creates) {
+        if (o.collective_creates) {
             if (rank == 0) {
                 collective_create_remove(1, 1, ntasks, temp_path, progress);
             }
@@ -877,80 +966,116 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
         }
       }
       progress->stone_wall_timer_seconds = 0;
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_CREATE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
-    phase_end();
-    t[1] = GetTimeStamp();
-
     /* stat phase */
-    if (stat_only) {
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+    if (o.stat_only) {
+      phase_prepare();
+      t_start = GetTimeStamp();
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
-        if (unique_dir_per_task) {
+        if (o.unique_dir_per_task) {
             unique_dir_access(STAT_SUB_DIR, temp_path);
-            if (!time_unique_dir_overhead) {
-                offset_timers(t, 1);
+            if (! o.time_unique_dir_overhead) {
+                t_start = GetTimeStamp();
             }
         } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
+            sprintf( temp_path, "%s/%s", o.testdir, path );
         }
 
         VERBOSE(3,5,"stat path is '%s'", temp_path );
 
         /* stat directories */
-        if (random_seed > 0) {
+        if (o.random_seed > 0) {
             mdtest_stat(1, 1, dir_iter, temp_path, progress);
         } else {
             mdtest_stat(0, 1, dir_iter, temp_path, progress);
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_STAT_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
-    phase_end();
-    t[2] = GetTimeStamp();
 
     /* read phase */
-    if (read_only) {
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+    if (o.read_only) {
+      phase_prepare();
+      t_start = GetTimeStamp();
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
-        if (unique_dir_per_task) {
+        if (o.unique_dir_per_task) {
             unique_dir_access(READ_SUB_DIR, temp_path);
-            if (!time_unique_dir_overhead) {
-                offset_timers(t, 2);
+            if (! o.time_unique_dir_overhead) {
+                t_start = GetTimeStamp();
             }
         } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
+            sprintf( temp_path, "%s/%s", o.testdir, path );
         }
 
         VERBOSE(3,5,"directory_test: read path is '%s'", temp_path );
 
         /* read directories */
-        if (random_seed > 0) {
+        if (o.random_seed > 0) {
             ;        /* N/A */
         } else {
             ;        /* N/A */
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_READ_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
-    phase_end();
-    t[3] = GetTimeStamp();
-
-    if (remove_only) {
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+    /* rename phase */
+    if(o.rename_dirs && o.items > 1){
+      phase_prepare();
+      t_start = GetTimeStamp();
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
-        if (unique_dir_per_task) {
-            unique_dir_access(RM_SUB_DIR, temp_path);
-            if (!time_unique_dir_overhead) {
-                offset_timers(t, 3);
+        if (o.unique_dir_per_task) {
+            unique_dir_access(STAT_SUB_DIR, temp_path);
+            if (! o.time_unique_dir_overhead) {
+                t_start = GetTimeStamp();
             }
         } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
+            sprintf( temp_path, "%s/%s", o.testdir, path );
+        }
+
+        VERBOSE(3,5,"rename path is '%s'", temp_path );
+
+        rename_dir_test(1, dir_iter, temp_path, progress);
+      }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_RENAME_NUM, o.items, t_start, t_end, t_end_before_barrier);
+    }
+
+    /* remove phase */
+    if (o.remove_only) {
+      phase_prepare();
+      t_start = GetTimeStamp();
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
+        prep_testdir(iteration, dir_iter);
+        if (o.unique_dir_per_task) {
+            unique_dir_access(RM_SUB_DIR, temp_path);
+            if (!o.time_unique_dir_overhead) {
+                t_start = GetTimeStamp();
+            }
+        } else {
+            sprintf( temp_path, "%s/%s", o.testdir, path );
         }
 
         VERBOSE(3,5,"directory_test: remove directories path is '%s'", temp_path );
 
         /* remove directories */
-        if (collective_creates) {
+        if (o.collective_creates) {
             if (rank == 0) {
                 collective_create_remove(0, 1, ntasks, temp_path, progress);
             }
@@ -958,236 +1083,231 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
             create_remove_items(0, 1, 0, 0, temp_path, 0, progress);
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_DIR_REMOVE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
-    phase_end();
-    t[4] = GetTimeStamp();
-
-    if (remove_only) {
-        if (unique_dir_per_task) {
+    if (o.remove_only) {
+        if (o.unique_dir_per_task) {
             unique_dir_access(RM_UNI_DIR, temp_path);
         } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
+            sprintf( temp_path, "%s/%s", o.testdir, path );
         }
 
         VERBOSE(3,5,"directory_test: remove unique directories path is '%s'\n", temp_path );
     }
 
-    if (unique_dir_per_task && !time_unique_dir_overhead) {
-        offset_timers(t, 4);
-    }
-
-    /* calculate times */
-    if (create_only) {
-        summary_table[iteration].rate[0] = items*size/(t[1] - t[0]);
-        summary_table[iteration].time[0] = t[1] - t[0];
-        summary_table[iteration].items[0] = items*size;
-        summary_table[iteration].stonewall_last_item[0] = items;
-    }
-    if (stat_only) {
-        summary_table[iteration].rate[1] = items*size/(t[2] - t[1]);
-        summary_table[iteration].time[1] = t[2] - t[1];
-        summary_table[iteration].items[1] = items*size;
-        summary_table[iteration].stonewall_last_item[1] = items;
-    }
-    if (read_only) {
-        summary_table[iteration].rate[2] = items*size/(t[3] - t[2]);
-        summary_table[iteration].time[2] = t[3] - t[2];
-        summary_table[iteration].items[2] = items*size;
-        summary_table[iteration].stonewall_last_item[2] = items;
-    }
-    if (remove_only) {
-        summary_table[iteration].rate[3] = items*size/(t[4] - t[3]);
-        summary_table[iteration].time[3] = t[4] - t[3];
-        summary_table[iteration].items[3] = items*size;
-        summary_table[iteration].stonewall_last_item[3] = items;
-    }
-
-    VERBOSE(1,-1,"   Directory creation: %14.3f sec, %14.3f ops/sec", t[1] - t[0], summary_table[iteration].rate[0]);
-    VERBOSE(1,-1,"   Directory stat    : %14.3f sec, %14.3f ops/sec", t[2] - t[1], summary_table[iteration].rate[1]);
-    /* N/A
-    VERBOSE(1,-1,"   Directory read    : %14.3f sec, %14.3f ops/sec", t[3] - t[2], summary_table[iteration].rate[2]);
-    */
-    VERBOSE(1,-1,"   Directory removal : %14.3f sec, %14.3f ops/sec", t[4] - t[3], summary_table[iteration].rate[3]);
+    VERBOSE(1,-1,"   Directory creation: %14.3f sec, %14.3f ops/sec", res->time[MDTEST_DIR_CREATE_NUM], o.summary_table[iteration].rate[MDTEST_DIR_CREATE_NUM]);
+    VERBOSE(1,-1,"   Directory stat    : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_DIR_STAT_NUM], o.summary_table[iteration].rate[MDTEST_DIR_STAT_NUM]);
+    VERBOSE(1,-1,"   Directory rename : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_DIR_RENAME_NUM], o.summary_table[iteration].rate[MDTEST_DIR_RENAME_NUM]);
+    VERBOSE(1,-1,"   Directory removal : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_DIR_REMOVE_NUM], o.summary_table[iteration].rate[MDTEST_DIR_REMOVE_NUM]);
 }
 
 /* Returns if the stonewall was hit */
-int updateStoneWallIterations(int iteration, rank_progress_t * progress, double tstart){
+int updateStoneWallIterations(int iteration, uint64_t items_done, double tstart, uint64_t * out_max_iter){
   int hit = 0;
-  uint64_t done = progress->items_done;
   long long unsigned max_iter = 0;
 
-  VERBOSE(1,1,"stonewall hit with %lld items", (long long) progress->items_done );
-  MPI_Allreduce(& progress->items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
-  summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = GetTimeStamp() - tstart;
+  VERBOSE(1,1,"stonewall hit with %lld items", (long long) items_done );
+  MPI_Allreduce(& items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
+  o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = GetTimeStamp() - tstart;
+  o.summary_table[iteration].stonewall_last_item[MDTEST_FILE_CREATE_NUM] = items_done;
+  *out_max_iter = max_iter;
 
   // continue to the maximum...
   long long min_accessed = 0;
-  MPI_Reduce(& progress->items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm);
+  MPI_Reduce(& items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm);
   long long sum_accessed = 0;
-  MPI_Reduce(& progress->items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
-  summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
-  summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * size;
+  MPI_Reduce(& items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
+  o.summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
+  o.summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * o.size;
 
-  if(items != (sum_accessed / size)){
-    VERBOSE(0,-1, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / size);
+  if(o.items != (sum_accessed / o.size)){
+    VERBOSE(0,-1, "Continue stonewall hit min: %lld max: %lld avg: %.1f \n", min_accessed, max_iter, ((double) sum_accessed) / o.size);
     hit = 1;
   }
-  progress->items_start = done;
-  progress->items_per_dir = max_iter;
 
   return hit;
 }
 
+void file_test_create(const int iteration, const int ntasks, const char *path, rank_progress_t * progress, double *t_start){
+  char temp_path[MAX_PATHLEN];
+  for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
+    prep_testdir(iteration, dir_iter);
+
+    if (o.unique_dir_per_task) {
+        unique_dir_access(MK_UNI_DIR, temp_path);
+        VERBOSE(5,5,"operating on %s", temp_path);
+        if (! o.time_unique_dir_overhead) {
+            *t_start = GetTimeStamp();
+        }
+    } else {
+        sprintf( temp_path, "%s/%s", o.testdir, path );
+    }
+
+    VERBOSE(3,-1,"file_test: create path is '%s'", temp_path );
+    /* "touch" the files */
+    if (o.collective_creates) {
+        if (rank == 0) {
+            collective_create_remove(1, 0, ntasks, temp_path, progress);
+        }
+        MPI_Barrier(testComm);
+    }
+
+    /* create files */
+    create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
+    if(o.stone_wall_timer_seconds){
+      // hit the stonewall
+      uint64_t max_iter = 0;
+      uint64_t items_done = progress->items_done + dir_iter * o.items_per_dir;
+      int hit = updateStoneWallIterations(iteration, items_done, *t_start, & max_iter);
+      progress->items_start = items_done;
+      progress->items_per_dir = max_iter;
+      if (hit){
+        progress->stone_wall_timer_seconds = 0;
+        VERBOSE(1,1,"stonewall: %lld of %lld", (long long) progress->items_start, (long long) progress->items_per_dir);
+        create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
+        // now reset the values
+        progress->stone_wall_timer_seconds = o.stone_wall_timer_seconds;
+        o.items = progress->items_done;
+      }
+      if (o.stoneWallingStatusFile){
+        StoreStoneWallingIterations(o.stoneWallingStatusFile, max_iter);
+      }
+      // reset stone wall timer to allow proper cleanup
+      progress->stone_wall_timer_seconds = 0;
+      // at the moment, stonewall can be done only with one directory_loop, so we can return here safely
+      break;
+    }
+  }
+}
+
 void file_test(const int iteration, const int ntasks, const char *path, rank_progress_t * progress) {
     int size;
-    double t[5] = {0};
+    double t_start, t_end, t_end_before_barrier;
     char temp_path[MAX_PATHLEN];
+    mdtest_results_t * res = & o.summary_table[iteration];
+
     MPI_Comm_size(testComm, &size);
 
     VERBOSE(3,5,"Entering file_test on %s", path);
 
     MPI_Barrier(testComm);
-    t[0] = GetTimeStamp();
 
     /* create phase */
-    if (create_only ) {
-      progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
+    if (o.create_only ) {
+      phase_prepare();
+      t_start = GetTimeStamp();
+      progress->stone_wall_timer_seconds = o.stone_wall_timer_seconds;
       progress->items_done = 0;
       progress->start_time = GetTimeStamp();
-
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
-        prep_testdir(iteration, dir_iter);
-
-        if (unique_dir_per_task) {
-            unique_dir_access(MK_UNI_DIR, temp_path);
-            VERBOSE(5,5,"operating on %s", temp_path);
-            if (!time_unique_dir_overhead) {
-                offset_timers(t, 0);
-            }
-        } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
-        }
-
-        VERBOSE(3,-1,"file_test: create path is '%s'", temp_path );
-
-        /* "touch" the files */
-        if (collective_creates) {
-            if (rank == 0) {
-                collective_create_remove(1, 0, ntasks, temp_path, progress);
-            }
-            MPI_Barrier(testComm);
-        }
-
-        /* create files */
-        create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
-        if(stone_wall_timer_seconds){
-	        int hit = updateStoneWallIterations(iteration, progress, t[0]);
-
-          if (hit){
-            progress->stone_wall_timer_seconds = 0;
-            VERBOSE(1,1,"stonewall: %lld of %lld", (long long) progress->items_start, (long long) progress->items_per_dir);
-            create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
-            // now reset the values
-            progress->stone_wall_timer_seconds = stone_wall_timer_seconds;
-            items = progress->items_done;
-          }
-          if (stoneWallingStatusFile){
-            StoreStoneWallingIterations(stoneWallingStatusFile, progress->items_done);
-          }
-          // reset stone wall timer to allow proper cleanup
-          progress->stone_wall_timer_seconds = 0;
-        }
-      }
+      file_test_create(iteration, ntasks, path, progress, &t_start);
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_FILE_CREATE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }else{
-      if (stoneWallingStatusFile){
+      if (o.stoneWallingStatusFile){
         int64_t expected_items;
         /* The number of items depends on the stonewalling file */
-        expected_items = ReadStoneWallingIterations(stoneWallingStatusFile);
+        expected_items = ReadStoneWallingIterations(o.stoneWallingStatusFile, testComm);
         if(expected_items >= 0){
-          items = expected_items;
-          progress->items_per_dir = items;
+          if(o.directory_loops > 1){
+            o.directory_loops = expected_items / o.items_per_dir;
+            o.items = o.items_per_dir;
+          }else{
+            o.items = expected_items;
+            progress->items_per_dir = o.items;
+          }
         }
         if (rank == 0) {
           if(expected_items == -1){
             WARN("Could not read stonewall status file");
           }else {
-            VERBOSE(1,1, "Read stonewall status; items: "LLU"\n", items);
+            VERBOSE(1,1, "Read stonewall status; items: "LLU"\n", o.items);
           }
         }
       }
     }
 
-    phase_end();
-    t[1] = GetTimeStamp();
-
     /* stat phase */
-    if (stat_only ) {
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+    if (o.stat_only ) {
+      phase_prepare();
+      t_start = GetTimeStamp();
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
-        if (unique_dir_per_task) {
+        if (o.unique_dir_per_task) {
             unique_dir_access(STAT_SUB_DIR, temp_path);
-            if (!time_unique_dir_overhead) {
-                offset_timers(t, 1);
+            if (!o.time_unique_dir_overhead) {
+                t_start = GetTimeStamp();
             }
         } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
+            sprintf( temp_path, "%s/%s", o.testdir, path );
         }
 
         VERBOSE(3,5,"file_test: stat path is '%s'", temp_path );
 
         /* stat files */
-        mdtest_stat((random_seed > 0 ? 1 : 0), 0, dir_iter, temp_path, progress);
+        mdtest_stat((o.random_seed > 0 ? 1 : 0), 0, dir_iter, temp_path, progress);
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_FILE_STAT_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
-    phase_end();
-    t[2] = GetTimeStamp();
-
     /* read phase */
-    if (read_only ) {
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+    if (o.read_only ) {
+      phase_prepare();
+      t_start = GetTimeStamp();
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
-        if (unique_dir_per_task) {
+        if (o.unique_dir_per_task) {
             unique_dir_access(READ_SUB_DIR, temp_path);
-            if (!time_unique_dir_overhead) {
-                offset_timers(t, 2);
+            if (! o.time_unique_dir_overhead) {
+                t_start = GetTimeStamp();
             }
         } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
+            sprintf( temp_path, "%s/%s", o.testdir, path );
         }
 
         VERBOSE(3,5,"file_test: read path is '%s'", temp_path );
 
         /* read files */
-        if (random_seed > 0) {
+        if (o.random_seed > 0) {
                 mdtest_read(1,0, dir_iter, temp_path);
         } else {
                 mdtest_read(0,0, dir_iter, temp_path);
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_FILE_READ_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
-    phase_end();
-    t[3] = GetTimeStamp();
-
-    if (remove_only) {
+    /* remove phase */
+    if (o.remove_only) {
+      phase_prepare();
+      t_start = GetTimeStamp();
       progress->items_start = 0;
 
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
-        if (unique_dir_per_task) {
+        if (o.unique_dir_per_task) {
             unique_dir_access(RM_SUB_DIR, temp_path);
-            if (!time_unique_dir_overhead) {
-                offset_timers(t, 3);
+            if (! o.time_unique_dir_overhead) {
+                t_start = GetTimeStamp();
             }
         } else {
-            sprintf( temp_path, "%s/%s", testdir, path );
+            sprintf( temp_path, "%s/%s", o.testdir, path );
         }
 
         VERBOSE(3,5,"file_test: rm directories path is '%s'", temp_path );
 
-        if (collective_creates) {
+        if (o.collective_creates) {
             if (rank == 0) {
                 collective_create_remove(0, 0, ntasks, temp_path, progress);
             }
@@ -1196,12 +1316,14 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
             create_remove_items(0, 0, 0, 0, temp_path, 0, progress);
         }
       }
+      t_end_before_barrier = GetTimeStamp();
+      phase_end();
+      t_end = GetTimeStamp();
+      updateResult(res, MDTEST_FILE_REMOVE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
-    phase_end();
-    t[4] = GetTimeStamp();
-    if (remove_only) {
-        if (unique_dir_per_task) {
+    if (o.remove_only) {
+        if (o.unique_dir_per_task) {
             unique_dir_access(RM_UNI_DIR, temp_path);
         } else {
             strcpy( temp_path, path );
@@ -1210,225 +1332,391 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         VERBOSE(3,5,"file_test: rm unique directories path is '%s'", temp_path );
     }
 
-    if (unique_dir_per_task && !time_unique_dir_overhead) {
-        offset_timers(t, 4);
+    if(o.num_dirs_in_tree_calc){ /* this is temporary fix needed when using -n and -i together */
+      o.items *= o.num_dirs_in_tree_calc;
     }
 
-    if(num_dirs_in_tree_calc){ /* this is temporary fix needed when using -n and -i together */
-      items *= num_dirs_in_tree_calc;
+    VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_CREATE_NUM], o.summary_table[iteration].rate[4]);
+    if(o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM]){
+      VERBOSE(1,-1,"  File creation (stonewall): %14.3f sec, %14.3f ops/sec", o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM], o.summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM]);
     }
-
-    /* calculate times */
-    if (create_only) {
-        summary_table[iteration].rate[4] = items*size/(t[1] - t[0]);
-        summary_table[iteration].time[4] = t[1] - t[0];
-        summary_table[iteration].items[4] = items*size;
-        summary_table[iteration].stonewall_last_item[4] = items;
-    }
-    if (stat_only) {
-        summary_table[iteration].rate[5] = items*size/(t[2] - t[1]);
-        summary_table[iteration].time[5] = t[2] - t[1];
-        summary_table[iteration].items[5] = items*size;
-        summary_table[iteration].stonewall_last_item[5] = items;
-    }
-    if (read_only) {
-        summary_table[iteration].rate[6] = items*size/(t[3] - t[2]);
-        summary_table[iteration].time[6] = t[3] - t[2];
-        summary_table[iteration].items[6] = items*size;
-        summary_table[iteration].stonewall_last_item[6] = items;
-    }
-    if (remove_only) {
-        summary_table[iteration].rate[7] = items*size/(t[4] - t[3]);
-        summary_table[iteration].time[7] = t[4] - t[3];
-        summary_table[iteration].items[7] = items*size;
-        summary_table[iteration].stonewall_last_item[7] = items;
-    }
-
-    VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", t[1] - t[0], summary_table[iteration].rate[4]);
-    if(summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM]){
-      VERBOSE(1,-1,"  File creation (stonewall): %14.3f sec, %14.3f ops/sec", summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM], summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM]);
-    }
-    VERBOSE(1,-1,"  File stat         : %14.3f sec, %14.3f ops/sec", t[2] - t[1], summary_table[iteration].rate[5]);
-    VERBOSE(1,-1,"  File read         : %14.3f sec, %14.3f ops/sec", t[3] - t[2], summary_table[iteration].rate[6]);
-    VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", t[4] - t[3], summary_table[iteration].rate[7]);
+    VERBOSE(1,-1,"  File stat         : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_STAT_NUM], o.summary_table[iteration].rate[5]);
+    VERBOSE(1,-1,"  File read         : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_READ_NUM], o.summary_table[iteration].rate[6]);
+    VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_REMOVE_NUM], o.summary_table[iteration].rate[7]);
 }
 
-void summarize_results(int iterations, int print_time) {
-    char access[MAX_PATHLEN];
-    int i, j, k;
-    int start, stop, tableSize = MDTEST_LAST_NUM;
-    double min, max, mean, sd, sum = 0, var = 0, curr = 0;
+char const * mdtest_test_name(int i){
+  switch (i) {
+  case MDTEST_DIR_CREATE_NUM: return "Directory creation";
+  case MDTEST_DIR_STAT_NUM:   return "Directory stat";
+  case MDTEST_DIR_READ_NUM:   return "Directory read";
+  case MDTEST_DIR_REMOVE_NUM: return "Directory removal";
+  case MDTEST_DIR_RENAME_NUM: return "Directory rename";
+  case MDTEST_FILE_CREATE_NUM: return "File creation";
+  case MDTEST_FILE_STAT_NUM:   return "File stat";
+  case MDTEST_FILE_READ_NUM:   return "File read";
+  case MDTEST_FILE_REMOVE_NUM: return "File removal";
+  case MDTEST_TREE_CREATE_NUM: return "Tree creation";
+  case MDTEST_TREE_REMOVE_NUM: return "Tree removal";
+  default: return "ERR INVALID TESTNAME      :";
+  }
+  return NULL;
+}
 
-    double all[iterations * size * tableSize];
+/*
+ * Store the results of each process in a file
+ */
+static void StoreRankInformation(int iterations, mdtest_results_t * agg){
+  const size_t size = sizeof(mdtest_results_t) * iterations;
+  if(rank == 0){
+    FILE* fd = fopen(o.saveRankDetailsCSV, "a");
+    if (fd == NULL){
+      FAIL("Cannot open saveRankPerformanceDetails file for writes!");
+    }
 
+    mdtest_results_t * results = safeMalloc(size * o.size);
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
 
-    VERBOSE(1,-1,"Entering summarize_results..." );
-
-    MPI_Barrier(testComm);
-    for(int i=0; i < iterations; i++){
-      if(print_time){
-        MPI_Gather(& summary_table[i].time[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
+    char buff[4096];
+    char * cpos = buff;
+    cpos += sprintf(cpos, "all,%llu", (long long unsigned) o.items);
+    for(int e = 0; e < MDTEST_LAST_NUM; e++){
+      if(agg->items[e] == 0){
+        cpos += sprintf(cpos, ",,");
       }else{
-        MPI_Gather(& summary_table[i].rate[0], tableSize, MPI_DOUBLE, & all[i*tableSize*size], tableSize, MPI_DOUBLE, 0, testComm);
+        cpos += sprintf(cpos, ",%.10e,%.10e", agg->items[e] / agg->time[e], agg->time[e]);
       }
     }
+    cpos += sprintf(cpos, "\n");
+    int ret = fwrite(buff, cpos - buff, 1, fd);
 
-    if (rank != 0) {
-      return;
-    }
-
-    VERBOSE(0,-1,"\nSUMMARY %s: (of %d iterations)", print_time ? "time": "rate", iterations);
-    VERBOSE(0,-1,"   Operation                      Max            Min           Mean        Std Dev");
-    VERBOSE(0,-1,"   ---------                      ---            ---           ----        -------");
-
-    /* if files only access, skip entries 0-3 (the dir tests) */
-    if (files_only && !dirs_only) {
-        start = 4;
-    } else {
-        start = 0;
-    }
-
-    /* if directories only access, skip entries 4-7 (the file tests) */
-    if (dirs_only && !files_only) {
-        stop = 4;
-    } else {
-        stop = 8;
-    }
-
-    /* special case: if no directory or file tests, skip all */
-    if (!dirs_only && !files_only) {
-        start = stop = 0;
-    }
-
-    for (i = start; i < stop; i++) {
-            min = max = all[i];
-            for (k=0; k < size; k++) {
-                for (j = 0; j < iterations; j++) {
-                    curr = all[(k*tableSize*iterations)
-                               + (j*tableSize) + i];
-                    if (min > curr) {
-                        min = curr;
-                    }
-                    if (max < curr) {
-                        max =  curr;
-                    }
-                    sum += curr;
-                }
-            }
-            mean = sum / (iterations * size);
-            for (k=0; k<size; k++) {
-                for (j = 0; j < iterations; j++) {
-                    var += pow((mean -  all[(k*tableSize*iterations)
-                                            + (j*tableSize) + i]), 2);
-                }
-            }
-            var = var / (iterations * size);
-            sd = sqrt(var);
-            switch (i) {
-            case 0: strcpy(access, "Directory creation        :"); break;
-            case 1: strcpy(access, "Directory stat            :"); break;
-                /* case 2: strcpy(access, "Directory read    :"); break; */
-            case 2: ;                                      break; /* N/A */
-            case 3: strcpy(access, "Directory removal         :"); break;
-            case 4: strcpy(access, "File creation             :"); break;
-            case 5: strcpy(access, "File stat                 :"); break;
-            case 6: strcpy(access, "File read                 :"); break;
-            case 7: strcpy(access, "File removal              :"); break;
-            default: strcpy(access, "ERR");                 break;
-            }
-            if (i != 2) {
-                fprintf(out_logfile, "   %s ", access);
-                fprintf(out_logfile, "%14.3f ", max);
-                fprintf(out_logfile, "%14.3f ", min);
-                fprintf(out_logfile, "%14.3f ", mean);
-                fprintf(out_logfile, "%14.3f\n", sd);
-                fflush(out_logfile);
-            }
-            sum = var = 0;
-
-    }
-
-    // TODO generalize once more stonewall timers are supported
-    double stonewall_time = 0;
-    uint64_t stonewall_items = 0;
-    for(int i=0; i < iterations; i++){
-      if(summary_table[i].stonewall_time[MDTEST_FILE_CREATE_NUM]){
-        stonewall_time += summary_table[i].stonewall_time[MDTEST_FILE_CREATE_NUM];
-        stonewall_items += summary_table[i].stonewall_item_sum[MDTEST_FILE_CREATE_NUM];
+    for(int iter = 0; iter < iterations; iter++){
+      for(int i=0; i < o.size; i++){
+        mdtest_results_t * cur = & results[i * iterations + iter];
+        cpos = buff;
+        cpos += sprintf(cpos, "%d,", i);
+        for(int e = 0; e < MDTEST_TREE_CREATE_NUM; e++){
+          if(cur->items[e] == 0){
+            cpos += sprintf(cpos, ",,");
+          }else{
+            cpos += sprintf(cpos, ",%.10e,%.10e", cur->items[e] / cur->time_before_barrier[e], cur->time_before_barrier[e]);
+          }
+        }
+        cpos += sprintf(cpos, "\n");
+        ret = fwrite(buff, cpos - buff, 1, fd);
+        if(ret != 1){
+          WARN("Couln't append to saveRankPerformanceDetailsCSV file\n");
+          break;
+        }
       }
     }
-    if(stonewall_items != 0){
-      fprintf(out_logfile, "   File create (stonewall)   : ");
-      fprintf(out_logfile, "%14s %14s %14.3f %14s\n", "NA", "NA", print_time ? stonewall_time :  stonewall_items / stonewall_time, "NA");
+    fclose(fd);
+    free(results);
+  }else{
+    /* this is a hack for now assuming all datatypes in the structure are double */
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+  }
+}
+
+static mdtest_results_t* get_result_index(mdtest_results_t* all_results, int proc, int iter, int interation_count){
+  return & all_results[proc * interation_count + iter];
+}
+
+static void summarize_results_rank0(int iterations,  mdtest_results_t * all_results, int print_time) {
+  int start, stop;
+  double min, max, mean, sd, sum, var, curr = 0;
+  double imin, imax, imean, isum, icur; // calculation per iteration
+  char const * access;
+  /* if files only access, skip entries 0-3 (the dir tests) */
+  if (o.files_only && ! o.dirs_only) {
+      start = MDTEST_FILE_CREATE_NUM;
+  } else {
+      start = 0;
+  }
+
+  /* if directories only access, skip entries 4-7 (the file tests) */
+  if (o.dirs_only && !o.files_only) {
+      stop = MDTEST_FILE_CREATE_NUM;
+  } else {
+      stop = MDTEST_TREE_CREATE_NUM;
+  }
+
+  /* special case: if no directory or file tests, skip all */
+  if (!o.dirs_only && !o.files_only) {
+      start = stop = 0;
+  }
+
+  if(o.print_all_proc){
+    fprintf(out_logfile, "\nPer process result (%s):\n", print_time ? "time" : "rate");
+    for (int j = 0; j < iterations; j++) {
+      fprintf(out_logfile, "iteration: %d\n", j);
+      for (int i = start; i < MDTEST_LAST_NUM; i++) {
+        access = mdtest_test_name(i);
+        if(access == NULL){
+          continue;
+        }
+        fprintf(out_logfile, "Test %s", access);
+        for (int k=0; k < o.size; k++) {
+          mdtest_results_t * cur = get_result_index(all_results, k, j, iterations);
+          if(print_time){
+            curr = cur->time_before_barrier[i];
+          }else{
+            curr = cur->rate_before_barrier[i];
+          }
+          fprintf(out_logfile, "%c%e", (k==0 ? ' ': ','), curr);
+        }
+        fprintf(out_logfile, "\n");
+      }
     }
+  }
 
-    /* calculate tree create/remove rates */
-    for (i = 8; i < tableSize; i++) {
-        min = max = all[i];
-        for (j = 0; j < iterations; j++) {
-            if(print_time){
-              curr = summary_table[j].time[i];
-            }else{
-              curr = summary_table[j].rate[i];
-            }
+  VERBOSE(0, -1, "\nSUMMARY %s: (of %d iterations)", print_time ? "time" : "rate", iterations);
+  PRINT("   Operation     ");
+  if(o.show_perrank_statistics){
+    PRINT("per Rank: Max            Min           Mean      per Iteration:");
+  }else{
+    PRINT("               ");
+  }
+  PRINT(" Max            Min           Mean        Std Dev\n");
+  PRINT("   ---------      ");
 
-            if (min > curr) {
-                min = curr;
-            }
-            if (max < curr) {
-                max =  curr;
-            }
-            sum += curr;
+  if(o.show_perrank_statistics){
+    PRINT("         ---            ---           ----       ");
+  }  
+  PRINT("               ---            ---           ----        -------\n");
+  for (int i = start; i < stop; i++) {
+    min = 1e308;
+    max = 0;
+    sum = var = 0;
+    imin = 1e308;
+    isum = imax = 0;
+    double iter_result[iterations];
+    for (int j = 0; j < iterations; j++) {
+      icur = print_time ? 0 : 1e308;
+      for (int k = 0; k < o.size; k++) {
+        mdtest_results_t * cur = get_result_index(all_results, k, j, iterations);
+        if(print_time){
+          curr = cur->time_before_barrier[i];
+        }else{
+          curr = cur->rate_before_barrier[i];
         }
-        mean = sum / (iterations);
-        for (j = 0; j < iterations; j++) {
-            if(print_time){
-              curr = summary_table[j].time[i];
-            }else{
-              curr = summary_table[j].rate[i];
-            }
+        if (min > curr) {
+          min = curr;
+        }
+        if (max < curr) {
+          max = curr;
+        }
+        sum += curr;
 
-            var += pow((mean -  curr), 2);
+        if (print_time) {
+          curr = cur->time[i];
+          if (icur < curr) {
+            icur = curr;
+          }
+        } else {
+          curr = cur->rate[i];
+          if (icur > curr) {
+            icur = curr;
+          }
         }
-        var = var / (iterations);
-        sd = sqrt(var);
-        switch (i) {
-        case 8: strcpy(access, "Tree creation             :"); break;
-        case 9: strcpy(access, "Tree removal              :"); break;
-        default: strcpy(access, "ERR");                 break;
-        }
-        fprintf(out_logfile, "   %s ", access);
+      }
+
+      if (icur > imax) {
+        imax = icur;
+      }
+      if (icur < imin) {
+        imin = icur;
+      }
+      isum += icur;
+      if(print_time){
+        iter_result[j] = icur;
+      }else{
+        iter_result[j] = icur * o.size;
+      }
+    }
+    mean = sum / iterations / o.size;
+    imean = isum / iterations;
+    if(! print_time){
+      imax *= o.size;
+      imin *= o.size;
+      isum *= o.size;
+      imean *= o.size;
+    }
+    for (int j = 0; j < iterations; j++) {
+      var += (imean - iter_result[j]) * (imean - iter_result[j]);
+    }
+    var = var / (iterations - 1);
+    sd = sqrt(var);
+    access = mdtest_test_name(i);
+    if (i != 2) {
+      fprintf(out_logfile, "   %-18s ", access);
+      
+      if(o.show_perrank_statistics){
         fprintf(out_logfile, "%14.3f ", max);
         fprintf(out_logfile, "%14.3f ", min);
         fprintf(out_logfile, "%14.3f ", mean);
-        fprintf(out_logfile, "%14.3f\n", sd);
-        fflush(out_logfile);
-        sum = var = 0;
+        fprintf(out_logfile, "    ");        
+      }      
+      fprintf(out_logfile, "    ");
+      fprintf(out_logfile, "%14.3f ", imax);
+      fprintf(out_logfile, "%14.3f ", imin);
+      fprintf(out_logfile, "%14.3f ", imean);
+      fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
+      fflush(out_logfile);
     }
+  }
+
+  /* calculate tree create/remove rates, applies only to Rank 0 */
+  for (int i = MDTEST_TREE_CREATE_NUM; i < MDTEST_LAST_NUM; i++) {
+      min = imin = 1e308;
+      max = imax = 0;
+      sum = var = 0;
+      for (int j = 0; j < iterations; j++) {
+          if(print_time){
+            curr = o.summary_table[j].time[i];
+          }else{
+            curr = o.summary_table[j].rate[i];
+          }
+          if (min > curr) {
+            min = curr;
+          }
+          if (max < curr) {
+            max =  curr;
+          }
+          sum += curr;
+          if(curr > imax){
+            imax = curr;
+          }
+          if(curr < imin){
+            imin = curr;
+          }
+      }
+
+      mean = sum / (iterations);
+
+      for (int j = 0; j < iterations; j++) {
+          if(print_time){
+            curr = o.summary_table[j].time[i];
+          }else{
+            curr = o.summary_table[j].rate[i];
+          }
+          var += (mean -  curr)*(mean -  curr);
+      }
+      var = var / (iterations - 1);
+      sd = sqrt(var);
+      access = mdtest_test_name(i);
+      fprintf(out_logfile, "   %-22s ", access);
+      if(o.show_perrank_statistics){
+        fprintf(out_logfile, "%14.3f ", max);
+        fprintf(out_logfile, "%14.3f ", min);
+        fprintf(out_logfile, "%14.3f ", mean);
+        fprintf(out_logfile, "    ");
+      }
+      fprintf(out_logfile, "%14.3f ", imax);
+      fprintf(out_logfile, "%14.3f ", imin);
+      fprintf(out_logfile, "%14.3f ", sum / iterations);
+      fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
+      fflush(out_logfile);
+  }
+}
+
+/*
+ Output the results and summarize them into rank 0's o.summary_table
+ */
+void summarize_results(int iterations, mdtest_results_t * results) {
+  const size_t size = sizeof(mdtest_results_t) * iterations;
+  mdtest_results_t * all_results = NULL;
+  if(rank == 0){
+    all_results = safeMalloc(size * o.size);
+    memset(all_results, 0, size * o.size);
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, all_results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+    // calculate the aggregated values for all processes
+    for(int j=0; j < iterations; j++){
+      for(int i=0; i < MDTEST_LAST_NUM; i++){
+        //double sum_rate = 0;
+        double max_time = 0;
+        double max_stonewall_time = 0;
+        uint64_t sum_items = 0;
+
+        // reduce over the processes
+        for(int p=0; p < o.size; p++){
+          mdtest_results_t * cur = get_result_index(all_results, p, j, iterations);
+          //sum_rate += all_results[p + j*p]->rate[i];
+          double t = cur->time[i];
+          max_time = max_time < t ? t : max_time;
+
+          sum_items += cur->items[i];
+
+          t = cur->stonewall_time[i];
+          max_stonewall_time = max_stonewall_time < t ? t : max_stonewall_time;
+        }
+
+        results[j].items[i] = sum_items;
+        results[j].time[i] = max_time;
+        results[j].stonewall_time[i] = max_stonewall_time;
+        if(sum_items == 0){
+          results[j].rate[i] = 0.0;
+        }else{
+          results[j].rate[i] = sum_items / max_time;
+        }
+
+        /* These results have already been reduced to Rank 0 */
+        results[j].stonewall_item_sum[i] = o.summary_table[j].stonewall_item_sum[i];
+        results[j].stonewall_item_min[i] = o.summary_table[j].stonewall_item_min[i];
+        results[j].stonewall_time[i] = o.summary_table[j].stonewall_time[i];
+      }
+    }
+  }else{
+    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+  }
+
+  /* share global results across processes as these are returned by the API */
+  MPI_Bcast(results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+
+  /* update relevant result values with local values as these are returned by the API */
+  for(int j=0; j < iterations; j++){
+    for(int i=0; i < MDTEST_LAST_NUM; i++){
+      results[j].time_before_barrier[i] = o.summary_table[j].time_before_barrier[i];
+      results[j].stonewall_last_item[i] = o.summary_table[j].stonewall_last_item[i];
+    }
+  }
+
+  if(rank != 0){
+    return;
+  }
+
+  if (o.print_rate_and_time){
+    summarize_results_rank0(iterations, all_results, 0);
+    summarize_results_rank0(iterations, all_results, 1);
+  }else{
+    summarize_results_rank0(iterations, all_results, o.print_time);
+  }
+
+  free(all_results);
 }
 
 /* Checks to see if the test setup is valid.  If it isn't, fail. */
 void md_validate_tests() {
 
-    if (((stone_wall_timer_seconds > 0) && (branch_factor > 1)) || ! barriers) {
-        FAIL( "Error, stone wall timer does only work with a branch factor <= 1 (current is %d) and with barriers\n", branch_factor);
+    if (((o.stone_wall_timer_seconds > 0) && (o.branch_factor > 1)) || ! o.barriers) {
+        FAIL( "Error, stone wall timer does only work with a branch factor <= 1 (current is %d) and with barriers\n", o.branch_factor);
     }
 
-    if (!create_only && !stat_only && !read_only && !remove_only) {
-        create_only = stat_only = read_only = remove_only = 1;
+    if (!o.create_only && ! o.stat_only && ! o.read_only && !o.remove_only && !o.rename_dirs) {
+        o.create_only = o.stat_only = o.read_only = o.remove_only = o.rename_dirs = 1;
         VERBOSE(1,-1,"main: Setting create/stat/read/remove_only to True" );
     }
 
     VERBOSE(1,-1,"Entering md_validate_tests..." );
 
     /* if dirs_only and files_only were both left unset, set both now */
-    if (!dirs_only && !files_only) {
-        dirs_only = files_only = 1;
+    if (!o.dirs_only && !o.files_only) {
+        o.dirs_only = o.files_only = 1;
     }
 
     /* if shared file 'S' access, no directory tests */
-    if (shared_file) {
-        dirs_only = 0;
+    if (o.shared_file) {
+        o.dirs_only = 0;
     }
 
     /* check for no barriers with shifting processes for different phases.
@@ -1436,75 +1724,95 @@ void md_validate_tests() {
        race conditions that may cause errors stat'ing or deleting after
        creates.
     */
-    if (( barriers == 0 ) && ( nstride != 0 ) && ( rank == 0 )) {
+    if (( o.barriers == 0 ) && ( o.nstride != 0 ) && ( rank == 0 )) {
         FAIL( "Possible race conditions will occur: -B not compatible with -N");
     }
 
     /* check for collective_creates incompatibilities */
-    if (shared_file && collective_creates && rank == 0) {
+    if (o.shared_file && o.collective_creates && rank == 0) {
         FAIL("-c not compatible with -S");
     }
-    if (path_count > 1 && collective_creates && rank == 0) {
+    if (o.path_count > 1 && o.collective_creates && rank == 0) {
         FAIL("-c not compatible with multiple test directories");
     }
-    if (collective_creates && !barriers) {
+    if (o.collective_creates && !o.barriers) {
         FAIL("-c not compatible with -B");
     }
 
     /* check for shared file incompatibilities */
-    if (unique_dir_per_task && shared_file && rank == 0) {
+    if (o.unique_dir_per_task && o.shared_file && rank == 0) {
         FAIL("-u not compatible with -S");
     }
 
     /* check multiple directory paths and strided option */
-    if (path_count > 1 && nstride > 0) {
+    if (o.path_count > 1 && o.nstride > 0) {
         FAIL("cannot have multiple directory paths with -N strides between neighbor tasks");
     }
 
     /* check for shared directory and multiple directories incompatibility */
-    if (path_count > 1 && unique_dir_per_task != 1) {
+    if (o.path_count > 1 && o.unique_dir_per_task != 1) {
         FAIL("shared directory mode is not compatible with multiple directory paths");
     }
 
     /* check if more directory paths than ranks */
-    if (path_count > size) {
+    if (o.path_count > o.size) {
         FAIL("cannot have more directory paths than MPI tasks");
     }
 
     /* check depth */
-    if (depth < 0) {
+    if (o.depth < 0) {
             FAIL("depth must be greater than or equal to zero");
     }
     /* check branch_factor */
-    if (branch_factor < 1 && depth > 0) {
+    if (o.branch_factor < 1 && o.depth > 0) {
             FAIL("branch factor must be greater than or equal to zero");
     }
     /* check for valid number of items */
-    if ((items > 0) && (items_per_dir > 0)) {
-       if(unique_dir_per_task){
+    if ((o.items > 0) && (o.items_per_dir > 0)) {
+       if(o.unique_dir_per_task){
          FAIL("only specify the number of items or the number of items per directory");
-       }else if( items % items_per_dir != 0){
+       }else if( o.items % o.items_per_dir != 0){
          FAIL("items must be a multiple of items per directory");
-       }else if( stone_wall_timer_seconds != 0){
-         FAIL("items + items_per_dir can only be set without stonewalling");
        }
     }
     /* check for using mknod */
-    if (write_bytes > 0 && make_node) {
+    if (o.write_bytes > 0 && o.make_node) {
         FAIL("-k not compatible with -w");
     }
 
-    if(verify_read && ! read_only)
+    if(o.verify_read && ! o.read_only)
       FAIL("Verify read requires that the read test is used");
 
-    if(verify_read && read_bytes <= 0)
+    if(o.verify_read && o.read_bytes <= 0)
       FAIL("Verify read requires that read bytes is > 0");
 
-    if(read_only && read_bytes <= 0)
+    if(o.read_only && o.read_bytes <= 0)
       WARN("Read bytes is 0, thus, a read test will actually just open/close");
 
-    if(create_only && read_only && read_bytes > write_bytes)
+    if(o.create_only && o.read_only && o.read_bytes > o.write_bytes)
       FAIL("When writing and reading files, read bytes must be smaller than write bytes");
+
+    if (rank == 0 && o.saveRankDetailsCSV){
+      // check that the file is writeable, truncate it and add header
+      FILE* fd = fopen(o.saveRankDetailsCSV, "w");
+      if (fd == NULL){
+        FAIL("Cannot open saveRankPerformanceDetails file for write!");
+      }
+      char * head = "rank,items";
+      int ret = fwrite(head, strlen(head), 1, fd);
+      for(int e = 0; e < MDTEST_LAST_NUM; e++){
+        char buf[1024];
+        const char * str = mdtest_test_name(e);
+
+        sprintf(buf, ",rate-%s,time-%s", str, str);
+        ret = fwrite(buf, strlen(buf), 1, fd);
+        if(ret != 1){
+          FAIL("Cannot write header to saveRankPerformanceDetails file");
+        }
+      }
+      fwrite("\n", 1, 1, fd);
+      fclose(fd);
+    }
 }
 
 void show_file_system_size(char *file_system) {
@@ -1525,7 +1833,7 @@ void show_file_system_size(char *file_system) {
 
     VERBOSE(1,-1,"Entering show_file_system_size on %s", file_system );
 
-    ret = backend->statfs (file_system, &stat_buf, backend_options);
+    ret = o.backend->statfs (file_system, &stat_buf, o.backend_options);
     if (0 != ret) {
         FAIL("unable to stat file system %s", file_system);
     }
@@ -1563,39 +1871,6 @@ void show_file_system_size(char *file_system) {
     return;
 }
 
-void display_freespace(char *testdirpath)
-{
-    char dirpath[MAX_PATHLEN] = {0};
-    int  i;
-    int  directoryFound   = 0;
-
-
-    VERBOSE(3,5,"Entering display_freespace on %s...", testdirpath );
-
-    strcpy(dirpath, testdirpath);
-
-    /* get directory for outfile */
-    i = strlen(dirpath);
-    while (i-- > 0) {
-        if (dirpath[i] == '/') {
-            dirpath[i] = '\0';
-            directoryFound = 1;
-            break;
-        }
-    }
-
-    /* if no directory/, use '.' */
-    if (directoryFound == 0) {
-        strcpy(dirpath, ".");
-    }
-
-    VERBOSE(3,5,"Before show_file_system_size, dirpath is '%s'", dirpath );
-    show_file_system_size(dirpath);
-    VERBOSE(3,5, "After show_file_system_size, dirpath is '%s'\n", dirpath );
-
-    return;
-}
-
 void create_remove_directory_tree(int create,
                                   int currDepth, char* path, int dirNum, rank_progress_t * progress) {
 
@@ -1606,16 +1881,16 @@ void create_remove_directory_tree(int create,
     VERBOSE(1,5,"Entering create_remove_directory_tree on %s, currDepth = %d...", path, currDepth );
 
     if (currDepth == 0) {
-        sprintf(dir, "%s/%s.%d/", path, base_tree_name, dirNum);
+        sprintf(dir, "%s/%s.%d/", path, o.base_tree_name, dirNum);
 
         if (create) {
             VERBOSE(2,5,"Making directory '%s'", dir);
-            if (-1 == backend->mkdir (dir, DIRMODE, backend_options)) {
-                fprintf(out_logfile, "error could not create directory '%s'\n", dir);
+            if (-1 == o.backend->mkdir (dir, DIRMODE, o.backend_options)) {
+                EWARNF("unable to create tree directory '%s'", dir);
             }
 #ifdef HAVE_LUSTRE_LUSTREAPI
             /* internal node for branching, can be non-striped for children */
-            if (global_dir_layout && \
+            if (o.global_dir_layout && \
                 llapi_dir_set_default_lmv_stripe(dir, -1, 0,
                                                  LMV_HASH_TYPE_FNV_1A_64,
                                                  NULL) == -1) {
@@ -1628,35 +1903,35 @@ void create_remove_directory_tree(int create,
 
         if (!create) {
             VERBOSE(2,5,"Remove directory '%s'", dir);
-            if (-1 == backend->rmdir(dir, backend_options)) {
-                FAIL("Unable to remove directory %s", dir);
+            if (-1 == o.backend->rmdir(dir, o.backend_options)) {
+                EWARNF("Unable to remove directory %s", dir);
             }
         }
-    } else if (currDepth <= depth) {
+    } else if (currDepth <= o.depth) {
 
         char temp_path[MAX_PATHLEN];
         strcpy(temp_path, path);
         int currDir = dirNum;
 
-        for (i=0; i<branch_factor; i++) {
-            sprintf(dir, "%s.%d/", base_tree_name, currDir);
+        for (i=0; i < o.branch_factor; i++) {
+            sprintf(dir, "%s.%d/", o.base_tree_name, currDir);
             strcat(temp_path, dir);
 
             if (create) {
                 VERBOSE(2,5,"Making directory '%s'", temp_path);
-                if (-1 == backend->mkdir(temp_path, DIRMODE, backend_options)) {
-                    FAIL("Unable to create directory %s", temp_path);
+                if (-1 == o.backend->mkdir(temp_path, DIRMODE, o.backend_options)) {
+                    EWARNF("Unable to create directory %s", temp_path);
                 }
             }
 
             create_remove_directory_tree(create, ++currDepth,
-                                         temp_path, (branch_factor*currDir)+1, progress);
+                                         temp_path, (o.branch_factor*currDir)+1, progress);
             currDepth--;
 
             if (!create) {
                 VERBOSE(2,5,"Remove directory '%s'", temp_path);
-                if (-1 == backend->rmdir(temp_path, backend_options)) {
-                    FAIL("Unable to remove directory %s", temp_path);
+                if (-1 == o.backend->rmdir(temp_path, o.backend_options)) {
+                    EWARNF("Unable to remove directory %s", temp_path);
                 }
             }
 
@@ -1666,11 +1941,11 @@ void create_remove_directory_tree(int create,
     }
 }
 
-static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t * summary_table){
+static void mdtest_iteration(int i, int j, mdtest_results_t * summary_table){
   rank_progress_t progress_o;
   memset(& progress_o, 0 , sizeof(progress_o));
   progress_o.stone_wall_timer_seconds = 0;
-  progress_o.items_per_dir = items_per_dir;
+  progress_o.items_per_dir = o.items_per_dir;
   rank_progress_t * progress = & progress_o;
 
   /* start and end times of directory tree create/remove */
@@ -1679,257 +1954,229 @@ static void mdtest_iteration(int i, int j, MPI_Group testgroup, mdtest_results_t
 
   VERBOSE(1,-1,"main: * iteration %d *", j+1);
 
-  for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
-    prep_testdir(j, dir_iter);
+  if(o.create_only){
+    for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
+      if (rank >= o.path_count) {
+        continue;
+      }
+      prep_testdir(j, dir_iter);
 
-    VERBOSE(2,5,"main (for j loop): making testdir, '%s'", testdir );
-    if ((rank < path_count) && backend->access(testdir, F_OK, backend_options) != 0) {
-        if (backend->mkdir(testdir, DIRMODE, backend_options) != 0) {
-            FAIL("Unable to create test directory %s", testdir);
-        }
+      VERBOSE(2,5,"main (for j loop): making o.testdir, '%s'", o.testdir );
+      if (o.backend->access(o.testdir, F_OK, o.backend_options) != 0) {
+          if (o.backend->mkdir(o.testdir, DIRMODE, o.backend_options) != 0) {
+              EWARNF("Unable to create test directory %s", o.testdir);
+          }
 #ifdef HAVE_LUSTRE_LUSTREAPI
-        /* internal node for branching, can be non-striped for children */
-        if (global_dir_layout && unique_dir_per_task && llapi_dir_set_default_lmv_stripe(testdir, -1, 0, LMV_HASH_TYPE_FNV_1A_64, NULL) == -1) {
-            FAIL("Unable to reset to global default directory layout");
-        }
+          /* internal node for branching, can be non-striped for children */
+          if (o.global_dir_layout && o.unique_dir_per_task && llapi_dir_set_default_lmv_stripe(o.testdir, -1, 0, LMV_HASH_TYPE_FNV_1A_64, NULL) == -1) {
+              EWARNF("Unable to reset to global default directory layout");
+          }
 #endif /* HAVE_LUSTRE_LUSTREAPI */
+      }
     }
-  }
 
-  if (create_only) {
-      /* create hierarchical directory structure */
-      MPI_Barrier(testComm);
+    /* create hierarchical directory structure */
+    MPI_Barrier(testComm);
 
-      startCreate = GetTimeStamp();
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
-        prep_testdir(j, dir_iter);
+    startCreate = GetTimeStamp();
+    for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
+      prep_testdir(j, dir_iter);
 
-        if (unique_dir_per_task) {
-            if (collective_creates && (rank == 0)) {
-                /*
-                 * This is inside two loops, one of which already uses "i" and the other uses "j".
-                 * I don't know how this ever worked. I'm changing this loop to use "k".
-                 */
-                for (k=0; k<size; k++) {
-                    sprintf(base_tree_name, "mdtest_tree.%d", k);
+      if (o.unique_dir_per_task) {
+        if (o.collective_creates && (rank == 0)) {
+          /*
+           * This is inside two loops, one of which already uses "i" and the other uses "j".
+           * I don't know how this ever worked. I'm changing this loop to use "k".
+           */
+          for (k=0; k < o.size; k++) {
+            sprintf(o.base_tree_name, "mdtest_tree.%d", k);
 
-                    VERBOSE(3,5,"main (create hierarchical directory loop-collective): Calling create_remove_directory_tree with '%s'", testdir );
-                    /*
-                     * Let's pass in the path to the directory we most recently made so that we can use
-                     * full paths in the other calls.
-                     */
-                    create_remove_directory_tree(1, 0, testdir, 0, progress);
-                    if(CHECK_STONE_WALL(progress)){
-                      size = k;
-                      break;
-                    }
-                }
-            } else if (!collective_creates) {
-                VERBOSE(3,5,"main (create hierarchical directory loop-!collective_creates): Calling create_remove_directory_tree with '%s'", testdir );
-                /*
-                 * Let's pass in the path to the directory we most recently made so that we can use
-                 * full paths in the other calls.
-                 */
-                create_remove_directory_tree(1, 0, testdir, 0, progress);
+            VERBOSE(3,5,"main (create hierarchical directory loop-collective): Calling create_remove_directory_tree with '%s'", o.testdir );
+            /*
+             * Let's pass in the path to the directory we most recently made so that we can use
+             * full paths in the other calls.
+             */
+            create_remove_directory_tree(1, 0, o.testdir, 0, progress);
+            if(CHECK_STONE_WALL(progress)){
+              o.size = k;
+              break;
             }
-        } else {
-            if (rank == 0) {
-                VERBOSE(3,5,"main (create hierarchical directory loop-!unque_dir_per_task): Calling create_remove_directory_tree with '%s'", testdir );
+          }
+        } else if (! o.collective_creates) {
+          VERBOSE(3,5,"main (create hierarchical directory loop-!collective_creates): Calling create_remove_directory_tree with '%s'", o.testdir );
+          /*
+           * Let's pass in the path to the directory we most recently made so that we can use
+           * full paths in the other calls.
+           */
+          create_remove_directory_tree(1, 0, o.testdir, 0, progress);
+        }
+      } else {
+        if (rank == 0) {
+          VERBOSE(3,5,"main (create hierarchical directory loop-!unque_dir_per_task): Calling create_remove_directory_tree with '%s'", o.testdir );
 
-                /*
-                 * Let's pass in the path to the directory we most recently made so that we can use
-                 * full paths in the other calls.
-                 */
-                create_remove_directory_tree(1, 0 , testdir, 0, progress);
-            }
+          /*
+           * Let's pass in the path to the directory we most recently made so that we can use
+           * full paths in the other calls.
+           */
+          create_remove_directory_tree(1, 0 , o.testdir, 0, progress);
         }
       }
-      MPI_Barrier(testComm);
-      endCreate = GetTimeStamp();
-      summary_table->rate[8] =
-          num_dirs_in_tree / (endCreate - startCreate);
-      summary_table->time[8] = (endCreate - startCreate);
-      summary_table->items[8] = num_dirs_in_tree;
-      summary_table->stonewall_last_item[8] = num_dirs_in_tree;
-      VERBOSE(1,-1,"V-1: main:   Tree creation     : %14.3f sec, %14.3f ops/sec", (endCreate - startCreate), summary_table->rate[8]);
+    }
+    MPI_Barrier(testComm);
+    endCreate = GetTimeStamp();
+    summary_table->rate[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree / (endCreate - startCreate);
+    summary_table->time[MDTEST_TREE_CREATE_NUM] = (endCreate - startCreate);
+    summary_table->items[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree;
+    summary_table->stonewall_last_item[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree;
+    VERBOSE(1,-1,"V-1: main:   Tree creation     : %14.3f sec, %14.3f ops/sec", (endCreate - startCreate), summary_table->rate[MDTEST_TREE_CREATE_NUM]);
   }
 
-  sprintf(unique_mk_dir, "%s.0", base_tree_name);
-  sprintf(unique_chdir_dir, "%s.0", base_tree_name);
-  sprintf(unique_stat_dir, "%s.0", base_tree_name);
-  sprintf(unique_read_dir, "%s.0", base_tree_name);
-  sprintf(unique_rm_dir, "%s.0", base_tree_name);
-  unique_rm_uni_dir[0] = 0;
+  sprintf(o.unique_mk_dir, "%s.0", o.base_tree_name);
+  sprintf(o.unique_chdir_dir, "%s.0", o.base_tree_name);
+  sprintf(o.unique_stat_dir, "%s.0", o.base_tree_name);
+  sprintf(o.unique_read_dir, "%s.0", o.base_tree_name);
+  sprintf(o.unique_rm_dir, "%s.0", o.base_tree_name);
+  o.unique_rm_uni_dir[0] = 0;
 
-  if (!unique_dir_per_task) {
-    VERBOSE(3,-1,"V-3: main: Using unique_mk_dir, '%s'", unique_mk_dir );
+  if (! o.unique_dir_per_task) {
+    VERBOSE(3,-1,"V-3: main: Using unique_mk_dir, '%s'", o.unique_mk_dir );
   }
 
   if (rank < i) {
-      if (!shared_file) {
-          sprintf(mk_name, "mdtest.%d.", (rank+(0*nstride))%i);
-          sprintf(stat_name, "mdtest.%d.", (rank+(1*nstride))%i);
-          sprintf(read_name, "mdtest.%d.", (rank+(2*nstride))%i);
-          sprintf(rm_name, "mdtest.%d.", (rank+(3*nstride))%i);
+      if (! o.shared_file) {
+          sprintf(o.mk_name, "mdtest.%d.", (rank+(0*o.nstride))%i);
+          sprintf(o.stat_name, "mdtest.%d.", (rank+(1*o.nstride))%i);
+          sprintf(o.read_name, "mdtest.%d.", (rank+(2*o.nstride))%i);
+          sprintf(o.rm_name, "mdtest.%d.", (rank+(3*o.nstride))%i);
       }
-      if (unique_dir_per_task) {
-          VERBOSE(3,5,"i %d nstride %d", i, nstride);
-          sprintf(unique_mk_dir, "mdtest_tree.%d.0",  (rank+(0*nstride))%i);
-          sprintf(unique_chdir_dir, "mdtest_tree.%d.0", (rank+(1*nstride))%i);
-          sprintf(unique_stat_dir, "mdtest_tree.%d.0", (rank+(2*nstride))%i);
-          sprintf(unique_read_dir, "mdtest_tree.%d.0", (rank+(3*nstride))%i);
-          sprintf(unique_rm_dir, "mdtest_tree.%d.0", (rank+(4*nstride))%i);
-          unique_rm_uni_dir[0] = 0;
-          VERBOSE(5,5,"mk_dir %s chdir %s stat_dir %s read_dir %s rm_dir %s\n", unique_mk_dir,unique_chdir_dir,unique_stat_dir,unique_read_dir,unique_rm_dir);
+      if (o.unique_dir_per_task) {
+          VERBOSE(3,5,"i %d nstride %d", i, o.nstride);
+          sprintf(o.unique_mk_dir, "mdtest_tree.%d.0",  (rank+(0*o.nstride))%i);
+          sprintf(o.unique_chdir_dir, "mdtest_tree.%d.0", (rank+(1*o.nstride))%i);
+          sprintf(o.unique_stat_dir, "mdtest_tree.%d.0", (rank+(2*o.nstride))%i);
+          sprintf(o.unique_read_dir, "mdtest_tree.%d.0", (rank+(3*o.nstride))%i);
+          sprintf(o.unique_rm_dir, "mdtest_tree.%d.0", (rank+(4*o.nstride))%i);
+          o.unique_rm_uni_dir[0] = 0;
+          VERBOSE(5,5,"mk_dir %s chdir %s stat_dir %s read_dir %s rm_dir %s\n", o.unique_mk_dir, o.unique_chdir_dir, o.unique_stat_dir, o.unique_read_dir, o.unique_rm_dir);
       }
 
-      VERBOSE(3,-1,"V-3: main: Copied unique_mk_dir, '%s', to topdir", unique_mk_dir );
+      VERBOSE(3,-1,"V-3: main: Copied unique_mk_dir, '%s', to topdir", o.unique_mk_dir );
 
-      if (dirs_only && !shared_file) {
-          if (pre_delay) {
-              DelaySecs(pre_delay);
+      if (o.dirs_only && ! o.shared_file) {
+          if (o.pre_delay) {
+              DelaySecs(o.pre_delay);
           }
-          directory_test(j, i, unique_mk_dir, progress);
+          directory_test(j, i, o.unique_mk_dir, progress);
       }
-      if (files_only) {
-          if (pre_delay) {
-              DelaySecs(pre_delay);
+      if (o.files_only) {
+          if (o.pre_delay) {
+              DelaySecs(o.pre_delay);
           }
-          VERBOSE(3,5,"will file_test on %s", unique_mk_dir);
+          VERBOSE(3,5,"will file_test on %s", o.unique_mk_dir);
 
-          file_test(j, i, unique_mk_dir, progress);
+          file_test(j, i, o.unique_mk_dir, progress);
       }
   }
 
   /* remove directory structure */
-  if (!unique_dir_per_task) {
-      VERBOSE(3,-1,"main: Using testdir, '%s'", testdir );
+  if (! o.unique_dir_per_task) {
+      VERBOSE(3,-1,"main: Using o.testdir, '%s'", o.testdir );
   }
 
   MPI_Barrier(testComm);
-  if (remove_only) {
+  if (o.remove_only) {
       progress->items_start = 0;
       startCreate = GetTimeStamp();
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
-        if (unique_dir_per_task) {
-            if (collective_creates && (rank == 0)) {
+        if (o.unique_dir_per_task) {
+            if (o.collective_creates && (rank == 0)) {
                 /*
                  * This is inside two loops, one of which already uses "i" and the other uses "j".
                  * I don't know how this ever worked. I'm changing this loop to use "k".
                  */
-                for (k=0; k<size; k++) {
-                    sprintf(base_tree_name, "mdtest_tree.%d", k);
+                for (k=0; k < o.size; k++) {
+                    sprintf(o.base_tree_name, "mdtest_tree.%d", k);
 
-                    VERBOSE(3,-1,"main (remove hierarchical directory loop-collective): Calling create_remove_directory_tree with '%s'", testdir );
+                    VERBOSE(3,-1,"main (remove hierarchical directory loop-collective): Calling create_remove_directory_tree with '%s'", o.testdir );
 
                     /*
                      * Let's pass in the path to the directory we most recently made so that we can use
                      * full paths in the other calls.
                      */
-                    create_remove_directory_tree(0, 0, testdir, 0, progress);
+                    create_remove_directory_tree(0, 0, o.testdir, 0, progress);
                     if(CHECK_STONE_WALL(progress)){
-                      size = k;
+                      o.size = k;
                       break;
                     }
                 }
-            } else if (!collective_creates) {
-                VERBOSE(3,-1,"main (remove hierarchical directory loop-!collective): Calling create_remove_directory_tree with '%s'", testdir );
+            } else if (! o.collective_creates) {
+                VERBOSE(3,-1,"main (remove hierarchical directory loop-!collective): Calling create_remove_directory_tree with '%s'", o.testdir );
 
                 /*
                  * Let's pass in the path to the directory we most recently made so that we can use
                  * full paths in the other calls.
                  */
-                create_remove_directory_tree(0, 0, testdir, 0, progress);
+                create_remove_directory_tree(0, 0, o.testdir, 0, progress);
             }
         } else {
             if (rank == 0) {
-                VERBOSE(3,-1,"V-3: main (remove hierarchical directory loop-!unique_dir_per_task): Calling create_remove_directory_tree with '%s'", testdir );
+                VERBOSE(3,-1,"V-3: main (remove hierarchical directory loop-!unique_dir_per_task): Calling create_remove_directory_tree with '%s'", o.testdir );
 
                 /*
                  * Let's pass in the path to the directory we most recently made so that we can use
                  * full paths in the other calls.
                  */
-                create_remove_directory_tree(0, 0 , testdir, 0, progress);
+                create_remove_directory_tree(0, 0 , o.testdir, 0, progress);
             }
         }
       }
 
       MPI_Barrier(testComm);
       endCreate = GetTimeStamp();
-      summary_table->rate[9] = num_dirs_in_tree / (endCreate - startCreate);
-      summary_table->time[9] = endCreate - startCreate;
-      summary_table->items[9] = num_dirs_in_tree;
-      summary_table->stonewall_last_item[8] = num_dirs_in_tree;
-      VERBOSE(1,-1,"main   Tree removal      : %14.3f sec, %14.3f ops/sec", (endCreate - startCreate), summary_table->rate[9]);
-      VERBOSE(2,-1,"main (at end of for j loop): Removing testdir of '%s'\n", testdir );
+      summary_table->rate[MDTEST_TREE_REMOVE_NUM] = o.num_dirs_in_tree / (endCreate - startCreate);
+      summary_table->time[MDTEST_TREE_REMOVE_NUM] = endCreate - startCreate;
+      summary_table->items[MDTEST_TREE_REMOVE_NUM] = o.num_dirs_in_tree;
+      summary_table->stonewall_last_item[MDTEST_TREE_REMOVE_NUM] = o.num_dirs_in_tree;
+      VERBOSE(1,-1,"main   Tree removal      : %14.3f sec, %14.3f ops/sec", (endCreate - startCreate), summary_table->rate[MDTEST_TREE_REMOVE_NUM]);
+      VERBOSE(2,-1,"main (at end of for j loop): Removing o.testdir of '%s'\n", o.testdir );
 
-      for (int dir_iter = 0; dir_iter < directory_loops; dir_iter ++){
+      for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(j, dir_iter);
-        if ((rank < path_count) && backend->access(testdir, F_OK, backend_options) == 0) {
-            //if (( rank == 0 ) && access(testdir, F_OK) == 0) {
-            if (backend->rmdir(testdir, backend_options) == -1) {
-                FAIL("unable to remove directory %s", testdir);
+        if ((rank < o.path_count) && o.backend->access(o.testdir, F_OK, o.backend_options) == 0) {
+            //if (( rank == 0 ) && access(o.testdir, F_OK) == 0) {
+            if (o.backend->rmdir(o.testdir, o.backend_options) == -1) {
+                EWARNF("unable to remove directory %s", o.testdir);
             }
         }
       }
   } else {
-      summary_table->rate[9] = 0;
+      summary_table->rate[MDTEST_TREE_REMOVE_NUM] = 0;
   }
 }
 
 void mdtest_init_args(){
-   barriers = 1;
-   branch_factor = 1;
-   throttle = 1;
-   stoneWallingStatusFile = NULL;
-   create_only = 0;
-   stat_only = 0;
-   read_only = 0;
-   verify_read = 0;
-   verification_error = 0;
-   remove_only = 0;
-   leaf_only = 0;
-   depth = 0;
-   num_dirs_in_tree = 0;
-   items_per_dir = 0;
-   random_seed = 0;
-   print_time = 0;
-   print_rate_and_time = 0;
-   shared_file = 0;
-   files_only = 0;
-   dirs_only = 0;
-   pre_delay = 0;
-   unique_dir_per_task = 0;
-   time_unique_dir_overhead = 0;
-   items = 0;
-   num_dirs_in_tree_calc = 0;
-   collective_creates = 0;
-   write_bytes = 0;
-   stone_wall_timer_seconds = 0;
-   read_bytes = 0;
-   sync_file = 0;
-   call_sync = 0;
-   path_count = 0;
-   nstride = 0;
-   make_node = 0;
-#ifdef HAVE_LUSTRE_LUSTREAPI
-   global_dir_layout = 0;
-#endif /* HAVE_LUSTRE_LUSTREAPI */
+  o = (mdtest_options_t) {
+     .barriers = 1,
+     .branch_factor = 1,
+     .random_buffer_offset = -1,
+     .prologue = "",
+     .epilogue = "",
+  };
 }
 
 mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * world_out) {
     testComm = world_com;
     out_logfile = world_out;
-    mpi_comm_world = world_com;
+    out_resultfile = world_out;
 
-    init_clock();
+    init_clock(world_com);
 
     mdtest_init_args();
     int i, j;
     int numNodes;
     int numTasksOnNode0 = 0;
-    MPI_Group worldgroup, testgroup;
+    MPI_Group worldgroup;
     struct {
         int first;
         int last;
@@ -1950,81 +2197,94 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     aiori_supported_apis(APIs, APIs_legacy, MDTEST);
     char apiStr[1024];
     sprintf(apiStr, "API for I/O [%s]", APIs);
-    memset(& hints, 0, sizeof(hints));
+    memset(& o.hints, 0, sizeof(o.hints));
+    
+    char * packetType = "t";
 
     option_help options [] = {
-      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & api},
-      {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & branch_factor},
+      {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & o.api},
+      {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.branch_factor},
       {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
-      {'C', NULL,        "only create files/dirs", OPTION_FLAG, 'd', & create_only},
-      {'T', NULL,        "only stat files/dirs", OPTION_FLAG, 'd', & stat_only},
-      {'E', NULL,        "only read files/dir", OPTION_FLAG, 'd', & read_only},
-      {'r', NULL,        "only remove files or directories left behind by previous runs", OPTION_FLAG, 'd', & remove_only},
-      {'D', NULL,        "perform test on directories only (no files)", OPTION_FLAG, 'd', & dirs_only},
-      {'e', NULL,        "bytes to read from each file", OPTION_OPTIONAL_ARGUMENT, 'l', & read_bytes},
+      {'C', NULL,        "only create files/dirs", OPTION_FLAG, 'd', & o.create_only},
+      {'T', NULL,        "only stat files/dirs", OPTION_FLAG, 'd', & o.stat_only},
+      {'E', NULL,        "only read files/dir", OPTION_FLAG, 'd', & o.read_only},
+      {'r', NULL,        "only remove files or directories left behind by previous runs", OPTION_FLAG, 'd', & o.remove_only},
+      {'D', NULL,        "perform test on directories only (no files)", OPTION_FLAG, 'd', & o.dirs_only},
+      {'e', NULL,        "bytes to read from each file", OPTION_OPTIONAL_ARGUMENT, 'l', & o.read_bytes},
       {'f', NULL,        "first number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & first},
-      {'F', NULL,        "perform test on files only (no directories)", OPTION_FLAG, 'd', & files_only},
+      {'F', NULL,        "perform test on files only (no directories)", OPTION_FLAG, 'd', & o.files_only},
 #ifdef HAVE_LUSTRE_LUSTREAPI
-      {'g', NULL,        "global default directory layout for test subdirectories (deletes inherited striping layout)", OPTION_FLAG, 'd', & global_dir_layout},
+      {'g', NULL,        "global default directory layout for test subdirectories (deletes inherited striping layout)", OPTION_FLAG, 'd', & o.global_dir_layout},
 #endif /* HAVE_LUSTRE_LUSTREAPI */
+      {'G', NULL,        "Offset for the data in the read/write buffer, if not set, a random value is used", OPTION_OPTIONAL_ARGUMENT, 'd', & o.random_buffer_offset},
       {'i', NULL,        "number of iterations the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & iterations},
-      {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & items_per_dir},
-      {'k', NULL,        "use mknod to create file", OPTION_FLAG, 'd', & make_node},
+      {'I', NULL,        "number of items per directory in tree", OPTION_OPTIONAL_ARGUMENT, 'l', & o.items_per_dir},
+      {'k', NULL,        "use mknod to create file", OPTION_FLAG, 'd', & o.make_node},
       {'l', NULL,        "last number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & last},
-      {'L', NULL,        "files only at leaf level of tree", OPTION_FLAG, 'd', & leaf_only},
-      {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & items},
-      {'N', NULL,        "stride # between tasks for file/dir operation (local=0; set to 1 to avoid client cache)", OPTION_OPTIONAL_ARGUMENT, 'd', & nstride},
-      {'p', NULL,        "pre-iteration delay (in seconds)", OPTION_OPTIONAL_ARGUMENT, 'd', & pre_delay},
-      {'P', NULL,        "print rate AND time", OPTION_FLAG, 'd', & print_rate_and_time},
+      {'L', NULL,        "files only at leaf level of tree", OPTION_FLAG, 'd', & o.leaf_only},
+      {'n', NULL,        "every process will creat/stat/read/remove # directories and files", OPTION_OPTIONAL_ARGUMENT, 'l', & o.items},
+      {'N', NULL,        "stride # between tasks for file/dir operation (local=0; set to 1 to avoid client cache)", OPTION_OPTIONAL_ARGUMENT, 'd', & o.nstride},
+      {'p', NULL,        "pre-iteration delay (in seconds)", OPTION_OPTIONAL_ARGUMENT, 'd', & o.pre_delay},
+      {'P', NULL,        "print rate AND time", OPTION_FLAG, 'd', & o.print_rate_and_time},
+      {0, "print-all-procs", "all processes print an excerpt of their results", OPTION_FLAG, 'd', & o.print_all_proc},
       {'R', NULL,        "random access to files (only for stat)", OPTION_FLAG, 'd', & randomize},
-      {0, "random-seed", "random seed for -R", OPTION_OPTIONAL_ARGUMENT, 'd', & random_seed},
+      {0, "random-seed", "random seed for -R", OPTION_OPTIONAL_ARGUMENT, 'd', & o.random_seed},
       {'s', NULL,        "stride between the number of tasks for each test", OPTION_OPTIONAL_ARGUMENT, 'd', & stride},
-      {'S', NULL,        "shared file access (file only, no directories)", OPTION_FLAG, 'd', & shared_file},
-      {'c', NULL,        "collective creates: task 0 does all creates", OPTION_FLAG, 'd', & collective_creates},
-      {'t', NULL,        "time unique working directory overhead", OPTION_FLAG, 'd', & time_unique_dir_overhead},
-      {'u', NULL,        "unique working directory for each task", OPTION_FLAG, 'd', & unique_dir_per_task},
+      {'S', NULL,        "shared file access (file only, no directories)", OPTION_FLAG, 'd', & o.shared_file},
+      {'c', NULL,        "collective creates: task 0 does all creates", OPTION_FLAG, 'd', & o.collective_creates},
+      {'t', NULL,        "time unique working directory overhead", OPTION_FLAG, 'd', & o.time_unique_dir_overhead},
+      {'u', NULL,        "unique working directory for each task", OPTION_FLAG, 'd', & o.unique_dir_per_task},
       {'v', NULL,        "verbosity (each instance of option increments by one)", OPTION_FLAG, 'd', & verbose},
       {'V', NULL,        "verbosity value", OPTION_OPTIONAL_ARGUMENT, 'd', & verbose},
-      {'w', NULL,        "bytes to write to each file after it is created", OPTION_OPTIONAL_ARGUMENT, 'l', & write_bytes},
-      {'W', NULL,        "number in seconds; stonewall timer, write as many seconds and ensure all processes did the same number of operations (currently only stops during create phase and files)", OPTION_OPTIONAL_ARGUMENT, 'd', & stone_wall_timer_seconds},
-      {'x', NULL,        "StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs", OPTION_OPTIONAL_ARGUMENT, 's', & stoneWallingStatusFile},
-      {'X', "verify-read", "Verify the data read", OPTION_FLAG, 'd', & verify_read},
-      {0, "verify-write", "Verify the data after a write by reading it back immediately", OPTION_FLAG, 'd', & verify_write},
-      {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & sync_file},
-      {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & call_sync},
-      {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & depth},
-      {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & print_time},
+      {'w', NULL,        "bytes to write to each file after it is created", OPTION_OPTIONAL_ARGUMENT, 'l', & o.write_bytes},
+      {'W', NULL,        "number in seconds; stonewall timer, write as many seconds and ensure all processes did the same number of operations (currently only stops during create phase and files)", OPTION_OPTIONAL_ARGUMENT, 'd', & o.stone_wall_timer_seconds},
+      {'x', NULL,        "StoneWallingStatusFile; contains the number of iterations of the creation phase, can be used to split phases across runs", OPTION_OPTIONAL_ARGUMENT, 's', & o.stoneWallingStatusFile},
+      {'X', "verify-read", "Verify the data read", OPTION_FLAG, 'd', & o.verify_read},
+      {0, "verify-write", "Verify the data after a write by reading it back immediately", OPTION_FLAG, 'd', & o.verify_write},
+      {'y', NULL,        "sync file after writing", OPTION_FLAG, 'd', & o.sync_file},
+      {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & o.call_sync},
+      {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.depth},
+      {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & o.print_time},
+      {0, "run-cmd-before-phase", "call this external command before each phase (excluded from the timing)", OPTION_OPTIONAL_ARGUMENT, 's', & o.prologue},
+      {0, "run-cmd-after-phase",  "call this external command after each phase (included in the timing)", OPTION_OPTIONAL_ARGUMENT, 's', & o.epilogue},
+      {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', & packetType},
+      {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
+      {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
+      {0, "showRankStatistics", "Include statistics per rank", OPTION_FLAG, 'd', & o.show_perrank_statistics},
+
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
     option_parse(argc, argv, global_options);
-    backend = aiori_select(api);
-    if (backend == NULL)
+    o.backend = aiori_select(o.api);
+    if (o.backend == NULL)
         ERR("Unrecognized I/O API");
-    if (! backend->enable_mdtest)
+    if (! o.backend->enable_mdtest)
         ERR("Backend doesn't support MDTest");
-    backend_options = airoi_update_module_options(backend, global_options);
+    o.backend_options = airoi_update_module_options(o.backend, global_options);
 
     free(global_options->modules);
     free(global_options);
+    
+    o.dataPacketType = parsePacketType(packetType[0]);
 
     MPI_Comm_rank(testComm, &rank);
-    MPI_Comm_size(testComm, &size);
+    MPI_Comm_size(testComm, &o.size);
 
-    if (backend->initialize){
-	    backend->initialize(backend_options);
+    if(o.backend->xfer_hints){
+      o.backend->xfer_hints(& o.hints);
     }
-    if(backend->xfer_hints){
-      backend->xfer_hints(& hints);
+    if(o.backend->check_params){
+      o.backend->check_params(o.backend_options);
     }
-    if(backend->check_params){
-      backend->check_params(backend_options);
+    if (o.backend->initialize){
+	    o.backend->initialize(o.backend_options);
     }
 
-    pid = getpid();
-    uid = getuid();
+    o.pid = getpid();
+    o.uid = getuid();
 
     numNodes = GetNumNodes(testComm);
     numTasksOnNode0 = GetNumTasksOnNode0(testComm);
@@ -2036,118 +2296,122 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     }
 
     VERBOSE(0,-1,"-- started at %s --\n", PrintTimestamp());
-    VERBOSE(0,-1,"mdtest-%s was launched with %d total task(s) on %d node(s)", RELEASE_VERS, size, numNodes);
+    VERBOSE(0,-1,"mdtest-%s was launched with %d total task(s) on %d node(s)", RELEASE_VERS, o.size, numNodes);
     VERBOSE(0,-1,"Command line used: %s", cmd_buffer);
 
     /* adjust special variables */
-    barriers = ! no_barriers;
+    o.barriers = ! no_barriers;
     if (path != NULL){
       parse_dirpath(path);
     }
     if( randomize > 0 ){
-      if (random_seed == 0) {
+      if (o.random_seed == 0) {
         /* Ensure all procs have the same random number */
-          random_seed = time(NULL);
+          o.random_seed = time(NULL);
           MPI_Barrier(testComm);
-          MPI_Bcast(&random_seed, 1, MPI_INT, 0, testComm);
+          MPI_Bcast(& o.random_seed, 1, MPI_INT, 0, testComm);
       }
-      random_seed += rank;
+      o.random_seed += rank;
     }
-    if ((items > 0) && (items_per_dir > 0) && (! unique_dir_per_task)) {
-      directory_loops = items / items_per_dir;
+    if( o.random_buffer_offset == -1 ){
+        o.random_buffer_offset = time(NULL);
+        MPI_Bcast(& o.random_buffer_offset, 1, MPI_INT, 0, testComm);
+    }
+    if ((o.items > 0) && (o.items_per_dir > 0) && (! o.unique_dir_per_task)) {
+      o.directory_loops = o.items / o.items_per_dir;
     }else{
-      directory_loops = 1;
+      o.directory_loops = 1;
     }
     md_validate_tests();
 
     // option_print_current(options);
-    VERBOSE(1,-1, "api                     : %s", api);
-    VERBOSE(1,-1, "barriers                : %s", ( barriers ? "True" : "False" ));
-    VERBOSE(1,-1, "collective_creates      : %s", ( collective_creates ? "True" : "False" ));
-    VERBOSE(1,-1, "create_only             : %s", ( create_only ? "True" : "False" ));
+    VERBOSE(1,-1, "api                     : %s", o.api);
+    VERBOSE(1,-1, "barriers                : %s", ( o.barriers ? "True" : "False" ));
+    VERBOSE(1,-1, "collective_creates      : %s", ( o.collective_creates ? "True" : "False" ));
+    VERBOSE(1,-1, "create_only             : %s", ( o.create_only ? "True" : "False" ));
     VERBOSE(1,-1, "dirpath(s):" );
-    for ( i = 0; i < path_count; i++ ) {
-        VERBOSE(1,-1, "\t%s", filenames[i] );
+    for ( i = 0; i < o.path_count; i++ ) {
+        VERBOSE(1,-1, "\t%s", o.filenames[i] );
     }
-    VERBOSE(1,-1, "dirs_only               : %s", ( dirs_only ? "True" : "False" ));
-    VERBOSE(1,-1, "read_bytes              : "LLU"", read_bytes );
-    VERBOSE(1,-1, "read_only               : %s", ( read_only ? "True" : "False" ));
+    VERBOSE(1,-1, "dirs_only               : %s", ( o.dirs_only ? "True" : "False" ));
+    VERBOSE(1,-1, "read_bytes              : "LLU"", o.read_bytes );
+    VERBOSE(1,-1, "read_only               : %s", ( o.read_only ? "True" : "False" ));
     VERBOSE(1,-1, "first                   : %d", first );
-    VERBOSE(1,-1, "files_only              : %s", ( files_only ? "True" : "False" ));
+    VERBOSE(1,-1, "files_only              : %s", ( o.files_only ? "True" : "False" ));
 #ifdef HAVE_LUSTRE_LUSTREAPI
-    VERBOSE(1,-1, "global_dir_layout       : %s", ( global_dir_layout ? "True" : "False" ));
+    VERBOSE(1,-1, "global_dir_layout       : %s", ( o.global_dir_layout ? "True" : "False" ));
 #endif /* HAVE_LUSTRE_LUSTREAPI */
     VERBOSE(1,-1, "iterations              : %d", iterations );
-    VERBOSE(1,-1, "items_per_dir           : "LLU"", items_per_dir );
+    VERBOSE(1,-1, "items_per_dir           : "LLU"", o.items_per_dir );
     VERBOSE(1,-1, "last                    : %d", last );
-    VERBOSE(1,-1, "leaf_only               : %s", ( leaf_only ? "True" : "False" ));
-    VERBOSE(1,-1, "items                   : "LLU"", items );
-    VERBOSE(1,-1, "nstride                 : %d", nstride );
-    VERBOSE(1,-1, "pre_delay               : %d", pre_delay );
-    VERBOSE(1,-1, "remove_only             : %s", ( leaf_only ? "True" : "False" ));
-    VERBOSE(1,-1, "random_seed             : %d", random_seed );
+    VERBOSE(1,-1, "leaf_only               : %s", ( o.leaf_only ? "True" : "False" ));
+    VERBOSE(1,-1, "items                   : "LLU"", o.items );
+    VERBOSE(1,-1, "nstride                 : %d", o.nstride );
+    VERBOSE(1,-1, "pre_delay               : %d", o.pre_delay );
+    VERBOSE(1,-1, "remove_only             : %s", ( o.leaf_only ? "True" : "False" ));
+    VERBOSE(1,-1, "random_seed             : %d", o.random_seed );
     VERBOSE(1,-1, "stride                  : %d", stride );
-    VERBOSE(1,-1, "shared_file             : %s", ( shared_file ? "True" : "False" ));
-    VERBOSE(1,-1, "time_unique_dir_overhead: %s", ( time_unique_dir_overhead ? "True" : "False" ));
-    VERBOSE(1,-1, "stone_wall_timer_seconds: %d", stone_wall_timer_seconds);
-    VERBOSE(1,-1, "stat_only               : %s", ( stat_only ? "True" : "False" ));
-    VERBOSE(1,-1, "unique_dir_per_task     : %s", ( unique_dir_per_task ? "True" : "False" ));
-    VERBOSE(1,-1, "write_bytes             : "LLU"", write_bytes );
-    VERBOSE(1,-1, "sync_file               : %s", ( sync_file ? "True" : "False" ));
-    VERBOSE(1,-1, "call_sync               : %s", ( call_sync ? "True" : "False" ));
-    VERBOSE(1,-1, "depth                   : %d", depth );
-    VERBOSE(1,-1, "make_node               : %d", make_node );
+    VERBOSE(1,-1, "shared_file             : %s", ( o.shared_file ? "True" : "False" ));
+    VERBOSE(1,-1, "time_unique_dir_overhead: %s", ( o.time_unique_dir_overhead ? "True" : "False" ));
+    VERBOSE(1,-1, "stone_wall_timer_seconds: %d", o.stone_wall_timer_seconds);
+    VERBOSE(1,-1, "stat_only               : %s", ( o.stat_only ? "True" : "False" ));
+    VERBOSE(1,-1, "unique_dir_per_task     : %s", ( o.unique_dir_per_task ? "True" : "False" ));
+    VERBOSE(1,-1, "write_bytes             : "LLU"", o.write_bytes );
+    VERBOSE(1,-1, "sync_file               : %s", ( o.sync_file ? "True" : "False" ));
+    VERBOSE(1,-1, "call_sync               : %s", ( o.call_sync ? "True" : "False" ));
+    VERBOSE(1,-1, "depth                   : %d", o.depth );
+    VERBOSE(1,-1, "make_node               : %d", o.make_node );
 
     /* setup total number of items and number of items per dir */
-    if (depth <= 0) {
-        num_dirs_in_tree = 1;
+    if (o.depth <= 0) {
+        o.num_dirs_in_tree = 1;
     } else {
-        if (branch_factor < 1) {
-            num_dirs_in_tree = 1;
-        } else if (branch_factor == 1) {
-            num_dirs_in_tree = depth + 1;
+        if (o.branch_factor < 1) {
+            o.num_dirs_in_tree = 1;
+        } else if (o.branch_factor == 1) {
+            o.num_dirs_in_tree = o.depth + 1;
         } else {
-            num_dirs_in_tree = (pow(branch_factor, depth+1) - 1) / (branch_factor - 1);
+            o.num_dirs_in_tree = (pow(o.branch_factor, o.depth+1) - 1) / (o.branch_factor - 1);
         }
     }
-    if (items_per_dir > 0) {
-        if(items == 0){
-          if (leaf_only) {
-              items = items_per_dir * (uint64_t) pow(branch_factor, depth);
+    if (o.items_per_dir > 0) {
+        if(o.items == 0){
+          if (o.leaf_only) {
+              o.items = o.items_per_dir * (uint64_t) pow(o.branch_factor, o.depth);
           } else {
-              items = items_per_dir * num_dirs_in_tree;
+              o.items = o.items_per_dir * o.num_dirs_in_tree;
           }
         }else{
-          num_dirs_in_tree_calc = num_dirs_in_tree;
+          o.num_dirs_in_tree_calc = o.num_dirs_in_tree;
         }
     } else {
-        if (leaf_only) {
-            if (branch_factor <= 1) {
-                items_per_dir = items;
+        if (o.leaf_only) {
+            if (o.branch_factor <= 1) {
+                o.items_per_dir = o.items;
             } else {
-                items_per_dir = (uint64_t) (items / pow(branch_factor, depth));
-                items = items_per_dir * (uint64_t) pow(branch_factor, depth);
+                o.items_per_dir = (uint64_t) (o.items / pow(o.branch_factor, o.depth));
+                o.items = o.items_per_dir * (uint64_t) pow(o.branch_factor, o.depth);
             }
         } else {
-            items_per_dir = items / num_dirs_in_tree;
-            items = items_per_dir * num_dirs_in_tree;
+            o.items_per_dir = o.items / o.num_dirs_in_tree;
+            o.items = o.items_per_dir * o.num_dirs_in_tree;
         }
     }
 
     /* initialize rand_array */
-    if (random_seed > 0) {
-        srand(random_seed);
+    if (o.random_seed > 0) {
+        srand(o.random_seed);
 
         uint64_t s;
 
-        rand_array = (uint64_t *) malloc( items * sizeof(*rand_array));
+        o.rand_array = (uint64_t *) safeMalloc( o.items * sizeof(*o.rand_array));
 
-        for (s=0; s < items; s++) {
-            rand_array[s] = s;
+        for (s=0; s < o.items; s++) {
+            o.rand_array[s] = s;
         }
 
         /* shuffle list randomly */
-        uint64_t n = items;
+        uint64_t n = o.items;
         while (n>1) {
             n--;
 
@@ -2166,122 +2430,132 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
              * element, and the kth element to the nth element.
              */
 
-            uint64_t tmp = rand_array[k];
-            rand_array[k] = rand_array[n];
-            rand_array[n] = tmp;
+            uint64_t tmp = o.rand_array[k];
+            o.rand_array[k] = o.rand_array[n];
+            o.rand_array[n] = tmp;
         }
     }
 
     /* allocate and initialize write buffer with # */
-    if (write_bytes > 0) {
-        int alloc_res = posix_memalign((void**)&write_buffer, sysconf(_SC_PAGESIZE), write_bytes);
-        if (alloc_res) {
-            FAIL("out of memory");
-        }
-        generate_memory_pattern(write_buffer, write_bytes);
+    if (o.write_bytes > 0) {
+        o.write_buffer = aligned_buffer_alloc(o.write_bytes, o.gpu_memory_flags);
+        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
     }
 
     /* setup directory path to work in */
-    if (path_count == 0) { /* special case where no directory path provided with '-d' option */
-        char *ret = getcwd(testdirpath, MAX_PATHLEN);
+    if (o.path_count == 0) { /* special case where no directory path provided with '-d' option */
+        char *ret = getcwd(o.testdirpath, MAX_PATHLEN);
         if (ret == NULL) {
-            FAIL("Unable to get current working directory on %s", testdirpath);
+            FAIL("Unable to get current working directory on %s", o.testdirpath);
         }
-        path_count = 1;
+        o.path_count = 1;
     } else {
-        strcpy(testdirpath, filenames[rank%path_count]);
+        strcpy(o.testdirpath, o.filenames[rank % o.path_count]);
     }
 
     /*   if directory does not exist, create it */
-    if ((rank < path_count) && backend->access(testdirpath, F_OK, backend_options) != 0) {
-        if (backend->mkdir(testdirpath, DIRMODE, backend_options) != 0) {
-            FAIL("Unable to create test directory path %s", testdirpath);
+    if ((rank < o.path_count) && o.backend->access(o.testdirpath, F_OK, o.backend_options) != 0) {
+        if (o.backend->mkdir(o.testdirpath, DIRMODE, o.backend_options) != 0) {
+            EWARNF("Unable to create test directory path %s", o.testdirpath);
         }
         created_root_dir = 1;
     }
 
     /* display disk usage */
-    VERBOSE(3,-1,"main (before display_freespace): testdirpath is '%s'", testdirpath );
+    VERBOSE(3,-1,"main (before display_freespace): o.testdirpath is '%s'", o.testdirpath );
 
-    if (rank == 0) display_freespace(testdirpath);
+    if (rank == 0) ShowFileSystemSize(o.testdirpath, o.backend, o.backend_options);
     int tasksBlockMapping = QueryNodeMapping(testComm, true);
 
     /* set the shift to mimic IOR and shift by procs per node */
-    if (nstride > 0) {
+    if (o.nstride > 0) {
         if ( numNodes > 1 && tasksBlockMapping ) {
             /* the user set the stride presumably to get the consumer tasks on a different node than the producer tasks
                however, if the mpirun scheduler placed the tasks by-slot (in a contiguous block) then we need to adjust the shift by ppn */
-            nstride *= numTasksOnNode0;
+            o.nstride *= numTasksOnNode0;
         }
-        VERBOSE(0,5,"Shifting ranks by %d for each phase.", nstride);
+        VERBOSE(0,5,"Shifting ranks by %d for each phase.", o.nstride);
     }
 
-    VERBOSE(3,-1,"main (after display_freespace): testdirpath is '%s'", testdirpath );
+    VERBOSE(3,-1,"main (after display_freespace): o.testdirpath is '%s'", o.testdirpath );
 
     if (rank == 0) {
-        if (random_seed > 0) {
-            VERBOSE(0,-1,"random seed: %d", random_seed);
+        if (o.random_seed > 0) {
+            VERBOSE(0,-1,"random seed: %d", o.random_seed);
         }
     }
 
-    if (gethostname(hostname, MAX_PATHLEN) == -1) {
+    if (gethostname(o.hostname, MAX_PATHLEN) == -1) {
         perror("gethostname");
         MPI_Abort(testComm, 2);
     }
 
     if (last == 0) {
-        first = size;
-        last = size;
+        first = o.size;
+        last = o.size;
+    }
+    if(first > last){
+      FAIL("process number: first > last doesn't make sense");
+    }
+    if(last > o.size){
+      FAIL("process number: last > number of processes doesn't make sense");
     }
 
     /* setup summary table for recording results */
-    summary_table = (mdtest_results_t *) malloc(iterations * sizeof(mdtest_results_t));
-    memset(summary_table, 0, iterations * sizeof(mdtest_results_t));
-    for(int i=0; i < iterations; i++){
-      for(int j=0; j < MDTEST_LAST_NUM; j++){
-        summary_table[i].rate[j] = 0.0;
-        summary_table[i].time[j] = 0.0;
-      }
-    }
+    o.summary_table = (mdtest_results_t *) safeMalloc(iterations * sizeof(mdtest_results_t));
+    memset(o.summary_table, 0, iterations * sizeof(mdtest_results_t));
 
-    if (summary_table == NULL) {
-        FAIL("out of memory");
-    }
-
-    if (unique_dir_per_task) {
-        sprintf(base_tree_name, "mdtest_tree.%d", rank);
+    if (o.unique_dir_per_task) {
+        sprintf(o.base_tree_name, "mdtest_tree.%d", rank);
     } else {
-        sprintf(base_tree_name, "mdtest_tree");
+        sprintf(o.base_tree_name, "mdtest_tree");
     }
+
+    mdtest_results_t * aggregated_results = safeMalloc(iterations * sizeof(mdtest_results_t));
 
     /* default use shared directory */
-    strcpy(mk_name, "mdtest.shared.");
-    strcpy(stat_name, "mdtest.shared.");
-    strcpy(read_name, "mdtest.shared.");
-    strcpy(rm_name, "mdtest.shared.");
+    strcpy(o.mk_name, "mdtest.shared.");
+    strcpy(o.stat_name, "mdtest.shared.");
+    strcpy(o.read_name, "mdtest.shared.");
+    strcpy(o.rm_name, "mdtest.shared.");
 
     MPI_Comm_group(testComm, &worldgroup);
+    
+    last = o.size < last ? o.size : last;
+    
+    /* Run the tests */    
+    for (i = first; i <= last; i += stride) {
+        sleep(1);
+        
+        if(i < last){
+          MPI_Group testgroup;
+          range.last = i - 1;
+          MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
+          MPI_Comm_create(world_com, testgroup, &testComm);
+          MPI_Group_free(&testgroup);
+          if(testComm == MPI_COMM_NULL){
+            continue;
+          }
+        }else{
+          MPI_Comm_dup(world_com, & testComm);
+        }
+        MPI_Comm_size(testComm, &o.size);
 
-    /* Run the tests */
-    for (i = first; i <= last && i <= size; i += stride) {
-        range.last = i - 1;
-        MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
-        MPI_Comm_create(testComm, testgroup, &testComm);
         if (rank == 0) {
-            uint64_t items_all = i * items;
-            if(num_dirs_in_tree_calc){
-              items_all *= num_dirs_in_tree_calc;
+            uint64_t items_all = i * o.items;
+            if(o.num_dirs_in_tree_calc){
+              items_all *= o.num_dirs_in_tree_calc;
             }
-            if (files_only && dirs_only) {
+            if (o.files_only && o.dirs_only) {
                 VERBOSE(0,-1,"%d tasks, "LLU" files/directories", i, items_all);
-            } else if (files_only) {
-                if (!shared_file) {
+            } else if (o.files_only) {
+                if (! o.shared_file) {
                     VERBOSE(0,-1,"%d tasks, "LLU" files", i, items_all);
                 }
                 else {
                     VERBOSE(0,-1,"%d tasks, 1 file", i);
                 }
-            } else if (dirs_only) {
+            } else if (o.dirs_only) {
                 VERBOSE(0,-1,"%d tasks, "LLU" directories", i, items_all);
             }
         }
@@ -2291,39 +2565,42 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
         for (j = 0; j < iterations; j++) {
             // keep track of the current status for stonewalling
-            mdtest_iteration(i, j, testgroup, & summary_table[j]);
+            mdtest_iteration(i, j, & o.summary_table[j]);
         }
-        if (print_rate_and_time){
-          summarize_results(iterations, 0);
-          summarize_results(iterations, 1);
-        }else{
-          summarize_results(iterations, print_time);
+        summarize_results(iterations, aggregated_results);
+        if(o.saveRankDetailsCSV){
+          StoreRankInformation(iterations, aggregated_results);
         }
-        if (i == 1 && stride > 1) {
-            i = 0;
+        int total_errors = 0;
+        MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
+        if(rank == 0 && total_errors){
+            VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
         }
+
+        MPI_Comm_free(&testComm);
+    }
+    
+    MPI_Group_free(&worldgroup);
+    testComm = world_com;
+
+    if (created_root_dir && o.remove_only && o.backend->rmdir(o.testdirpath, o.backend_options) != 0) {
+        FAIL("Unable to remove test directory path %s", o.testdirpath);
     }
 
-    if (created_root_dir && remove_only && backend->rmdir(testdirpath, backend_options) != 0) {
-        FAIL("Unable to remove test directory path %s", testdirpath);
-    }
-
-    if(verification_error){
-      VERBOSE(0, -1, "\nERROR: verifying the data read! Take the performance values with care!\n");
-    }
     VERBOSE(0,-1,"-- finished at %s --\n", PrintTimestamp());
 
-    if (random_seed > 0) {
-        free(rand_array);
+    if (o.random_seed > 0) {
+        free(o.rand_array);
     }
 
-    if (backend->finalize){
-      backend->finalize(backend_options);
+    if (o.backend->finalize){
+      o.backend->finalize(o.backend_options);
     }
 
-    if (write_bytes > 0) {
-      free(write_buffer);
+    if (o.write_bytes > 0) {
+      aligned_buffer_free(o.write_buffer, o.gpu_memory_flags);
     }
+    free(o.summary_table);
 
-    return summary_table;
+    return aggregated_results;
 }

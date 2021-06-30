@@ -11,23 +11,24 @@ Running IOR
 -----------
 There are two ways of running IOR:
 
-    1) Command line with arguments -- executable followed by command line
-        options.
+    1) Command line with arguments -- executable followed by command line options.
 
-        ::
-            $ ./IOR -w -r -o filename
+       .. code-block:: shell
 
-        This performs a write and a read to the file 'filename'.
+        $ ./IOR -w -r -o filename
+
+       This performs a write and a read to the file 'filename'.
 
     2) Command line with scripts -- any arguments on the command line will
-        establish the default for the test run, but a script may be used in
-        conjunction with this for varying specific tests during an execution of
-        the code. Only arguments before the script will be used!
+       establish the default for the test run, but a script may be used in
+       conjunction with this for varying specific tests during an execution of
+       the code. Only arguments before the script will be used!
 
-        ::
-            $ ./IOR -W -f script
+       .. code-block:: shell
 
-        This defaults all tests in 'script' to use write data checking.
+        $ ./IOR -W -f script
+
+       This defaults all tests in 'script' to use write data checking.
 
 
 In this tutorial the first one is used as it is much easier to toy around with
@@ -40,10 +41,10 @@ Getting Started with IOR
 
 IOR writes data sequentially with the following parameters:
 
-   * blockSize (-b)
-   * transferSize (-t)
-   * segmentCount (-s)
-   * numTasks (-n)
+   * ``blockSize`` (``-b``)
+   * ``transferSize`` (``-t``)
+   * ``segmentCount`` (``-s``)
+   * ``numTasks`` (``-n``)
 
 which are best illustrated with a diagram:
 
@@ -52,30 +53,34 @@ which are best illustrated with a diagram:
 
 These four parameters are all you need to get started with IOR.  However,
 naively running IOR usually gives disappointing results.  For example, if we run
-a four-node IOR test that writes a total of 16 GiB::
+a four-node IOR test that writes a total of 16 GiB:
 
-    $ mpirun -n 64 ./ior -t 1m -b 16m -s 16
-    ...
-    access bw(MiB/s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s) iter
-    ------ --------- ---------- --------- -------- -------- -------- -------- ----
-    write  427.36    16384      1024.00   0.107961 38.34    32.48    38.34    2
-    read   239.08    16384      1024.00   0.005789 68.53    65.53    68.53    2
-    remove -         -          -         -        -        -        0.534400 2
+.. code-block:: shell
+
+   $ mpirun -n 64 ./ior -t 1m -b 16m -s 16
+   ...
+   access bw(MiB/s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s) iter
+   ------ --------- ---------- --------- -------- -------- -------- -------- ----
+   write  427.36    16384      1024.00   0.107961 38.34    32.48    38.34    2
+   read   239.08    16384      1024.00   0.005789 68.53    65.53    68.53    2
+   remove -         -          -         -        -        -        0.534400 2
 
 
 we can only get a couple hundred megabytes per second out of a Lustre file
 system that should be capable of a lot more.
 
 Switching from writing to a single-shared file to one file per process using the
--F (filePerProcess=1) option changes the performance dramatically::
+``-F`` (``filePerProcess=1``) option changes the performance dramatically:
 
-    $ mpirun -n 64 ./ior -t 1m -b 16m -s 16 -F
-    ...
-    access bw(MiB/s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s) iter
-    ------ --------- ---------- --------- -------- -------- -------- -------- ----
-    write  33645     16384      1024.00   0.007693 0.486249 0.195494 0.486972 1
-    read   149473    16384      1024.00   0.004936 0.108627 0.016479 0.109612 1
-    remove -         -          -         -        -        -        6.08     1
+.. code-block:: shell
+
+   $ mpirun -n 64 ./ior -t 1m -b 16m -s 16 -F
+   ...
+   access bw(MiB/s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s) iter
+   ------ --------- ---------- --------- -------- -------- -------- -------- ----
+   write  33645     16384      1024.00   0.007693 0.486249 0.195494 0.486972 1
+   read   149473    16384      1024.00   0.004936 0.108627 0.016479 0.109612 1
+   remove -         -          -         -        -        -        6.08     1
 
 
 This is in large part because letting each MPI process work on its own file cuts
@@ -123,7 +128,7 @@ There are a couple of ways to measure the read performance of the underlying
 Lustre file system. The most crude way is to simply write more data than will
 fit into the total page cache so that by the time the write phase has completed,
 the beginning of the file has already been evicted from cache. For example,
-increasing the number of segments (-s) to write more data reveals the point at
+increasing the number of segments (``-s``) to write more data reveals the point at
 which the nodes' page cache on my test system runs over very clearly:
 
 .. image:: tutorial-ior-overflowing-cache.png
@@ -142,17 +147,19 @@ written by node N-1.
 Since page cache is not shared between compute nodes, shifting tasks this way
 ensures that each MPI process is reading data it did not write.
 
-IOR provides the -C option (reorderTasks) to do this, and it forces each MPI
+IOR provides the ``-C`` option (``reorderTasks``) to do this, and it forces each MPI
 process to read the data written by its neighboring node. Running IOR with
-this option gives much more credible read performance::
+this option gives much more credible read performance:
 
-    $ mpirun -n 64 ./ior -t 1m -b 16m -s 16 -F -C
-    ...
-    access bw(MiB/s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s) iter
-    ------ --------- ---------- --------- -------- -------- -------- -------- ----
-    write  41326     16384      1024.00   0.005756 0.395859 0.095360 0.396453 0
-    read   3310.00   16384      1024.00   0.011786 4.95     4.20     4.95     1
-    remove -         -          -         -        -        -        0.237291 1
+.. code-block:: shell
+
+   $ mpirun -n 64 ./ior -t 1m -b 16m -s 16 -F -C
+   ...
+   access bw(MiB/s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s) iter
+   ------ --------- ---------- --------- -------- -------- -------- -------- ----
+   write  41326     16384      1024.00   0.005756 0.395859 0.095360 0.396453 0
+   read   3310.00   16384      1024.00   0.011786 4.95     4.20     4.95     1
+   remove -         -          -         -        -        -        0.237291 1
 
 
 But now it should seem obvious that the write performance is also ridiculously
@@ -166,16 +173,18 @@ pages we just wrote to flush out to Lustre. Including the time it takes for
 fsync() to finish gives us a measure of how long it takes for our data to write
 to the page cache and for the page cache to write back to Lustre.
 
-IOR provides another convenient option, -e (fsync), to do just this. And, once
-again, using this option changes our performance measurement quite a bit::
+IOR provides another convenient option, ``-e`` (fsync), to do just this. And, once
+again, using this option changes our performance measurement quite a bit:
 
-    $ mpirun -n 64 ./ior -t 1m -b 16m -s 16 -F -C -e
-    ...
-    access bw(MiB/s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s) iter
-    ------ --------- ---------- --------- -------- -------- -------- -------- ----
-    write  2937.89   16384      1024.00   0.011841 5.56     4.93     5.58     0
-    read   2712.55   16384      1024.00   0.005214 6.04     5.08     6.04     3
-    remove -         -          -         -        -        -        0.037706 0
+.. code-block:: shell
+
+   $ mpirun -n 64 ./ior -t 1m -b 16m -s 16 -F -C -e
+   ...
+   access bw(MiB/s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s) iter
+   ------ --------- ---------- --------- -------- -------- -------- -------- ----
+   write  2937.89   16384      1024.00   0.011841 5.56     4.93     5.58     0
+   read   2712.55   16384      1024.00   0.005214 6.04     5.08     6.04     3
+   remove -         -          -         -        -        -        0.037706 0
 
 
 and we finally have a believable bandwidth measurement for our file system.
@@ -192,16 +201,17 @@ the best choice.  There are several ways in which we can get clever and defeat
 page cache in a more general sense to get meaningful performance numbers.
 
 When measuring write performance, bypassing page cache is actually quite simple;
-opening a file with the O_DIRECT flag going directly to disk.  In addition,
-the fsync() call can be inserted into applications, as is done with IOR's -e
+opening a file with the ``O_DIRECT`` flag going directly to disk.  In addition,
+the ``fsync()`` call can be inserted into applications, as is done with IOR's ``-e``
 option.
 
 Measuring read performance is a lot trickier.  If you are fortunate enough to
 have root access on a test system, you can force the Linux kernel to empty out
 its page cache by doing
 
-::
-    # echo 1 > /proc/sys/vm/drop_caches
+.. code-block:: shell
+
+   # echo 1 > /proc/sys/vm/drop_caches
 
 and in fact, this is often good practice before running any benchmark
 (e.g., Linpack) because it ensures that you aren't losing performance to the
@@ -210,23 +220,25 @@ memory for its own use.
 
 Unfortunately, many of us do not have root on our systems, so we have to get
 even more clever.  As it turns out, there is a way to pass a hint to the kernel
-that a file is no longer needed in page cache::
+that a file is no longer needed in page cache:
 
-    #define _XOPEN_SOURCE 600
-    #include <unistd.h>
-    #include <fcntl.h>
-    int main(int argc, char *argv[]) {
-        int fd;
-        fd = open(argv[1], O_RDONLY);
-        fdatasync(fd);
-        posix_fadvise(fd, 0,0,POSIX_FADV_DONTNEED);
-        close(fd);
-        return 0;
-    }
+.. code-block:: c
 
-The effect of passing POSIX_FADV_DONTNEED using posix_fadvise() is usually that
+   #define _XOPEN_SOURCE 600
+   #include <unistd.h>
+   #include <fcntl.h>
+   int main(int argc, char *argv[]) {
+       int fd;
+       fd = open(argv[1], O_RDONLY);
+       fdatasync(fd);
+       posix_fadvise(fd, 0,0,POSIX_FADV_DONTNEED);
+       close(fd);
+       return 0;
+   }
+
+The effect of passing POSIX_FADV_DONTNEED using ``posix_fadvise()`` is usually that
 all pages belonging to that file are evicted from page cache in Linux.  However,
-this is just a hint--not a guarantee--and the kernel evicts these pages
+this is just a hint --not a guarantee-- and the kernel evicts these pages
 asynchronously, so it may take a second or two for pages to actually leave page
 cache.  Fortunately, Linux also provides a way to probe pages in a file to see
 if they are resident in memory.

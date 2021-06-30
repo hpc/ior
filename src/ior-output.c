@@ -21,7 +21,7 @@ void PrintTableHeader(){
     fprintf(out_resultfile, "access    bw(MiB/s)  IOPS       Latency(s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter\n");
     fprintf(out_resultfile, "------    ---------  ----       ----------  ---------- ---------  --------   --------   --------   --------   ----\n");
   }else if(outputFormat == OUTPUT_CSV){
-    fprintf(out_resultfile, "access,bw(MiB/s),IOPS,Latency,block(KiB),xfer(KiB),open(s),wr/rd(s),close(s),total(s),iter\n");
+    fprintf(out_resultfile, "access,bw(MiB/s),IOPS,Latency,block(KiB),xfer(KiB),open(s),wr/rd(s),close(s),total(s),numTasks,iter\n");
   }
 }
 
@@ -260,6 +260,7 @@ void PrintReducedResult(IOR_test_t *test, int access, double bw, double iops, do
     PrintKeyValDouble("wrRdTime", diff_subset[1]);
     PrintKeyValDouble("closeTime", diff_subset[2]);
     PrintKeyValDouble("totalTime", totalTime);
+    PrintKeyValInt("Numtasks", test->params.numTasks);
     fprintf(out_resultfile, "%d\n", rep);
   }
 
@@ -304,23 +305,6 @@ void PrintHeader(int argc, char **argv)
                 }
                 PrintKeyValEnd();
         }
-
-#ifdef _NO_MPI_TIMER
-        if (verbose >= VERBOSE_2)
-                fprintf(out_logfile, "Using unsynchronized POSIX timer\n");
-#else                           /* not _NO_MPI_TIMER */
-        if (MPI_WTIME_IS_GLOBAL) {
-                if (verbose >= VERBOSE_2)
-                    fprintf(out_logfile, "Using synchronized MPI timer\n");
-        } else {
-                if (verbose >= VERBOSE_2)
-                  fprintf(out_logfile, "Using unsynchronized MPI timer\n");
-        }
-#endif                          /* _NO_MPI_TIMER */
-        if (verbose >= VERBOSE_1) {
-                fprintf(out_logfile, "Start time skew across all tasks: %.02f sec\n",
-                        wall_clock_deviation);
-        }
         if (verbose >= VERBOSE_3) {     /* show env */
                 fprintf(out_logfile, "STARTING ENVIRON LOOP\n");
                 for (i = 0; environ[i] != NULL; i++) {
@@ -346,7 +330,9 @@ void ShowTestStart(IOR_param_t *test)
   PrintKeyValInt("TestID", test->id);
   PrintKeyVal("StartTime", CurrentTimeString());
 
-  ShowFileSystemSize(test);
+  char filename[MAX_PATHLEN];
+  GetTestFileName(filename, test);
+  ShowFileSystemSize(filename, test->backend, test->backend_options);
 
   if (verbose >= VERBOSE_3 || outputFormat == OUTPUT_JSON) {
     char* data_packets[] = {"g","t","o","i"};
@@ -385,7 +371,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("randomOffset", test->randomOffset);
     PrintKeyValInt("checkWrite", test->checkWrite);
     PrintKeyValInt("checkRead", test->checkRead);
-    PrintKeyValInt("storeFileOffset", test->storeFileOffset);
+    PrintKeyValInt("dataPacketType", test->dataPacketType);
     PrintKeyValInt("keepFile", test->keepFile);
     PrintKeyValInt("keepFileWithError", test->keepFileWithError);
     PrintKeyValInt("warningAsErrors", test->warningAsErrors);
@@ -620,9 +606,6 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           PrintKeyValInt("taskPerNodeOffset", params->taskPerNodeOffset);
           PrintKeyValInt("reorderTasksRandom", params->reorderTasksRandom);
           PrintKeyValInt("reorderTasksRandomSeed", params->reorderTasksRandomSeed);
-          PrintKeyValInt("segmentCount", params->segmentCount);
-          PrintKeyValInt("blockSize", params->blockSize);
-          PrintKeyValInt("transferSize", params->transferSize);
           PrintKeyValDouble("bwMaxMIB", bw->max / MEBIBYTE);
           PrintKeyValDouble("bwMinMIB", bw->min / MEBIBYTE);
           PrintKeyValDouble("bwMeanMIB", bw->mean / MEBIBYTE);

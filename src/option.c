@@ -253,8 +253,10 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
   int i = 0;
   if(arg != NULL){
     arg[0] = 0;
-    arg++;
     replaced_equal = 1;
+
+    // Check empty value
+    arg = (arg[1] == 0) ? NULL : arg + 1;
   }
   *flag_parsed_next = 0;
 
@@ -264,11 +266,13 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
       return;
   }
   txt++;
-
+  int parsed = 0;
+  
+  // printf("Parsing: %s : %s\n", txt, arg);
   // support groups of multiple flags like -vvv or -vq
   for(int flag_index = 0; flag_index < strlen(txt); ++flag_index){
     // don't loop looking for multiple flags if we already processed a long option
-    if(txt[0] == '-' && flag_index > 0)
+    if(txt[flag_index] == '=' || (txt[0] == '-' && flag_index > 0))
         break;
 
     for(int m = 0; m < opt_all->module_count; m++ ){
@@ -281,6 +285,7 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
           continue;
         }
         if ( (o->shortVar == txt[flag_index]) || (strlen(txt) > 2 && txt[0] == '-' && o->longVar != NULL && strcmp(txt + 1, o->longVar) == 0)){
+          //  printf("Found %s %c=%c? %d %d\n", o->help, o->shortVar, txt[flag_index], (o->shortVar == txt[flag_index]), (strlen(txt) > 2 && txt[0] == '-' && o->longVar != NULL && strcmp(txt + 1, o->longVar) == 0));
           // now process the option.
           switch(o->arg){
             case (OPTION_FLAG):{
@@ -296,7 +301,7 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
             case (OPTION_OPTIONAL_ARGUMENT):
             case (OPTION_REQUIRED_ARGUMENT):{
               // check if next is an argument
-              if(arg == NULL){
+              if(arg == NULL && replaced_equal != 1){
                 if(o->shortVar == txt[0] && txt[1] != 0){
                   arg = & txt[1];
                 }else{
@@ -370,12 +375,13 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
             (*requiredArgsSeen)++;
           }
 
-          return;
+          parsed = 1;
         }
       }
     }
   }
-
+  if(parsed) return;
+  
   if(strcmp(txt, "h") == 0 || strcmp(txt, "-help") == 0){
     *print_help = 1;
   }else{

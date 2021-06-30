@@ -61,6 +61,18 @@ extern int aiori_warning_as_errors;
 } while (0)
 
 
+/* warning with format string and errno printed */
+#define EINFO(FORMAT, ...) do {                                         \
+        if (verbose > VERBOSE_2) {                                       \
+            fprintf(out_logfile, "INFO: " FORMAT ", (%s:%d).\n", \
+                    __VA_ARGS__,  __FILE__, __LINE__); \
+        } else {                                                         \
+            fprintf(out_logfile, "INFO: " FORMAT "\n",  \
+                    __VA_ARGS__);                \
+        }                                                                \
+        fflush(out_logfile);                                                  \
+} while (0)
+
 /* display error message with format string and terminate execution */
 #define ERRF(FORMAT, ...) do {                                           \
         fprintf(out_logfile, "ERROR: " FORMAT ", (%s:%d)\n", \
@@ -94,12 +106,13 @@ extern int aiori_warning_as_errors;
 #define MPI_CHECKF(MPI_STATUS, FORMAT, ...) do {                         \
     char resultString[MPI_MAX_ERROR_STRING];                             \
     int resultLength;                                                    \
+    int checkf_mpi_status = MPI_STATUS;                                  \
                                                                          \
-    if (MPI_STATUS != MPI_SUCCESS) {                                     \
-        MPI_Error_string(MPI_STATUS, resultString, &resultLength);       \
-        fprintf(out_logfile, "ERROR: " FORMAT ", MPI %s, (%s:%d)\n",      \
+    if (checkf_mpi_status != MPI_SUCCESS) {                              \
+        MPI_Error_string(checkf_mpi_status, resultString, &resultLength);\
+        fprintf(out_logfile, "ERROR: " FORMAT ", MPI %s, (%s:%d)\n",     \
                 __VA_ARGS__, resultString, __FILE__, __LINE__);          \
-        fflush(out_logfile);                                                  \
+        fflush(out_logfile);                                             \
         MPI_Abort(MPI_COMM_WORLD, -1);                                   \
     }                                                                    \
 } while(0)
