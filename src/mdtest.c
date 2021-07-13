@@ -719,6 +719,8 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         /* below temp used to be hiername */
         VERBOSE(3,5,"mdtest_read file: %s", item);
 
+        o.hints.filePerProc = ! o.shared_file;
+
         /* open file for reading */
         aiori_fh = o.backend->open (item, O_RDONLY, o.backend_options);
         if (NULL == aiori_fh) {
