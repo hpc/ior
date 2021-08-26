@@ -37,6 +37,14 @@
 #include "utilities.h"
 #include "iordef.h"
 
+#if defined(DAOS_API_VERSION_MAJOR) && defined(DAOS_API_VERSION_MINOR)
+#define CHECK_DAOS_API_VERSION(major, minor)                            \
+        ((DAOS_API_VERSION_MAJOR > (major))                             \
+         || (DAOS_API_VERSION_MAJOR == (major) && DAOS_API_VERSION_MINOR >= (minor)))
+#else
+#define CHECK_DAOS_API_VERSION(major, minor) 0
+#endif
+
 static dfs_t *dfs;
 static daos_handle_t poh, coh;
 static daos_oclass_id_t objectClass;
@@ -59,9 +67,6 @@ enum handleType {
 /************************** O P T I O N S *****************************/
 typedef struct {
         char	*pool;
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-        char	*svcl;
-#endif
         char	*group;
         char	*cont;
 	int	chunk_size;
@@ -84,12 +89,9 @@ static option_help * DFS_options(aiori_mod_opt_t ** init_backend_options,
         *init_backend_options = (aiori_mod_opt_t *) o;
 
         option_help h [] = {
-                {0, "dfs.pool", "Pool uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->pool},
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-                {0, "dfs.svcl", "Pool SVCL", OPTION_OPTIONAL_ARGUMENT, 's', &o->svcl},
-#endif
+                {0, "dfs.pool", "Pool label or uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->pool},
                 {0, "dfs.group", "DAOS system name", OPTION_OPTIONAL_ARGUMENT, 's', &o->group},
-                {0, "dfs.cont", "Container uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->cont},
+                {0, "dfs.cont", "Container label or uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->cont},
                 {0, "dfs.chunk_size", "File chunk size in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'd', &o->chunk_size},
                 {0, "dfs.oclass", "File object class", OPTION_OPTIONAL_ARGUMENT, 's', &o->oclass},
                 {0, "dfs.dir_oclass", "Directory object class", OPTION_OPTIONAL_ARGUMENT, 's',
@@ -196,11 +198,6 @@ static int DFS_check_params(aiori_mod_opt_t * options){
 
         if (o->pool == NULL || o->cont == NULL)
                 ERR("Invalid pool or container options\n");
-
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-        if (o->svcl == NULL)
-                ERR("Invalid SVCL\n");
-#endif
 
         if (testComm == MPI_COMM_NULL)
                 testComm = MPI_COMM_WORLD;
@@ -482,11 +479,6 @@ DFS_Init(aiori_mod_opt_t * options)
         if (o->pool == NULL || o->cont == NULL)
                 return;
 
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-        if (o->svcl == NULL)
-                return;
-#endif
-
         pool_connect = cont_create = cont_open = dfs_mounted = false;
 
 	rc = daos_init();
@@ -503,44 +495,42 @@ DFS_Init(aiori_mod_opt_t * options)
         DCHECK(rc, "Failed to initialize dir hashtable");
 
         if (rank == 0) {
-                uuid_t pool_uuid;
                 daos_pool_info_t pool_info;
                 daos_cont_info_t co_info;
 
+                INFO(VERBOSE_1, "DFS Pool = %s", o->pool);
+                INFO(VERBOSE_1, "DFS Container = %s", o->cont);
+
+#if CHECK_DAOS_API_VERSION(1, 4)
+                rc = daos_pool_connect(o->pool, o->group, DAOS_PC_RW, &poh, &pool_info, NULL);
+                DCHECK(rc, "Failed to connect to pool %s", o->pool);
+                pool_connect = true;
+
+                rc = daos_cont_open(poh, o->cont, DAOS_COO_RW, &coh, &co_info, NULL);
+#else
+                uuid_t pool_uuid;
+
                 rc = uuid_parse(o->pool, pool_uuid);
                 DCHECK(rc, "Failed to parse 'Pool uuid': %s", o->pool);
-
                 rc = uuid_parse(o->cont, co_uuid);
                 DCHECK(rc, "Failed to parse 'Cont uuid': %s", o->cont);
 
-                INFO(VERBOSE_1, "Pool uuid = %s", o->pool);
-                INFO(VERBOSE_1, "DFS Container namespace uuid = %s", o->cont);
-
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-                d_rank_list_t *svcl = NULL;
-
-                svcl = daos_rank_list_parse(o->svcl, ":");
-                if (svcl == NULL)
-                        ERR("Failed to allocate svcl");
-                INFO(VERBOSE_1, "Pool svcl = %s", o->svcl);
-
-                /** Connect to DAOS pool */
-                rc = daos_pool_connect(pool_uuid, o->group, svcl, DAOS_PC_RW,
-                                       &poh, &pool_info, NULL);
-                d_rank_list_free(svcl);
-#else
-                rc = daos_pool_connect(pool_uuid, o->group, DAOS_PC_RW,
-                                       &poh, &pool_info, NULL);
-#endif
-                DCHECK(rc, "Failed to connect to pool");
+                rc = daos_pool_connect(pool_uuid, o->group, DAOS_PC_RW, &poh, &pool_info, NULL);
+                DCHECK(rc, "Failed to connect to pool %s", o->pool);
                 pool_connect = true;
 
-                rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
-                                    NULL);
+                rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+#endif
                 /* If NOEXIST we create it */
                 if (rc == -DER_NONEXIST) {
                         INFO(VERBOSE_1, "Creating DFS Container ...\n");
-
+#if CHECK_DAOS_API_VERSION(1, 4)
+                        if (uuid_parse(o->cont, co_uuid) != 0)
+                                /** user passes in label */
+                                rc = dfs_cont_create_with_label(poh, o->cont, NULL, &co_uuid, &coh, NULL);
+                        else
+                                /** user passes in uuid */
+#endif
                         rc = dfs_cont_create(poh, co_uuid, NULL, &coh, NULL);
                         if (rc)
                                 DCHECK(rc, "Failed to create container");
@@ -573,8 +563,13 @@ out:
                         dfs_umount(dfs);
                 if (cont_open)
                         daos_cont_close(coh, NULL);
-                if (cont_create && rank == 0)
+                if (cont_create && rank == 0) {
+#if CHECK_DAOS_API_VERSION(1, 4)
+                        daos_cont_destroy(poh, o->cont, 1, NULL);
+#else
                         daos_cont_destroy(poh, co_uuid, 1, NULL);
+#endif
+                }
                 if (pool_connect)
                         daos_pool_disconnect(poh, NULL);
         }
@@ -650,9 +645,6 @@ DFS_Finalize(aiori_mod_opt_t *options)
 out:
         /** reset tunables */
 	o->pool		= NULL;
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-	o->svcl		= NULL;
-#endif
 	o->group	= NULL;
 	o->cont		= NULL;
 	o->chunk_size	= 0;
