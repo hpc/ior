@@ -1521,8 +1521,6 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
                 ERR("random offset and constant reorder tasks specified with single-shared-file. Choose one and resubmit");
         if (test->randomOffset && test->checkRead && test->randomSeed == -1)
                 ERR("random offset with read check option requires to set the random seed");
-        if (test->randomOffset && test->dataPacketType == DATA_OFFSET)
-                ERR("random offset not available with store file offset option)");
         if ((strcasecmp(test->api, "HDF5") == 0) && test->randomOffset)
                 ERR("random offset not available with HDF5");
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->randomOffset)
