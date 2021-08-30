@@ -528,7 +528,14 @@ int POSIX_Mknod(char *testFileName)
  */
 aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
-        int fd_oflag = O_BINARY | O_RDWR;
+        int fd_oflag = O_BINARY;
+        if(flags & IOR_RDONLY){
+          fd_oflag |= O_RDONLY;
+        }else if(flags & IOR_WRONLY){
+          fd_oflag |= O_WRONLY;
+        }else{
+          fd_oflag |= O_RDWR;
+        }
         posix_fd * pfd = safeMalloc(sizeof(posix_fd));
         posix_options_t * o = (posix_options_t*) param;
         if (o->direct_io == TRUE){

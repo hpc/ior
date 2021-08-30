@@ -1442,6 +1442,14 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
         IOR_param_t defaults;
         init_IOR_Param_t(&defaults, com);
 
+        if (test->stoneWallingStatusFile && test->keepFile == 0)
+          ERR("a StoneWallingStatusFile is only sensible when splitting write/read into multiple executions of ior, please use -k");
+        if (test->stoneWallingStatusFile && test->stoneWallingWearOut == 0 && test->writeFile)
+          ERR("the StoneWallingStatusFile is only sensible for a write test when using  stoneWallingWearOut");
+        if (test->deadlineForStonewalling == 0 && test->stoneWallingWearOut > 0)
+          ERR("the stoneWallingWearOut is only sensible when setting a stonewall deadline with -D");
+        if (test->stoneWallingStatusFile && test->testscripts)
+          WARN("the StoneWallingStatusFile only preserves the last experiment, make sure that each run uses a separate status file!");
         if (test->repetitions <= 0)
                 WARN_RESET("too few test repetitions",
                            test, &defaults, repetitions);
@@ -1513,8 +1521,6 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
                 ERR("random offset and constant reorder tasks specified with single-shared-file. Choose one and resubmit");
         if (test->randomOffset && test->checkRead && test->randomSeed == -1)
                 ERR("random offset with read check option requires to set the random seed");
-        if (test->randomOffset && test->dataPacketType == DATA_OFFSET)
-                ERR("random offset not available with store file offset option)");
         if ((strcasecmp(test->api, "HDF5") == 0) && test->randomOffset)
                 ERR("random offset not available with HDF5");
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->randomOffset)
@@ -1652,7 +1658,6 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_
           amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
-          (*transferCount)++;
           *errors += CompareData(buffer, transfer, *transferCount, test, offset, pretendRank, WRITECHECK);
   } else if (access == READCHECK) {
           ((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
@@ -1672,7 +1677,7 @@ static void prefillSegment(IOR_param_t *test, void * randomPrefillBuffer, int pr
   IOR_offset_t transferCount;
   int errors;
   ioBuffers->buffer = randomPrefillBuffer;
-  for (int i = startSegment; i < endSegment; i++){
+  for (IOR_offset_t i = startSegment; i < endSegment; i++){
     for (int j = 0; j < offsets; j++) {
       IOR_offset_t offset = j * test->randomPrefillBlocksize;
       if (test->filePerProc) {
@@ -1700,7 +1705,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
         double startForStonewall;
         int hitStonewall;
-        int i, j;
+        IOR_offset_t i, j;
         IOR_point_t *point = ((access == WRITE) || (access == WRITECHECK)) ?
                              &results->write : &results->read;
 
