@@ -917,9 +917,9 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
     o.phase_cleanup = o.phase_precreate = o.phase_benchmark = 1;
   }
   if (! o.phase_precreate && o.phase_benchmark && o.stonewall_timer && ! o.stonewall_timer_wear_out){
-    if(o.rank == 0)
-      ERR("Invalid options, if running only the benchmark phase using -2 with stonewall option then use stonewall wear-out");
-    exit(1);
+    if(o.rank == 0){
+      WARN("Dangerous option combination: and benchmark phase (-2) using with stonewall option (-w) without stonewall wear-out will lead to files that cannot be cleaned up using the cleanup phase(-3). Also multiple iterations are problematic.");
+    }
   }
   if( o.random_seed == -1 ){
       o.random_seed = time(NULL);
