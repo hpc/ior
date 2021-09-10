@@ -467,28 +467,43 @@ DFS_Init(aiori_mod_opt_t * options)
 
         dfs_init_count++;
         if (dfs_init_count > 1) {
+                pool_connect = cont_create = cont_open = dfs_mounted = true;
                 /** chunk size and oclass can change between different runs */
-                if (o->oclass)
+                if (o->oclass) {
                         objectClass = daos_oclass_name2id(o->oclass);
-                if (o->dir_oclass)
+                        if (objectClass == OC_UNKNOWN)
+                                DERR("Invalid DAOS object class: %s\n", o->oclass);
+                }
+                if (o->dir_oclass) {
                         dir_oclass = daos_oclass_name2id(o->dir_oclass);
+                        if (dir_oclass == OC_UNKNOWN)
+                                DERR("Invalid DAOS directory object class: %s\n", o->dir_oclass);
+                }
                 return;
         }
 
         /** shouldn't be fatal since it can be called with POSIX backend selection */
-        if (o->pool == NULL || o->cont == NULL)
+        if (o->pool == NULL || o->cont == NULL) {
+                dfs_init_count--;
                 return;
+        }
 
         pool_connect = cont_create = cont_open = dfs_mounted = false;
 
 	rc = daos_init();
         DCHECK(rc, "Failed to initialize daos");
 
-        if (o->oclass)
+        if (o->oclass) {
                 objectClass = daos_oclass_name2id(o->oclass);
+                if (objectClass == OC_UNKNOWN)
+                        DERR("Invalid DAOS object class: %s\n", o->oclass);
+        }
 
-        if (o->dir_oclass)
+        if (o->dir_oclass) {
                 dir_oclass = daos_oclass_name2id(o->dir_oclass);
+                if (dir_oclass == OC_UNKNOWN)
+                        DERR("Invalid DAOS directory object class: %s\n", o->dir_oclass);
+        }
 
         rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU,
                                  4, NULL, &hdl_hash_ops, &aiori_dfs_hash);
@@ -572,6 +587,11 @@ out:
                 }
                 if (pool_connect)
                         daos_pool_disconnect(poh, NULL);
+                if (aiori_dfs_hash)
+                        d_hash_table_destroy(aiori_dfs_hash, false);
+                daos_fini();
+                dfs_init_count--;
+                ERR("Failed to initialize DAOS DFS driver");
         }
 }
 
