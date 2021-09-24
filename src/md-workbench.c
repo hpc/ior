@@ -899,6 +899,8 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
   }
 
   memset(& o.hints, 0, sizeof(o.hints));
+  o.hints.filePerProc = 1;
+  
   options_all_t * global_options = airoi_create_all_module_options(options);
   int parsed = option_parse(argc, argv, global_options);
   o.backend = aiori_select(o.interface);
