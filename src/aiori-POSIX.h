@@ -19,6 +19,9 @@ typedef struct{
   int gpfs_hint_access;          /* use gpfs "access range" hint */
   int gpfs_release_token;        /* immediately release GPFS tokens after
                                     creating or opening a file */
+  int gpfs_finegrain_writesharing;  /* Enable fine grain write sharing */
+  int gpfs_finegrain_readsharing;   /* Enable fine grain read sharing */
+
   /* beegfs variables */
   int beegfs_numTargets;           /* number storage targets to use */
   int beegfs_chunkSize;            /* srtipe pattern for new files */

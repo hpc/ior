@@ -135,6 +135,10 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
 #ifdef HAVE_GPFS_FCNTL_H
     {0, "posix.gpfs.hintaccess", "", OPTION_FLAG, 'd', & o->gpfs_hint_access},
     {0, "posix.gpfs.releasetoken", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->gpfs_release_token},
+#ifdef HAVE_GPFSFINEGRAINWRITESHARING_T
+    {0, "posix.gpfs.finegrainwritesharing", "    Enable fine grain write sharing", OPTION_FLAG, 'd', & o->gpfs_finegrain_writesharing},
+    {0, "posix.gpfs.finegrainreadsharing", "     Enable fine grain read sharing", OPTION_FLAG, 'd', & o->gpfs_finegrain_readsharing},
+#endif
 
 #endif
 #ifdef HAVE_LUSTRE_USER
@@ -279,6 +283,61 @@ void gpfs_access_end(int fd, IOR_offset_t length, IOR_offset_t offset,  int acce
         }
 }
 
+#ifdef HAVE_GPFSFINEGRAINWRITESHARING_T
+/* This hint optimizes the performance of small strided
+   writes to a shared file from a parallel application */
+void gpfs_fineGrainWriteSharing(int fd)
+{
+        struct
+        {
+                gpfsFcntlHeader_t header;
+                gpfsFineGrainWriteSharing_t write;
+        } sharingHint;
+        int rc;
+
+        sharingHint.header.totalLength = sizeof(sharingHint);
+        sharingHint.header.fcntlVersion = GPFS_FCNTL_CURRENT_VERSION;
+        sharingHint.header.fcntlReserved = 0;
+
+        sharingHint.write.structLen = sizeof(sharingHint.write);
+        sharingHint.write.structType = GPFS_FINE_GRAIN_WRITE_SHARING;
+        sharingHint.write.fineGrainWriteSharing = 1;
+        sharingHint.write.taskId = -1;
+        sharingHint.write.totalTasks =  -1;
+        sharingHint.write.recordSize =  -1;
+
+        rc = gpfs_fcntl(fd, &sharingHint);
+        if (verbose >= VERBOSE_2 && rc != 0) {
+                EWARNF("gpfs_fcntl(%d, ...) fine grain write sharing hint failed.", fd);
+        }
+}
+
+/* This hint optimizes the performance of small strided
+   reads from a shared file from a parallel application */
+void gpfs_fineGrainReadSharing(int fd)
+{
+        struct
+        {
+                gpfsFcntlHeader_t header;
+                gpfsPrefetch_t read;
+        } sharingHint;
+        int rc;
+
+        sharingHint.header.totalLength = sizeof(sharingHint);
+        sharingHint.header.fcntlVersion = GPFS_FCNTL_CURRENT_VERSION;
+        sharingHint.header.fcntlReserved = 0;
+
+        sharingHint.read.structLen = sizeof(sharingHint.read);
+        sharingHint.read.structType = GPFS_PREFETCH;
+        sharingHint.read.prefetchEnableRead = 0;
+        sharingHint.read.prefetchEnableWrite = 1;
+
+        rc = gpfs_fcntl(fd, &sharingHint);
+        if (verbose >= VERBOSE_2 && rc != 0) {
+                EWARNF("gpfs_fcntl(%d, ...) fine grain read sharing hint failed.", fd);
+        }
+}
+#endif
 #endif
 
 #ifdef HAVE_BEEGFS_BEEGFS_H
@@ -500,6 +559,12 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
         if (o->gpfs_release_token ) {
                 gpfs_free_all_locks(pfd->fd);
         }
+#ifdef HAVE_GPFSFINEGRAINWRITESHARING_T
+        /* Enable fine grain write sharing */
+        if (o->gpfs_finegrain_writesharing) {
+                gpfs_fineGrainWriteSharing(pfd->fd);
+        }
+#endif
 #endif
 #ifdef HAVE_GPU_DIRECT
   if(o->gpuDirect){
@@ -564,6 +629,12 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
         if(o->gpfs_release_token) {
                 gpfs_free_all_locks(pfd->fd);
         }
+#ifdef HAVE_GPFSFINEGRAINWRITESHARING_T
+        /* Enable fine grain read sharing */
+        if (o->gpfs_finegrain_readsharing) {
+                gpfs_fineGrainReadSharing(pfd->fd);
+        }
+#endif
 #endif
 #ifdef HAVE_GPU_DIRECT
         if(o->gpuDirect){

@@ -70,6 +70,7 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
         AC_SEARCH_LIBS([gpfs_fcntl], [gpfs], [],
         [AC_MSG_ERROR([Library containing gpfs_fcntl symbols not found])
         ])
+        AC_CHECK_TYPES([gpfsFineGrainWriteSharing_t], [], [], [[#include <gpfs_fcntl.h>]])
     ])
 ])
 
