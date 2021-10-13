@@ -357,11 +357,17 @@ LUSTRE-SPECIFIC:
 
 GPFS-SPECIFIC:
 ================
-  * gpfsHintAccess       - use gpfs_fcntl hints to pre-declare accesses
+  --posix.gpfs.hintaccess              - use gpfs_fcntl hints to pre-declare accesses
 
-  * gpfsReleaseToken     - immediately after opening or creating file, release
-			   all locks.  Might help mitigate lock-revocation
-			   traffic when many processes write/read to same file.
+  --posix.gpfs.releasetoken            - immediately after opening or creating file, release
+                                         all locks.  Might help mitigate lock-revocation
+                                         traffic when many processes write/read to same file.
+
+  --posix.gpfs.finegrainwritesharing   - This hint optimizes the performance of small strided
+                                         writes to a shared file from a parallel application
+
+  --posix.gpfs.finegrainreadsharing    - This hint optimizes the performance of small strided
+                                         reads from a shared file from a parallel application
 
 BeeGFS-SPECIFIC (POSIX only):
 ================
