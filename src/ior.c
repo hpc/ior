@@ -1574,12 +1574,8 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
                 ERR("using readCheck only requires to write a timeStampSignature -- use -G");
         if (test->segmentCount < 0)
                 ERR("segment count must be positive value");
-        if ((test->blockSize % sizeof(IOR_size_t)) != 0)
-                ERR("block size must be a multiple of access size");
         if (test->blockSize < 0)
                 ERR("block size must be non-negative integer");
-        if ((test->transferSize % sizeof(IOR_size_t)) != 0)
-                ERR("transfer size must be a multiple of access size");
         if (test->transferSize < 0)
                 ERR("transfer size must be non-negative integer");
         if (test->transferSize == 0) {
