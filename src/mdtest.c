@@ -2206,7 +2206,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     option_help options [] = {
       {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & o.api},
       {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.branch_factor},
-      {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
+      {'d', NULL,        "directory or multiple directories where the test will run [dir|dir1@dir2@dir3...]", OPTION_OPTIONAL_ARGUMENT, 's', & path},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
       {'C', NULL,        "only create files/dirs", OPTION_FLAG, 'd', & o.create_only},
       {'T', NULL,        "only stat files/dirs", OPTION_FLAG, 'd', & o.stat_only},
