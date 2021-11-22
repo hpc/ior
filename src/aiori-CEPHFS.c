@@ -44,18 +44,21 @@ struct cephfs_options{
   char * user;
   char * conf;
   char * prefix;
+  int olazy;
 };
 
 static struct cephfs_options o = {
   .user = NULL,
   .conf = NULL,
   .prefix = NULL,
+  .olazy = 0,
 };
 
 static option_help options [] = {
       {0, "cephfs.user", "Username for the ceph cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.user},
       {0, "cephfs.conf", "Config file for the ceph cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.conf},
       {0, "cephfs.prefix", "mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', & o.prefix},
+      {0, "cephfs.olazy", "Enable Lazy I/O", OPTION_FLAG, 'd', & o.olazy},
       LAST_OPTION
 };
 
@@ -238,6 +241,12 @@ static aiori_fd_t *CEPHFS_Open(char *path, int flags, aiori_mod_opt_t *options)
         *fd = ceph_open(cmount, file, ceph_flags, mode);
         if (*fd < 0) {
                 CEPHFS_ERR("ceph_open failed", *fd);
+        }
+        if (o.olazy == TRUE) {
+                int ret = ceph_lazyio(cmount, *fd, 1);
+                if (ret != 0) {
+                        WARN("Error enabling lazy mode");
+                }
         }
         return (void *) fd;
 }
