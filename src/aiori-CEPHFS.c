@@ -44,6 +44,7 @@ struct cephfs_options{
   char * user;
   char * conf;
   char * prefix;
+  char * remote_prefix;
   int olazy;
 };
 
@@ -51,13 +52,15 @@ static struct cephfs_options o = {
   .user = NULL,
   .conf = NULL,
   .prefix = NULL,
+  .remote_prefix = NULL,
   .olazy = 0,
 };
 
 static option_help options [] = {
       {0, "cephfs.user", "Username for the ceph cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.user},
       {0, "cephfs.conf", "Config file for the ceph cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.conf},
-      {0, "cephfs.prefix", "mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', & o.prefix},
+      {0, "cephfs.prefix", "Mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', & o.prefix},
+      {0, "cephfs.remote_prefix", "Remote mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', & o.remote_prefix},
       {0, "cephfs.olazy", "Enable Lazy I/O", OPTION_FLAG, 'd', & o.olazy},
       LAST_OPTION
 };
@@ -139,10 +142,15 @@ static option_help * CEPHFS_options(){
 
 static void CEPHFS_Init()
 {
+        char *remote_prefix = "/";
+
         /* Short circuit if the options haven't been filled yet. */
         if (!o.user || !o.conf || !o.prefix) {
                 WARN("CEPHFS_Init() called before options have been populated!");
                 return;
+        }
+        if (o.remote_prefix != NULL) {
+                remote_prefix = o.remote_prefix;
         }
 
         /* Short circuit if the mount handle already exists */ 
@@ -164,7 +172,7 @@ static void CEPHFS_Init()
         }
 
         /* mount the handle */
-        ret = ceph_mount(cmount, o.prefix);
+        ret = ceph_mount(cmount, remote_prefix);
         if (ret) {
                 CEPHFS_ERR("unable to mount cephfs", ret);
                 ceph_shutdown(cmount);
