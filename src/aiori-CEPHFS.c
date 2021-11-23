@@ -57,8 +57,8 @@ static struct cephfs_options o = {
 };
 
 static option_help options [] = {
-      {0, "cephfs.user", "Username for the ceph cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.user},
-      {0, "cephfs.conf", "Config file for the ceph cluster", OPTION_REQUIRED_ARGUMENT, 's', & o.conf},
+      {0, "cephfs.user", "Username for the ceph cluster", OPTION_OPTIONAL_ARGUMENT, 's', & o.user},
+      {0, "cephfs.conf", "Config file for the ceph cluster", OPTION_OPTIONAL_ARGUMENT, 's', & o.conf},
       {0, "cephfs.prefix", "Mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', & o.prefix},
       {0, "cephfs.remote_prefix", "Remote mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', & o.remote_prefix},
       {0, "cephfs.olazy", "Enable Lazy I/O", OPTION_FLAG, 'd', & o.olazy},
