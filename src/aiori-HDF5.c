@@ -60,7 +60,7 @@
         if (strcmp(resultString, "Invalid minor error number") != 0)     \
             fprintf(stdout, "%s\n", resultString);                       \
         fprintf(stdout, "** exiting **\n");                              \
-        exit(-1);                                                        \
+        exit(EXIT_FAILURE);                                                        \
     }                                                                    \
 } while(0)
 #else                           /* ! (H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6) */
@@ -75,7 +75,7 @@
          *            char* mesg, size_t size)                           \
          */                                                              \
         fprintf(stdout, "** exiting **\n");                              \
-        exit(-1);                                                        \
+        exit(EXIT_FAILURE);                                                        \
     }                                                                    \
 } while(0)
 #endif                          /* H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6 */

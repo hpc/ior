@@ -851,12 +851,12 @@ static int return_position(){
     FILE * f = fopen(o.run_info_file, "r");
     if(! f){
       ERRF("[ERROR] Could not open %s for restart", o.run_info_file);
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     ret = fscanf(f, "pos: %d", & position);
     if (ret != 1){
       ERRF("Could not read from %s for restart", o.run_info_file);
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     fclose(f);
   }
@@ -871,7 +871,7 @@ static void store_position(int position){
   FILE * f = fopen(o.run_info_file, "w");
   if(! f){
     ERRF("[ERROR] Could not open %s for saving data", o.run_info_file);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   fprintf(f, "pos: %d\n", position);
   fclose(f);

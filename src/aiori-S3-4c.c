@@ -841,7 +841,7 @@ static IOR_offset_t S3_Xfer_internal(int          access,
          if (strlen(param->io_buf->eTag) != ETAG_SIZE+2) { /* quotes at both ends */
 					fprintf(stderr, "Rank %d: ERROR: expected ETag to be %d hex digits\n",
 							  rank, ETAG_SIZE);
-					exit(1);
+					exit(EXIT_FAILURE);
          }
 
 			// save the eTag for later
