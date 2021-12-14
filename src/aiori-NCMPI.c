@@ -39,7 +39,7 @@
                 __FILE__, __LINE__, MSG);                                \
         fprintf(stdout, "ERROR: %s.\n", ncmpi_strerror(NCMPI_RETURN));   \
         fprintf(stdout, "** exiting **\n");                              \
-        exit(-1);                                                        \
+        exit(EXIT_FAILURE);                                                        \
     }                                                                    \
 } while(0)
 

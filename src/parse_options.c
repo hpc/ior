@@ -95,7 +95,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 if (initialized)
                     MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
                 else
-                    exit(-1);
+                    exit(EXIT_FAILURE);
         }
         if (strcasecmp(option, "api") == 0) {
           params->api = strdup(value);
@@ -103,7 +103,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
           params->backend = aiori_select(params->api);
           if (params->backend == NULL){
             fprintf(out_logfile, "Could not load backend API %s\n", params->api);
-            exit(-1);
+            exit(EXIT_FAILURE);
           }
         } else if (strcasecmp(option, "summaryFile") == 0) {
           if (rank == 0){
@@ -258,7 +258,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                   if (initialized)
                       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
                   else
-                      exit(-1);
+                      exit(EXIT_FAILURE);
                 }
         }
 }
@@ -285,7 +285,7 @@ void ParseLine(char *line, IOR_param_t * test, options_all_t * module_options)
                 }
                 if(strlen(start) < 3){
                   fprintf(out_logfile, "Invalid option substring string: \"%s\" in \"%s\"\n", start, line);
-                  exit(1);
+                  exit(EXIT_FAILURE);
                 }
                 DecodeDirective(start, test, module_options);
                 start = end + 1;

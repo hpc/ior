@@ -315,7 +315,7 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
               if(arg == NULL){
                 const char str[] = {o->shortVar, 0};
                 printf("Error, argument missing for option %s\n", (o->longVar != NULL) ? o->longVar : str);
-                exit(1);
+                exit(EXIT_FAILURE);
               }
 
               switch(o->type){
@@ -460,7 +460,7 @@ int option_parse(int argc, char ** argv, options_all_t * opt_all){
       }
       option_print_help(args);
     }
-    exit(0);
+    exit(EXIT_FAILURE);
   }
 
   return i;

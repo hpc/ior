@@ -808,7 +808,7 @@ DFS_Xfer(int access, aiori_fd_t *file, IOR_size_t *buffer, IOR_offset_t length,
 
                 if (ret < remaining) {
                         if (hints->singleXferAttempt == TRUE)
-                                exit(-1);
+                                exit(EXIT_FAILURE);
                         if (xferRetries > MAX_RETRY)
                                 ERR("too many retries -- aborting");
                 }
