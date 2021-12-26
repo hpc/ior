@@ -397,8 +397,8 @@ static int GetFileMode(int flags)
             WARN("O_DIRECT not implemented in NCMPI");
         }
 
-        /* to enable > 4GB file size */
-        fd_mode |= NC_64BIT_OFFSET;
+        /* to enable > 4GB variable size */
+        fd_mode |= NC_64BIT_DATA;
 
         return (fd_mode);
 }
