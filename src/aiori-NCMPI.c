@@ -335,6 +335,7 @@ static IOR_offset_t NCMPI_Xfer(int access, aiori_fd_t *fd, IOR_size_t * buffer, 
  */
 static void NCMPI_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
+        NCMPI_CHECK(ncmpi_sync(*(int *)fd), "cannot sync file");
 }
 
 /*
