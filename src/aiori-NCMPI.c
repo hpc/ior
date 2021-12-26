@@ -352,7 +352,7 @@ static void NCMPI_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
  */
 static void NCMPI_Delete(char *testFileName, aiori_mod_opt_t * param)
 {
-        return(MPIIO_Delete(testFileName, param));
+        NCMPI_CHECK(ncmpi_delete(testFileName, MPI_INFO_NULL), "cannot delete file");
 }
 
 /*
