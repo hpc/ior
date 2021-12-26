@@ -343,10 +343,6 @@ static void NCMPI_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
  */
 static void NCMPI_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
-        if (hints->collective == FALSE) {
-                NCMPI_CHECK(ncmpi_end_indep_data(*(int *)fd),
-                            "cannot disable independent data mode");
-        }
         NCMPI_CHECK(ncmpi_close(*(int *)fd), "cannot close file");
         free(fd);
 }
