@@ -391,7 +391,7 @@ static int GetFileMode(int flags)
             WARN("Exclusive access not implemented in NCMPI");
         }
         if (flags & IOR_TRUNC) {
-            WARN("File truncation not implemented in NCMPI");
+                fd_mode |= NC_CLOBBER;
         }
         if (flags & IOR_DIRECT) {
             WARN("O_DIRECT not implemented in NCMPI");
