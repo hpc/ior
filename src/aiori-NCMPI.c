@@ -33,13 +33,13 @@
  */
 #define NCMPI_CHECK(NCMPI_RETURN, MSG) do {                              \
                                                                          \
-    if (NCMPI_RETURN < 0) {                                              \
+    if (NCMPI_RETURN != NC_NOERR) {                                      \
         fprintf(stdout, "** error **\n");                                \
         fprintf(stdout, "ERROR in %s (line %d): %s.\n",                  \
                 __FILE__, __LINE__, MSG);                                \
         fprintf(stdout, "ERROR: %s.\n", ncmpi_strerror(NCMPI_RETURN));   \
         fprintf(stdout, "** exiting **\n");                              \
-        exit(EXIT_FAILURE);                                                        \
+        exit(EXIT_FAILURE);                                              \
     }                                                                    \
 } while(0)
 
@@ -335,6 +335,7 @@ static IOR_offset_t NCMPI_Xfer(int access, aiori_fd_t *fd, IOR_size_t * buffer, 
  */
 static void NCMPI_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
+        NCMPI_CHECK(ncmpi_sync(*(int *)fd), "cannot sync file");
 }
 
 /*
@@ -342,10 +343,6 @@ static void NCMPI_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
  */
 static void NCMPI_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
-        if (hints->collective == FALSE) {
-                NCMPI_CHECK(ncmpi_end_indep_data(*(int *)fd),
-                            "cannot disable independent data mode");
-        }
         NCMPI_CHECK(ncmpi_close(*(int *)fd), "cannot close file");
         free(fd);
 }
@@ -355,7 +352,7 @@ static void NCMPI_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
  */
 static void NCMPI_Delete(char *testFileName, aiori_mod_opt_t * param)
 {
-        return(MPIIO_Delete(testFileName, param));
+        NCMPI_CHECK(ncmpi_delete(testFileName, MPI_INFO_NULL), "cannot delete file");
 }
 
 /*
@@ -394,14 +391,14 @@ static int GetFileMode(int flags)
             WARN("Exclusive access not implemented in NCMPI");
         }
         if (flags & IOR_TRUNC) {
-            WARN("File truncation not implemented in NCMPI");
+                fd_mode |= NC_CLOBBER;
         }
         if (flags & IOR_DIRECT) {
             WARN("O_DIRECT not implemented in NCMPI");
         }
 
-        /* to enable > 4GB file size */
-        fd_mode |= NC_64BIT_OFFSET;
+        /* to enable > 4GB variable size */
+        fd_mode |= NC_64BIT_DATA;
 
         return (fd_mode);
 }
