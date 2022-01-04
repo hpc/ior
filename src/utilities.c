@@ -893,6 +893,7 @@ int64_t ReadStoneWallingIterations(char * const filename, MPI_Comm com){
     }
     int ret = fscanf(out, "%lld", & data);
     if (ret != 1){
+      fclose(out);
       return -1;
     }
     fclose(out);
