@@ -32,7 +32,6 @@
  * NCMPI_CHECK will display a custom error message and then exit the program
  */
 #define NCMPI_CHECK(NCMPI_RETURN, MSG) do {                              \
-                                                                         \
     if (NCMPI_RETURN != NC_NOERR) {                                      \
         fprintf(stdout, "** error **\n");                                \
         fprintf(stdout, "ERROR in %s (line %d): %s.\n",                  \
@@ -88,8 +87,8 @@ static option_help * NCMPI_options(aiori_mod_opt_t ** init_backend_options, aior
   *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
-    {0, "mpiio.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->hintsFileName},
-    {0, "mpiio.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->showHints},
+    {0, "ncmpi.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->hintsFileName},
+    {0, "ncmpi.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->showHints},
     LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
@@ -153,8 +152,7 @@ static aiori_fd_t *NCMPI_Create(char *testFileName, int iorflags, aiori_mod_opt_
         /* ncmpi_get_file_info is first available in 1.2.0 */
         if (rank == 0 && o->showHints) {
             MPI_Info info_used;
-            MPI_CHECK(ncmpi_get_file_info(*fd, &info_used),
-                      "cannot inquire file info");
+            NCMPI_CHECK(ncmpi_get_file_info(*fd, &info_used), "cannot inquire file info");
             /* print the MPI file hints currently used */
             fprintf(stdout, "\nhints returned from opened file {\n");
             ShowHints(&info_used);

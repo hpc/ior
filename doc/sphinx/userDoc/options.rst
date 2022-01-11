@@ -46,7 +46,7 @@ These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``
   -n    noFill -- no fill in HDF5 file creation
   -N N  numTasks -- number of tasks that should participate in the test
   -o S  testFile -- full name for test
-  -O S  string of IOR directives (e.g. -O checkRead=1,lustreStripeCount=32)
+  -O S  string of IOR directives (e.g. -O checkRead=1,GPUid=2)
   -p    preallocate -- preallocate file size
   -P    useSharedFilePointer -- use shared file pointer [not working]
   -q    quitOnError -- during file error-checking, abort on error
@@ -281,28 +281,61 @@ MPIIO-, HDF5-, AND NCMPI-ONLY
 
   * ``collective`` - uses collective operations for access (default: 0)
 
-  * ``showHints`` - show hint/value pairs attached to open file.  Not available
-    for NCMPI. (default: 0)
+  * ``showHints`` - show hint/value pairs attached to open file (default: 0)
 
 LUSTRE-SPECIFIC
 ^^^^^^^^^^^^^^^^^
 
-  * ``lustreStripeCount`` - set the Lustre stripe count for the test file(s) (default: 0)
+  * POSIX-ONLY:
 
-  * ``lustreStripeSize`` - set the Lustre stripe size for the test file(s) (default: 0)
+    * ``--posix.lustre.stripecount`` - set the Lustre stripe count for the test file(s) (default: 0)
 
-  * ``lustreStartOST`` - set the starting OST for the test file(s) (default: -1)
+    * ``--posix.lustre.stripesize`` - set the Lustre stripe size for the test file(s) (default: 0)
 
-  * ``lustreIgnoreLocks`` - disable Lustre range locking (default: 0)
+    * ``--posix.lustre.startost`` - set the starting OST for the test file(s) (default: -1)
 
-GPFS-SPECIFIC
+    * ``--posix.lustre.ignorelocks`` - disable Lustre range locking (default: 0)
+
+  * MPIIO-, HDF5-, AND NCMPI-ONLY:
+  
+    * ROMIO-based IO (see `here <https://github.com/pmodels/mpich/blob/048879f1234419abb035aacbaf655880c8f77dba/src/mpi/romio/adio/ad_lustre/ad_lustre_open.c#L58>`_):
+    
+      * requires setting the environment variable ``ROMIO_FSTYPE_FORCE=LUSTRE:`` (or similar for specific MPIs) to enable ROMIO's Lustre ADIO
+
+      * ``IOR_HINT__MPI__striping_factor`` - set the Lustre stripe count for the test file(s) (default: -1)
+
+      * ``IOR_HINT__MPI__striping_unit`` - set the Lustre stripe size for the test file(s) (default: 0)
+
+      * ``IOR_HINT__MPI__romio_lustre_start_iodevice`` - set the starting OST for the test file(s) (default: -1)
+    
+    * OMPIO-based IO (see `here <https://github.com/open-mpi/ompi/blob/6d237e85d730ed946c9f45fcd3e19b78a243203e/ompi/mca/fs/lustre/fs_lustre_component.c#L75>`_)
+
+      * not setting either of the environment variables below causes a fatal `Floating point exception: Integer divide-by-zero` error
+
+      * execution with either of the environment variables causes this message `ior: setstripe error for 'testfile': stripe already set` which can safely be ignored as OMPIO tries to modify the stripe settings twice although the first time succeeds
+
+      * ``OMPI_MCA_fs_lustre_stripe_width`` / ``IOR_HINT__MPI__stripe_width`` - set the Lustre stripe count for the test file(s) (default: 0)
+
+      * ``OMPI_MCA_fs_lustre_stripe_size`` / ``IOR_HINT__MPI__stripe_size`` - set the Lustre stripe size for the test file(s) (default: 0)
+
+
+GPFS-SPECIFIC (POSIX-ONLY)
 ^^^^^^^^^^^^^^
 
-  * ``gpfsHintAccess`` - use ``gpfs_fcntl`` hints to pre-declare accesses (default: 0)
+  * ``--posix.gpfs.hintaccess`` - use gpfs_fcntl hints to pre-declare accesses
 
-  * ``gpfsReleaseToken`` - release all locks immediately after opening or
-    creating file.  Might help mitigate lock-revocation traffic when many
-    processes write/read to same file. (default: 0)
+  * ``--posix.gpfs.releasetoken`` - immediately after opening or creating file, release all locks.  Might help mitigate lock-revocation traffic when many processes write/read to same file.
+
+  * ``--posix.gpfs.finegrainwritesharing`` - This hint optimizes the performance of small strided writes to a shared file from a parallel application
+
+  * ``--posix.gpfs.finegrainreadsharing`` - This hint optimizes the performance of small strided reads from a shared file from a parallel application
+
+BeeGFS-SPECIFIC (POSIX-ONLY):
+^^^^^^^^^^^^^^
+
+  * ``--posix.beegfs.NumTargets`` - set the number of storage targets to use
+
+  * ``--posix.beegfs.ChunkSize`` - set the striping chunk size. Must be a power of two, and greater than 64kiB, (e.g.: 256k, 1M, ...)
 
 Verbosity levels
 ----------------
