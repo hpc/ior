@@ -183,7 +183,7 @@ static void MMAP_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
         mmap_options_t *o = (mmap_options_t*) param;
         if (msync(o->mmap_ptr, hints->expectedAggFileSize, MS_SYNC) != 0)
-                EWARN("msync() failed");
+                WARN("msync() failed");
 }
 
 /*

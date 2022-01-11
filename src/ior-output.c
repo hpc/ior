@@ -297,7 +297,7 @@ void PrintHeader(int argc, char **argv)
         }
         PrintKeyValEnd();
         if (uname(&unamebuf) != 0) {
-                EWARN("uname failed");
+                WARN("uname failed");
                 PrintKeyVal("Machine", "Unknown");
         } else {
                 PrintKeyValStart("Machine");
