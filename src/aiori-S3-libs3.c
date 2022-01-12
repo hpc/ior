@@ -153,7 +153,7 @@ static void responseCompleteCallback(S3Status status, const S3ErrorDetails *erro
 
 #define CHECK_ERROR(p) \
 if (s3status != S3StatusOK){ \
-  EWARNF("S3 %s:%d (path:%s) \"%s\": %s %s", __FUNCTION__, __LINE__, p,  S3_get_status_name(s3status), s3error.message, s3error.furtherDetails ? s3error.furtherDetails : ""); \
+  WARNF("S3 %s:%d (path:%s) \"%s\": %s %s", __FUNCTION__, __LINE__, p,  S3_get_status_name(s3status), s3error.message, s3error.furtherDetails ? s3error.furtherDetails : ""); \
 }
 
 

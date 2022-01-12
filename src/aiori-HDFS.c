@@ -78,7 +78,11 @@
 #include <assert.h>
 /*
 #ifdef HAVE_LUSTRE_USER
-#include <lustre/lustre_user.h>
+#  ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
+#    include <linux/lustre/lustre_user.h>
+#  elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
+#    include <lustre/lustre_user.h>
+#  endif
 #endif
 */
 #include "ior.h"
@@ -599,7 +603,7 @@ static void HDFS_Fsync(aiori_fd_t * fd, aiori_mod_opt_t * param) {
 	}
 	if ( hdfsHSync( hdfs_fs, hdfs_file ) != 0 ) {
     // Hsync is implemented to flush out data with newer Hadoop versions
-		EWARN( "hdfsFlush() failed" );
+		WARN( "hdfsFlush() failed" );
 	}
 }
 
@@ -649,7 +653,7 @@ static void HDFS_Delete( char *testFileName, aiori_mod_opt_t * param ) {
 		sprintf(errmsg, "[RANK %03d]: hdfsDelete() of file \"%s\" failed\n",
 		        rank, testFileName);
 
-		EWARN( errmsg );
+		WARN( errmsg );
 	}
 	if (verbose >= VERBOSE_4) {
 		printf("<- HDFS_Delete\n");
