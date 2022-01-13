@@ -506,6 +506,36 @@ static int S3_check_params(aiori_mod_opt_t * options){
 
 static void S3_init(aiori_mod_opt_t * options){
   s3_options_t * o = (s3_options_t*) options;
+
+  /* parse list of hostnames into specific host for this rank;
+  this cannot be done during S3_options() because this happens before MPI_Init()  */
+  if ( o->host != NULL ) {
+
+    const char* delimiters= " ,;";
+
+    int num_hosts = 0;
+    char* r= strtok(o->host, delimiters);
+    while (r != NULL) {
+        num_hosts++;
+        r= strtok(NULL, delimiters);
+    }
+
+    if (num_hosts > 1) {
+      
+      int i= rank % num_hosts;
+
+      /* set o->host to the i'th piece separated by '\0' */
+      char* next= o->host;
+      while (i > 0) {
+
+        next= strchr(next, '\0');
+        next++;
+        i--;
+      }
+      o->host= next;
+    }
+  }
+
   int ret = S3_initialize(NULL, S3_INIT_ALL, o->host);
   if(ret != S3StatusOK)
     FAIL("Could not initialize S3 library");
