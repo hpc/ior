@@ -64,7 +64,7 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
   {0, "S3-libs3.dont-suffix-bucket", "By default a hash will be added to the bucket name to increase uniqueness, this disables the option.", OPTION_FLAG, 'd', & o->dont_suffix },
   {0, "S3-libs3.s3-compatible", "to be selected when using S3 compatible storage", OPTION_FLAG, 'd', & o->s3_compatible },
   {0, "S3-libs3.use-ssl", "used to specify that SSL is needed for the connection", OPTION_FLAG, 'd', & o->use_ssl },
-  {0, "S3-libs3.host", "The host optionally followed by:port.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
+  {0, "S3-libs3.host", "The host optionally followed by:port. Or specify a list of hosts separated by [ ,;] to be used in a round robin fashion by the MPI ranks.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
   {0, "S3-libs3.secret-key", "The secret key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->secret_key},
   {0, "S3-libs3.access-key", "The access key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->access_key},
   {0, "S3-libs3.region", "The region used for the authorization signature.", OPTION_OPTIONAL_ARGUMENT, 's', & o->authRegion},
