@@ -328,11 +328,11 @@ static void create_remove_dirs (const char *path, bool create, uint64_t itemNum)
 
     if (create) {
         if (o.backend->mkdir(curr_item, DIRMODE, o.backend_options) == -1) {
-            EWARNF("unable to create directory %s", curr_item);
+            WARNF("unable to create directory %s", curr_item);
         }
     } else {
         if (o.backend->rmdir(curr_item, o.backend_options) == -1) {
-            EWARNF("unable to remove directory %s", curr_item);
+            WARNF("unable to remove directory %s", curr_item);
         }
     }
 }
@@ -371,7 +371,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 
         ret = o.backend->mknod (curr_item);
         if (ret != 0)
-            EWARNF("unable to mknode file %s", curr_item);
+            WARNF("unable to mknode file %s", curr_item);
 
         return;
     } else if (o.collective_creates) {
@@ -379,7 +379,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 
         aiori_fh = o.backend->open (curr_item, IOR_WRONLY | IOR_CREAT, o.backend_options);
         if (NULL == aiori_fh){
-            EWARNF("unable to open file %s", curr_item);
+            WARNF("unable to open file %s", curr_item);
             return;
         }
 
@@ -392,7 +392,7 @@ static void create_file (const char *path, uint64_t itemNum) {
 
         aiori_fh = o.backend->create (curr_item, IOR_WRONLY | IOR_CREAT, o.backend_options);
         if (NULL == aiori_fh){
-          EWARNF("unable to create file %s", curr_item);
+          WARNF("unable to create file %s", curr_item);
           return;
         }
     }
@@ -404,13 +404,13 @@ static void create_file (const char *path, uint64_t itemNum) {
         update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
 
         if ( o.write_bytes != (size_t) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
-            EWARNF("unable to write file %s", curr_item);
+            WARNF("unable to write file %s", curr_item);
         }
 
         if (o.verify_write) {
             o.write_buffer[0] = 42;
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
-                EWARNF("unable to verify write (read/back) file %s", curr_item);
+                WARNF("unable to verify write (read/back) file %s", curr_item);
             }
             int error = verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
             o.verification_error += error;
@@ -470,7 +470,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
             //create files
             aiori_fh = o.backend->create (curr_item, IOR_WRONLY | IOR_CREAT, o.backend_options);
             if (NULL == aiori_fh) {
-                EWARNF("unable to create file %s", curr_item);
+                WARNF("unable to create file %s", curr_item);
             }else{
               o.backend->close (aiori_fh, o.backend_options);
             }
@@ -634,7 +634,7 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
         /* below temp used to be hiername */
         VERBOSE(3,5,"mdtest_stat %4s: %s", (dirs ? "dir" : "file"), item);
         if (-1 == o.backend->stat (item, &buf, o.backend_options)) {
-            EWARNF("unable to stat %s %s", dirs ? "directory" : "file", item);
+            WARNF("unable to stat %s %s", dirs ? "directory" : "file", item);
         }
     }
 }
@@ -719,10 +719,12 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         /* below temp used to be hiername */
         VERBOSE(3,5,"mdtest_read file: %s", item);
 
+        o.hints.filePerProc = ! o.shared_file;
+
         /* open file for reading */
         aiori_fh = o.backend->open (item, O_RDONLY, o.backend_options);
         if (NULL == aiori_fh) {
-            EWARNF("unable to open file %s", item);
+            WARNF("unable to open file %s", item);
             continue;
         }
 
@@ -730,7 +732,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
         if (o.read_bytes > 0) {
             read_buffer[0] = 42;
             if (o.read_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) read_buffer, o.read_bytes, 0, o.backend_options)) {
-                EWARNF("unable to read file %s", item);
+                WARNF("unable to read file %s", item);
                 continue;
             }
             int pretend_rank = (2 * o.nstride + rank) % o.size;
@@ -898,7 +900,7 @@ void rename_dir_test(const int dirs, const long dir_iter, const char *path, rank
           strcpy(item, first_item_name);
         }
         if (-1 == o.backend->rename(item, item_last, o.backend_options)) {
-            EWARNF("unable to rename %s %s", dirs ? "directory" : "file", item);
+            WARNF("unable to rename %s %s", dirs ? "directory" : "file", item);
         }
 
         strcpy(item_last, item);
@@ -1336,13 +1338,13 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       o.items *= o.num_dirs_in_tree_calc;
     }
 
-    VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_CREATE_NUM], o.summary_table[iteration].rate[4]);
+    VERBOSE(1,-1,"  File creation     : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_CREATE_NUM], o.summary_table[iteration].rate[MDTEST_FILE_CREATE_NUM]);
     if(o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM]){
       VERBOSE(1,-1,"  File creation (stonewall): %14.3f sec, %14.3f ops/sec", o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM], o.summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM]);
     }
-    VERBOSE(1,-1,"  File stat         : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_STAT_NUM], o.summary_table[iteration].rate[5]);
-    VERBOSE(1,-1,"  File read         : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_READ_NUM], o.summary_table[iteration].rate[6]);
-    VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_REMOVE_NUM], o.summary_table[iteration].rate[7]);
+    VERBOSE(1,-1,"  File stat         : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_STAT_NUM], o.summary_table[iteration].rate[MDTEST_FILE_STAT_NUM]);
+    VERBOSE(1,-1,"  File read         : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_READ_NUM], o.summary_table[iteration].rate[MDTEST_FILE_READ_NUM]);
+    VERBOSE(1,-1,"  File removal      : %14.3f sec, %14.3f ops/sec", res->time[MDTEST_FILE_REMOVE_NUM], o.summary_table[iteration].rate[MDTEST_FILE_REMOVE_NUM]);
 }
 
 char const * mdtest_test_name(int i){
@@ -1886,7 +1888,7 @@ void create_remove_directory_tree(int create,
         if (create) {
             VERBOSE(2,5,"Making directory '%s'", dir);
             if (-1 == o.backend->mkdir (dir, DIRMODE, o.backend_options)) {
-                EWARNF("unable to create tree directory '%s'", dir);
+                WARNF("unable to create tree directory '%s'", dir);
             }
 #ifdef HAVE_LUSTRE_LUSTREAPI
             /* internal node for branching, can be non-striped for children */
@@ -1904,7 +1906,7 @@ void create_remove_directory_tree(int create,
         if (!create) {
             VERBOSE(2,5,"Remove directory '%s'", dir);
             if (-1 == o.backend->rmdir(dir, o.backend_options)) {
-                EWARNF("Unable to remove directory %s", dir);
+                WARNF("Unable to remove directory %s", dir);
             }
         }
     } else if (currDepth <= o.depth) {
@@ -1920,7 +1922,7 @@ void create_remove_directory_tree(int create,
             if (create) {
                 VERBOSE(2,5,"Making directory '%s'", temp_path);
                 if (-1 == o.backend->mkdir(temp_path, DIRMODE, o.backend_options)) {
-                    EWARNF("Unable to create directory %s", temp_path);
+                    WARNF("Unable to create directory %s", temp_path);
                 }
             }
 
@@ -1931,7 +1933,7 @@ void create_remove_directory_tree(int create,
             if (!create) {
                 VERBOSE(2,5,"Remove directory '%s'", temp_path);
                 if (-1 == o.backend->rmdir(temp_path, o.backend_options)) {
-                    EWARNF("Unable to remove directory %s", temp_path);
+                    WARNF("Unable to remove directory %s", temp_path);
                 }
             }
 
@@ -1964,12 +1966,12 @@ static void mdtest_iteration(int i, int j, mdtest_results_t * summary_table){
       VERBOSE(2,5,"main (for j loop): making o.testdir, '%s'", o.testdir );
       if (o.backend->access(o.testdir, F_OK, o.backend_options) != 0) {
           if (o.backend->mkdir(o.testdir, DIRMODE, o.backend_options) != 0) {
-              EWARNF("Unable to create test directory %s", o.testdir);
+              WARNF("Unable to create test directory %s", o.testdir);
           }
 #ifdef HAVE_LUSTRE_LUSTREAPI
           /* internal node for branching, can be non-striped for children */
           if (o.global_dir_layout && o.unique_dir_per_task && llapi_dir_set_default_lmv_stripe(o.testdir, -1, 0, LMV_HASH_TYPE_FNV_1A_64, NULL) == -1) {
-              EWARNF("Unable to reset to global default directory layout");
+              WARN("Unable to reset to global default directory layout");
           }
 #endif /* HAVE_LUSTRE_LUSTREAPI */
       }
@@ -2146,7 +2148,7 @@ static void mdtest_iteration(int i, int j, mdtest_results_t * summary_table){
         if ((rank < o.path_count) && o.backend->access(o.testdir, F_OK, o.backend_options) == 0) {
             //if (( rank == 0 ) && access(o.testdir, F_OK) == 0) {
             if (o.backend->rmdir(o.testdir, o.backend_options) == -1) {
-                EWARNF("unable to remove directory %s", o.testdir);
+                WARNF("unable to remove directory %s", o.testdir);
             }
         }
       }
@@ -2204,7 +2206,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     option_help options [] = {
       {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & o.api},
       {'b', NULL,        "branching factor of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.branch_factor},
-      {'d', NULL,        "the directory in which the tests will run", OPTION_OPTIONAL_ARGUMENT, 's', & path},
+      {'d', NULL,        "directory or multiple directories where the test will run [dir|dir1@dir2@dir3...]", OPTION_OPTIONAL_ARGUMENT, 's', & path},
       {'B', NULL,        "no barriers between phases", OPTION_OPTIONAL_ARGUMENT, 'd', & no_barriers},
       {'C', NULL,        "only create files/dirs", OPTION_FLAG, 'd', & o.create_only},
       {'T', NULL,        "only stat files/dirs", OPTION_FLAG, 'd', & o.stat_only},
@@ -2246,9 +2248,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'Y', NULL,        "call the sync command after each phase (included in the timing; note it causes all IO to be flushed from your node)", OPTION_FLAG, 'd', & o.call_sync},
       {'z', NULL,        "depth of hierarchical directory structure", OPTION_OPTIONAL_ARGUMENT, 'd', & o.depth},
       {'Z', NULL,        "print time instead of rate", OPTION_FLAG, 'd', & o.print_time},
+      {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|random|o|i|t|r]", OPTION_OPTIONAL_ARGUMENT, 's', & packetType},
       {0, "run-cmd-before-phase", "call this external command before each phase (excluded from the timing)", OPTION_OPTIONAL_ARGUMENT, 's', & o.prologue},
       {0, "run-cmd-after-phase",  "call this external command after each phase (included in the timing)", OPTION_OPTIONAL_ARGUMENT, 's', & o.epilogue},
-      {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', & packetType},
       {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
@@ -2456,7 +2458,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /*   if directory does not exist, create it */
     if ((rank < o.path_count) && o.backend->access(o.testdirpath, F_OK, o.backend_options) != 0) {
         if (o.backend->mkdir(o.testdirpath, DIRMODE, o.backend_options) != 0) {
-            EWARNF("Unable to create test directory path %s", o.testdirpath);
+            WARNF("Unable to create test directory path %s", o.testdirpath);
         }
         created_root_dir = 1;
     }

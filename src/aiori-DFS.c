@@ -37,12 +37,20 @@
 #include "utilities.h"
 #include "iordef.h"
 
-dfs_t *dfs;
+#if defined(DAOS_API_VERSION_MAJOR) && defined(DAOS_API_VERSION_MINOR)
+#define CHECK_DAOS_API_VERSION(major, minor)                            \
+        ((DAOS_API_VERSION_MAJOR > (major))                             \
+         || (DAOS_API_VERSION_MAJOR == (major) && DAOS_API_VERSION_MINOR >= (minor)))
+#else
+#define CHECK_DAOS_API_VERSION(major, minor) 0
+#endif
+
+static dfs_t *dfs;
 static daos_handle_t poh, coh;
 static daos_oclass_id_t objectClass;
 static daos_oclass_id_t dir_oclass;
-static struct d_hash_table *dir_hash;
-static bool dfs_init;
+static struct d_hash_table *aiori_dfs_hash = NULL;
+static int dfs_init_count;
 
 struct aiori_dir_hdl {
         d_list_t	entry;
@@ -59,9 +67,6 @@ enum handleType {
 /************************** O P T I O N S *****************************/
 typedef struct {
         char	*pool;
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-        char	*svcl;
-#endif
         char	*group;
         char	*cont;
 	int	chunk_size;
@@ -79,25 +84,20 @@ static option_help * DFS_options(aiori_mod_opt_t ** init_backend_options,
                 memcpy(o, init_values, sizeof(DFS_options_t));
         } else {
                 memset(o, 0, sizeof(DFS_options_t));
-                /* initialize the options properly */
-                o->chunk_size	= 1048576;
         }
 
         *init_backend_options = (aiori_mod_opt_t *) o;
 
         option_help h [] = {
-                {0, "dfs.pool", "pool uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->pool},
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-                {0, "dfs.svcl", "pool SVCL", OPTION_OPTIONAL_ARGUMENT, 's', &o->svcl},
-#endif
-                {0, "dfs.group", "server group", OPTION_OPTIONAL_ARGUMENT, 's', &o->group},
-                {0, "dfs.cont", "DFS container uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->cont},
-                {0, "dfs.chunk_size", "chunk size", OPTION_OPTIONAL_ARGUMENT, 'd', &o->chunk_size},
-                {0, "dfs.oclass", "object class", OPTION_OPTIONAL_ARGUMENT, 's', &o->oclass},
-                {0, "dfs.dir_oclass", "directory object class", OPTION_OPTIONAL_ARGUMENT, 's',
+                {0, "dfs.pool", "Pool label or uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->pool},
+                {0, "dfs.group", "DAOS system name", OPTION_OPTIONAL_ARGUMENT, 's', &o->group},
+                {0, "dfs.cont", "Container label or uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->cont},
+                {0, "dfs.chunk_size", "File chunk size in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'd', &o->chunk_size},
+                {0, "dfs.oclass", "File object class", OPTION_OPTIONAL_ARGUMENT, 's', &o->oclass},
+                {0, "dfs.dir_oclass", "Directory object class", OPTION_OPTIONAL_ARGUMENT, 's',
                  &o->dir_oclass},
-                {0, "dfs.prefix", "mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', &o->prefix},
-                {0, "dfs.destroy", "Destroy DFS Container", OPTION_FLAG, 'd', &o->destroy},
+                {0, "dfs.prefix", "Mount prefix", OPTION_OPTIONAL_ARGUMENT, 's', &o->prefix},
+                {0, "dfs.destroy", "Destroy DFS container on finalize", OPTION_FLAG, 'd', &o->destroy},
                 LAST_OPTION
         };
 
@@ -122,6 +122,7 @@ static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, char *);
 static int DFS_Statfs (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t *);
 static int DFS_Stat (const char *, struct stat *, aiori_mod_opt_t *);
 static int DFS_Mkdir (const char *, mode_t, aiori_mod_opt_t *);
+static int DFS_Rename(const char *, const char *, aiori_mod_opt_t *);
 static int DFS_Rmdir (const char *, aiori_mod_opt_t *);
 static int DFS_Access (const char *, int, aiori_mod_opt_t *);
 static option_help * DFS_options();
@@ -146,6 +147,7 @@ ior_aiori_t dfs_aiori = {
         .xfer_hints	= DFS_init_xfer_options,
         .statfs		= DFS_Statfs,
         .mkdir		= DFS_Mkdir,
+        .rename		= DFS_Rename,
         .rmdir		= DFS_Rmdir,
         .access		= DFS_Access,
         .stat		= DFS_Stat,
@@ -161,12 +163,12 @@ ior_aiori_t dfs_aiori = {
 do {                                                                    \
         int _rc = (rc);                                                 \
                                                                         \
-        if (_rc != 0) {                                                  \
+        if (_rc != 0) {                                                 \
                 fprintf(stderr, "ERROR (%s:%d): %d: %d: "               \
                         format"\n", __FILE__, __LINE__, rank, _rc,      \
                         ##__VA_ARGS__);                                 \
                 fflush(stderr);                                         \
-                exit(-1);                                       	\
+                goto out;                                               \
         }                                                               \
 } while (0)
 
@@ -176,10 +178,12 @@ do {                                                                    \
                 printf("[%d] "format"\n", rank, ##__VA_ARGS__);         \
 } while (0)
 
-#define GERR(format, ...)                                               \
+#define DERR(format, ...)                                               \
 do {                                                                    \
         fprintf(stderr, format"\n", ##__VA_ARGS__);                     \
-        MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");  \
+        fflush(stderr);                                                 \
+        rc = -1;                                                        \
+        goto out;                                                       \
 } while (0)
 
 static aiori_xfer_hint_t * hints = NULL;
@@ -195,10 +199,9 @@ static int DFS_check_params(aiori_mod_opt_t * options){
         if (o->pool == NULL || o->cont == NULL)
                 ERR("Invalid pool or container options\n");
 
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-        if (o->svcl == NULL)
-                ERR("Invalid SVCL\n");
-#endif
+        if (testComm == MPI_COMM_NULL)
+                testComm = MPI_COMM_WORLD;
+
         return 0;
 }
 
@@ -222,18 +225,33 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
         struct aiori_dir_hdl *hdl = hdl_obj(rlink);
 
-        assert(d_hash_rec_unlinked(&hdl->entry));
         dfs_release(hdl->oh);
         free(hdl);
 }
 
+static bool
+rec_decref(struct d_hash_table *htable, d_list_t *rlink)
+{
+        return true;
+}
+
+static uint32_t
+rec_hash(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct aiori_dir_hdl *hdl = hdl_obj(rlink);
+
+        return d_hash_string_u32(hdl->name, strlen(hdl->name));
+}
+
 static d_hash_table_ops_t hdl_hash_ops = {
         .hop_key_cmp	= key_cmp,
-        .hop_rec_free	= rec_free
+	.hop_rec_decref	= rec_decref,
+	.hop_rec_free	= rec_free,
+	.hop_rec_hash	= rec_hash
 };
 
 /* Distribute process 0's pool or container handle to others. */
-static void
+static int
 HandleDistribute(enum handleType type)
 {
         d_iov_t global;
@@ -286,7 +304,10 @@ HandleDistribute(enum handleType type)
                 DCHECK(rc, "Failed to get local handle");
         }
 
-        free(global.iov_buf);
+out:
+        if (global.iov_buf)
+                free(global.iov_buf);
+        return rc;
 }
 
 static int
@@ -300,14 +321,6 @@ parse_filename(const char *path, char **_obj_name, char **_cont_name)
 
 	if (path == NULL || _obj_name == NULL || _cont_name == NULL)
 		return -EINVAL;
-
-	if (strcmp(path, "/") == 0) {
-		*_cont_name = strdup("/");
-		if (*_cont_name == NULL)
-			return -ENOMEM;
-		*_obj_name = NULL;
-		return 0;
-	}
 
 	f1 = strdup(path);
 	if (f1 == NULL) {
@@ -324,53 +337,35 @@ parse_filename(const char *path, char **_obj_name, char **_cont_name)
 	fname = basename(f1);
 	cont_name = dirname(f2);
 
-	if (cont_name[0] == '.' || cont_name[0] != '/') {
-		char cwd[1024];
+        if (cont_name[0] != '/') {
+                char *ptr;
+                char buf[PATH_MAX];
 
-		if (getcwd(cwd, 1024) == NULL) {
-                        rc = -ENOMEM;
+                ptr = realpath(cont_name, buf);
+                if (ptr == NULL) {
+                        rc = errno;
                         goto out;
                 }
 
-		if (strcmp(cont_name, ".") == 0) {
-			cont_name = strdup(cwd);
-			if (cont_name == NULL) {
-                                rc = -ENOMEM;
-                                goto out;
-                        }
-		} else {
-			char *new_dir = calloc(strlen(cwd) + strlen(cont_name)
-					       + 1, sizeof(char));
-			if (new_dir == NULL) {
-                                rc = -ENOMEM;
-                                goto out;
-                        }
-
-			strcpy(new_dir, cwd);
-			if (cont_name[0] == '.') {
-				strcat(new_dir, &cont_name[1]);
-			} else {
-				strcat(new_dir, "/");
-				strcat(new_dir, cont_name);
-			}
-			cont_name = new_dir;
-		}
-		*_cont_name = cont_name;
-	} else {
-		*_cont_name = strdup(cont_name);
-		if (*_cont_name == NULL) {
-                        rc = -ENOMEM;
+                cont_name = strdup(ptr);
+                if (cont_name == NULL) {
+                        rc = ENOMEM;
                         goto out;
                 }
-	}
+                *_cont_name = cont_name;
+        } else {
+                *_cont_name = strdup(cont_name);
+                if (*_cont_name == NULL) {
+                        rc = ENOMEM;
+                        goto out;
+                }
+        }
 
-	*_obj_name = strdup(fname);
-	if (*_obj_name == NULL) {
-		free(*_cont_name);
-		*_cont_name = NULL;
-                rc = -ENOMEM;
+        *_obj_name = strdup(fname);
+        if (*_obj_name == NULL) {
+                rc = ENOMEM;
                 goto out;
-	}
+        }
 
 out:
 	if (f1)
@@ -380,7 +375,7 @@ out:
 	return rc;
 }
 
-static void
+static int
 share_file_handle(dfs_obj_t **file, MPI_Comm comm)
 {
         d_iov_t global;
@@ -416,38 +411,48 @@ share_file_handle(dfs_obj_t **file, MPI_Comm comm)
                 DCHECK(rc, "Failed to get local handle");
         }
 
-        free(global.iov_buf);
+out:
+        if (global.iov_buf)
+                free(global.iov_buf);
+        return rc;
 }
 
 static dfs_obj_t *
 lookup_insert_dir(const char *name, mode_t *mode)
 {
         struct aiori_dir_hdl *hdl;
+        dfs_obj_t *oh;
         d_list_t *rlink;
+        size_t len = strlen(name);
         int rc;
 
-        rlink = d_hash_rec_find(dir_hash, name, strlen(name));
+        rlink = d_hash_rec_find(aiori_dfs_hash, name, len);
         if (rlink != NULL) {
                 hdl = hdl_obj(rlink);
                 return hdl->oh;
         }
 
-        hdl = calloc(1, sizeof(struct aiori_dir_hdl));
-        if (hdl == NULL)
-                GERR("failed to alloc dir handle");
-
-        strncpy(hdl->name, name, PATH_MAX-1);
-        hdl->name[PATH_MAX-1] = '\0';
-
-        rc = dfs_lookup(dfs, name, O_RDWR, &hdl->oh, mode, NULL);
+        rc = dfs_lookup(dfs, name, O_RDWR, &oh, mode, NULL);
         if (rc)
                 return NULL;
-        if (mode && S_ISREG(*mode))
-                return hdl->oh;
 
-        rc = d_hash_rec_insert(dir_hash, hdl->name, strlen(hdl->name),
-                               &hdl->entry, true);
-        DCHECK(rc, "Failed to insert dir handle in hashtable");
+        if (mode && !S_ISDIR(*mode))
+                return oh;
+
+        hdl = calloc(1, sizeof(struct aiori_dir_hdl));
+        if (hdl == NULL)
+                return NULL;
+
+        strncpy(hdl->name, name, len);
+        hdl->oh = oh;
+
+        rc = d_hash_rec_insert(aiori_dfs_hash, hdl->name, len, &hdl->entry, false);
+        if (rc) {
+                fprintf(stderr, "Failed to insert dir handle in hashtable\n");
+                dfs_release(hdl->oh);
+                free(hdl);
+                return NULL;
+        }
 
         return hdl->oh;
 }
@@ -456,97 +461,138 @@ static void
 DFS_Init(aiori_mod_opt_t * options)
 {
         DFS_options_t *o = (DFS_options_t *)options;
+        bool pool_connect, cont_create, cont_open, dfs_mounted;
+        uuid_t co_uuid;
 	int rc;
 
-        /** in case we are already initialized, return */
-        if (dfs_init)
+        dfs_init_count++;
+        if (dfs_init_count > 1) {
+                pool_connect = cont_create = cont_open = dfs_mounted = true;
+                /** chunk size and oclass can change between different runs */
+                if (o->oclass) {
+                        objectClass = daos_oclass_name2id(o->oclass);
+                        if (objectClass == OC_UNKNOWN)
+                                DERR("Invalid DAOS object class: %s\n", o->oclass);
+                }
+                if (o->dir_oclass) {
+                        dir_oclass = daos_oclass_name2id(o->dir_oclass);
+                        if (dir_oclass == OC_UNKNOWN)
+                                DERR("Invalid DAOS directory object class: %s\n", o->dir_oclass);
+                }
                 return;
+        }
 
         /** shouldn't be fatal since it can be called with POSIX backend selection */
-        if (o->pool == NULL || o->cont == NULL)
+        if (o->pool == NULL || o->cont == NULL) {
+                dfs_init_count--;
                 return;
+        }
 
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-        if (o->svcl == NULL)
-                return;
-#endif
+        pool_connect = cont_create = cont_open = dfs_mounted = false;
 
 	rc = daos_init();
         DCHECK(rc, "Failed to initialize daos");
 
         if (o->oclass) {
                 objectClass = daos_oclass_name2id(o->oclass);
-		if (objectClass == OC_UNKNOWN)
-			GERR("Invalid DAOS object class %s\n", o->oclass);
-	}
+                if (objectClass == OC_UNKNOWN)
+                        DERR("Invalid DAOS object class: %s\n", o->oclass);
+        }
 
         if (o->dir_oclass) {
                 dir_oclass = daos_oclass_name2id(o->dir_oclass);
-		if (dir_oclass == OC_UNKNOWN)
-			GERR("Invalid DAOS directory object class %s\n", o->dir_oclass);
-	}
+                if (dir_oclass == OC_UNKNOWN)
+                        DERR("Invalid DAOS directory object class: %s\n", o->dir_oclass);
+        }
 
-        rc = d_hash_table_create(0, 16, NULL, &hdl_hash_ops, &dir_hash);
+        rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU,
+                                 4, NULL, &hdl_hash_ops, &aiori_dfs_hash);
         DCHECK(rc, "Failed to initialize dir hashtable");
 
         if (rank == 0) {
-                uuid_t pool_uuid, co_uuid;
                 daos_pool_info_t pool_info;
                 daos_cont_info_t co_info;
 
+                INFO(VERBOSE_1, "DFS Pool = %s", o->pool);
+                INFO(VERBOSE_1, "DFS Container = %s", o->cont);
+
+#if CHECK_DAOS_API_VERSION(1, 4)
+                rc = daos_pool_connect(o->pool, o->group, DAOS_PC_RW, &poh, &pool_info, NULL);
+                DCHECK(rc, "Failed to connect to pool %s", o->pool);
+                pool_connect = true;
+
+                rc = daos_cont_open(poh, o->cont, DAOS_COO_RW, &coh, &co_info, NULL);
+#else
+                uuid_t pool_uuid;
+
                 rc = uuid_parse(o->pool, pool_uuid);
                 DCHECK(rc, "Failed to parse 'Pool uuid': %s", o->pool);
-
                 rc = uuid_parse(o->cont, co_uuid);
                 DCHECK(rc, "Failed to parse 'Cont uuid': %s", o->cont);
 
-                INFO(VERBOSE_1, "Pool uuid = %s", o->pool);
-                INFO(VERBOSE_1, "DFS Container namespace uuid = %s", o->cont);
+                rc = daos_pool_connect(pool_uuid, o->group, DAOS_PC_RW, &poh, &pool_info, NULL);
+                DCHECK(rc, "Failed to connect to pool %s", o->pool);
+                pool_connect = true;
 
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-                d_rank_list_t *svcl = NULL;
-
-                svcl = daos_rank_list_parse(o->svcl, ":");
-                if (svcl == NULL)
-                        ERR("Failed to allocate svcl");
-                INFO(VERBOSE_1, "Pool svcl = %s", o->svcl);
-
-                /** Connect to DAOS pool */
-                rc = daos_pool_connect(pool_uuid, o->group, svcl, DAOS_PC_RW,
-                                       &poh, &pool_info, NULL);
-                d_rank_list_free(svcl);
-#else
-                rc = daos_pool_connect(pool_uuid, o->group, DAOS_PC_RW,
-                                       &poh, &pool_info, NULL);
+                rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
 #endif
-                DCHECK(rc, "Failed to connect to pool");
-
-                rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
-                                    NULL);
                 /* If NOEXIST we create it */
                 if (rc == -DER_NONEXIST) {
                         INFO(VERBOSE_1, "Creating DFS Container ...\n");
-
+#if CHECK_DAOS_API_VERSION(1, 4)
+                        if (uuid_parse(o->cont, co_uuid) != 0)
+                                /** user passes in label */
+                                rc = dfs_cont_create_with_label(poh, o->cont, NULL, &co_uuid, &coh, NULL);
+                        else
+                                /** user passes in uuid */
+#endif
                         rc = dfs_cont_create(poh, co_uuid, NULL, &coh, NULL);
                         if (rc)
                                 DCHECK(rc, "Failed to create container");
+                        cont_create = true;
                 } else if (rc) {
                         DCHECK(rc, "Failed to create container");
                 }
+                cont_open = true;
 
                 rc = dfs_mount(poh, coh, O_RDWR, &dfs);
                 DCHECK(rc, "Failed to mount DFS namespace");
+                dfs_mounted = true;
         }
 
         HandleDistribute(POOL_HANDLE);
+        pool_connect = true;
         HandleDistribute(CONT_HANDLE);
+        cont_open = true;
         HandleDistribute(DFS_HANDLE);
+        dfs_mounted = true;
 
         if (o->prefix) {
                 rc = dfs_set_prefix(dfs, o->prefix);
                 DCHECK(rc, "Failed to set DFS Prefix");
         }
-        dfs_init = true;
+
+out:
+        if (rc) {
+                if (dfs_mounted)
+                        dfs_umount(dfs);
+                if (cont_open)
+                        daos_cont_close(coh, NULL);
+                if (cont_create && rank == 0) {
+#if CHECK_DAOS_API_VERSION(1, 4)
+                        daos_cont_destroy(poh, o->cont, 1, NULL);
+#else
+                        daos_cont_destroy(poh, co_uuid, 1, NULL);
+#endif
+                }
+                if (pool_connect)
+                        daos_pool_disconnect(poh, NULL);
+                if (aiori_dfs_hash)
+                        d_hash_table_destroy(aiori_dfs_hash, false);
+                daos_fini();
+                dfs_init_count--;
+                ERR("Failed to initialize DAOS DFS driver");
+        }
 }
 
 static void
@@ -555,8 +601,27 @@ DFS_Finalize(aiori_mod_opt_t *options)
         DFS_options_t *o = (DFS_options_t *)options;
         int rc;
 
+	objectClass	= 0;
+	dir_oclass	= 0;
+
+        dfs_init_count --;
+        if (dfs_init_count != 0)
+                return;
+
 	MPI_Barrier(testComm);
-        d_hash_table_destroy(dir_hash, true /* force */);
+
+        while (1) {
+                d_list_t *rlink = NULL;
+
+                rlink = d_hash_rec_first(aiori_dfs_hash);
+                if (rlink == NULL)
+                        break;
+                d_hash_rec_decref(aiori_dfs_hash, rlink);
+        }
+
+        rc = d_hash_table_destroy(aiori_dfs_hash, false);
+        DCHECK(rc, "Failed to destroy DFS hash");
+        MPI_Barrier(testComm);
 
 	rc = dfs_umount(dfs);
         DCHECK(rc, "Failed to umount DFS namespace");
@@ -569,27 +634,22 @@ DFS_Finalize(aiori_mod_opt_t *options)
 	if (o->destroy) {
                 if (rank == 0) {
                         uuid_t uuid;
-                        double t1, t2;
 
-                        INFO(VERBOSE_1, "Destroying DFS Container: %s\n", o->cont);
+                        INFO(VERBOSE_1, "Destroying DFS Container: %s", o->cont);
                         uuid_parse(o->cont, uuid);
-                        t1 = MPI_Wtime();
                         rc = daos_cont_destroy(poh, uuid, 1, NULL);
-                        t2 = MPI_Wtime();
-                        if (rc == 0)
-                                INFO(VERBOSE_1, "Container Destroy time = %f secs", t2-t1);
+                        DCHECK(rc, "Failed to destroy container %s", o->cont);
                 }
 
                 MPI_Bcast(&rc, 1, MPI_INT, 0, testComm);
                 if (rc) {
 			if (rank == 0)
 				DCHECK(rc, "Failed to destroy container %s (%d)", o->cont, rc);
-			MPI_Abort(MPI_COMM_WORLD, -1);
                 }
         }
 
         if (rank == 0)
-                INFO(VERBOSE_1, "Disconnecting from DAOS POOL\n");
+                INFO(VERBOSE_1, "Disconnecting from DAOS POOL");
 
         rc = daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
@@ -597,26 +657,21 @@ DFS_Finalize(aiori_mod_opt_t *options)
 	MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
         if (rank == 0)
-                INFO(VERBOSE_1, "Finalizing DAOS..\n");
+                INFO(VERBOSE_1, "Finalizing DAOS..");
 
 	rc = daos_fini();
         DCHECK(rc, "Failed to finalize DAOS");
 
+out:
         /** reset tunables */
 	o->pool		= NULL;
-#if !defined(DAOS_API_VERSION_MAJOR) || DAOS_API_VERSION_MAJOR < 1
-	o->svcl		= NULL;
-#endif
 	o->group	= NULL;
 	o->cont		= NULL;
-	o->chunk_size	= 1048576;
+	o->chunk_size	= 0;
 	o->oclass	= NULL;
 	o->dir_oclass	= NULL;
 	o->prefix	= NULL;
 	o->destroy	= 0;
-	objectClass	= 0;
-	dir_oclass	= 0;
-	dfs_init	= false;
 }
 
 /*
@@ -643,7 +698,7 @@ DFS_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
 
                 parent = lookup_insert_dir(dir_name, NULL);
                 if (parent == NULL)
-                        GERR("Failed to lookup parent dir");
+                        DERR("Failed to lookup parent: %s", dir_name);
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                               objectClass, o->chunk_size, NULL, &obj);
@@ -651,14 +706,15 @@ DFS_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
         }
 
         if (!hints->filePerProc) {
-                share_file_handle(&obj, testComm);
+                rc = share_file_handle(&obj, testComm);
+                DCHECK(rc, "global open of %s Failed", name);
         }
 
+out:
 	if (name)
 		free(name);
 	if (dir_name)
 		free(dir_name);
-
         return (aiori_fd_t *)(obj);
 }
 
@@ -686,7 +742,7 @@ DFS_Open(char *testFileName, int flags, aiori_mod_opt_t *param)
 	if (hints->filePerProc || rank == 0) {
                 parent = lookup_insert_dir(dir_name, NULL);
                 if (parent == NULL)
-                        GERR("Failed to lookup parent dir");
+                        DERR("Failed to lookup parent: %s", dir_name);
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag, objectClass,
                               o->chunk_size, NULL, &obj);
@@ -694,9 +750,11 @@ DFS_Open(char *testFileName, int flags, aiori_mod_opt_t *param)
         }
 
         if (!hints->filePerProc) {
-                share_file_handle(&obj, testComm);
+                rc = share_file_handle(&obj, testComm);
+                DCHECK(rc, "global open of %s Failed", name);
         }
 
+out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -734,20 +792,23 @@ DFS_Xfer(int access, aiori_fd_t *file, IOR_size_t *buffer, IOR_offset_t length,
                 /* write/read file */
                 if (access == WRITE) {
                         rc = dfs_write(dfs, obj, &sgl, off, NULL);
-                        if (rc) {
-                                fprintf(stderr, "dfs_write() failed (%d)\n", rc);
-                                return -1;
-                        }
+                        if (rc)
+                                ERRF("dfs_write(%p, %lld) failed (%d): %s\n",
+                                     (void*)ptr, remaining, rc, strerror(rc));
                         ret = remaining;
                 } else {
                         rc = dfs_read(dfs, obj, &sgl, off, &ret, NULL);
-                        if (rc || ret == 0)
-                                fprintf(stderr, "dfs_read() failed(%d)\n", rc);
+                        if (rc)
+                                ERRF("dfs_read(%p, %lld) failed (%d): %s\n",
+                                     (void*)ptr, remaining, rc, strerror(rc));
+                        if (ret == 0)
+                                ERRF("dfs_read(%p, %lld) returned EOF prematurely",
+                                     (void*)ptr, remaining);
                 }
 
                 if (ret < remaining) {
                         if (hints->singleXferAttempt == TRUE)
-                                exit(-1);
+                                exit(EXIT_FAILURE);
                         if (xferRetries > MAX_RETRY)
                                 ERR("too many retries -- aborting");
                 }
@@ -811,11 +872,11 @@ DFS_Delete(char *testFileName, aiori_mod_opt_t * param)
 
         parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
-                GERR("Failed to lookup parent dir");
+                DERR("Failed to lookup parent: %s", dir_name);
 
 	rc = dfs_remove(dfs, parent, name, false, NULL);
-        DCHECK(rc, "dfs_remove() of %s Failed", name);
-
+        DCHECK(rc, "Failed to remove path %s", testFileName);
+out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -887,7 +948,10 @@ DFS_Statfs(const char *path, ior_aiori_statfs_t *sfs, aiori_mod_opt_t * param)
         sfs->f_ffree = -1;
         sfs->f_bavail = sfs->f_bfree;
 
-        return 0;
+out:
+        if (rc)
+                rc = -1;
+        return rc;
 }
 
 static int
@@ -906,15 +970,59 @@ DFS_Mkdir(const char *path, mode_t mode, aiori_mod_opt_t * param)
 
         parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
-                GERR("Failed to lookup parent dir");
+                DERR("Failed to lookup parent: %s", dir_name);
 
         rc = dfs_mkdir(dfs, parent, name, mode, dir_oclass);
-        DCHECK(rc, "dfs_mkdir() of %s Failed", name);
 
+out:
 	if (name)
 		free(name);
 	if (dir_name)
 		free(dir_name);
+        if (rc)
+                rc = -1;
+	return rc;
+}
+
+static int
+DFS_Rename(const char *oldfile, const char *newfile, aiori_mod_opt_t * param)
+{
+        dfs_obj_t *old_parent = NULL, *new_parent = NULL;
+	char *old_name = NULL, *old_dir_name = NULL;
+	char *new_name = NULL, *new_dir_name = NULL;
+	int rc;
+
+	rc = parse_filename(oldfile, &old_name, &old_dir_name);
+        DCHECK(rc, "Failed to parse path %s", oldfile);
+	assert(old_dir_name);
+        assert(old_name);
+
+	rc = parse_filename(newfile, &new_name, &new_dir_name);
+        DCHECK(rc, "Failed to parse path %s", newfile);
+	assert(new_dir_name);
+        assert(new_name);
+
+        old_parent = lookup_insert_dir(old_dir_name, NULL);
+        if (old_parent == NULL)
+                DERR("Failed to lookup parent: %s", old_dir_name);
+
+        new_parent = lookup_insert_dir(new_dir_name, NULL);
+        if (new_parent == NULL)
+                DERR("Failed to lookup parent: %s", new_dir_name);
+
+        rc = dfs_move(dfs, old_parent, old_name, new_parent, new_name, NULL);
+
+out:
+	if (old_name)
+		free(old_name);
+	if (old_dir_name)
+		free(old_dir_name);
+	if (new_name)
+		free(new_name);
+	if (new_dir_name)
+		free(new_dir_name);
+        if (rc)
+                return -1;
 	return rc;
 }
 
@@ -933,11 +1041,11 @@ DFS_Rmdir(const char *path, aiori_mod_opt_t * param)
 
         parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
-                GERR("Failed to lookup parent dir");
+                DERR("Failed to lookup parent: %s", dir_name);
 
 	rc = dfs_remove(dfs, parent, name, false, NULL);
-        DCHECK(rc, "dfs_remove() of %s Failed", name);
 
+out:
 	if (name)
 		free(name);
 	if (dir_name)
@@ -950,18 +1058,36 @@ DFS_Rmdir(const char *path, aiori_mod_opt_t * param)
 static int
 DFS_Access(const char *path, int mode, aiori_mod_opt_t * param)
 {
+        dfs_obj_t *parent = NULL;
         dfs_obj_t *obj = NULL;
-        mode_t fmode;
+	char *name = NULL, *dir_name = NULL;
+	int rc;
 
-        obj = lookup_insert_dir(path, &fmode);
-        if (obj == NULL)
+	rc = parse_filename(path, &name, &dir_name);
+        DCHECK(rc, "Failed to parse path %s", path);
+
+	assert(dir_name);
+        assert(name);
+
+        parent = lookup_insert_dir(dir_name, NULL);
+        if (parent == NULL)
+                DERR("Failed to lookup parent: %s", dir_name);
+
+        if (strcmp(name, "/") == 0) {
+                free(name);
+                name = NULL;
+        }
+
+	rc = dfs_access(dfs, parent, name, mode);
+
+out:
+	if (name)
+		free(name);
+	if (dir_name)
+		free(dir_name);
+        if (rc)
                 return -1;
-
-        /** just close if it's a file */
-        if (S_ISREG(fmode))
-                dfs_release(obj);
-
-        return 0;
+	return rc;
 }
 
 static int
@@ -979,10 +1105,11 @@ DFS_Stat(const char *path, struct stat *buf, aiori_mod_opt_t * param)
 
         parent = lookup_insert_dir(dir_name, NULL);
         if (parent == NULL)
-                GERR("Failed to lookup parent dir");
+                DERR("Failed to lookup parent: %s", dir_name);
 
 	rc = dfs_stat(dfs, parent, name, buf);
 
+out:
 	if (name)
 		free(name);
 	if (dir_name)

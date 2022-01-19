@@ -120,7 +120,7 @@ static int test_initialize(IOR_test_t * test){
 #ifdef HAVE_CUDA
   cudaError_t cret = cudaSetDevice(test->params.gpuID);
   if(cret != cudaSuccess){
-    EWARNF("cudaSetDevice(%d) error: %s", test->params.gpuID, cudaGetErrorString(cret));
+    WARNF("cudaSetDevice(%d) error: %s", test->params.gpuID, cudaGetErrorString(cret));
   }
 #endif
 
@@ -314,7 +314,7 @@ DisplayOutliers(int numTasks,
                 if (ret != 0)
                         strcpy(hostname, "unknown");
 
-                EWARNF("for %s, task %d, %s %s is %f (mean=%f, stddev=%f)\n",
+                WARNF("for %s, task %d, %s %s is %f (mean=%f, stddev=%f)\n",
                         hostname, rank, accessString, timeString, timerVal,  mean, sd);
         }
 }
@@ -388,11 +388,11 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
                              != point->aggFileSizeFromXfer)
                             || (point->aggFileSizeFromStat
                                 != point->aggFileSizeFromXfer)) {
-                                EWARNF("Expected aggregate file size       = %lld", (long long) params->expectedAggFileSize);
-                                EWARNF("Stat() of aggregate file size      = %lld", (long long) point->aggFileSizeFromStat);
-                                EWARNF("Using actual aggregate bytes moved = %lld", (long long) point->aggFileSizeFromXfer);
+                                WARNF("Expected aggregate file size       = %lld", (long long) params->expectedAggFileSize);
+                                WARNF("Stat() of aggregate file size      = %lld", (long long) point->aggFileSizeFromStat);
+                                WARNF("Using actual aggregate bytes moved = %lld", (long long) point->aggFileSizeFromXfer);
                                 if(params->deadlineForStonewalling){
-                                  EWARN("Maybe caused by deadlineForStonewalling");
+                                  WARN("Maybe caused by deadlineForStonewalling");
                                 }
                         }
                 }
@@ -433,7 +433,7 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
                                 WARN("overflow in errors counted");
                                 allErrors = -1;
                         }
-                        EWARNF("Incorrect data on %s (%d errors found).\n",
+                        WARNF("Incorrect data on %s (%d errors found).\n",
                                 access == WRITECHECK ? "write" : "read", allErrors);
                         fprintf(out_logfile,
                                 "Used Time Stamp %u (0x%x) for Data Signature\n",
@@ -546,7 +546,7 @@ char * GetPlatformName()
         struct utsname name;
 
         if (uname(&name) != 0) {
-                EWARN("cannot get platform name");
+                WARN("cannot get platform name");
                 sprintf(sysName, "%s", "Unknown");
                 sprintf(nodeName, "%s", "Unknown");
         } else {
@@ -870,9 +870,9 @@ static void InitTests(IOR_test_t *tests)
                         params->numTasks = mpiNumTasks;
                 } else if (params->numTasks > mpiNumTasks) {
                         if (rank == 0) {
-                                EWARNF("More tasks requested (%d) than available (%d),",
+                                WARNF("More tasks requested (%d) than available (%d),",
                                         params->numTasks, mpiNumTasks);
-                                EWARNF("         running with %d tasks.\n", mpiNumTasks);
+                                WARNF("         running with %d tasks.\n", mpiNumTasks);
                         }
                         params->numTasks = mpiNumTasks;
                 }
@@ -1189,7 +1189,7 @@ static void TestIoSys(IOR_test_t *test)
           GetTestFileName(testFileName, params);
           int ret = backend->stat(testFileName, & sb, params->backend_options);
           if(ret == 0) {
-            EWARNF("The file \"%s\" exists already and will be overwritten", testFileName);
+            WARNF("The file \"%s\" exists already and will be overwritten", testFileName);
           }
         }
 
@@ -1521,8 +1521,6 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
                 ERR("random offset and constant reorder tasks specified with single-shared-file. Choose one and resubmit");
         if (test->randomOffset && test->checkRead && test->randomSeed == -1)
                 ERR("random offset with read check option requires to set the random seed");
-        if (test->randomOffset && test->dataPacketType == DATA_OFFSET)
-                ERR("random offset not available with store file offset option)");
         if ((strcasecmp(test->api, "HDF5") == 0) && test->randomOffset)
                 ERR("random offset not available with HDF5");
         if ((strcasecmp(test->api, "NCMPI") == 0) && test->randomOffset)

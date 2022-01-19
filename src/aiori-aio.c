@@ -239,7 +239,6 @@ ior_aiori_t aio_aiori = {
         .initialize = aio_initialize,
         .finalize = aio_finalize,
         .xfer_hints = aio_xfer_hints,
-        .get_options = aio_options,
         .fsync = aio_Fsync,
         .open = aio_Open,
         .xfer = aio_Xfer,

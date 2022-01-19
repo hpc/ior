@@ -95,7 +95,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 if (initialized)
                     MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
                 else
-                    exit(-1);
+                    exit(EXIT_FAILURE);
         }
         if (strcasecmp(option, "api") == 0) {
           params->api = strdup(value);
@@ -103,7 +103,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
           params->backend = aiori_select(params->api);
           if (params->backend == NULL){
             fprintf(out_logfile, "Could not load backend API %s\n", params->api);
-            exit(-1);
+            exit(EXIT_FAILURE);
           }
         } else if (strcasecmp(option, "summaryFile") == 0) {
           if (rank == 0){
@@ -258,7 +258,7 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                   if (initialized)
                       MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
                   else
-                      exit(-1);
+                      exit(EXIT_FAILURE);
                 }
         }
 }
@@ -285,7 +285,7 @@ void ParseLine(char *line, IOR_param_t * test, options_all_t * module_options)
                 }
                 if(strlen(start) < 3){
                   fprintf(out_logfile, "Invalid option substring string: \"%s\" in \"%s\"\n", start, line);
-                  exit(1);
+                  exit(EXIT_FAILURE);
                 }
                 DecodeDirective(start, test, module_options);
                 start = end + 1;
@@ -370,8 +370,8 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                         continue;
 
                 /* skip lines containing only comments */
-                if (sscanf(ptr, " #%s", empty) == 1)
-                        continue;
+                if (sscanf(ptr, " #%c", empty) == 1)
+                        continue;                
 
                 if (contains_only(ptr, "ior stop")) {
                         break;
@@ -452,12 +452,12 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'j', NULL,        "outlierThreshold -- warn on outlier N seconds from mean", OPTION_OPTIONAL_ARGUMENT, 'd', & params->outlierThreshold},
     {'k', NULL,        "keepFile -- don't remove the test file(s) on program exit", OPTION_FLAG, 'd', & params->keepFile},
     {'K', NULL,        "keepFileWithError  -- keep error-filled file(s) after data-checking", OPTION_FLAG, 'd', & params->keepFileWithError},
-    {'l', "dataPacketType",        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
+    {'l', "dataPacketType",        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|random|o|i|t|r]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
     {'m', NULL,        "multiFile -- use number of reps (-i) for multiple file count", OPTION_FLAG, 'd', & params->multiFile},
     {'M', NULL,        "memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)", OPTION_OPTIONAL_ARGUMENT, 's', & params->memoryPerNodeStr},
     {'N', NULL,        "numTasks -- number of tasks that are participating in the test (overrides MPI)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},
     {'o', NULL,        "testFile -- full name for test", OPTION_OPTIONAL_ARGUMENT, 's', & params->testFileName},
-    {'O', NULL,        "string of IOR directives (e.g. -O checkRead=1,lustreStripeCount=32)", OPTION_OPTIONAL_ARGUMENT, 'p', & decodeDirectiveWrapper},
+    {'O', NULL,        "string of IOR directives (e.g. -O checkRead=1,GPUid=2)", OPTION_OPTIONAL_ARGUMENT, 'p', & decodeDirectiveWrapper},
     {'Q', NULL,        "taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->taskPerNodeOffset},
     {'r', NULL,        "readFile -- read existing file", OPTION_FLAG, 'd', & params->readFile},
     {'R', NULL,        "checkRead -- verify that the output of read matches the expected signature (used with -G)", OPTION_FLAG, 'd', & params->checkRead},

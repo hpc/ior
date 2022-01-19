@@ -70,6 +70,7 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
         AC_SEARCH_LIBS([gpfs_fcntl], [gpfs], [],
         [AC_MSG_ERROR([Library containing gpfs_fcntl symbols not found])
         ])
+        AC_CHECK_TYPES([gpfsFineGrainWriteSharing_t], [], [], [[#include <gpfs_fcntl.h>]])
     ])
 ])
 
@@ -131,7 +132,8 @@ AC_ARG_WITH([lustre],
                 [support configurable Lustre striping values @<:@default=check@:>@])],
         [], [with_lustre=check])
 AS_IF([test "x$with_lustre" = xyes ], [
-        AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h], [AC_DEFINE([HAVE_LUSTRE_USER], [], [Lustre user API available in some shape or form])], [
+        AC_CHECK_HEADERS([linux/lustre/lustre_user.h lustre/lustre_user.h],
+                [AC_DEFINE([HAVE_LUSTRE_USER], [], [Lustre user API available in some shape or form])], [
                 if test "x$with_lustre" != xcheck -a \
                         "x$ac_cv_header_linux_lustre_lustre_user_h" = "xno" -a \
                         "x$ac_cv_header_lustre_lustre_user_h" = "xno" ; then

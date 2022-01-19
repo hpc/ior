@@ -1,4 +1,4 @@
-LDFLAGS  = $(extraLDFLAGS)
+AM_LDFLAGS = $(extraLDFLAGS)
 LDADD    = ../libaiori.a $(extraLDADD)
 
 # Add test here

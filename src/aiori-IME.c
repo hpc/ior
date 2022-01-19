@@ -322,7 +322,7 @@ void IME_Delete(char *testFileName, aiori_mod_opt_t *param)
                 return;
 
         if (ime_native_unlink(testFileName) != 0)
-                EWARNF("[RANK %03d]: cannot delete file \"%s\"\n",
+                WARNF("[RANK %03d]: cannot delete file \"%s\"\n",
                        rank, testFileName);
 }
 

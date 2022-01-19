@@ -491,7 +491,7 @@ static void MPIIO_Fsync(aiori_fd_t *fdp, aiori_mod_opt_t * module_options)
     return;
   mpiio_fd_t * mfd = (mpiio_fd_t*) fdp;
   if (MPI_File_sync(mfd->fd) != MPI_SUCCESS)
-      EWARN("fsync() failed");
+      WARN("fsync() failed");
 }
 
 /*

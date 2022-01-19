@@ -663,7 +663,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
         }
       }else{
         s->obj_read.err++;
-        EWARNF("%d: Error while reading the obj: %s", o.rank, obj_name);
+        WARNF("%d: Error while reading the obj: %s", o.rank, obj_name);
       }
       o.backend->close(aiori_fh, o.backend_options);
 
@@ -710,7 +710,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
         if (! o.ignore_precreate_errors){
          ERRF("%d: Error while creating the obj: %s", o.rank, obj_name);
         }
-        EWARNF("Unable to open file %s", obj_name);
+        WARNF("Unable to open file %s", obj_name);
         s->obj_create.err++;
       }
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_create, pos, & s->max_op_time, & op_time);
@@ -826,7 +826,7 @@ static option_help options [] = {
   {'w', "stonewall-timer", "Stop each benchmark iteration after the specified seconds (if not used with -W this leads to process-specific progress!)", OPTION_OPTIONAL_ARGUMENT, 'd', & o.stonewall_timer},
   {'W', "stonewall-wear-out", "Stop with stonewall after specified time and use a soft wear-out phase -- all processes perform the same number of iterations", OPTION_FLAG, 'd', & o.stonewall_timer_wear_out},
   {'X', "verify-read", "Verify the data on read", OPTION_FLAG, 'd', & o.verify_read},
-  {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|o|i|t]", OPTION_OPTIONAL_ARGUMENT, 's', & o.packetTypeStr},
+  {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|random|o|i|t|r]", OPTION_OPTIONAL_ARGUMENT, 's', & o.packetTypeStr},
   {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
   {0, "start-item", "The iteration number of the item to start with, allowing to offset the operations", OPTION_OPTIONAL_ARGUMENT, 'l', & o.start_item_number},
   {0, "print-detailed-stats", "Print detailed machine parsable statistics.", OPTION_FLAG, 'd', & o.print_detailed_stats},
@@ -851,12 +851,12 @@ static int return_position(){
     FILE * f = fopen(o.run_info_file, "r");
     if(! f){
       ERRF("[ERROR] Could not open %s for restart", o.run_info_file);
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     ret = fscanf(f, "pos: %d", & position);
     if (ret != 1){
       ERRF("Could not read from %s for restart", o.run_info_file);
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     fclose(f);
   }
@@ -871,7 +871,7 @@ static void store_position(int position){
   FILE * f = fopen(o.run_info_file, "w");
   if(! f){
     ERRF("[ERROR] Could not open %s for saving data", o.run_info_file);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   fprintf(f, "pos: %d\n", position);
   fclose(f);
@@ -899,6 +899,8 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
   }
 
   memset(& o.hints, 0, sizeof(o.hints));
+  o.hints.filePerProc = 1;
+  
   options_all_t * global_options = airoi_create_all_module_options(options);
   int parsed = option_parse(argc, argv, global_options);
   o.backend = aiori_select(o.interface);
@@ -917,9 +919,9 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
     o.phase_cleanup = o.phase_precreate = o.phase_benchmark = 1;
   }
   if (! o.phase_precreate && o.phase_benchmark && o.stonewall_timer && ! o.stonewall_timer_wear_out){
-    if(o.rank == 0)
-      ERR("Invalid options, if running only the benchmark phase using -2 with stonewall option then use stonewall wear-out");
-    exit(1);
+    if(o.rank == 0){
+      WARN("Dangerous option combination: and benchmark phase (-2) using with stonewall option (-w) without stonewall wear-out will lead to files that cannot be cleaned up using the cleanup phase(-3). Also multiple iterations are problematic.");
+    }
   }
   if( o.random_seed == -1 ){
       o.random_seed = time(NULL);
@@ -984,7 +986,7 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
   if (o.phase_precreate){
     if (o.rank == 0){
       if (o.backend->mkdir(o.prefix, DIRMODE, o.backend_options) != 0) {
-          EWARNF("Unable to create test directory %s", o.prefix);
+          WARNF("Unable to create test directory %s", o.prefix);
       }
     }
     init_stats(& phase_stats, o.precreate * o.dset_count);

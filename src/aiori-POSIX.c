@@ -32,11 +32,14 @@
 #include <assert.h>
 
 
-#ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
-#  include <linux/lustre/lustre_user.h>
-#elif defined(HAVE_LUSTRE_USER)
-#  include <lustre/lustre_user.h>
-#endif
+#ifdef HAVE_LUSTRE_USER
+#  ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
+#    include <linux/lustre/lustre_user.h>
+#  elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
+#    include <lustre/lustre_user.h>
+#  endif
+#endif /* HAVE_LUSTRE_USER */
+
 #ifdef HAVE_GPFS_H
 #  include <gpfs.h>
 #endif
@@ -45,9 +48,9 @@
 #endif
 
 #ifdef HAVE_BEEGFS_BEEGFS_H
-#include <beegfs/beegfs.h>
-#include <dirent.h>
-#include <libgen.h>
+#  include <beegfs/beegfs.h>
+#  include <dirent.h>
+#  include <libgen.h>
 #endif
 
 #include "ior.h"
@@ -59,8 +62,8 @@
 
 #ifdef HAVE_GPU_DIRECT
 typedef long long loff_t;
-#include <cuda_runtime.h>
-#include <cufile.h>
+#  include <cuda_runtime.h>
+#  include <cufile.h>
 #endif
 
 typedef struct {
@@ -98,7 +101,7 @@ static void init_cufile(posix_fd * pfd){
   };
   CUfileError_t status = cuFileHandleRegister(& pfd->cf_handle, & cf_descr);
   if(status.err != CU_FILE_SUCCESS){
-    EWARNF("Could not register handle %s", cuFileGetErrorString(status));
+    WARNF("Could not register handle %s", cuFileGetErrorString(status));
   }
 }
 #endif
@@ -135,6 +138,10 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
 #ifdef HAVE_GPFS_FCNTL_H
     {0, "posix.gpfs.hintaccess", "", OPTION_FLAG, 'd', & o->gpfs_hint_access},
     {0, "posix.gpfs.releasetoken", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->gpfs_release_token},
+#ifdef HAVE_GPFSFINEGRAINWRITESHARING_T
+    {0, "posix.gpfs.finegrainwritesharing", "    Enable fine grain write sharing", OPTION_FLAG, 'd', & o->gpfs_finegrain_writesharing},
+    {0, "posix.gpfs.finegrainreadsharing", "     Enable fine grain read sharing", OPTION_FLAG, 'd', & o->gpfs_finegrain_readsharing},
+#endif
 
 #endif
 #ifdef HAVE_LUSTRE_USER
@@ -142,7 +149,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
     {0, "posix.lustre.startost", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_start_ost},
     {0, "posix.lustre.ignorelocks", "", OPTION_FLAG, 'd', & o->lustre_ignore_locks},
-#endif
+#endif /* HAVE_LUSTRE_USER */
 #ifdef HAVE_GPU_DIRECT
     {0, "gpuDirect",        "allocate I/O buffers on the GPU", OPTION_FLAG, 'd', & o->gpuDirect},
 #endif
@@ -228,7 +235,7 @@ void gpfs_free_all_locks(int fd)
 
         rc = gpfs_fcntl(fd, &release_all);
         if (verbose >= VERBOSE_0 && rc != 0) {
-                EWARNF("gpfs_fcntl(%d, ...) release all locks hint failed.", fd);
+                WARNF("gpfs_fcntl(%d, ...) release all locks hint failed.", fd);
         }
 }
 void gpfs_access_start(int fd, IOR_offset_t length, IOR_offset_t offset, int access)
@@ -251,7 +258,7 @@ void gpfs_access_start(int fd, IOR_offset_t length, IOR_offset_t offset, int acc
 
         rc = gpfs_fcntl(fd, &take_locks);
         if (verbose >= VERBOSE_2 && rc != 0) {
-                EWARNF("gpfs_fcntl(%d, ...) access range hint failed.", fd);
+                WARNF("gpfs_fcntl(%d, ...) access range hint failed.", fd);
         }
 }
 
@@ -275,10 +282,65 @@ void gpfs_access_end(int fd, IOR_offset_t length, IOR_offset_t offset,  int acce
 
         rc = gpfs_fcntl(fd, &free_locks);
         if (verbose >= VERBOSE_2 && rc != 0) {
-                EWARNF("gpfs_fcntl(%d, ...) free range hint failed.", fd);
+                WARNF("gpfs_fcntl(%d, ...) free range hint failed.", fd);
         }
 }
 
+#ifdef HAVE_GPFSFINEGRAINWRITESHARING_T
+/* This hint optimizes the performance of small strided
+   writes to a shared file from a parallel application */
+void gpfs_fineGrainWriteSharing(int fd)
+{
+        struct
+        {
+                gpfsFcntlHeader_t header;
+                gpfsFineGrainWriteSharing_t write;
+        } sharingHint;
+        int rc;
+
+        sharingHint.header.totalLength = sizeof(sharingHint);
+        sharingHint.header.fcntlVersion = GPFS_FCNTL_CURRENT_VERSION;
+        sharingHint.header.fcntlReserved = 0;
+
+        sharingHint.write.structLen = sizeof(sharingHint.write);
+        sharingHint.write.structType = GPFS_FINE_GRAIN_WRITE_SHARING;
+        sharingHint.write.fineGrainWriteSharing = 1;
+        sharingHint.write.taskId = -1;
+        sharingHint.write.totalTasks =  -1;
+        sharingHint.write.recordSize =  -1;
+
+        rc = gpfs_fcntl(fd, &sharingHint);
+        if (verbose >= VERBOSE_2 && rc != 0) {
+                WARNF("gpfs_fcntl(%d, ...) fine grain write sharing hint failed.", fd);
+        }
+}
+
+/* This hint optimizes the performance of small strided
+   reads from a shared file from a parallel application */
+void gpfs_fineGrainReadSharing(int fd)
+{
+        struct
+        {
+                gpfsFcntlHeader_t header;
+                gpfsPrefetch_t read;
+        } sharingHint;
+        int rc;
+
+        sharingHint.header.totalLength = sizeof(sharingHint);
+        sharingHint.header.fcntlVersion = GPFS_FCNTL_CURRENT_VERSION;
+        sharingHint.header.fcntlReserved = 0;
+
+        sharingHint.read.structLen = sizeof(sharingHint.read);
+        sharingHint.read.structType = GPFS_PREFETCH;
+        sharingHint.read.prefetchEnableRead = 0;
+        sharingHint.read.prefetchEnableWrite = 1;
+
+        rc = gpfs_fcntl(fd, &sharingHint);
+        if (verbose >= VERBOSE_2 && rc != 0) {
+                WARNF("gpfs_fcntl(%d, ...) fine grain read sharing hint failed.", fd);
+        }
+}
+#endif
 #endif
 
 #ifdef HAVE_BEEGFS_BEEGFS_H
@@ -395,6 +457,18 @@ bool beegfs_createFilePath(char* filepath, mode_t mode, int numTargets, int chun
 #endif /* HAVE_BEEGFS_BEEGFS_H */
 
 
+#ifdef HAVE_LUSTRE_USER
+void lustre_disable_file_locks(const int fd) {
+        int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
+        if (verbose >= VERBOSE_1) {
+                INFO("** Disabling lustre range locking **\n");
+        }
+        if (ioctl(fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1) {
+                ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", fd);
+        }
+}
+#endif /* HAVE_LUSTRE_USER */
+
 /*
  * Create and open a file through the POSIX interface.
  */
@@ -458,7 +532,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                                           "barrier error");
                 }
         } else {
-#endif                          /* HAVE_LUSTRE_USER */
+#endif /* HAVE_LUSTRE_USER */
 
                 fd_oflag |= O_CREAT | O_RDWR;
 
@@ -472,7 +546,7 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                     if (result) {
                        fd_oflag &= ~O_CREAT;
                     } else {
-                       EWARN("BeeGFS tuning failed");
+                       WARN("BeeGFS tuning failed");
                     }
                  }
 #endif /* HAVE_BEEGFS_BEEGFS_H */
@@ -487,11 +561,9 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
         }
 
         if (o->lustre_ignore_locks) {
-                int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
-                if (ioctl(pfd->fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
-                        ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", pfd->fd);
+                lustre_disable_file_locks(pfd->fd);
         }
-#endif                          /* HAVE_LUSTRE_USER */
+#endif /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         /* in the single shared file case, immediately release all locks, with
@@ -500,6 +572,12 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
         if (o->gpfs_release_token ) {
                 gpfs_free_all_locks(pfd->fd);
         }
+#ifdef HAVE_GPFSFINEGRAINWRITESHARING_T
+        /* Enable fine grain write sharing */
+        if (o->gpfs_finegrain_writesharing) {
+                gpfs_fineGrainWriteSharing(pfd->fd);
+        }
+#endif
 #endif
 #ifdef HAVE_GPU_DIRECT
   if(o->gpuDirect){
@@ -551,19 +629,20 @@ aiori_fd_t *POSIX_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 
 #ifdef HAVE_LUSTRE_USER
         if (o->lustre_ignore_locks) {
-                int lustre_ioctl_flags = LL_FILE_IGNORE_LOCK;
-                if (verbose >= VERBOSE_1) {
-                        EINFO("** Disabling lustre range locking **\n");
-                }
-                if (ioctl(pfd->fd, LL_IOC_SETFLAGS, &lustre_ioctl_flags) == -1)
-                        ERRF("ioctl(%d, LL_IOC_SETFLAGS, ...) failed", pfd->fd);
+                lustre_disable_file_locks(pfd->fd);
         }
-#endif                          /* HAVE_LUSTRE_USER */
+#endif /* HAVE_LUSTRE_USER */
 
 #ifdef HAVE_GPFS_FCNTL_H
         if(o->gpfs_release_token) {
                 gpfs_free_all_locks(pfd->fd);
         }
+#ifdef HAVE_GPFSFINEGRAINWRITESHARING_T
+        /* Enable fine grain read sharing */
+        if (o->gpfs_finegrain_readsharing) {
+                gpfs_fineGrainReadSharing(pfd->fd);
+        }
+#endif
 #endif
 #ifdef HAVE_GPU_DIRECT
         if(o->gpuDirect){
@@ -607,7 +686,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                 /* write/read file */
                 if (access == WRITE) {  /* WRITE */
                         if (verbose >= VERBOSE_4) {
-                                EINFO("task %d writing to offset %lld\n",
+                                INFOF("task %d writing to offset %lld\n",
                                         rank,
                                         offset + length - remaining);
                         }
@@ -628,7 +707,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                         }
                 } else {        /* READ or CHECK */
                         if (verbose >= VERBOSE_4) {
-                                EINFO("task %d reading from offset %lld\n",
+                                INFOF("task %d reading from offset %lld\n",
                                         rank,
                                         offset + length - remaining);
                         }
@@ -649,7 +728,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                         fd, (void*)ptr, remaining);
                 }
                 if (rc < remaining) {
-                        EWARNF("task %d, partial %s, %lld of %lld bytes at offset %lld\n",
+                        WARNF("task %d, partial %s, %lld of %lld bytes at offset %lld\n",
                                 rank,
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
@@ -676,7 +755,7 @@ void POSIX_Fsync(aiori_fd_t *afd, aiori_mod_opt_t * param)
 {
     int fd = ((posix_fd*) afd)->fd;
     if (fsync(fd) != 0)
-        EWARNF("fsync(%d) failed", fd);
+        WARNF("fsync(%d) failed", fd);
 }
 
 
@@ -717,7 +796,7 @@ void POSIX_Delete(char *testFileName, aiori_mod_opt_t * param)
         if(hints->dryRun)
           return;
         if (unlink(testFileName) != 0){
-                EWARNF("[RANK %03d]: unlink() of file \"%s\" failed", rank, testFileName);
+                WARNF("[RANK %03d]: unlink() of file \"%s\" failed", rank, testFileName);
         }
 }
 
@@ -726,7 +805,7 @@ int POSIX_Rename(const char * oldfile, const char * newfile, aiori_mod_opt_t * m
     return 0;
 
   if(rename(oldfile, newfile) != 0){
-    EWARNF("[RANK %03d]: rename() of file \"%s\" to  \"%s\" failed", rank, oldfile, newfile);
+    WARNF("[RANK %03d]: rename() of file \"%s\" to  \"%s\" failed", rank, oldfile, newfile);
     return -1;
   }
   return 0;

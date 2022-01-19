@@ -60,7 +60,7 @@
         if (strcmp(resultString, "Invalid minor error number") != 0)     \
             fprintf(stdout, "%s\n", resultString);                       \
         fprintf(stdout, "** exiting **\n");                              \
-        exit(-1);                                                        \
+        exit(EXIT_FAILURE);                                                        \
     }                                                                    \
 } while(0)
 #else                           /* ! (H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6) */
@@ -75,7 +75,7 @@
          *            char* mesg, size_t size)                           \
          */                                                              \
         fprintf(stdout, "** exiting **\n");                              \
-        exit(-1);                                                        \
+        exit(EXIT_FAILURE);                                                        \
     }                                                                    \
 } while(0)
 #endif                          /* H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6 */
@@ -181,18 +181,6 @@ static int HDF5_check_params(aiori_mod_opt_t * options){
       ERR("alignment must be non-negative integer");
   if (o->individualDataSets)
       ERR("individual data sets not implemented");
-  if (o->noFill) {
-    /* check if hdf5 available */
-#if defined (H5_VERS_MAJOR) && defined (H5_VERS_MINOR)
-    /* no-fill option not available until hdf5-1.6.x */
-#if (H5_VERS_MAJOR > 0 && H5_VERS_MINOR > 5)
-#else
-    ERRF("'no fill' option not available in HDF5");
-#endif
-#else
-    WARN("unable to determine HDF5 version for 'no fill' usage");
-#endif
-  }
   return 0;
 }
 
@@ -273,7 +261,6 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
                 comm = testComm;
         }
 
-        SetHints(&mpiHints, o->hintsFileName);
         /*
          * note that with MP_HINTS_FILTERED=no, all key/value pairs will
          * be in the info object.  The info object that is attached to
@@ -281,6 +268,7 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
          * deemed valid by the implementation.
          */
         /* show hints passed to file */
+        SetHints(&mpiHints, o->hintsFileName);
         if (rank == 0 && o->showHints) {
                 fprintf(stdout, "\nhints passed to access property list {\n");
                 ShowHints(&mpiHints);
@@ -294,7 +282,6 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
                    "cannot set alignment");
 
 #ifdef HAVE_H5PSET_ALL_COLL_METADATA_OPS
-
         if (o->collective_md) {
                 /* more scalable metadata */
 
@@ -317,40 +304,18 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
         }
 
         /* show hints actually attached to file handle */
-        if (o->showHints || (1) /* WEL - this needs fixing */ ) {
-                if (rank == 0 && (o->showHints) /* WEL - this needs fixing */ ) {
-                        WARN("showHints not working for HDF5");
-                }
-        } else {
-                MPI_Info mpiHintsCheck = MPI_INFO_NULL;
-                hid_t apl;
-                apl = H5Fget_access_plist(*fd);
-                HDF5_CHECK(H5Pget_fapl_mpio(apl, &comm, &mpiHintsCheck),
-                           "cannot get info object through HDF5");
+        if (o->showHints) {
+                MPI_File *fd_mpiio;
+                HDF5_CHECK(H5Fget_vfd_handle(*fd, accessPropList, (void **) &fd_mpiio), "cannot get file handle");
+                MPI_Info info_used;
+                MPI_CHECK(MPI_File_get_info(*fd_mpiio, &info_used), "cannot get file info");
                 if (rank == 0) {
-                        fprintf(stdout,
-                                "\nhints returned from opened file (HDF5) {\n");
-                        ShowHints(&mpiHintsCheck);
-                        fprintf(stdout, "}\n");
-                        if (1 == 1) {   /* request the MPIIO file handle and its hints */
-                                MPI_File *fd_mpiio;
-                                HDF5_CHECK(H5Fget_vfd_handle
-                                           (*fd, apl, (void **)&fd_mpiio),
-                                           "cannot get MPIIO file handle");
-                                if (mpiHintsCheck != MPI_INFO_NULL)
-                                        MPI_Info_free(&mpiHintsCheck);
-                                MPI_CHECK(MPI_File_get_info
-                                          (*fd_mpiio, &mpiHintsCheck),
-                                          "cannot get info object through MPIIO");
-                                fprintf(stdout,
-                                        "\nhints returned from opened file (MPIIO) {\n");
-                                ShowHints(&mpiHintsCheck);
+                        /* print the MPI file hints currently used */
+                        fprintf(stdout, "\nhints returned from opened file {\n");
+                        ShowHints(&info_used);
                                 fprintf(stdout, "}\n");
-                                if (mpiHintsCheck != MPI_INFO_NULL)
-                                        MPI_Info_free(&mpiHintsCheck);
                         }
-                }
-                MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+                MPI_CHECK(MPI_Info_free(&info_used), "cannot free file info");
         }
 
         /* this is necessary for resetting various parameters
@@ -499,6 +464,7 @@ static IOR_offset_t HDF5_Xfer(int access, aiori_fd_t *fd, IOR_size_t * buffer,
  */
 static void HDF5_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * param)
 {
+        HDF5_CHECK(H5Fflush(*(hid_t *) fd, H5F_SCOPE_LOCAL), "cannot flush file to disk");
 }
 
 /*
@@ -627,10 +593,6 @@ static void SetupDataSet(void *fd, int flags, aiori_mod_opt_t * param)
         if (flags & IOR_CREAT) {     /* WRITE */
                 /* create data set */
                 dataSetPropList = H5Pcreate(H5P_DATASET_CREATE);
-                /* check if hdf5 available */
-#if defined (H5_VERS_MAJOR) && defined (H5_VERS_MINOR)
-                /* no-fill option not available until hdf5-1.6.x */
-#if (H5_VERS_MAJOR > 0 && H5_VERS_MINOR > 5)
                 if (o->noFill == TRUE) {
                         if (rank == 0 && verbose >= VERBOSE_1) {
                                 fprintf(stdout, "\nusing 'no fill' option\n");
@@ -639,15 +601,6 @@ static void SetupDataSet(void *fd, int flags, aiori_mod_opt_t * param)
                                                     H5D_FILL_TIME_NEVER),
                                    "cannot set fill time for property list");
                 }
-#else
-                char errorString[MAX_STR];
-                sprintf(errorString, "'no fill' option not available in %s",
-                        test->apiVersion);
-                ERR(errorString);
-#endif
-#else
-                WARN("unable to determine HDF5 version for 'no fill' usage");
-#endif
                 dataSet =
                     H5Dcreate(*(hid_t *) fd, dataSetName, H5T_NATIVE_LLONG,
                               dataSpace, dataSetPropList);
