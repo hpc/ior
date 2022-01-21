@@ -76,7 +76,7 @@ void FailMessage(int rank, const char *location, char *format, ...);
     ERRF("%s", MSG);                                                    \
 } while (0)
 
-/* if MPI_STATUS indicates error, display error message with format
+/* if MPI_STATUS indicates error, display error message with format */
 /* string and error string from MPI_STATUS and terminate execution */
 #define MPI_CHECKF(MPI_STATUS, FORMAT, ...) do {                        \
     char resultString[MPI_MAX_ERROR_STRING];                            \
