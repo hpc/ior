@@ -48,15 +48,16 @@
 #if H5_VERS_MAJOR > 1 && H5_VERS_MINOR > 6
 #define HDF5_CHECK(HDF5_RETURN, MSG) do {                                \
     char   resultString[1024];                                           \
+    herr_t _HDF5_RETURN = (HDF5_RETURN);                                 \
                                                                          \
-    if (HDF5_RETURN < 0) {                                               \
+    if (_HDF5_RETURN < 0) {                                              \
         fprintf(stdout, "** error **\n");                                \
         fprintf(stdout, "ERROR in %s (line %d): %s.\n",                  \
                 __FILE__, __LINE__, MSG);                                \
-        strcpy(resultString, H5Eget_major((H5E_major_t)HDF5_RETURN));    \
+        strcpy(resultString, H5Eget_major((H5E_major_t)_HDF5_RETURN));   \
         if (strcmp(resultString, "Invalid major error number") != 0)     \
             fprintf(stdout, "HDF5 %s\n", resultString);                  \
-        strcpy(resultString, H5Eget_minor((H5E_minor_t)HDF5_RETURN));    \
+        strcpy(resultString, H5Eget_minor((H5E_minor_t)_HDF5_RETURN));   \
         if (strcmp(resultString, "Invalid minor error number") != 0)     \
             fprintf(stdout, "%s\n", resultString);                       \
         fprintf(stdout, "** exiting **\n");                              \

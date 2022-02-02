@@ -32,11 +32,13 @@
  * NCMPI_CHECK will display a custom error message and then exit the program
  */
 #define NCMPI_CHECK(NCMPI_RETURN, MSG) do {                              \
-    if (NCMPI_RETURN != NC_NOERR) {                                      \
+    int _NCMPI_RETURN = (NCMPI_RETURN);                                  \
+                                                                         \
+    if (_NCMPI_RETURN != NC_NOERR) {                                     \
         fprintf(stdout, "** error **\n");                                \
         fprintf(stdout, "ERROR in %s (line %d): %s.\n",                  \
                 __FILE__, __LINE__, MSG);                                \
-        fprintf(stdout, "ERROR: %s.\n", ncmpi_strerror(NCMPI_RETURN));   \
+        fprintf(stdout, "ERROR: %s.\n", ncmpi_strerror(_NCMPI_RETURN));  \
         fprintf(stdout, "** exiting **\n");                              \
         exit(EXIT_FAILURE);                                              \
     }                                                                    \
