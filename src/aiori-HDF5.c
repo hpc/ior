@@ -99,9 +99,9 @@ static int HDF5_check_params(aiori_mod_opt_t * options);
 
 /************************** O P T I O N S *****************************/
 typedef struct{
+  mpiio_options_t mpio;
+  
   int collective_md;
-  char * hintsFileName;            /* full name for hints file */
-  int showHints;                   /* show hints */
   int individualDataSets;          /* datasets not shared by all procs */
   int noFill;                      /* no fill in file creation */
   IOR_offset_t setAlignment;       /* alignment in bytes */
@@ -123,9 +123,11 @@ static option_help * HDF5_options(aiori_mod_opt_t ** init_backend_options, aiori
   *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
+    /* options imported from MPIIO */
+    {0, "hdf5.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->mpio.hintsFileName},
+    {0, "hdf5.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->mpio.showHints},    
+    /* generic options */
     {0, "hdf5.collectiveMetadata", "Use collectiveMetadata (available since HDF5-1.10.0)", OPTION_FLAG, 'd', & o->collective_md},
-    {0, "hdf5.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->hintsFileName},
-    {0, "hdf5.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->showHints},
     {0, "hdf5.individualDataSets",        "Datasets not shared by all procs [not working]", OPTION_FLAG, 'd', & o->individualDataSets},
     {0, "hdf5.setAlignment",        "HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'd', & o->setAlignment},
     {0, "hdf5.noFill", "No fill in HDF5 file creation", OPTION_FLAG, 'd', & o->noFill},
@@ -269,8 +271,8 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
          * deemed valid by the implementation.
          */
         /* show hints passed to file */
-        SetHints(&mpiHints, o->hintsFileName);
-        if (rank == 0 && o->showHints) {
+        SetHints(&mpiHints, o->mpio.hintsFileName);
+        if (rank == 0 && o->mpio.showHints) {
                 fprintf(stdout, "\nhints passed to access property list {\n");
                 ShowHints(&mpiHints);
                 fprintf(stdout, "}\n");
@@ -305,7 +307,7 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
         }
 
         /* show hints actually attached to file handle */
-        if (o->showHints) {
+        if (o->mpio.showHints) {
                 MPI_File *fd_mpiio;
                 HDF5_CHECK(H5Fget_vfd_handle(*fd, accessPropList, (void **) &fd_mpiio), "cannot get file handle");
                 MPI_Info info_used;
