@@ -23,7 +23,10 @@ CHFS_options(aiori_mod_opt_t **init_backend_options,
 	if (init_values != NULL)
 		memcpy(o, init_values, sizeof(*o));
 	else
-		o->chunk_size = 4096;
+		memset(o, 0, sizeof(*o));
+
+	if (o->chunk_size > 0)
+		chfs_set_chunk_size(o->chunk_size);
 
 	*init_backend_options = (aiori_mod_opt_t *)o;
 
@@ -60,13 +63,12 @@ aiori_fd_t *
 CHFS_create(char *fn, int flags, aiori_mod_opt_t *param)
 {
 	struct CHFS_File *bf;
-	struct chfs_option *o = (struct chfs_option *)param;
 	int fd;
 
 	if (hints->dryRun)
 		return (NULL);
 
-	fd = chfs_create_chunk_size(fn, flags, 0664, o->chunk_size);
+	fd = chfs_create(fn, flags, 0664);
 	if (fd < 0)
 		ERR("chfs_create failed");
 	bf = malloc(sizeof(*bf));
@@ -138,7 +140,7 @@ CHFS_delete(char *fn, aiori_mod_opt_t *param)
 char *
 CHFS_version()
 {
-	return ("1.0.0");
+	return ((char *)chfs_version());
 }
 
 void
