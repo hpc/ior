@@ -270,9 +270,9 @@ static void phase_prepare(){
   if (*o.prologue){
     VERBOSE(0,5,"calling prologue: \"%s\"", o.prologue);
     system(o.prologue);
-    if (o.barriers) {
-      MPI_Barrier(testComm);
-    }
+  }
+  if (o.barriers) {
+    MPI_Barrier(testComm);
   }
 }
 
