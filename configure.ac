@@ -154,6 +154,21 @@ AM_COND_IF([WITH_LUSTRE],[
         AC_DEFINE([WITH_LUSTRE], [], [Build wth LUSTRE backend])
 ])
 
+# enable darshan profiling support
+AC_ARG_ENABLE(darshan,
+              AS_HELP_STRING([--enable-darshan], [Build with Darshan I/O profiler]),
+              [],
+              [enable_darshan=no])
+AS_IF([test "x$enable_darshan" != "xno"],[
+    AS_IF([test -d "$enable_darshan"],
+        [],
+        AC_MSG_ERROR(enableval for enable-darshan is required and must be a valid install prefix path for Darshan library)
+    )
+    LDFLAGS="$LDFLAGS -L${enable_darshan}/lib -Wl,-rpath=${enable_darshan}/lib -Wl,-no-as-needed"
+	AC_CHECK_LIB([darshan], [darshan_core_initialize], [],
+                   [AC_MSG_ERROR([Cannot find Darshan])])
+])
+
 # IME (DDN's Infinite Memory Engine) support
 AC_ARG_WITH([ime],
         [AS_HELP_STRING([--with-ime],
