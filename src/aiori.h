@@ -159,7 +159,17 @@ int aiori_posix_access (const char *path, int mode, aiori_mod_opt_t * module_opt
 int aiori_posix_stat (const char *path, struct stat *buf, aiori_mod_opt_t * module_options);
 
 
-/* NOTE: these 4 MPI-IO functions are exported for reuse by HDF5/PNetCDF */
+/* NOTE: these MPI-IO pro are exported for reuse by HDF5/PNetCDF */
+
+typedef struct { /* if you change this datatype, e.g., adding more options, make sure that all depending modules are updated */
+  int showHints;                   /* show hints */
+  int useFileView;                 /* use MPI_File_set_view */
+  int preallocate;                 /* preallocate file size */
+  int useSharedFilePointer;        /* use shared file pointer */
+  int useStridedDatatype;          /* put strided access into datatype */
+  char * hintsFileName;            /* full name for hints file */
+} mpiio_options_t;
+
 void MPIIO_Delete(char *testFileName, aiori_mod_opt_t * module_options);
 IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * options, char *testFileName);
 int MPIIO_Access(const char *, int, aiori_mod_opt_t * module_options);

@@ -51,15 +51,6 @@ typedef struct{
   MPI_Datatype fileType;           /* filetype for file view */
 } mpiio_fd_t;
 
-typedef struct {
-  int showHints;                   /* show hints */
-  int useFileView;                 /* use MPI_File_set_view */
-  int preallocate;                 /* preallocate file size */
-  int useSharedFilePointer;        /* use shared file pointer */
-  int useStridedDatatype;          /* put strided access into datatype */
-  char * hintsFileName;            /* full name for hints file */
-} mpiio_options_t;
-
 static option_help * MPIIO_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
   mpiio_options_t * o = malloc(sizeof(mpiio_options_t));
   if (init_values != NULL){
@@ -69,7 +60,7 @@ static option_help * MPIIO_options(aiori_mod_opt_t ** init_backend_options, aior
   }
   *init_backend_options = (aiori_mod_opt_t*) o;
 
-  option_help h [] = {
+  option_help h [] = { 
     {0, "mpiio.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->hintsFileName},
     {0, "mpiio.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->showHints},
     {0, "mpiio.preallocate",   "Preallocate file size", OPTION_FLAG, 'd', & o->preallocate},

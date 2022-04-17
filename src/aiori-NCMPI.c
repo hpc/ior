@@ -32,11 +32,13 @@
  * NCMPI_CHECK will display a custom error message and then exit the program
  */
 #define NCMPI_CHECK(NCMPI_RETURN, MSG) do {                              \
-    if (NCMPI_RETURN != NC_NOERR) {                                      \
+    int _NCMPI_RETURN = (NCMPI_RETURN);                                  \
+                                                                         \
+    if (_NCMPI_RETURN != NC_NOERR) {                                     \
         fprintf(stdout, "** error **\n");                                \
         fprintf(stdout, "ERROR in %s (line %d): %s.\n",                  \
                 __FILE__, __LINE__, MSG);                                \
-        fprintf(stdout, "ERROR: %s.\n", ncmpi_strerror(NCMPI_RETURN));   \
+        fprintf(stdout, "ERROR: %s.\n", ncmpi_strerror(_NCMPI_RETURN));  \
         fprintf(stdout, "** exiting **\n");                              \
         exit(EXIT_FAILURE);                                              \
     }                                                                    \
@@ -67,8 +69,7 @@ static void NCMPI_xfer_hints(aiori_xfer_hint_t * params){
 }
 
 typedef struct {
-  int showHints;                   /* show hints */
-  char * hintsFileName;            /* full name for hints file */
+  mpiio_options_t mpio;
 
   /* runtime variables */
   int var_id;                      /* variable id handle for data set */
@@ -87,8 +88,11 @@ static option_help * NCMPI_options(aiori_mod_opt_t ** init_backend_options, aior
   *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
-    {0, "ncmpi.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->hintsFileName},
-    {0, "ncmpi.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->showHints},
+    {0, "ncmpi.hintsFileName","Full name for hints file", OPTION_OPTIONAL_ARGUMENT, 's', & o->mpio.hintsFileName},
+    {0, "ncmpi.showHints",    "Show MPI hints", OPTION_FLAG, 'd', & o->mpio.showHints},
+    {0, "ncmpi.preallocate",   "Preallocate file size", OPTION_FLAG, 'd', & o->mpio.preallocate},
+    {0, "ncmpi.useStridedDatatype", "put strided access into datatype", OPTION_FLAG, 'd', & o->mpio.useStridedDatatype},
+    {0, "ncmpi.useFileView",  "Use MPI_File_set_view", OPTION_FLAG, 'd', & o->mpio.useFileView},
     LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
@@ -129,8 +133,8 @@ static aiori_fd_t *NCMPI_Create(char *testFileName, int iorflags, aiori_mod_opt_
         ncmpi_options_t * o = (ncmpi_options_t*) param;
 
         /* read and set MPI file hints from hintsFile */
-        SetHints(&mpiHints, o->hintsFileName);
-        if (rank == 0 && o->showHints) {
+        SetHints(&mpiHints, o->mpio.hintsFileName);
+        if (rank == 0 && o->mpio.showHints) {
                 fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
                 ShowHints(&mpiHints);
                 fprintf(stdout, "}\n");
@@ -150,7 +154,7 @@ static aiori_fd_t *NCMPI_Create(char *testFileName, int iorflags, aiori_mod_opt_
 
 #if defined(PNETCDF_VERSION_MAJOR) && (PNETCDF_VERSION_MAJOR > 1 || PNETCDF_VERSION_MINOR >= 2)
         /* ncmpi_get_file_info is first available in 1.2.0 */
-        if (rank == 0 && o->showHints) {
+        if (rank == 0 && o->mpio.showHints) {
             MPI_Info info_used;
             NCMPI_CHECK(ncmpi_get_file_info(*fd, &info_used), "cannot inquire file info");
             /* print the MPI file hints currently used */
@@ -175,8 +179,8 @@ static aiori_fd_t *NCMPI_Open(char *testFileName, int iorflags, aiori_mod_opt_t 
         ncmpi_options_t * o = (ncmpi_options_t*) param;
 
         /* read and set MPI file hints from hintsFile */
-        SetHints(&mpiHints, o->hintsFileName);
-        if (rank == 0 && o->showHints) {
+        SetHints(&mpiHints, o->mpio.hintsFileName);
+        if (rank == 0 && o->mpio.showHints) {
                 fprintf(stdout, "\nhints passed to MPI_File_open() {\n");
                 ShowHints(&mpiHints);
                 fprintf(stdout, "}\n");
@@ -196,7 +200,7 @@ static aiori_fd_t *NCMPI_Open(char *testFileName, int iorflags, aiori_mod_opt_t 
 
 #if defined(PNETCDF_VERSION_MAJOR) && (PNETCDF_VERSION_MAJOR > 1 || PNETCDF_VERSION_MINOR >= 2)
         /* ncmpi_get_file_info is first available in 1.2.0 */
-        if (rank == 0 && o->showHints) {
+        if (rank == 0 && o->mpio.showHints) {
             MPI_Info info_used;
             MPI_CHECK(ncmpi_get_file_info(*fd, &info_used),
                       "cannot inquire file info");
