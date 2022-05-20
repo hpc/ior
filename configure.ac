@@ -360,10 +360,10 @@ if test x$with_chfs != xno; then
     xyes) ;;
     *)
     CPPFLAGS="$CPPFLAGS -I$with_chfs/include"
-    LDFLAGS="$LDFLAGS -L$with_chfs/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_chfs/lib"
-    PKG_CHECK_MODULES([MARGO], [margo])
-    PKG_CHECK_MODULES([OPENSSL], [openssl]) ;;
+    LDFLAGS="$LDFLAGS -L$with_chfs/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_chfs/lib" ;;
   esac
+  PKG_CHECK_MODULES([MARGO], [margo])
+  PKG_CHECK_MODULES([OPENSSL], [openssl])
 fi
 
 # aws4c is needed for the S3 backend (see --with-S3, below).
