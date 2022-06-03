@@ -76,8 +76,8 @@ FILE * out_resultfile = NULL;
 enum OutputFormat_t outputFormat;
 
 /* local */
-int rand_state_init = 0;
-uint64_t rand_state = 0;
+//int rand_state_init = 0;
+//uint64_t rand_state = 0;
 
 /***************************** F U N C T I O N S ******************************/
 
@@ -99,18 +99,14 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
   uint64_t * buffi = (uint64_t*) buf;
 
   if (dataPacketType == DATA_RANDOM) {
-      uint64_t rand_state_local = rand_state;
-      if (!rand_state_init) {
-          unsigned seed = rand_seed + pretendRank;
-          rand_state_init = 1;
-          rand_state_local = rand_r(&seed);
-      }
+      uint64_t rand_state_local;
+      unsigned seed = rand_seed + pretendRank + item;
+      rand_state_local = rand_r(&seed);
       for (size_t i = 0; i < size; i++) {
           rand_state_local *= RANDALGO_GOLDEN_RATIO_PRIME;
           rand_state_local >>= 3;
           buffi[i] = rand_state_local;
       }
-      rand_state = rand_state_local;
       return;
   }
 
@@ -136,19 +132,13 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
   // first half of 64 bits use the rank
   const size_t size = bytes / 8;
   // the first 8 bytes of each 4k block are updated at runtime
-  unsigned seed = rand_seed + pretendRank;
-  if (dataPacketType == DATA_RANDOM && !rand_state_init) {
-      rand_state_init = 1;
-      rand_state = rand_r(&seed);
-  }
   for(size_t i=0; i < size; i++){
     switch(dataPacketType){
       case(DATA_RANDOM):
-        rand_state *= RANDALGO_GOLDEN_RATIO_PRIME;
-        rand_state >>= 3;
-        buffi[i] = rand_state;
+        // Nothing to do, will work on updates
         break;
       case(DATA_INCOMPRESSIBLE):{
+        unsigned seed = rand_seed + pretendRank;
         uint64_t hi = ((uint64_t) rand_r(& seed) << 32);
         uint64_t lo = (uint64_t) rand_r(& seed);
         buffi[i] = hi | lo;
@@ -170,21 +160,25 @@ int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_s
   int error = 0;
   // always read all data to ensure that performance numbers stay the same
   uint64_t * buffi = (uint64_t*) buffer;
-  
+    
   // the first 8 bytes are set to item number
   int k=1;  
-  unsigned seed = rand_seed + pretendRank;
+  
+  uint64_t rand_state_local;
+  unsigned seed = rand_seed + pretendRank + item;
+  rand_state_local = rand_r(&seed);
   const size_t size = bytes / 8;
   for(size_t i=0; i < size; i++){
     uint64_t exp;
         
     switch(dataPacketType){
       case(DATA_RANDOM):
-        rand_state *= RANDALGO_GOLDEN_RATIO_PRIME;
-        rand_state >>= 3;
-        buffi[i] = rand_state;
+        rand_state_local *= RANDALGO_GOLDEN_RATIO_PRIME;
+        rand_state_local >>= 3;
+        exp = rand_state_local;
         break;
       case(DATA_INCOMPRESSIBLE):{
+        unsigned seed = rand_seed + pretendRank;
         uint64_t hi = ((uint64_t) rand_r(& seed) << 32);
         uint64_t lo = (uint64_t) rand_r(& seed);
         exp = hi | lo;
@@ -195,7 +189,7 @@ int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_s
         break;
       }
     }
-    if(i % 512 == 0 && dataPacketType != DATA_TIMESTAMP){
+    if(i % 512 == 0 && (dataPacketType != DATA_TIMESTAMP) && dataPacketType != DATA_RANDOM){
       exp = ((uint32_t) item * k) | ((uint64_t) pretendRank) << 32;
       k++;
     }
@@ -208,6 +202,7 @@ int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_s
       error = 1;
     }
   }
+  
   return error;
 }
 
