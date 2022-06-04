@@ -164,6 +164,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->stoneWallingStatusFile  = strdup(value);
         } else if (strcasecmp(option, "maxtimeduration") == 0) {
                 params->maxTimeDuration = atoi(value);
+        } else if (strcasecmp(option, "mintimeduration") == 0) {
+                params->minTimeDuration = atoi(value);
         } else if (strcasecmp(option, "outlierthreshold") == 0) {
                 params->outlierThreshold = atoi(value);
         } else if (strcasecmp(option, "numnodes") == 0) {
@@ -431,6 +433,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O stoneWallingWearOut=1           -- once the stonewalling timeout is over, all process finish to access the amount of data", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O minTimeDuration=0           -- minimum Runtime for the run (will repeat from beginning of the file if time is not yet over)", .arg = OPTION_OPTIONAL_ARGUMENT},
 #ifdef HAVE_CUDA
     {.help="  -O allocateBufferOnGPU=X           -- allocate I/O buffers on the GPU: X=1 uses managed memory, X=2 device memory.", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O GPUid=X                         -- select the GPU to use.", .arg = OPTION_OPTIONAL_ARGUMENT},

@@ -257,7 +257,9 @@ void init_IOR_Param_t(IOR_param_t * p, MPI_Comm com)
 
         p->writeFile = p->readFile = FALSE;
         p->checkWrite = p->checkRead = FALSE;
-
+        
+        p->minTimeDuration = 0;
+        
         /*
          * These can be overridden from the command-line but otherwise will be
          * set from MPI.
@@ -1748,46 +1750,48 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
           MPI_Barrier(test->testComm);
         }
 
-        for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
-          if(randomPrefillBuffer && test->deadlineForStonewalling != 0){
-            // prefill the whole segment with data, this needs to be done collectively
-            double t_start = GetTimeStamp();
-            prefillSegment(test, randomPrefillBuffer, pretendRank, fd, ioBuffers, i, i+1);
-            MPI_Barrier(test->testComm);
-            if(rank == 0 && verbose > VERBOSE_1){
-              fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
+        do{ // to ensure the benchmark runs a certain time
+          for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
+            if(randomPrefillBuffer && test->deadlineForStonewalling != 0){
+              // prefill the whole segment with data, this needs to be done collectively
+              double t_start = GetTimeStamp();
+              prefillSegment(test, randomPrefillBuffer, pretendRank, fd, ioBuffers, i, i+1);
+              MPI_Barrier(test->testComm);
+              if(rank == 0 && verbose > VERBOSE_1){
+                fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
+              }
             }
-          }
-          for (j = 0; j < offsets &&  !hitStonewall ; j++) {
-            IOR_offset_t offset;
-            if (test->randomOffset) {
-              if(test->filePerProc){
-                offset = offsets_rnd[j] + (i * test->blockSize);
+            for (j = 0; j < offsets &&  !hitStonewall ; j++) {
+              IOR_offset_t offset;
+              if (test->randomOffset) {
+                if(test->filePerProc){
+                  offset = offsets_rnd[j] + (i * test->blockSize);
+                }else{
+                  offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
+                }
               }else{
-                offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
+                offset = j * test->transferSize;
+                if (test->filePerProc) {
+                  offset += i * test->blockSize;
+                } else {
+                  offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
+                }
               }
-            }else{
-              offset = j * test->transferSize;
-              if (test->filePerProc) {
-                offset += i * test->blockSize;
-              } else {
-                offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
+              dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
+              pairCnt++;
+
+              hitStonewall = ((test->deadlineForStonewalling != 0
+                  && (GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
+                  || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
+
+              if ( test->collective && test->deadlineForStonewalling ) {
+                // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
+                // it absolutely must be an 'all or none':
+                MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, testComm), "hitStonewall broadcast failed");
               }
-            }
-            dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
-            pairCnt++;
-
-            hitStonewall = ((test->deadlineForStonewalling != 0
-                && (GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
-                || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
-
-            if ( test->collective && test->deadlineForStonewalling ) {
-              // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
-              // it absolutely must be an 'all or none':
-              MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, testComm), "hitStonewall broadcast failed");
             }
           }
-        }
+        } while((GetTimeStamp() - startForStonewall) < test->minTimeDuration);
         if (test->stoneWallingWearOut){
           if (verbose >= VERBOSE_1){
             fprintf(out_logfile, "%d: stonewalling pairs accessed: %lld\n", rank, (long long) pairCnt);
@@ -1819,6 +1823,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
               i++;
             }
             for ( ; pairCnt < point->pairs_accessed; i++) {
+              if(i == test->segmentCount) i = 0; // wrap over, necessary to deal with minTimeDuration
               for ( ; j < offsets && pairCnt < point->pairs_accessed ; j++) {
                 IOR_offset_t offset;
                 if (test->randomOffset) {
@@ -1838,7 +1843,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                 dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
               }
-              j = 0;
+              j = 0;              
             }
           }
         }else{
