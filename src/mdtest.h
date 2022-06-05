@@ -27,6 +27,7 @@ typedef struct
     double time[MDTEST_LAST_NUM]; /* Time */
     double time_before_barrier[MDTEST_TREE_CREATE_NUM]; /* individual time before executing the barrier */
     uint64_t items[MDTEST_LAST_NUM]; /* Number of operations done in this process*/
+    uint64_t total_errors;
 
     /* Statistics when hitting the stonewall */
     double   stonewall_time[MDTEST_LAST_NUM];     /* Max runtime of any process until completion / hit of the stonewall */
