@@ -720,12 +720,15 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
 #ifdef HAVE_GPU_DIRECT
                         }
 #endif
-                        if (rc == 0)
-                                ERRF("read(%d, %p, %lld) returned EOF prematurely",
-                                        fd, (void*)ptr, remaining);
-                        if (rc == -1)
-                                ERRF("read(%d, %p, %lld) failed",
-                                        fd, (void*)ptr, remaining);
+                        if (rc == 0){
+                          WARNF("read(%d, %p, %lld) returned EOF prematurely", fd, (void*)ptr, remaining);
+                          return length - remaining;
+                        }
+                                
+                        if (rc == -1){
+                          WARNF("read(%d, %p, %lld) failed", fd, (void*)ptr, remaining);
+                          return length - remaining;
+                        }
                 }
                 if (rc < remaining) {
                         WARNF("task %d, partial %s, %lld of %lld bytes at offset %lld\n",
@@ -733,8 +736,10 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
                                 offset + length - remaining);
-                        if (xferRetries > MAX_RETRY || hints->singleXferAttempt)
-                                ERR("too many retries -- aborting");
+                        if (xferRetries > MAX_RETRY || hints->singleXferAttempt){
+                          WARN("too many retries -- aborting");
+                          return length - remaining;
+                        }
                 }
                 assert(rc >= 0);
                 assert(rc <= remaining);
