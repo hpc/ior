@@ -766,7 +766,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
           struct flock lck = {
           .l_whence = SEEK_SET,
           .l_start  = offset,
-          .l_len    = remaining,
+          .l_len    = length,
           .l_type = F_UNLCK,
           }; 
           if(fcntl(fd, F_SETLK, &lck) != 0){
