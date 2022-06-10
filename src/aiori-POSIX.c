@@ -322,7 +322,11 @@ void gpfs_fineGrainReadSharing(int fd)
         struct
         {
                 gpfsFcntlHeader_t header;
+#ifdef HAVE_GPFSFINEGRAINREADSHARING_T
+                gpfsFineGrainReadSharing_t read;
+#else
                 gpfsPrefetch_t read;
+#endif
         } sharingHint;
         int rc;
 
@@ -331,9 +335,14 @@ void gpfs_fineGrainReadSharing(int fd)
         sharingHint.header.fcntlReserved = 0;
 
         sharingHint.read.structLen = sizeof(sharingHint.read);
+#ifdef HAVE_GPFSFINEGRAINREADSHARING_T
+        sharingHint.read.structType = GPFS_FINE_GRAIN_READ_SHARING;
+        sharingHint.read.fineGrainReadSharing = 1;
+#else
         sharingHint.read.structType = GPFS_PREFETCH;
         sharingHint.read.prefetchEnableRead = 0;
         sharingHint.read.prefetchEnableWrite = 1;
+#endif
 
         rc = gpfs_fcntl(fd, &sharingHint);
         if (verbose >= VERBOSE_2 && rc != 0) {
