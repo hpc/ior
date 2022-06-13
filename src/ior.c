@@ -408,10 +408,10 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
  * difference in buffers and returns total errors counted.
  */
 static size_t
-CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
+CompareData(void *expectedBuffer, size_t size, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
 {
         assert(access == WRITECHECK || access == READCHECK);
-        return verify_memory_pattern(offset, expectedBuffer, transferCount, test->setTimeStampSignature, fillrank, test->dataPacketType);
+        return verify_memory_pattern(offset, expectedBuffer, size, test->setTimeStampSignature, fillrank, test->dataPacketType);
 }
 
 /*
@@ -1635,7 +1635,7 @@ IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, IOR_offs
         return (offsetArray);
 }
 
-static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_offset_t transfer, IOR_offset_t * transferCount, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
+static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_offset_t transfer, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
   IOR_offset_t amtXferred = 0;
 
   void *buffer = ioBuffers->buffer;
@@ -1665,14 +1665,14 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_
           amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
-          *errors += CompareData(buffer, transfer, *transferCount, test, offset, pretendRank, WRITECHECK);
+          *errors += CompareData(buffer, transfer, test, offset, pretendRank, WRITECHECK);
   } else if (access == READCHECK) {
           ((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
           amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer){
             ERR("cannot read from file");
           }
-          *errors += CompareData(buffer, transfer, *transferCount, test, offset, pretendRank, READCHECK);
+          *errors += CompareData(buffer, transfer, test, offset, pretendRank, READCHECK);
   }
   return amtXferred;
 }
@@ -1681,7 +1681,6 @@ static void prefillSegment(IOR_param_t *test, void * randomPrefillBuffer, int pr
   // prefill the whole file already with an invalid pattern
   int offsets = test->blockSize / test->randomPrefillBlocksize;
   void * oldBuffer = ioBuffers->buffer;
-  IOR_offset_t transferCount;
   int errors;
   ioBuffers->buffer = randomPrefillBuffer;
   for (IOR_offset_t i = startSegment; i < endSegment; i++){
@@ -1692,7 +1691,7 @@ static void prefillSegment(IOR_param_t *test, void * randomPrefillBuffer, int pr
       } else {
         offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
       }
-      WriteOrReadSingle(offset, pretendRank, test->randomPrefillBlocksize, & transferCount, & errors, test, fd, ioBuffers, WRITE);
+      WriteOrReadSingle(offset, pretendRank, test->randomPrefillBlocksize, & errors, test, fd, ioBuffers, WRITE);
     }
   }
   ioBuffers->buffer = oldBuffer;
@@ -1706,7 +1705,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                                 aiori_fd_t *fd, const int access, IOR_io_buffers *ioBuffers)
 {
         int errors = 0;
-        IOR_offset_t transferCount = 0;
         uint64_t pairCnt = 0;
         int pretendRank;
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
@@ -1777,7 +1775,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                   offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
                 }
               }
-              dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
+              dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & errors, test, fd, ioBuffers, access);
               pairCnt++;
 
               hitStonewall = ((test->deadlineForStonewalling != 0
@@ -1840,7 +1838,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                     offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
                   }
                 }
-                dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
+                dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
               }
               j = 0;              
