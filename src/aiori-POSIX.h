@@ -26,6 +26,7 @@ typedef struct{
   int beegfs_numTargets;           /* number storage targets to use */
   int beegfs_chunkSize;            /* srtipe pattern for new files */
   int gpuDirect;
+  int range_locks;                 /* use POSIX range locks for writes */
 } posix_options_t;
 
 void POSIX_Sync(aiori_mod_opt_t * param);
