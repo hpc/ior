@@ -502,7 +502,7 @@ static void HDF5_Close(aiori_fd_t *afd, aiori_mod_opt_t * param)
 static void HDF5_Delete(char *testFileName, aiori_mod_opt_t * param)
 {
   if(hints->dryRun)
-    return
+    return;
   MPIIO_Delete(testFileName, param);
   return;
 }
