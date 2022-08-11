@@ -109,6 +109,12 @@ extraSOURCES += aiori-Gfarm.c
 extraLDADD += -lgfarm
 endif
 
+if USE_CHFS_AIORI
+extraSOURCES += aiori-CHFS.c
+extraCPPFLAGS += @MARGO_CFLAGS@ @OPENSSL_CFLAGS@
+extraLDADD += -lchfs @MARGO_LIBS@ @OPENSSL_LIBS@
+endif
+
 if USE_S3_4C_AIORI
 extraSOURCES  += aiori-S3-4c.c
 if AWS4C_DIR

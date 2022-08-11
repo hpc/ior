@@ -733,6 +733,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
             read_buffer[0] = 42;
             if (o.read_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) read_buffer, o.read_bytes, 0, o.backend_options)) {
                 WARNF("unable to read file %s", item);
+                o.verification_error += 1;
                 continue;
             }
             int pretend_rank = (2 * o.nstride + rank) % o.size;
@@ -2578,7 +2579,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
         if(rank == 0 && total_errors){
             VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
         }
-
+        aggregated_results->total_errors += total_errors;
         MPI_Comm_free(&testComm);
     }
     

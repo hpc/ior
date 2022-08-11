@@ -257,7 +257,9 @@ void init_IOR_Param_t(IOR_param_t * p, MPI_Comm com)
 
         p->writeFile = p->readFile = FALSE;
         p->checkWrite = p->checkRead = FALSE;
-
+        
+        p->minTimeDuration = 0;
+        
         /*
          * These can be overridden from the command-line but otherwise will be
          * set from MPI.
@@ -406,10 +408,10 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
  * difference in buffers and returns total errors counted.
  */
 static size_t
-CompareData(void *expectedBuffer, size_t size, IOR_offset_t transferCount, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
+CompareData(void *expectedBuffer, size_t size, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
 {
         assert(access == WRITECHECK || access == READCHECK);
-        return verify_memory_pattern(offset, expectedBuffer, transferCount, test->setTimeStampSignature, fillrank, test->dataPacketType);
+        return verify_memory_pattern(offset, expectedBuffer, size, test->setTimeStampSignature, fillrank, test->dataPacketType);
 }
 
 /*
@@ -1502,6 +1504,11 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
                 ERR("block/transfer size may not be smaller than IOR_size_t for NCMPI");
         if (((strcasecmp(test->api, "POSIX") != 0)
             && (strcasecmp(test->api, "MPIIO") != 0)
+            && (strcasecmp(test->api, "HDF5") != 0)
+            && (strcasecmp(test->api, "NCMPI") != 0)
+            && (strcasecmp(test->api, "DUMMY") != 0)
+            && (strcasecmp(test->api, "AIO") != 0)
+            && (strcasecmp(test->api, "PMDK") != 0)
             && (strcasecmp(test->api, "MMAP") != 0)
             && (strcasecmp(test->api, "HDFS") != 0)
             && (strcasecmp(test->api, "DFS") != 0)
@@ -1628,7 +1635,7 @@ IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, IOR_offs
         return (offsetArray);
 }
 
-static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_offset_t transfer, IOR_offset_t * transferCount, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
+static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_offset_t transfer, int * errors, IOR_param_t * test, aiori_fd_t * fd, IOR_io_buffers* ioBuffers, int access){
   IOR_offset_t amtXferred = 0;
 
   void *buffer = ioBuffers->buffer;
@@ -1658,14 +1665,14 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_
           amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
-          *errors += CompareData(buffer, transfer, *transferCount, test, offset, pretendRank, WRITECHECK);
+          *errors += CompareData(buffer, transfer, test, offset, pretendRank, WRITECHECK);
   } else if (access == READCHECK) {
           ((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
           amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer){
             ERR("cannot read from file");
           }
-          *errors += CompareData(buffer, transfer, *transferCount, test, offset, pretendRank, READCHECK);
+          *errors += CompareData(buffer, transfer, test, offset, pretendRank, READCHECK);
   }
   return amtXferred;
 }
@@ -1674,7 +1681,6 @@ static void prefillSegment(IOR_param_t *test, void * randomPrefillBuffer, int pr
   // prefill the whole file already with an invalid pattern
   int offsets = test->blockSize / test->randomPrefillBlocksize;
   void * oldBuffer = ioBuffers->buffer;
-  IOR_offset_t transferCount;
   int errors;
   ioBuffers->buffer = randomPrefillBuffer;
   for (IOR_offset_t i = startSegment; i < endSegment; i++){
@@ -1685,7 +1691,7 @@ static void prefillSegment(IOR_param_t *test, void * randomPrefillBuffer, int pr
       } else {
         offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
       }
-      WriteOrReadSingle(offset, pretendRank, test->randomPrefillBlocksize, & transferCount, & errors, test, fd, ioBuffers, WRITE);
+      WriteOrReadSingle(offset, pretendRank, test->randomPrefillBlocksize, & errors, test, fd, ioBuffers, WRITE);
     }
   }
   ioBuffers->buffer = oldBuffer;
@@ -1699,7 +1705,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                                 aiori_fd_t *fd, const int access, IOR_io_buffers *ioBuffers)
 {
         int errors = 0;
-        IOR_offset_t transferCount = 0;
         uint64_t pairCnt = 0;
         int pretendRank;
         IOR_offset_t dataMoved = 0;     /* for data rate calculation */
@@ -1743,46 +1748,48 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
           MPI_Barrier(test->testComm);
         }
 
-        for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
-          if(randomPrefillBuffer && test->deadlineForStonewalling != 0){
-            // prefill the whole segment with data, this needs to be done collectively
-            double t_start = GetTimeStamp();
-            prefillSegment(test, randomPrefillBuffer, pretendRank, fd, ioBuffers, i, i+1);
-            MPI_Barrier(test->testComm);
-            if(rank == 0 && verbose > VERBOSE_1){
-              fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
+        do{ // to ensure the benchmark runs a certain time
+          for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
+            if(randomPrefillBuffer && test->deadlineForStonewalling != 0){
+              // prefill the whole segment with data, this needs to be done collectively
+              double t_start = GetTimeStamp();
+              prefillSegment(test, randomPrefillBuffer, pretendRank, fd, ioBuffers, i, i+1);
+              MPI_Barrier(test->testComm);
+              if(rank == 0 && verbose > VERBOSE_1){
+                fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
+              }
             }
-          }
-          for (j = 0; j < offsets &&  !hitStonewall ; j++) {
-            IOR_offset_t offset;
-            if (test->randomOffset) {
-              if(test->filePerProc){
-                offset = offsets_rnd[j] + (i * test->blockSize);
+            for (j = 0; j < offsets &&  !hitStonewall ; j++) {
+              IOR_offset_t offset;
+              if (test->randomOffset) {
+                if(test->filePerProc){
+                  offset = offsets_rnd[j] + (i * test->blockSize);
+                }else{
+                  offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
+                }
               }else{
-                offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
+                offset = j * test->transferSize;
+                if (test->filePerProc) {
+                  offset += i * test->blockSize;
+                } else {
+                  offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
+                }
               }
-            }else{
-              offset = j * test->transferSize;
-              if (test->filePerProc) {
-                offset += i * test->blockSize;
-              } else {
-                offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
+              dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & errors, test, fd, ioBuffers, access);
+              pairCnt++;
+
+              hitStonewall = ((test->deadlineForStonewalling != 0
+                  && (GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
+                  || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
+
+              if ( test->collective && test->deadlineForStonewalling ) {
+                // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
+                // it absolutely must be an 'all or none':
+                MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, testComm), "hitStonewall broadcast failed");
               }
-            }
-            dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
-            pairCnt++;
-
-            hitStonewall = ((test->deadlineForStonewalling != 0
-                && (GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
-                || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
-
-            if ( test->collective && test->deadlineForStonewalling ) {
-              // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
-              // it absolutely must be an 'all or none':
-              MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, testComm), "hitStonewall broadcast failed");
             }
           }
-        }
+        } while((GetTimeStamp() - startForStonewall) < test->minTimeDuration);
         if (test->stoneWallingWearOut){
           if (verbose >= VERBOSE_1){
             fprintf(out_logfile, "%d: stonewalling pairs accessed: %lld\n", rank, (long long) pairCnt);
@@ -1814,6 +1821,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
               i++;
             }
             for ( ; pairCnt < point->pairs_accessed; i++) {
+              if(i == test->segmentCount) i = 0; // wrap over, necessary to deal with minTimeDuration
               for ( ; j < offsets && pairCnt < point->pairs_accessed ; j++) {
                 IOR_offset_t offset;
                 if (test->randomOffset) {
@@ -1830,10 +1838,10 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, IOR_results_t *results,
                     offset += (i * test->numTasks * test->blockSize) + (pretendRank * test->blockSize);
                   }
                 }
-                dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & transferCount, & errors, test, fd, ioBuffers, access);
+                dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & errors, test, fd, ioBuffers, access);
                 pairCnt++;
               }
-              j = 0;
+              j = 0;              
             }
           }
         }else{

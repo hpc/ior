@@ -133,6 +133,7 @@ typedef struct
     int useExistingTestFile;         /* do not delete test file before access */
     int deadlineForStonewalling;     /* max time in seconds to run any test phase */
     int stoneWallingWearOut;         /* wear out the stonewalling, once the timeout is over, each process has to write the same amount */
+    int minTimeDuration;             /* minimum runtime */
     uint64_t stoneWallingWearOutIterations; /* the number of iterations for the stonewallingWearOut, needed for readBack */
     char * stoneWallingStatusFile;
 
