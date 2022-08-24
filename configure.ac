@@ -348,7 +348,9 @@ fi
 
 # CHFS support
 PKG_CHECK_MODULES([CHFS], [chfs],
-  [AC_DEFINE([USE_CHFS_AIORI], [], [Build CHFS backend AIORI])],
+  [AC_DEFINE([USE_CHFS_AIORI], [], [Build CHFS backend AIORI])
+   CHFS_RPATH=$(pkg-config --libs-only-L chfs | sed 's/-L/-Wl,-rpath=/g')
+   AC_SUBST(CHFS_RPATH)],
   [with_chfs=no])
 AM_CONDITIONAL([USE_CHFS_AIORI], [test x$with_chfs != xno])
 

@@ -112,6 +112,7 @@ endif
 if USE_CHFS_AIORI
 extraSOURCES += aiori-CHFS.c
 extraCPPFLAGS += @CHFS_CFLAGS@
+extraLDFLAGS += @CHFS_RPATH@
 extraLDADD += @CHFS_LIBS@
 endif
 
