@@ -93,6 +93,7 @@ static char* HDF5_GetVersion();
 static void HDF5_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
 static IOR_offset_t HDF5_GetFileSize(aiori_mod_opt_t *, char *);
 static int HDF5_Access(const char *, int, aiori_mod_opt_t *);
+static void HDF5_Finalize(aiori_mod_opt_t *);
 static void HDF5_init_xfer_options(aiori_xfer_hint_t * params);
 static int HDF5_check_params(aiori_mod_opt_t * options);
 
@@ -157,6 +158,7 @@ ior_aiori_t hdf5_aiori = {
         .rmdir = aiori_posix_rmdir,
         .access = HDF5_Access,
         .stat = aiori_posix_stat,
+        .finalize = HDF5_Finalize,
         .get_options = HDF5_options,
         .check_params = HDF5_check_params
 };
@@ -632,4 +634,14 @@ static int HDF5_Access(const char *path, int mode, aiori_mod_opt_t *param)
   if(hints->dryRun)
     return 0;
   return(MPIIO_Access(path, mode, param));
+}
+
+/*
+ * Call H5close to ensure library is
+ * shutdown before MPI_Finalize is called
+ */
+static void
+HDF5_Finalize(aiori_mod_opt_t * options)
+{
+    H5close();
 }
