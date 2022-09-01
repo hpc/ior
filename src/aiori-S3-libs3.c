@@ -64,7 +64,7 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
   {0, "S3-libs3.dont-suffix-bucket", "By default a hash will be added to the bucket name to increase uniqueness, this disables the option.", OPTION_FLAG, 'd', & o->dont_suffix },
   {0, "S3-libs3.s3-compatible", "to be selected when using S3 compatible storage", OPTION_FLAG, 'd', & o->s3_compatible },
   {0, "S3-libs3.use-ssl", "used to specify that SSL is needed for the connection", OPTION_FLAG, 'd', & o->use_ssl },
-  {0, "S3-libs3.host", "The host optionally followed by:port.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
+  {0, "S3-libs3.host", "The host optionally followed by:port. Or specify a list of hosts separated by [ ,;] to be used in a round robin fashion by the MPI ranks.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
   {0, "S3-libs3.secret-key", "The secret key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->secret_key},
   {0, "S3-libs3.access-key", "The access key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->access_key},
   {0, "S3-libs3.region", "The region used for the authorization signature.", OPTION_OPTIONAL_ARGUMENT, 's', & o->authRegion},
@@ -506,6 +506,36 @@ static int S3_check_params(aiori_mod_opt_t * options){
 
 static void S3_init(aiori_mod_opt_t * options){
   s3_options_t * o = (s3_options_t*) options;
+
+  /* parse list of hostnames into specific host for this rank;
+  this cannot be done during S3_options() because this happens before MPI_Init()  */
+  if ( o->host != NULL ) {
+
+    const char* delimiters= " ,;";
+
+    int num_hosts = 0;
+    char* r= strtok(o->host, delimiters);
+    while (r != NULL) {
+        num_hosts++;
+        r= strtok(NULL, delimiters);
+    }
+
+    if (num_hosts > 1) {
+      
+      int i= rank % num_hosts;
+
+      /* set o->host to the i'th piece separated by '\0' */
+      char* next= o->host;
+      while (i > 0) {
+
+        next= strchr(next, '\0');
+        next++;
+        i--;
+      }
+      o->host= next;
+    }
+  }
+
   int ret = S3_initialize(NULL, S3_INIT_ALL, o->host);
   if(ret != S3StatusOK)
     FAIL("Could not initialize S3 library");

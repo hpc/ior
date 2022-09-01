@@ -27,6 +27,7 @@
 #endif                          /* __linux__ */
 
 #include <errno.h>
+#include <unistd.h>
 #include <fcntl.h>              /* IO operations */
 #include <sys/stat.h>
 #include <assert.h>
@@ -131,6 +132,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
 
   option_help h [] = {
     {0, "posix.odirect", "Direct I/O Mode", OPTION_FLAG, 'd', & o->direct_io},
+    {0, "posix.rangelocks", "Use range locks (read locks for read ops)", OPTION_FLAG, 'd', & o->range_locks},
 #ifdef HAVE_BEEGFS_BEEGFS_H
     {0, "posix.beegfs.NumTargets", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->beegfs_numTargets},
     {0, "posix.beegfs.ChunkSize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->beegfs_chunkSize},
@@ -322,7 +324,11 @@ void gpfs_fineGrainReadSharing(int fd)
         struct
         {
                 gpfsFcntlHeader_t header;
+#ifdef HAVE_GPFSFINEGRAINREADSHARING_T
+                gpfsFineGrainReadSharing_t read;
+#else
                 gpfsPrefetch_t read;
+#endif
         } sharingHint;
         int rc;
 
@@ -331,9 +337,14 @@ void gpfs_fineGrainReadSharing(int fd)
         sharingHint.header.fcntlReserved = 0;
 
         sharingHint.read.structLen = sizeof(sharingHint.read);
+#ifdef HAVE_GPFSFINEGRAINREADSHARING_T
+        sharingHint.read.structType = GPFS_FINE_GRAIN_READ_SHARING;
+        sharingHint.read.fineGrainReadSharing = 1;
+#else
         sharingHint.read.structType = GPFS_PREFETCH;
         sharingHint.read.prefetchEnableRead = 0;
         sharingHint.read.prefetchEnableWrite = 1;
+#endif
 
         rc = gpfs_fcntl(fd, &sharingHint);
         if (verbose >= VERBOSE_2 && rc != 0) {
@@ -682,6 +693,18 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
         if (lseek64(fd, offset, SEEK_SET) == -1)
                 ERRF("lseek64(%d, %lld, SEEK_SET) failed", fd, offset);
         off_t mem_offset = 0;
+
+        if(o->range_locks){
+          struct flock lck = {
+          .l_whence = SEEK_SET,
+          .l_start  = offset,
+          .l_len    = remaining,
+          .l_type = access == WRITE ? F_WRLCK : F_RDLCK,
+          }; 
+          if(fcntl(fd, F_SETLKW, &lck) != 0){
+              WARN("Error with F_SETLKW");
+          }
+        }        
         while (remaining > 0) {
                 /* write/read file */
                 if (access == WRITE) {  /* WRITE */
@@ -720,12 +743,15 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
 #ifdef HAVE_GPU_DIRECT
                         }
 #endif
-                        if (rc == 0)
-                                ERRF("read(%d, %p, %lld) returned EOF prematurely",
-                                        fd, (void*)ptr, remaining);
-                        if (rc == -1)
-                                ERRF("read(%d, %p, %lld) failed",
-                                        fd, (void*)ptr, remaining);
+                        if (rc == 0){
+                          WARNF("read(%d, %p, %lld) returned EOF prematurely", fd, (void*)ptr, remaining);
+                          return length - remaining;
+                        }
+                                
+                        if (rc == -1){
+                          WARNF("read(%d, %p, %lld) failed", fd, (void*)ptr, remaining);
+                          return length - remaining;
+                        }
                 }
                 if (rc < remaining) {
                         WARNF("task %d, partial %s, %lld of %lld bytes at offset %lld\n",
@@ -733,8 +759,10 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                                 access == WRITE ? "write()" : "read()",
                                 rc, remaining,
                                 offset + length - remaining);
-                        if (xferRetries > MAX_RETRY || hints->singleXferAttempt)
-                                ERR("too many retries -- aborting");
+                        if (xferRetries > MAX_RETRY || hints->singleXferAttempt){
+                          WARN("too many retries -- aborting");
+                          return length - remaining;
+                        }
                 }
                 assert(rc >= 0);
                 assert(rc <= remaining);
@@ -743,6 +771,17 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                 mem_offset += rc;
                 xferRetries++;
         }
+        if(o->range_locks){
+          struct flock lck = {
+          .l_whence = SEEK_SET,
+          .l_start  = offset,
+          .l_len    = length,
+          .l_type = F_UNLCK,
+          }; 
+          if(fcntl(fd, F_SETLK, &lck) != 0){
+              WARN("Error with F_UNLCK");
+          }
+        }        
 #ifdef HAVE_GPFS_FCNTL_H
         if (o->gpfs_hint_access) {
             gpfs_access_end(fd, length, offset, access);
