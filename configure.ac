@@ -348,24 +348,12 @@ if test x$with_gfarm != xno; then
 fi
 
 # CHFS support
-AC_MSG_CHECKING([for CHFS consistent hash file system])
-AC_ARG_WITH([chfs],
-  [AS_HELP_STRING([--with-chfs=CHFS_ROOT],
-    [support IO with CHFS backend @<:@default=no@:>@])],
-  [], [with_chfs=no])
-AC_MSG_RESULT([$with_chfs])
+PKG_CHECK_MODULES([CHFS], [chfs],
+  [AC_DEFINE([USE_CHFS_AIORI], [], [Build CHFS backend AIORI])
+   CHFS_RPATH=$(pkg-config --libs-only-L chfs | sed 's/-L/-Wl,-rpath=/g')
+   AC_SUBST(CHFS_RPATH)],
+  [with_chfs=no])
 AM_CONDITIONAL([USE_CHFS_AIORI], [test x$with_chfs != xno])
-if test x$with_chfs != xno; then
-  AC_DEFINE([USE_CHFS_AIORI], [], [Build CHFS backend AIORI])
-  case x$with_chfs in
-    xyes) ;;
-    *)
-    CPPFLAGS="$CPPFLAGS -I$with_chfs/include"
-    LDFLAGS="$LDFLAGS -L$with_chfs/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_chfs/lib" ;;
-  esac
-  PKG_CHECK_MODULES([MARGO], [margo])
-  PKG_CHECK_MODULES([OPENSSL], [openssl])
-fi
 
 # aws4c is needed for the S3 backend (see --with-S3, below).
 # Version 0.5.2 of aws4c is available at https://github.com/jti-lanl/aws4c.git
