@@ -45,7 +45,15 @@
 #include "utilities.h"
 #include "parse_options.h"
 
-#define IOR_NB_TIMERS 6
+enum {
+        IOR_TIMER_OPEN_START,
+        IOR_TIMER_OPEN_STOP,
+        IOR_TIMER_RDWR_START,
+        IOR_TIMER_RDWR_STOP,
+        IOR_TIMER_CLOSE_START,
+        IOR_TIMER_CLOSE_STOP,
+        IOR_NB_TIMERS
+};
 
 /* file scope globals */
 extern char **environ;
@@ -327,19 +335,19 @@ DisplayOutliers(int numTasks,
 static void
 CheckForOutliers(IOR_param_t *test, const double *timer, const int access)
 {
-        DisplayOutliers(test->numTasks, timer[0],
+        DisplayOutliers(test->numTasks, timer[IOR_TIMER_OPEN_START],
                         "start time", access, test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[1] - timer[0],
+                        timer[IOR_TIMER_OPEN_STOP] - timer[IOR_TIMER_OPEN_START],
                         "elapsed create time", access, test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[3] - timer[2],
+                        timer[IOR_TIMER_RDWR_STOP] - timer[IOR_TIMER_RDWR_START],
                         "elapsed transfer time", access,
                         test->outlierThreshold);
         DisplayOutliers(test->numTasks,
-                        timer[5] - timer[4],
+                        timer[IOR_TIMER_CLOSE_STOP] - timer[IOR_TIMER_CLOSE_START],
                         "elapsed close time", access, test->outlierThreshold);
-        DisplayOutliers(test->numTasks, timer[5], "end time",
+        DisplayOutliers(test->numTasks, timer[IOR_TIMER_CLOSE_STOP], "end time",
                         access, test->outlierThreshold);
 }
 
@@ -758,8 +766,8 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
         for (i = 0; i < IOR_NB_TIMERS / 2; i++)
                 diff[i] = reduced[2 * i + 1] - reduced[2 * i];
 
-        totalTime = reduced[5] - reduced[0];
-        accessTime = reduced[3] - reduced[2];
+        totalTime = reduced[IOR_TIMER_CLOSE_STOP] - reduced[IOR_TIMER_OPEN_START];
+        accessTime = reduced[IOR_TIMER_RDWR_STOP] - reduced[IOR_TIMER_RDWR_START];
 
         IOR_point_t *point = (access == WRITE) ? &test->results[rep].write :
                                                  &test->results[rep].read;
@@ -780,7 +788,7 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
          * minimum (best) latency achieved. So what is reported is the average
          * latency of all ops from a single task, then taking the minimum of
          * that between all tasks. */
-        latency = (timer[3] - timer[2]) / (params->blockSize / params->transferSize);
+        latency = (timer[IOR_TIMER_RDWR_STOP] - timer[IOR_TIMER_RDWR_START]) / (params->blockSize / params->transferSize);
         MPI_CHECK(MPI_Reduce(&latency, &minlatency, 1, MPI_DOUBLE,
                              MPI_MIN, 0, testComm), "MPI_Reduce()");
 
@@ -1036,22 +1044,22 @@ WriteTimes(IOR_param_t *test, const double *timer, const int iteration,
 
                 if (access == WRITE) {
                         switch (i) {
-                        case 0:
+                        case IOR_TIMER_OPEN_START:
                                 strcpy(timerName, "write open start");
                                 break;
-                        case 1:
+                        case IOR_TIMER_OPEN_STOP:
                                 strcpy(timerName, "write open stop");
                                 break;
-                        case 2:
+                        case IOR_TIMER_RDWR_START:
                                 strcpy(timerName, "write start");
                                 break;
-                        case 3:
+                        case IOR_TIMER_RDWR_STOP:
                                 strcpy(timerName, "write stop");
                                 break;
-                        case 4:
+                        case IOR_TIMER_CLOSE_START:
                                 strcpy(timerName, "write close start");
                                 break;
-                        case 5:
+                        case IOR_TIMER_CLOSE_STOP:
                                 strcpy(timerName, "write close stop");
                                 break;
                         default:
@@ -1061,22 +1069,22 @@ WriteTimes(IOR_param_t *test, const double *timer, const int iteration,
                 }
                 else {
                         switch (i) {
-                        case 0:
+                        case IOR_TIMER_OPEN_START:
                                 strcpy(timerName, "read open start");
                                 break;
-                        case 1:
+                        case IOR_TIMER_OPEN_STOP:
                                 strcpy(timerName, "read open stop");
                                 break;
-                        case 2:
+                        case IOR_TIMER_RDWR_START:
                                 strcpy(timerName, "read start");
                                 break;
-                        case 3:
+                        case IOR_TIMER_RDWR_STOP:
                                 strcpy(timerName, "read stop");
                                 break;
-                        case 4:
+                        case IOR_TIMER_CLOSE_START:
                                 strcpy(timerName, "read close start");
                                 break;
-                        case 5:
+                        case IOR_TIMER_CLOSE_STOP:
                                 strcpy(timerName, "read close stop");
                                 break;
                         default:
@@ -1092,8 +1100,8 @@ WriteTimes(IOR_param_t *test, const double *timer, const int iteration,
 
 static void StoreRankInformation(IOR_test_t *test, double *timer, const int rep, const int access){
   IOR_param_t *params = &test->params;
-  double totalTime = timer[5] - timer[0];
-  double accessTime = timer[3] - timer[2];
+  double totalTime = timer[IOR_TIMER_CLOSE_STOP] - timer[IOR_TIMER_OPEN_START];
+  double accessTime = timer[IOR_TIMER_RDWR_STOP] - timer[IOR_TIMER_RDWR_START];
   double times[] = {totalTime, accessTime};
 
   if(rank == 0){
@@ -1246,10 +1254,10 @@ static void TestIoSys(IOR_test_t *test)
                         params->stoneWallingWearOutIterations = params_saved_wearout;
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = WRITE;
-                        timer[0] = GetTimeStamp();
+                        timer[IOR_TIMER_OPEN_START] = GetTimeStamp();
                         fd = backend->create(testFileName, IOR_WRONLY | IOR_CREAT | IOR_TRUNC, params->backend_options);
                         if(fd == NULL) FAIL("Cannot create file");
-                        timer[1] = GetTimeStamp();
+                        timer[IOR_TIMER_OPEN_STOP] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
@@ -1258,20 +1266,20 @@ static void TestIoSys(IOR_test_t *test)
                                         "Commencing write performance test: %s",
                                         CurrentTimeString());
                         }
-                        timer[2] = GetTimeStamp();
+                        timer[IOR_TIMER_RDWR_START] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, &results[rep], fd, WRITE, &ioBuffers);
                         if (params->verbose >= VERBOSE_4) {
                           fprintf(out_logfile, "* data moved = %llu\n", dataMoved);
                           fflush(out_logfile);
                         }
-                        timer[3] = GetTimeStamp();
+                        timer[IOR_TIMER_RDWR_STOP] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
-                        timer[4] = GetTimeStamp();
+                        timer[IOR_TIMER_CLOSE_START] = GetTimeStamp();
                         backend->close(fd, params->backend_options);
 
-                        timer[5] = GetTimeStamp();
+                        timer[IOR_TIMER_CLOSE_STOP] = GetTimeStamp();
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
                         /* check if stat() of file doesn't equal expected file size,
@@ -1376,10 +1384,10 @@ static void TestIoSys(IOR_test_t *test)
                         DelaySecs(params->interTestDelay);
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         params->open = READ;
-                        timer[0] = GetTimeStamp();
+                        timer[IOR_TIMER_OPEN_START] = GetTimeStamp();
                         fd = backend->open(testFileName, IOR_RDONLY, params->backend_options);
                         if(fd == NULL) FAIL("Cannot open file");
-                        timer[1] = GetTimeStamp();
+                        timer[IOR_TIMER_OPEN_STOP] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
@@ -1388,15 +1396,15 @@ static void TestIoSys(IOR_test_t *test)
                                         "Commencing read performance test: %s\n",
                                         CurrentTimeString());
                         }
-                        timer[2] = GetTimeStamp();
+                        timer[IOR_TIMER_RDWR_START] = GetTimeStamp();
                         dataMoved = WriteOrRead(params, &results[rep], fd, operation_flag, &ioBuffers);
-                        timer[3] = GetTimeStamp();
+                        timer[IOR_TIMER_RDWR_STOP] = GetTimeStamp();
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
-                        timer[4] = GetTimeStamp();
+                        timer[IOR_TIMER_CLOSE_START] = GetTimeStamp();
                         backend->close(fd, params->backend_options);
-                        timer[5] = GetTimeStamp();
+                        timer[IOR_TIMER_CLOSE_STOP] = GetTimeStamp();
 
                         /* check if stat() of file doesn't equal expected file size,
                            use actual amount of byte moved */
