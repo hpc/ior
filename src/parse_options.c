@@ -67,9 +67,6 @@ static void CheckRunSettings(IOR_test_t *tests)
 
                 if(params->gpuDirect){
                   params->gpuMemoryFlags = IOR_MEMORY_TYPE_GPU_DEVICE_ONLY;
-                  if(params->checkRead || params->checkWrite){
-                    ERR("GPUDirect data cannot yet be checked");
-                  }
                 }
         }
 }

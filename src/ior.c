@@ -1669,13 +1669,13 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_
             nanosleep( & wait, NULL);
           }
   } else if (access == WRITECHECK) {
-          ((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
+          //((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
           amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot read from file write check");
           *errors += CompareData(buffer, transfer, test, offset, pretendRank, WRITECHECK);
   } else if (access == READCHECK) {
-          ((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
+          //((long long int*) buffer)[0] = ~((long long int*) buffer)[0]; // changes the buffer, no memset to reduce the memory pressure
           amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer){
             ERR("cannot read from file");
