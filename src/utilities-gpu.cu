@@ -1,8 +1,13 @@
+/*
+  This file contains CUDA code for creating and checking memory patterns on the device.
+*/
 #include <cuda_runtime.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
+#include <stdint.h>
 
 #include "iordef.h"
 
@@ -13,8 +18,25 @@ void cu_generate_memory_timestamp(float * buf, size_t bytes, int rand_seed, int 
   
 }
 
+__global__ 
+void cu_verify_memory_timestamp(uint64_t item, float * buf, size_t bytes, int rand_seed, int pretendRank, int * errors){
+  
+}
+
 extern "C" void generate_memory_pattern_gpu(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){    
   if(dataPacketType == DATA_TIMESTAMP){
     cu_generate_memory_timestamp<<<bytes, 1>>>((float*)bytes, bytes, rand_seed, pretendRank);
   }
+}
+
+extern "C" void update_write_memory_pattern_gpu(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType){
+  // nothing to do for dataPacketType == DATA_TIMESTAMP
+}
+
+extern "C" int verify_memory_pattern_gpu(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+  int errors = 0;
+  if(dataPacketType == DATA_TIMESTAMP){
+    cu_verify_memory_timestamp<<<bytes, 1>>>(item, (float*)bytes, bytes, rand_seed, pretendRank, & errors);
+  }
+  return errors;
 }

@@ -95,6 +95,13 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
   if (dataPacketType == DATA_TIMESTAMP || bytes < 8)
     return;
 
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+    update_write_memory_pattern_gpu(item, buf, bytes, rand_seed,  pretendRank, dataPacketType);
+    return;
+  }
+#endif
+
   size_t size = bytes / sizeof(uint64_t);
   uint64_t * buffi = (uint64_t*) buf;
 
@@ -162,8 +169,14 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
   }
 }
 
-int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
+int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){  
   int error = 0;
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+    error = verify_memory_pattern_gpu(item, buffer, bytes, rand_seed, pretendRank, dataPacketType);
+    return error;
+  }
+#endif
   // always read all data to ensure that performance numbers stay the same
   uint64_t * buffi = (uint64_t*) buffer;
     
