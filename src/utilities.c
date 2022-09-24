@@ -169,6 +169,16 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
   }
 }
 
+void invalidate_buffer_pattern(char * buffer, size_t bytes, ior_memory_flags type){
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+#ifdef HAVE_GPU_DIRECT
+    cudaMemset(buffer, 0x42, bytes > 512 ? 512 : bytes);
+#endif
+  }else{
+    buffer[0] = ~buffer[0]; // changes the buffer, no memset to reduce the memory pressure
+  }
+}
+
 int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){  
   int error = 0;
 #ifdef HAVE_GPU_DIRECT

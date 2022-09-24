@@ -598,7 +598,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
   char obj_name[MAX_PATHLEN];
   int ret;
   char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
-  // memset(buf, o.rank % 256, o.file_size);
+  invalidate_buffer_pattern(buf, o.file_size, o.gpu_memory_flags);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   int start_index = *current_index_p;
