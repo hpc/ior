@@ -66,9 +66,6 @@ static void CheckRunSettings(IOR_test_t *tests)
                 }
 
                 if(params->gpuDirect){
-                  if(params->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_MANAGED){
-                    ERR("GPUDirect cannot be used with managed memory");
-                  }
                   params->gpuMemoryFlags = IOR_MEMORY_TYPE_GPU_DEVICE_ONLY;
                   if(params->checkRead || params->checkWrite){
                     ERR("GPUDirect data cannot yet be checked");

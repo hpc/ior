@@ -651,7 +651,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     /* allocate read buffer */
     if (o.read_bytes > 0) {
         read_buffer = aligned_buffer_alloc(o.read_bytes, o.gpu_memory_flags);
-        memset(read_buffer, -1, o.read_bytes);
+        generate_memory_pattern(read_buffer, o.read_bytes, 0, 0, DATA_TIMESTAMP, o.gpu_memory_flags);
     }
 
     uint64_t stop_items = o.items;
@@ -730,7 +730,6 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* read file */
         if (o.read_bytes > 0) {
-            read_buffer[0] = 42;
             if (o.read_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) read_buffer, o.read_bytes, 0, o.backend_options)) {
                 WARNF("unable to read file %s", item);
                 o.verification_error += 1;
