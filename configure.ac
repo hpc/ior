@@ -119,8 +119,16 @@ AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
     ])
 ])
 AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect = xyes])
-AM_COND_IF([HAVE_GPU_DIRECT],[AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])])
+AM_COND_IF([HAVE_GPU_DIRECT],[
+  AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])
+  ])
 
+varNVCC=nvcc
+AC_ARG_WITH(nvcc,
+              AS_HELP_STRING([--with-nvcc], [Use the NVCC as specified]),
+              [AS_IF([test "$with_nvcc" != "yes"], varNVCC=$with_nvcc)],
+              [])
+AC_SUBST(NVCC, $varNVCC)
 
 # Check for system capabilities
 AC_SYS_LARGEFILE

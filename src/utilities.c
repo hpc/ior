@@ -128,6 +128,12 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
  * @param dataPacketType identifier to designate pattern to fill buffer
  */
 void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+    generate_memory_pattern_gpu(buf, bytes, rand_seed,  pretendRank, dataPacketType);
+    return;
+  }
+#endif
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
   const size_t size = bytes / 8;

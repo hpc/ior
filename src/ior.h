@@ -47,12 +47,6 @@
 
 #define ISPOWEROFTWO(x) ((x != 0) && !(x & (x - 1)))
 
-typedef enum{
-    IOR_MEMORY_TYPE_CPU = 0,
-    IOR_MEMORY_TYPE_GPU_MANAGED = 1,
-    IOR_MEMORY_TYPE_GPU_DEVICE_ONLY = 2,
-} ior_memory_flags;
-
 
 /***************** IOR_BUFFERS *************************************************/
 /* A struct to hold the buffers so we can pass 1 pointer around instead of 3
