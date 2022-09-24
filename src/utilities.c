@@ -91,7 +91,7 @@ enum OutputFormat_t outputFormat;
  * @param pretendRank unique identifier for this process
  * @param dataPacketType identifier to designate pattern to fill buffer
  */
-void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
   if (dataPacketType == DATA_TIMESTAMP || bytes < 8)
     return;
 
@@ -127,7 +127,7 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
  * @param pretendRank unique identifier for this process
  * @param dataPacketType identifier to designate pattern to fill buffer
  */
-void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
   const size_t size = bytes / 8;
@@ -156,7 +156,7 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
   }
 }
 
-int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
   int error = 0;
   // always read all data to ensure that performance numbers stay the same
   uint64_t * buffi = (uint64_t*) buffer;

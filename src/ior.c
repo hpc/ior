@@ -419,7 +419,7 @@ static size_t
 CompareData(void *expectedBuffer, size_t size, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
 {
         assert(access == WRITECHECK || access == READCHECK);
-        return verify_memory_pattern(offset, expectedBuffer, size, test->setTimeStampSignature, fillrank, test->dataPacketType);
+        return verify_memory_pattern(offset, expectedBuffer, size, test->setTimeStampSignature, fillrank, test->dataPacketType, test->gpuMemoryFlags);
 }
 
 /*
@@ -1229,7 +1229,7 @@ static void TestIoSys(IOR_test_t *test)
                           (&params->timeStampSignatureValue, 1, MPI_UNSIGNED, 0,
                            testComm), "cannot broadcast start time value");
 
-                generate_memory_pattern((char*) ioBuffers.buffer, params->transferSize, params->setTimeStampSignature, pretendRank, params->dataPacketType);
+                generate_memory_pattern((char*) ioBuffers.buffer, params->transferSize, params->setTimeStampSignature, pretendRank, params->dataPacketType, params->gpuMemoryFlags);
 
                 /* use repetition count for number of multiple files */
                 if (params->multiFile)
@@ -1650,7 +1650,7 @@ static IOR_offset_t WriteOrReadSingle(IOR_offset_t offset, int pretendRank, IOR_
   if (access == WRITE) {
           /* fills each transfer with a unique pattern
            * containing the offset into the file */
-          update_write_memory_pattern(offset, ioBuffers->buffer, transfer, test->setTimeStampSignature, pretendRank, test->dataPacketType);
+          update_write_memory_pattern(offset, ioBuffers->buffer, transfer, test->setTimeStampSignature, pretendRank, test->dataPacketType, test->gpuMemoryFlags);
           amtXferred = backend->xfer(access, fd, buffer, transfer, offset, test->backend_options);
           if (amtXferred != transfer)
                   ERR("cannot write to file");
