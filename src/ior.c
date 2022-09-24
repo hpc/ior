@@ -419,7 +419,7 @@ static size_t
 CompareData(void *expectedBuffer, size_t size, IOR_param_t *test, IOR_offset_t offset, int fillrank, int access)
 {
         assert(access == WRITECHECK || access == READCHECK);
-        return verify_memory_pattern(offset, expectedBuffer, size, test->setTimeStampSignature, fillrank, test->dataPacketType, test->gpuMemoryFlags);
+        return verify_memory_pattern(offset, expectedBuffer, size, test->timeStampSignatureValue, fillrank, test->dataPacketType, test->gpuMemoryFlags);
 }
 
 /*
@@ -1185,6 +1185,7 @@ static void TestIoSys(IOR_test_t *test)
         if (params->setTimeStampSignature) { // initialize the buffer properly
                 params->timeStampSignatureValue = (unsigned int) params->setTimeStampSignature;
         }
+
         XferBuffersSetup(&ioBuffers, params, pretendRank);
         
         /* Initial time stamp */
@@ -1212,8 +1213,7 @@ static void TestIoSys(IOR_test_t *test)
                                 if ((currentTime = time(NULL)) == -1) {
                                         ERR("cannot get current time");
                                 }
-                                params->timeStampSignatureValue =
-                                        (unsigned int)currentTime;
+                                params->timeStampSignatureValue = (unsigned int)currentTime;
                         }
                         if (verbose >= VERBOSE_2) {
                                 fprintf(out_logfile,
@@ -1229,7 +1229,7 @@ static void TestIoSys(IOR_test_t *test)
                           (&params->timeStampSignatureValue, 1, MPI_UNSIGNED, 0,
                            testComm), "cannot broadcast start time value");
 
-                generate_memory_pattern((char*) ioBuffers.buffer, params->transferSize, params->setTimeStampSignature, pretendRank, params->dataPacketType, params->gpuMemoryFlags);
+                generate_memory_pattern((char*) ioBuffers.buffer, params->transferSize, params->timeStampSignatureValue, pretendRank, params->dataPacketType, params->gpuMemoryFlags);
 
                 /* use repetition count for number of multiple files */
                 if (params->multiFile)
