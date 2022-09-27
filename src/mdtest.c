@@ -401,7 +401,7 @@ static void create_file (const char *path, uint64_t itemNum) {
         VERBOSE(3,5,"create_remove_items_helper: write..." );
 
         o.hints.fsyncPerWrite = o.sync_file;
-        update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
+        update_write_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType, o.gpu_memory_flags);
 
         if ( o.write_bytes != (size_t) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
             WARNF("unable to write file %s", curr_item);
@@ -412,7 +412,7 @@ static void create_file (const char *path, uint64_t itemNum) {
             if (o.write_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) o.write_buffer, o.write_bytes, 0, o.backend_options)) {
                 WARNF("unable to verify write (read/back) file %s", curr_item);
             }
-            int error = verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
+            int error = verify_memory_pattern(itemNum, o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType, o.gpu_memory_flags);
             o.verification_error += error;
             if(error){
                 VERBOSE(1,1,"verification error in file: %s", curr_item);
@@ -651,7 +651,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
     /* allocate read buffer */
     if (o.read_bytes > 0) {
         read_buffer = aligned_buffer_alloc(o.read_bytes, o.gpu_memory_flags);
-        memset(read_buffer, -1, o.read_bytes);
+        invalidate_buffer_pattern(read_buffer, o.read_bytes, o.gpu_memory_flags);
     }
 
     uint64_t stop_items = o.items;
@@ -730,7 +730,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         /* read file */
         if (o.read_bytes > 0) {
-            read_buffer[0] = 42;
+            invalidate_buffer_pattern(read_buffer, o.read_bytes, o.gpu_memory_flags);
             if (o.read_bytes != (size_t) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) read_buffer, o.read_bytes, 0, o.backend_options)) {
                 WARNF("unable to read file %s", item);
                 o.verification_error += 1;
@@ -741,7 +741,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
               if (o.shared_file) {
                 pretend_rank = rank;
               }
-              int error = verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.dataPacketType);
+              int error = verify_memory_pattern(item_num, read_buffer, o.read_bytes, o.random_buffer_offset, pretend_rank, o.dataPacketType, o.gpu_memory_flags);
               o.verification_error += error;
               if(error){
                 VERBOSE(1,1,"verification error in file: %s", item);
@@ -2442,7 +2442,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /* allocate and initialize write buffer with # */
     if (o.write_bytes > 0) {
         o.write_buffer = aligned_buffer_alloc(o.write_bytes, o.gpu_memory_flags);
-        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType);
+        generate_memory_pattern(o.write_buffer, o.write_bytes, o.random_buffer_offset, rank, o.dataPacketType, o.gpu_memory_flags);
     }
 
     /* setup directory path to work in */

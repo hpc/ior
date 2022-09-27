@@ -91,9 +91,16 @@ enum OutputFormat_t outputFormat;
  * @param pretendRank unique identifier for this process
  * @param dataPacketType identifier to designate pattern to fill buffer
  */
-void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
   if (dataPacketType == DATA_TIMESTAMP || bytes < 8)
     return;
+
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+    update_write_memory_pattern_gpu(item, buf, bytes, rand_seed,  pretendRank, dataPacketType);
+    return;
+  }
+#endif
 
   size_t size = bytes / sizeof(uint64_t);
   uint64_t * buffi = (uint64_t*) buf;
@@ -127,7 +134,13 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
  * @param pretendRank unique identifier for this process
  * @param dataPacketType identifier to designate pattern to fill buffer
  */
-void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+    generate_memory_pattern_gpu(buf, bytes, rand_seed,  pretendRank, dataPacketType);
+    return;
+  }
+#endif
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
   const size_t size = bytes / 8;
@@ -156,8 +169,24 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
   }
 }
 
-int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+void invalidate_buffer_pattern(char * buffer, size_t bytes, ior_memory_flags type){
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+#ifdef HAVE_GPU_DIRECT
+    cudaMemset(buffer, 0x42, bytes > 512 ? 512 : bytes);
+#endif
+  }else{
+    buffer[0] = ~buffer[0]; // changes the buffer, no memset to reduce the memory pressure
+  }
+}
+
+int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){  
   int error = 0;
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+    error = verify_memory_pattern_gpu(item, buffer, bytes, rand_seed, pretendRank, dataPacketType);
+    return error;
+  }
+#endif
   // always read all data to ensure that performance numbers stay the same
   uint64_t * buffi = (uint64_t*) buffer;
     

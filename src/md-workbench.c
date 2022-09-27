@@ -556,7 +556,7 @@ void run_precreate(phase_stat_t * s, int current_index){
   }
 
   char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
-  generate_memory_pattern(buf, o.file_size, o.random_seed, o.rank, o.dataPacketType);
+  generate_memory_pattern(buf, o.file_size, o.random_seed, o.rank, o.dataPacketType, o.gpu_memory_flags);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   double op_time;
@@ -572,7 +572,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       if (NULL == aiori_fh){
         FAIL("Unable to open file %s", obj_name);
       }
-      update_write_memory_pattern(f * o.dset_count + d, buf, o.file_size, o.random_seed, o.rank, o.dataPacketType);
+      update_write_memory_pattern(f * o.dset_count + d, buf, o.file_size, o.random_seed, o.rank, o.dataPacketType, o.gpu_memory_flags);
       if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
         s->obj_create.suc++;
       }else{
@@ -598,7 +598,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
   char obj_name[MAX_PATHLEN];
   int ret;
   char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
-  memset(buf, o.rank % 256, o.file_size);
+  invalidate_buffer_pattern(buf, o.file_size, o.gpu_memory_flags);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   int start_index = *current_index_p;
@@ -653,7 +653,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
       if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options) ) {
         if(o.verify_read){
-            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_seed, readRank, o.dataPacketType) == 0){
+            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_seed, readRank, o.dataPacketType, o.gpu_memory_flags) == 0){
               s->obj_read.suc++;
             }else{
               s->obj_read.err++;
@@ -694,8 +694,8 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       op_timer = GetTimeStamp();
       aiori_fh = o.backend->create(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
       if (NULL != aiori_fh){
-        generate_memory_pattern(buf, o.file_size, o.random_seed, writeRank, o.dataPacketType);
-        update_write_memory_pattern(newFileIndex * o.dset_count + d, buf, o.file_size, o.random_seed, writeRank, o.dataPacketType);
+        generate_memory_pattern(buf, o.file_size, o.random_seed, writeRank, o.dataPacketType, o.gpu_memory_flags);
+        update_write_memory_pattern(newFileIndex * o.dset_count + d, buf, o.file_size, o.random_seed, writeRank, o.dataPacketType, o.gpu_memory_flags);
         
         if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
           s->obj_create.suc++;

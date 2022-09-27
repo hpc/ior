@@ -722,9 +722,9 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
 #ifdef HAVE_GPU_DIRECT
                         }
 #endif
-                        if (rc == -1)
-                                ERRF("write(%d, %p, %lld) failed",
-                                        fd, (void*)ptr, remaining);
+                        if (rc < 0){
+                          WARNF("write(%d, %p, %lld) failed %s", fd, (void*)ptr, remaining, strerror(errno));
+                        }
                         if (hints->fsyncPerWrite == TRUE){
                           POSIX_Fsync((aiori_fd_t*) &fd, param);
                         }
@@ -748,8 +748,8 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                           return length - remaining;
                         }
                                 
-                        if (rc == -1){
-                          WARNF("read(%d, %p, %lld) failed", fd, (void*)ptr, remaining);
+                        if (rc < 0){
+                          WARNF("read(%d, %p, %lld) failed %s", fd, (void*)ptr, remaining, strerror(errno));
                           return length - remaining;
                         }
                 }

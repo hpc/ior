@@ -47,6 +47,7 @@ endif
 
 if HAVE_GPU_DIRECT
 extraLDADD    += -lcufile
+extraSOURCES  += utilities-gpu.cu
 endif
 
 if USE_HDF5_AIORI
@@ -177,3 +178,6 @@ all-local: build.conf
 build.conf:
 	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) $(LIBS) > build.conf
 	@echo CFLAGS=$(CFLAGS) $(extraCPPFLAGS) >> build.conf
+
+.cu.o:
+	$(NVCC) $(CFLAGS) -c -o $@ $<

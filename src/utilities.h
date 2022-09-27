@@ -36,10 +36,16 @@ void* safeMalloc(uint64_t size);
 void set_o_direct_flag(int *fd);
 
 ior_dataPacketType_e parsePacketType(char t);
-void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType);
-void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType);
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType, ior_memory_flags type);
+void update_write_memory_pattern_gpu(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType);
+void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType, ior_memory_flags type);
+void generate_memory_pattern_gpu(char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType);
+/* invalidate memory in the buffer */
+void invalidate_buffer_pattern(char * buf, size_t bytes, ior_memory_flags type);
+
 /* check a data buffer, @return 0 if all is correct, otherwise 1 */
-int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType);
+int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type);
+int verify_memory_pattern_gpu(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType);
 
 char *CurrentTimeString(void);
 int Regex(char *, char *);

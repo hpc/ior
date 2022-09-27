@@ -26,6 +26,12 @@ typedef enum {
   DATA_RANDOM           /* fully scrambled blocks */
 } ior_dataPacketType_e;
 
+typedef enum{
+    IOR_MEMORY_TYPE_CPU = 0,
+    IOR_MEMORY_TYPE_GPU_MANAGED = 1,
+    IOR_MEMORY_TYPE_GPU_DEVICE_ONLY = 2,
+} ior_memory_flags;
+
 #ifdef _WIN32
 #   define _CRT_SECURE_NO_WARNINGS
 #   define _CRT_RAND_S
