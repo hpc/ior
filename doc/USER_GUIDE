@@ -381,13 +381,16 @@ GPFS-SPECIFIC (POSIX-ONLY):
 
   * --posix.gpfs.releasetoken             - immediately after opening or creating file, release
                                             all locks.  Might help mitigate lock-revocation
-                                            traffic when many processes write/read to same file.
+                                            traffic when many processes write/read to same file
 
   * --posix.gpfs.finegrainwritesharing    - This hint optimizes the performance of small strided
                                             writes to a shared file from a parallel application
 
   * --posix.gpfs.finegrainreadsharing     - This hint optimizes the performance of small strided
                                             reads from a shared file from a parallel application
+
+  * --posix.gpfs.createsharing            - This hint optimizes the performance of workloads that
+                                            create many files in a shared directory
 
 BeeGFS-SPECIFIC (POSIX-ONLY):
 ================

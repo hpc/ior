@@ -144,8 +144,10 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     {0, "posix.gpfs.finegrainwritesharing", "    Enable fine grain write sharing", OPTION_FLAG, 'd', & o->gpfs_finegrain_writesharing},
     {0, "posix.gpfs.finegrainreadsharing", "     Enable fine grain read sharing", OPTION_FLAG, 'd', & o->gpfs_finegrain_readsharing},
 #endif
-
+#ifdef HAVE_GPFSCREATESHARING_T
+    {0, "posix.gpfs.createsharing", "        Enable efficient file creation in a shared directory", OPTION_FLAG, 'd', & o->gpfs_createsharing},
 #endif
+#endif // HAVE_GPFS_FCNTL_H
 #ifdef HAVE_LUSTRE_USER
     {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
