@@ -76,6 +76,14 @@
 
 #include <mpi.h>
 
+#ifdef HAVE_GPFSCREATESHARING_T
+#include <gpfs_fcntl.h>
+#include "aiori-POSIX.h"
+#ifndef   open64                /* necessary for TRU64 -- */
+#  define open64  open          /* unlikely, but may pose */
+#endif  /* not open64 */        /* conflicting prototypes */
+#endif /* HAVE_GPFSCREATESHARING_T */
+
 #pragma GCC diagnostic ignored "-Wformat-overflow"
 
 #ifdef HAVE_LUSTRE_LUSTREAPI
@@ -1135,6 +1143,37 @@ int updateStoneWallIterations(int iteration, uint64_t items_done, double tstart,
   return hit;
 }
 
+#ifdef HAVE_GPFSCREATESHARING_T
+void gpfs_createSharing(char *testDirName, int enable)
+{
+  int fd, rc;
+  int fd_oflag = O_RDONLY;
+
+  struct
+  {
+    gpfsFcntlHeader_t header;
+    gpfsCreateSharing_t fcreate;
+  } createSharingHint;
+
+  createSharingHint.header.totalLength = sizeof(createSharingHint);
+  createSharingHint.header.fcntlVersion = GPFS_FCNTL_CURRENT_VERSION;
+  createSharingHint.header.fcntlReserved = 0;
+
+  createSharingHint.fcreate.structLen = sizeof(createSharingHint.fcreate);
+  createSharingHint.fcreate.structType = GPFS_CREATE_SHARING;
+  createSharingHint.fcreate.enable = enable;
+
+  fd = open64(testDirName, fd_oflag);
+  if (fd < 0)
+    ERRF("open64(\"%s\", %d) failed: %s", testDirName, fd_oflag, strerror(errno));
+
+  rc = gpfs_fcntl(fd, &createSharingHint);
+  if (verbose >= VERBOSE_2 && rc != 0) {
+    WARNF("gpfs_fcntl(%d, ...) create sharing hint failed. rc %d", fd, rc);
+  }
+}
+#endif  /* HAVE_GPFSCREATESHARING_T */
+
 void file_test_create(const int iteration, const int ntasks, const char *path, rank_progress_t * progress, double *t_start){
   char temp_path[MAX_PATHLEN];
   for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
@@ -1203,12 +1242,30 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     if (o.create_only ) {
       phase_prepare();
       t_start = GetTimeStamp();
+#ifdef HAVE_GPFSCREATESHARING_T
+      /* Enable createSharingHint */
+      posix_options_t * hint_backend_option = (posix_options_t*) o.backend_options;
+      if (hint_backend_option->gpfs_createsharing)
+      {
+        sprintf(temp_path, "%s/%s", o.testdir, path);
+        VERBOSE(3,5,"file_test: GPFS Hint enable directory path is '%s'", temp_path);
+        gpfs_createSharing(temp_path, 1);
+      }
+#endif  /* HAVE_GPFSCREATESHARING_T */
       progress->stone_wall_timer_seconds = o.stone_wall_timer_seconds;
       progress->items_done = 0;
       progress->start_time = GetTimeStamp();
       file_test_create(iteration, ntasks, path, progress, &t_start);
       t_end_before_barrier = GetTimeStamp();
       phase_end();
+#ifdef HAVE_GPFSCREATESHARING_T
+      /* Disable createSharingHint */
+      if (hint_backend_option->gpfs_createsharing)
+      {
+        VERBOSE(3,5,"file_test: GPFS Hint disable directory path is '%s'", temp_path);
+        gpfs_createSharing(temp_path, 0);
+      }
+#endif  /* HAVE_GPFSCREATESHARING_T */
       t_end = GetTimeStamp();
       updateResult(res, MDTEST_FILE_CREATE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }else{
