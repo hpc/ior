@@ -28,8 +28,9 @@ typedef enum {
 
 typedef enum{
     IOR_MEMORY_TYPE_CPU = 0,
-    IOR_MEMORY_TYPE_GPU_MANAGED = 1,
-    IOR_MEMORY_TYPE_GPU_DEVICE_ONLY = 2,
+    IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_CPU = 1, /* Verifications are run on CPU */
+    IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU = 2, /* Verifications are run on GPU */
+    IOR_MEMORY_TYPE_GPU_DEVICE_ONLY = 3,
 } ior_memory_flags;
 
 #ifdef _WIN32
