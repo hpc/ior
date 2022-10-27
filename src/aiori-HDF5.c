@@ -688,10 +688,10 @@ static IOR_offset_t HDF5_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
                 ret = MPIIO_GetFileSize(test, testFileName);
 #ifdef HAVE_H5PGET_VOL_ID
         else {
-            if(rank == 0)
-                WARN("getfilesize not supported with current VOL connector!");
+                if(rank == 0)
+                    WARN("getfilesize not supported with current VOL connector!");
 
-            ret = -1;
+                ret = -1;
         }
 
         HDF5_CHECK(H5VLclose(vol_id), "cannot close VOL ID");
@@ -703,23 +703,89 @@ static IOR_offset_t HDF5_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
 static int HDF5_StatFS(const char * oid, ior_aiori_statfs_t * stat_buf,
                        aiori_mod_opt_t * param)
 {
-        if(rank == 0)
-                WARN("statfs not supported in HDF5 backend!");
-        return -1;
+        int ret;
+#ifdef HAVE_H5PGET_VOL_ID
+        hid_t vol_id, accessPropList;
+
+        /* set up file access property list */
+        accessPropList = H5Pcreate(H5P_FILE_ACCESS);
+        HDF5_CHECK(accessPropList, "cannot create file access property list");
+        HDF5_CHECK(H5Pget_vol_id(accessPropList, &vol_id), "cannot get vol id");
+        HDF5_CHECK(H5Pclose(accessPropList), "cannot close access property list");
+
+        if(vol_id == H5VL_NATIVE)
+#endif
+                ret = aiori_posix_statfs(oid, stat_buf, param);
+#ifdef HAVE_H5PGET_VOL_ID
+        else {
+                if(rank == 0)
+                    WARN("statfs not supported by current VOL connector!");
+
+                ret = -1;
+        }
+
+        HDF5_CHECK(H5VLclose(vol_id), "cannot close VOL ID");
+#endif
+
+        return ret;
 }
 
 static int HDF5_MkDir(const char * oid, mode_t mode, aiori_mod_opt_t * param)
 {
-        if(rank == 0)
-                WARN("mkdir not supported in HDF5 backend!");
-        return -1;
+        int ret;
+#ifdef HAVE_H5PGET_VOL_ID
+        hid_t vol_id, accessPropList;
+
+        /* set up file access property list */
+        accessPropList = H5Pcreate(H5P_FILE_ACCESS);
+        HDF5_CHECK(accessPropList, "cannot create file access property list");
+        HDF5_CHECK(H5Pget_vol_id(accessPropList, &vol_id), "cannot get vol id");
+        HDF5_CHECK(H5Pclose(accessPropList), "cannot close access property list");
+
+        if(vol_id == H5VL_NATIVE)
+#endif
+                ret = aiori_posix_mkdir(oid, mode, param);
+#ifdef HAVE_H5PGET_VOL_ID
+        else {
+                if(rank == 0)
+                    WARN("mkdir not supported by current VOL connector!");
+
+                ret = -1;
+        }
+
+        HDF5_CHECK(H5VLclose(vol_id), "cannot close VOL ID");
+#endif
+
+        return ret;
 }
 
 static int HDF5_RmDir(const char * oid, aiori_mod_opt_t * param)
 {
-        if(rank == 0)
-                WARN("rmdir not supported in HDF5 backend!");
-        return -1;
+        int ret;
+#ifdef HAVE_H5PGET_VOL_ID
+        hid_t vol_id, accessPropList;
+
+        /* set up file access property list */
+        accessPropList = H5Pcreate(H5P_FILE_ACCESS);
+        HDF5_CHECK(accessPropList, "cannot create file access property list");
+        HDF5_CHECK(H5Pget_vol_id(accessPropList, &vol_id), "cannot get vol id");
+        HDF5_CHECK(H5Pclose(accessPropList), "cannot close access property list");
+
+        if(vol_id == H5VL_NATIVE)
+#endif
+                ret = aiori_posix_rmdir(oid, param);
+#ifdef HAVE_H5PGET_VOL_ID
+        else {
+                if(rank == 0)
+                    WARN("rmdir not supported by current VOL connector!");
+
+                ret = -1;
+        }
+
+        HDF5_CHECK(H5VLclose(vol_id), "cannot close VOL ID");
+#endif
+
+        return ret;
 }
 
 static int HDF5_Access(const char * path, int mode, aiori_mod_opt_t * param)
@@ -758,9 +824,31 @@ static int HDF5_Access(const char * path, int mode, aiori_mod_opt_t * param)
 
 static int HDF5_Stat(const char * oid, struct stat * buf, aiori_mod_opt_t * param)
 {
-        if(rank == 0)
-                WARN("stat not supported in HDF5 backend!");
-        return -1;
+        int ret;
+#ifdef HAVE_H5PGET_VOL_ID
+        hid_t vol_id, accessPropList;
+
+        /* set up file access property list */
+        accessPropList = H5Pcreate(H5P_FILE_ACCESS);
+        HDF5_CHECK(accessPropList, "cannot create file access property list");
+        HDF5_CHECK(H5Pget_vol_id(accessPropList, &vol_id), "cannot get vol id");
+        HDF5_CHECK(H5Pclose(accessPropList), "cannot close access property list");
+
+        if(vol_id == H5VL_NATIVE)
+#endif
+                ret = aiori_posix_stat(oid, buf, param);
+#ifdef HAVE_H5PGET_VOL_ID
+        else {
+                if(rank == 0)
+                    WARN("stat not supported by current VOL connector!");
+
+                ret = -1;
+        }
+
+        HDF5_CHECK(H5VLclose(vol_id), "cannot close VOL ID");
+#endif
+
+        return ret;
 }
 
 /*
