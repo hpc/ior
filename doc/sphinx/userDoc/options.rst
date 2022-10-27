@@ -266,13 +266,15 @@ MPIIO-ONLY
 HDF5-ONLY
 ^^^^^^^^^
 
-  * ``individualDataSets`` - within a single file, each task will access its own
+  * ``hdf5.individualDataSets`` - within a single file, each task will access its own
     dataset.  Default IOR creates a dataset the size of ``numTasks * blockSize``
     to be accessed by all tasks (default: 0)
 
-  * ``noFill`` - do not pre-fill data in HDF5 file creation (default: 0)
+  * ``hdf5.noFill`` - do not pre-fill data in HDF5 file creation (default: 0)
 
-  * ``setAlignment`` - set the HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g) (default: 1)
+  * ``hdf5.setAlignment`` - set the HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g) (default: 1)
+
+  * ``hdf5.chunkSize`` - set the HDF5 chunk size (in terms of dataset elements) (default: no chunking)
 
   * ``hdf5.collectiveMetadata`` - enable HDF5 collective metadata (available since HDF5-1.10.0)
 
