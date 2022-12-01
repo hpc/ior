@@ -50,6 +50,7 @@ static int RADOS_MkDir(const char *, mode_t, aiori_mod_opt_t *);
 static int RADOS_RmDir(const char *, aiori_mod_opt_t *);
 static int RADOS_Access(const char *, int, aiori_mod_opt_t *);
 static int RADOS_Stat(const char *, struct stat *, aiori_mod_opt_t *);
+static int RADOS_check_params(aiori_mod_opt_t * options);
 
 /************************** O P T I O N S *****************************/
 typedef struct {
@@ -75,9 +76,9 @@ static option_help * RADOS_options(aiori_mod_opt_t ** init_backend_options, aior
   *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
-    {0, "rados.user", "Username for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o->user},
-    {0, "rados.conf", "Config file for the RADOS cluster", OPTION_REQUIRED_ARGUMENT, 's', & o->conf},
-    {0, "rados.pool", "RADOS pool to use for I/O", OPTION_REQUIRED_ARGUMENT, 's', & o->pool},
+    {0, "rados.user", "Username for the RADOS cluster", OPTION_OPTIONAL_ARGUMENT, 's', & o->user},
+    {0, "rados.conf", "Config file for the RADOS cluster", OPTION_OPTIONAL_ARGUMENT, 's', & o->conf},
+    {0, "rados.pool", "RADOS pool to use for I/O", OPTION_OPTIONAL_ARGUMENT, 's', & o->pool},
     LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
@@ -104,13 +105,25 @@ ior_aiori_t rados_aiori = {
         .rmdir = RADOS_RmDir,
         .access = RADOS_Access,
         .stat = RADOS_Stat,
-        .get_options = RADOS_options
+        .get_options = RADOS_options,
+        .check_params = RADOS_check_params
 };
 
 static rados_t       rados_cluster;     /* RADOS cluster handle */
 static rados_ioctx_t rados_ioctx;       /* I/O context for our pool in the RADOS cluster */
 
 /***************************** F U N C T I O N S ******************************/
+
+static int RADOS_check_params(aiori_mod_opt_t * options){
+  RADOS_options_t *o = (RADOS_options_t*) options;
+  if (!(o->user))
+      ERR("RADOS user must be specified");
+  if (!(o->conf))
+      ERR("RADOS conf must be specified");
+  if (!(o->pool))
+      ERR("RADOS pool must be specified");
+  return 0;
+}
 
 static void RADOS_Initialize(aiori_mod_opt_t * options)
 {
