@@ -135,6 +135,11 @@ extraSOURCES  += aiori-S3-libs3.c
 extraLDADD    += -ls3
 endif
 
+if USE_S3_AWS_AIORI
+extraSOURCES  += aiori-S3-aws.c
+extraLDADD    += -laws-c-s3 -laws-c-auth -laws-c-cal -laws-c-compression -laws-c-http -laws-c-io -laws-c-sdkutils -laws-c-common -laws-checksums -lcrypto -ls2n -lssl -laws-c-auth -laws-c-cal -laws-c-compression -laws-c-http -laws-c-io -laws-c-sdkutils -laws-c-common -laws-checksums -lcrypto -ls2n -lssl -laws-c-auth -laws-c-cal -laws-c-compression -laws-c-http -laws-c-io -laws-c-sdkutils -laws-c-common -laws-checksums -lcrypto -ls2n -lssl -lm
+endif
+
 if WITH_LUSTRE
 extraLDADD  += -llustreapi
 endif
