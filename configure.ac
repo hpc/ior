@@ -389,6 +389,35 @@ AM_COND_IF([AWS4C_DIR],[
    AC_SUBST([AWS4C_LDFLAGS], [-L$aws4c_dir])
 ])
 
+# Amazon S3 support using the aws-s3 library
+AC_ARG_WITH([S3-aws],
+        [AS_HELP_STRING([--with-S3-aws],
+           [support IO with Amazon libS3 @<:@default=no@:>@])],
+        [],
+        [with_S3_aws=no])
+AM_CONDITIONAL([USE_S3_AWS_AIORI], [test x$with_S3_aws = xyes])
+AM_COND_IF([USE_S3_AWS_AIORI],[
+        AC_DEFINE([USE_S3_AWS_AIORI], [], [Build Amazon-S3 backend AIORI using AWS])
+])
+
+err=0
+AS_IF([test "x$with_S3_aws" != xno], [
+            AC_MSG_NOTICE([beginning of S3-related checks])
+            AS_IF([test "x$with_S3_aws" != xyes], [
+              CFLAGS="$CFLAGS -I$with_S3_aws/include"
+              LDFLAGS="$LDFLAGS -Wl,-no-as-needed -L$with_S3_aws/lib"
+            ])
+            LIBS="-laws-c-s3 -laws-c-auth -laws-c-cal -laws-c-compression -laws-c-http -laws-c-io -laws-c-sdkutils -laws-c-common -laws-checksums -lcrypto -ls2n -lssl -laws-c-auth -laws-c-cal -laws-c-compression -laws-c-http -laws-c-io -laws-c-sdkutils -laws-c-common -laws-checksums -lcrypto -ls2n -lssl -laws-c-auth -laws-c-cal -laws-c-compression -laws-c-http -laws-c-io -laws-c-sdkutils -laws-c-common -laws-checksums -lcrypto -ls2n -lssl -lm"
+            AC_CHECK_HEADERS([aws/s3/s3_client.h], [], [err=1])
+
+            # Autotools thinks searching for a library means I want it added to LIBS
+            AC_CHECK_LIB([aws-c-s3], [aws_s3_library_init], [], [err=1])
+
+            AC_MSG_NOTICE([end of S3-related checks])
+            if test "$err" == 1; then
+                AC_MSG_FAILURE([S3 support is missing.  dnl Make sure you have access to aws-c.  dnl])
+            fi
+])
 
 
 # Amazon S3 support using the libs3 API
