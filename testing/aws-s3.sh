@@ -49,3 +49,7 @@ cmake --build aws-c-auth/build --target install
 git clone git@github.com:awslabs/aws-c-s3.git
 cmake -S aws-c-s3 -B aws-c-s3/build -DCMAKE_INSTALL_PREFIX=$INSTALL -DCMAKE_PREFIX_PATH=$INSTALL
 cmake --build aws-c-s3/build --target install
+
+# No need to copy private headers
+# cp -r aws-c-s3/include/aws/s3/private $INSTALL/include/aws/s3
+echo Now run: ../configure --with-S3-aws=$INSTALL

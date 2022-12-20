@@ -70,6 +70,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_MMAP_AIORI
         &mmap_aiori,
 #endif
+#ifdef USE_S3_AWS_AIORI
+        &S3_libS3_aws,
+#endif
 #ifdef USE_S3_LIBS3_AIORI
         &S3_libS3_aiori,
 #endif

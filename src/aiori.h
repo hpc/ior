@@ -132,6 +132,7 @@ extern ior_aiori_t ncmpi_aiori;
 extern ior_aiori_t posix_aiori;
 extern ior_aiori_t pmdk_aiori;
 extern ior_aiori_t mmap_aiori;
+extern ior_aiori_t S3_libS3_aws;
 extern ior_aiori_t S3_libS3_aiori;
 extern ior_aiori_t s3_4c_aiori;
 extern ior_aiori_t s3_plus_aiori;

@@ -11,11 +11,16 @@
 #include <unistd.h>
 #include <time.h>
 
-#include <aws/common/command_line_parser.h>
-#include <aws/common/file.h>
-#include <aws/io/stream.h>
+#include <aws/auth/credentials.h>
+#include <aws/common/condition_variable.h>
+#include <aws/common/mutex.h>
+#include <aws/common/zero.h>
+#include <aws/io/channel_bootstrap.h>
+#include <aws/io/event_loop.h>
+#include <aws/io/logging.h>
 #include <aws/io/uri.h>
-#include <aws/s3/s3.h>
+#include <aws/s3/s3_client.h>
+
 
 #include "ior.h"
 #include "aiori.h"
@@ -31,21 +36,23 @@ static void s3_xfer_hints(aiori_xfer_hint_t * params){
 
 /************************** O P T I O N S *****************************/
 typedef struct {
-  int bucket_per_file;
-  char * access_key;
-  char * secret_key;
-  char * host;
-  char * bucket_prefix;
-  char * bucket_prefix_cur;
-  char * locationConstraint;
-  char * authRegion;
+  char * config_file;
+  char * credential_file;
+  char * host; // region + aws.
+  char * bucket;
 
-  int timeout;
-  int dont_suffix;
-  int s3_compatible;
-  int use_ssl;
-  S3BucketContext bucket_context;
-  S3Protocol s3_protocol;
+  struct aws_allocator *allocator;
+  struct aws_s3_client *client;
+  struct aws_credentials_provider *credentials_provider;
+  struct aws_client_bootstrap *client_bootstrap;
+  struct aws_logger logger;
+  struct aws_mutex mutex;
+  struct aws_host_resolver *resolver;
+  struct aws_event_loop_group *event_loop_group;
+  struct aws_condition_variable c_var;
+  bool execution_completed;
+  struct aws_signing_config_aws signing_config;
+  enum aws_log_level log_level;  
 } s3_options_t;
 
 static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
@@ -54,23 +61,18 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
     memcpy(o, init_values, sizeof(s3_options_t));
   }else{
     memset(o, 0, sizeof(s3_options_t));
+    o->config_file     = "s3-cfg.ini";
+    o->credential_file = "s3-cred.ini";
+    o->bucket          = "ior";
   }
 
   *init_backend_options = (aiori_mod_opt_t*) o;
-  o->bucket_prefix = "ior";
-  o->bucket_prefix_cur = "b";
-
   option_help h [] = {
-  {0, "S3-libs3.bucket-per-file", "Use one bucket to map one file/directory, otherwise one bucket is used to store all dirs/files.", OPTION_FLAG, 'd', & o->bucket_per_file},
-  {0, "S3-libs3.bucket-name-prefix", "The prefix of the bucket(s).", OPTION_OPTIONAL_ARGUMENT, 's', & o->bucket_prefix},
-  {0, "S3-libs3.dont-suffix-bucket", "By default a hash will be added to the bucket name to increase uniqueness, this disables the option.", OPTION_FLAG, 'd', & o->dont_suffix },
-  {0, "S3-libs3.s3-compatible", "to be selected when using S3 compatible storage", OPTION_FLAG, 'd', & o->s3_compatible },
-  {0, "S3-libs3.use-ssl", "used to specify that SSL is needed for the connection", OPTION_FLAG, 'd', & o->use_ssl },
-  {0, "S3-libs3.host", "The host optionally followed by:port. Or specify a list of hosts separated by [ ,;] to be used in a round robin fashion by the MPI ranks.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
-  {0, "S3-libs3.secret-key", "The secret key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->secret_key},
-  {0, "S3-libs3.access-key", "The access key.", OPTION_OPTIONAL_ARGUMENT, 's', & o->access_key},
-  {0, "S3-libs3.region", "The region used for the authorization signature.", OPTION_OPTIONAL_ARGUMENT, 's', & o->authRegion},
-  {0, "S3-libs3.location", "The bucket geographic location.", OPTION_OPTIONAL_ARGUMENT, 's', & o->locationConstraint},
+  {0, "S3-aws.host", "The host and region followed by:port. Or specify a list of hosts separated by [ ,;] to be used in a round robin fashion by the MPI ranks.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
+  {0, "S3-aws.config_file", "The AWS configuration file.", OPTION_OPTIONAL_ARGUMENT, 's', & o->config_file},
+  {0, "S3-aws.credential_file", "The file with the credentials.", OPTION_OPTIONAL_ARGUMENT, 's', & o->credential_file},
+  {0, "S3-aws.host", "The host/region used for the authorization signature.", OPTION_OPTIONAL_ARGUMENT, 's', & o->host},
+  {0, "S3-aws.bucket", "The bucket name.", OPTION_OPTIONAL_ARGUMENT, 's', & o->bucket},
   LAST_OPTION
   };
   option_help * help = malloc(sizeof(h));
@@ -79,9 +81,6 @@ static option_help * S3_options(aiori_mod_opt_t ** init_backend_options, aiori_m
 }
 
 static void def_file_name(s3_options_t * o, char * out_name, char const * path){
-  if(o->bucket_per_file){
-    out_name += sprintf(out_name, "%s-", o->bucket_prefix_cur);
-  }
   // duplicate path except "/"
   while(*path != 0){
     char c = *path;
@@ -110,9 +109,6 @@ static void def_file_name(s3_options_t * o, char * out_name, char const * path){
 
 static void def_bucket_name(s3_options_t * o, char * out_name, char const * path){
   // S3_MAX_BUCKET_NAME_SIZE
-  if(o->bucket_per_file){
-    out_name += sprintf(out_name, "%s-", o->bucket_prefix_cur);
-  }
   // duplicate path except "/"
   while(*path != 0){
     char c = *path;
@@ -126,8 +122,6 @@ static void def_bucket_name(s3_options_t * o, char * out_name, char const * path
     path++;
   }
   *out_name = '\0';
-
-  // S3Status S3_validate_bucket_name(const char *bucketName, S3UriStyle uriStyle);
 }
 
 struct data_handling{
@@ -135,35 +129,14 @@ struct data_handling{
   int64_t size;
 };
 
-static S3Status s3status = S3StatusInterrupted;
-static S3ErrorDetails s3error = {NULL};
-
-static S3Status responsePropertiesCallback(const S3ResponseProperties *properties, void *callbackData){
-  s3status = S3StatusOK;
-  return s3status;
-}
-
-static void responseCompleteCallback(S3Status status, const S3ErrorDetails *error, void *callbackData) {
-  s3status = status;
-  if (error == NULL){
-    s3error.message = NULL;
-  }else{
-    s3error = *error;
-  }
-  return;
-}
-
 #define CHECK_ERROR(p) \
 if (s3status != S3StatusOK){ \
   WARNF("S3 %s:%d (path:%s) \"%s\": %s %s", __FUNCTION__, __LINE__, p,  S3_get_status_name(s3status), s3error.message, s3error.furtherDetails ? s3error.furtherDetails : ""); \
 }
 
-
-static S3ResponseHandler responseHandler = {  &responsePropertiesCallback, &responseCompleteCallback };
-
 static char * S3_getVersion()
 {
-  return "0.5";
+  return "1.0";
 }
 
 static void S3_Fsync(aiori_fd_t *fd, aiori_mod_opt_t * options)
@@ -177,14 +150,6 @@ static void S3_Sync(aiori_mod_opt_t * options)
   // Not needed
 }
 
-static S3Status S3ListResponseCallback(const char *ownerId, const char *ownerDisplayName, const char *bucketName, int64_t creationDateSeconds, void *callbackData){
-  uint64_t * count = (uint64_t*) callbackData;
-  *count += 1;
-  return S3StatusOK;
-}
-
-static S3ListServiceHandler listhandler = { {  &responsePropertiesCallback, &responseCompleteCallback }, & S3ListResponseCallback};
-
 static int S3_statfs (const char * path, ior_aiori_statfs_t * stat, aiori_mod_opt_t * options){
   stat->f_bsize = 1;
   stat->f_blocks = 1;
@@ -193,79 +158,24 @@ static int S3_statfs (const char * path, ior_aiori_statfs_t * stat, aiori_mod_op
   stat->f_ffree = 1;
   s3_options_t * o = (s3_options_t*) options;
 
-  // use the number of bucket as files
-  uint64_t buckets = 0;
-  S3_list_service(o->s3_protocol, o->access_key, o->secret_key, NULL, o->host,
-    o->authRegion, NULL, o->timeout, & listhandler, & buckets);
-  stat->f_files = buckets;
-  CHECK_ERROR(o->authRegion);
-
   return 0;
 }
-
-static S3Status S3multipart_handler(const char *upload_id, void *callbackData){
-  *((char const**)(callbackData)) = upload_id;
-  return S3StatusOK;
-}
-
-static S3MultipartInitialHandler multipart_handler = { {&responsePropertiesCallback, &responseCompleteCallback }, & S3multipart_handler};
 
 typedef struct{
   char * object;
 } S3_fd_t;
 
-static int putObjectDataCallback(int bufferSize, char *buffer, void *callbackData){
-  struct data_handling * dh = (struct data_handling *) callbackData;
-  const int64_t size = dh->size > bufferSize ? bufferSize : dh->size;
-  if(size == 0) return 0;
-  memcpy(buffer, dh->buf, size);
-  dh->buf = (IOR_size_t*) ((char*)(dh->buf) + size);
-  dh->size -= size;
-
-  return size;
-}
-
-static S3PutObjectHandler putObjectHandler = { {  &responsePropertiesCallback, &responseCompleteCallback }, & putObjectDataCallback };
 
 static aiori_fd_t *S3_Create(char *path, int iorflags, aiori_mod_opt_t * options)
 {
-  char * upload_id;
   s3_options_t * o = (s3_options_t*) options;
   char p[FILENAME_MAX];
   def_file_name(o, p, path);
-
-
-  if(iorflags & IOR_CREAT){
-    if(o->bucket_per_file){
-      S3_create_bucket(o->s3_protocol, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, S3CannedAclPrivate, o->locationConstraint, NULL, o->timeout, & responseHandler, NULL);
-    }else{
-      struct data_handling dh = { .buf = NULL, .size = 0 };
-      S3_put_object(& o->bucket_context, p, 0, NULL, NULL, o->timeout, &putObjectHandler, & dh);
-    }
-    if (s3status != S3StatusOK){
-      CHECK_ERROR(p);
-      return NULL;
-    }
-  }
 
   S3_fd_t * fd = malloc(sizeof(S3_fd_t));
   fd->object = strdup(p);
   return (aiori_fd_t*) fd;
 }
-
-
-static S3Status statResponsePropertiesCallback(const S3ResponseProperties *properties, void *callbackData){
-  // check the size
-  struct stat *buf = (struct stat*) callbackData;
-  if(buf != NULL){
-    buf->st_size = properties->contentLength;
-    buf->st_mtime = properties->lastModified;
-  }
-  s3status = S3StatusOK;
-  return s3status;
-}
-
-static S3ResponseHandler statResponseHandler = {  &statResponsePropertiesCallback, &responseCompleteCallback };
 
 static aiori_fd_t *S3_Open(char *path, int flags, aiori_mod_opt_t * options)
 {
@@ -283,35 +193,12 @@ static aiori_fd_t *S3_Open(char *path, int flags, aiori_mod_opt_t * options)
   char p[FILENAME_MAX];
   def_file_name(o, p, path);
 
-  if (o->bucket_per_file){
-    S3_test_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key,
-                        NULL, o->host, p, o->authRegion, 0, NULL,
-                        NULL, o->timeout, & responseHandler, NULL);
-  }else{
-    struct stat buf;
-    S3_head_object(& o->bucket_context, p, NULL, o->timeout, & statResponseHandler, & buf);
-  }
-  if (s3status != S3StatusOK){
-    CHECK_ERROR(p);
-    return NULL;
-  }
+
 
   S3_fd_t * fd = malloc(sizeof(S3_fd_t));
   fd->object = strdup(p);
   return (aiori_fd_t*) fd;
 }
-
-static S3Status getObjectDataCallback(int bufferSize, const char *buffer,  void *callbackData){
-  struct data_handling * dh = (struct data_handling *) callbackData;
-  const int64_t size = dh->size > bufferSize ? bufferSize : dh->size;
-  memcpy(dh->buf, buffer, size);
-  dh->buf = (IOR_size_t*) ((char*)(dh->buf) + size);
-  dh->size -= size;
-
-  return S3StatusOK;
-}
-
-static S3GetObjectHandler getObjectHandler = { {  &responsePropertiesCallback, &responseCompleteCallback }, & getObjectDataCallback };
 
 static IOR_offset_t S3_Xfer(int access, aiori_fd_t * afd, IOR_size_t * buffer, IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * options){
   S3_fd_t * fd = (S3_fd_t *) afd;
@@ -320,27 +207,14 @@ static IOR_offset_t S3_Xfer(int access, aiori_fd_t * afd, IOR_size_t * buffer, I
   s3_options_t * o = (s3_options_t*) options;
   char p[FILENAME_MAX];
 
-  if(o->bucket_per_file){
-    o->bucket_context.bucketName = fd->object;
-    if(offset != 0){
-      sprintf(p, "%ld-%ld", (long) offset, (long) length);
-    }else{
-      sprintf(p, "0");
-    }
+  if(offset != 0){
+    sprintf(p, "%s-%ld-%ld", fd->object, (long) offset, (long) length);
   }else{
-    if(offset != 0){
-      sprintf(p, "%s-%ld-%ld", fd->object, (long) offset, (long) length);
-    }else{
-      sprintf(p, "%s", fd->object);
-    }
+    sprintf(p, "%s", fd->object);
   }
+
   if(access == WRITE){
-    S3_put_object(& o->bucket_context, p, length, NULL, NULL, o->timeout, &putObjectHandler, & dh);
   }else{
-    S3_get_object(& o->bucket_context, p, NULL, 0, length, NULL, o->timeout, &getObjectHandler, & dh);
-  }
-  if (! o->s3_compatible){
-    CHECK_ERROR(p);
   }
   return length;
 }
@@ -360,19 +234,6 @@ typedef struct {
   char const *nextMarker;
 } s3_delete_req;
 
-S3Status list_delete_cb(int isTruncated, const char *nextMarker, int contentsCount, const S3ListBucketContent *contents, int commonPrefixesCount, const char **commonPrefixes, void *callbackData){
-  s3_delete_req * req = (s3_delete_req*) callbackData;
-  for(int i=0; i < contentsCount; i++){
-    S3_delete_object(& req->o->bucket_context, contents[i].key, NULL, req->o->timeout, & responseHandler, NULL);
-  }
-  req->truncated = isTruncated;
-  if(isTruncated){
-    req->nextMarker = nextMarker;
-  }
-  return S3StatusOK;
-}
-
-static S3ListBucketHandler list_delete_handler = {{&responsePropertiesCallback, &responseCompleteCallback }, list_delete_cb};
 
 static void S3_Delete(char *path, aiori_mod_opt_t * options)
 {
@@ -380,48 +241,6 @@ static void S3_Delete(char *path, aiori_mod_opt_t * options)
   char p[FILENAME_MAX];
   def_file_name(o, p, path);
 
-
-  if(o->bucket_per_file){
-    o->bucket_context.bucketName = p;
-    s3_delete_req req = {0, o, 0, NULL};
-    do{
-      S3_list_bucket(& o->bucket_context, NULL, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
-    }while(req.truncated);
-    S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
-  }else{
-    char * del_heuristics = getenv("S3LIB_DELETE_HEURISTICS");
-    if(del_heuristics){
-      struct stat buf;
-      S3_head_object(& o->bucket_context, p, NULL, o->timeout, & statResponseHandler, & buf);
-      if(s3status != S3StatusOK){
-        // As the file does not exist, can return safely
-        CHECK_ERROR(p);
-        return;
-      } 
-      int threshold = atoi(del_heuristics);
-      if (buf.st_size > threshold){
-        // there may exist fragments, so try to delete them
-        s3_delete_req req = {0, o, 0, NULL};
-        do{
-          S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
-        }while(req.truncated);
-      }
-      S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
-    }else{    
-      // Regular deletion, must remove all created fragments
-      S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
-      if(s3status != S3StatusOK){
-        // As the file does not exist, can return savely
-        CHECK_ERROR(p);
-        return;
-      }
-      s3_delete_req req = {0, o, 0, NULL};
-      do{
-        S3_list_bucket(& o->bucket_context, p, req.nextMarker, NULL, INT_MAX, NULL, o->timeout, & list_delete_handler, & req);
-      }while(req.truncated);
-    }
-  }
-  CHECK_ERROR(p);
 }
 
 static int S3_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * options){
@@ -429,19 +248,7 @@ static int S3_mkdir (const char *path, mode_t mode, aiori_mod_opt_t * options){
   char p[FILENAME_MAX];
   def_bucket_name(o, p, path);
 
-
-  if (o->bucket_per_file){
-    S3_create_bucket(o->s3_protocol, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, S3CannedAclPrivate, o->locationConstraint, NULL, o->timeout, & responseHandler, NULL);
-    CHECK_ERROR(p);
-    return 0;
-  }else{
-    struct data_handling dh = { .buf = NULL, .size = 0 };
-    S3_put_object(& o->bucket_context, p, 0, NULL, NULL, o->timeout, & putObjectHandler, & dh);
-    if (! o->s3_compatible){
-      CHECK_ERROR(p);
-    }
-    return 0;
-  }
+  return 0;
 }
 
 static int S3_rmdir (const char *path, aiori_mod_opt_t * options){
@@ -449,15 +256,7 @@ static int S3_rmdir (const char *path, aiori_mod_opt_t * options){
   char p[FILENAME_MAX];
 
   def_bucket_name(o, p, path);
-  if (o->bucket_per_file){
-    S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host, p, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
-    CHECK_ERROR(p);
-    return 0;
-  }else{
-    S3_delete_object(& o->bucket_context, p, NULL, o->timeout, & responseHandler, NULL);
-    CHECK_ERROR(p);
-    return 0;
-  }
+  return 0;
 }
 
 static int S3_stat(const char *path, struct stat *buf, aiori_mod_opt_t * options){
@@ -465,17 +264,7 @@ static int S3_stat(const char *path, struct stat *buf, aiori_mod_opt_t * options
   char p[FILENAME_MAX];
   def_file_name(o, p, path);
   memset(buf, 0, sizeof(struct stat));
-  // TODO count the individual file fragment sizes together
-  if (o->bucket_per_file){
-    S3_test_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key,
-                        NULL, o->host, p, o->authRegion, 0, NULL,
-                        NULL, o->timeout, & responseHandler, NULL);
-  }else{
-    S3_head_object(& o->bucket_context, p, NULL, o->timeout, & statResponseHandler, buf);
-  }
-  if (s3status != S3StatusOK){
-    return -1;
-  }
+
   return 0;
 }
 
@@ -494,12 +283,6 @@ static IOR_offset_t S3_GetFileSize(aiori_mod_opt_t * options, char *testFileName
 
 static int S3_check_params(aiori_mod_opt_t * options){
   s3_options_t * o = (s3_options_t*) options;
-  if(o->access_key == NULL){
-    o->access_key = "";
-  }
-  if(o->secret_key == NULL){
-    o->secret_key = "";
-  }
   if(o->host == NULL){
     WARN("The S3 hostname should be specified");
   }
@@ -512,7 +295,6 @@ static void S3_init(aiori_mod_opt_t * options){
   /* parse list of hostnames into specific host for this rank;
   this cannot be done during S3_options() because this happens before MPI_Init()  */
   if ( o->host != NULL ) {
-
     const char* delimiters= " ,;";
 
     int num_hosts = 0;
@@ -538,62 +320,56 @@ static void S3_init(aiori_mod_opt_t * options){
     }
   }
 
-  int ret = S3_initialize(NULL, S3_INIT_ALL, o->host);
-  if(ret != S3StatusOK)
-    FAIL("Could not initialize S3 library");
+  struct aws_allocator *allocator = aws_default_allocator();
+  aws_s3_library_init(allocator);  
 
-  // create a bucket id based on access-key using a trivial checksumming
-  if(! o->dont_suffix){
-    uint64_t c = 0;
-    char * r = o->access_key;
-    for(uint64_t pos = 1; (*r) != '\0' ; r++, pos*=10) {
-      c += (*r) * pos;
-    }
-    int count = snprintf(NULL, 0, "%s%lu", o->bucket_prefix, c % 1000);
-    char * old_prefix = o->bucket_prefix;
-    o->bucket_prefix_cur = malloc(count + 1);
-    sprintf(o->bucket_prefix_cur, "%s%lu", old_prefix, c % 1000);
-  }else{
-    o->bucket_prefix_cur = o->bucket_prefix;
-  }
+  // code based upon aws-c-s3/samples/s3/main.c
+  o->allocator = allocator;
+  o->c_var = (struct aws_condition_variable)AWS_CONDITION_VARIABLE_INIT;
+  aws_mutex_init(& o->mutex);
 
-  // init bucket context
-  memset(& o->bucket_context, 0, sizeof(o->bucket_context));
-  o->bucket_context.hostName = o->host;
-  o->bucket_context.bucketName = o->bucket_prefix_cur;
-  if (o->use_ssl){
-    o->s3_protocol = S3ProtocolHTTPS;
-  }else{
-    o->s3_protocol  = S3ProtocolHTTP;
-  }
-  o->bucket_context.protocol = o->s3_protocol;
-  o->bucket_context.uriStyle = S3UriStylePath;
-  o->bucket_context.accessKeyId = o->access_key;
-  o->bucket_context.secretAccessKey = o->secret_key;
+  /* event loop */
+  o->event_loop_group = aws_event_loop_group_new_default(allocator, 0, NULL);
 
-  if (! o->bucket_per_file && rank == 0){
-    S3_create_bucket(o->s3_protocol, o->access_key, o->secret_key, NULL, o->host, o->bucket_context.bucketName, o->authRegion, S3CannedAclPrivate, o->locationConstraint, NULL, o->timeout, & responseHandler, NULL);
-    CHECK_ERROR(o->bucket_context.bucketName);
+  /* resolver */
+  struct aws_host_resolver_default_options resolver_options = {
+      .el_group = o->event_loop_group,
+      .max_entries = 8,
+  };
+  o->resolver = aws_host_resolver_new_default(allocator, &resolver_options);
+  
+  /* client bootstrap */
+  struct aws_client_bootstrap_options bootstrap_options = {
+    .event_loop_group = o->event_loop_group,
+    .host_resolver = o->resolver,
+  };
+  o->client_bootstrap = aws_client_bootstrap_new(allocator, &bootstrap_options);
+  if (o->client_bootstrap == NULL) {
+      ERR("ERROR initializing client bootstrap\n");
   }
-
-  if ( ret != S3StatusOK ){
-    FAIL("S3 error %s", S3_get_status_name(ret));
-  }
+  
+  struct aws_credentials_provider_profile_options cred_options;
+  AWS_ZERO_STRUCT(cred_options);    
+  cred_options.bootstrap = o->client_bootstrap; 
+  cred_options.config_file_name_override = aws_byte_cursor_from_c_str(o->config_file);
+  cred_options.credentials_file_name_override = aws_byte_cursor_from_c_str(o->credential_file);
+  o->credentials_provider = aws_credentials_provider_new_profile(allocator, & cred_options);
 }
 
 static void S3_final(aiori_mod_opt_t * options){
   s3_options_t * o = (s3_options_t*) options;
-  if (! o->bucket_per_file && rank == 0){
-    S3_delete_bucket(o->s3_protocol, S3UriStylePath, o->access_key, o->secret_key, NULL, o->host,  o->bucket_context.bucketName, o->authRegion, NULL,  o->timeout, & responseHandler, NULL);
-    CHECK_ERROR(o->bucket_context.bucketName);
-  }
-
-  S3_deinitialize();
+  aws_s3_client_release(o->client);
+  aws_credentials_provider_release(o->credentials_provider);
+  aws_client_bootstrap_release(o->client_bootstrap);
+  aws_host_resolver_release(o->resolver);
+  aws_event_loop_group_release(o->event_loop_group);
+  aws_mutex_clean_up(& o->mutex);
+  aws_s3_library_clean_up();
 }
 
 
-ior_aiori_t S3_libS3_aiori = {
-        .name = "S3-libs3",
+ior_aiori_t S3_libS3_aws = {
+        .name = "S3-aws",
         .name_legacy = NULL,
         .create = S3_Create,
         .open = S3_Open,
