@@ -47,6 +47,7 @@ void invalidate_buffer_pattern(char * buf, size_t bytes, ior_memory_flags type);
 int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type);
 int verify_memory_pattern_gpu(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType);
 
+void PrintKeyVal(char * key, char * value);
 char *CurrentTimeString(void);
 int Regex(char *, char *);
 void ShowFileSystemSize(char * filename, const struct ior_aiori * backend, void * backend_options);

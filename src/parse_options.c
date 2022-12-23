@@ -64,10 +64,6 @@ static void CheckRunSettings(IOR_test_t *tests)
                 if(params->dualMount && !params->filePerProc) {
                   ERR("Dual Mount can only be used with File Per Process");
                 }
-
-                if(params->gpuDirect){
-                  params->gpuMemoryFlags = IOR_MEMORY_TYPE_GPU_DEVICE_ONLY;
-                }
         }
 }
 
