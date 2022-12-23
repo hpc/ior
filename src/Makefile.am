@@ -46,7 +46,7 @@ extraLDADD    += -lcudart
 endif
 
 if HAVE_GPU_DIRECT
-extraLDADD    += -lcufile
+extraLDADD    += -lcufile -lstdc++
 extraSOURCES  += utilities-gpu.cu
 endif
 

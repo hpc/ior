@@ -83,7 +83,7 @@ AC_ARG_WITH([cuda],
         [], [with_cuda=check])
 
 AS_IF([test "x$with_cuda" != xno], [
-        LDFLAGS="$LDFLAGS -L$with_cuda/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64"
+        LDFLAGS="$LDFLAGS -L$with_cuda/lib64 -L$with_cuda/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64:$with_cuda/lib"
         CPPFLAGS="$CPPFLAGS -I$with_cuda/include"
 
         AC_CHECK_HEADERS([cuda_runtime.h], [AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])], [
@@ -96,7 +96,7 @@ AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
         [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
     ])
 ])
-AM_CONDITIONAL([HAVE_CUDA], [test x$with_cuda = xyes])
+AM_CONDITIONAL([HAVE_CUDA], [test x$with_cuda != xno])
 AM_COND_IF([HAVE_CUDA],[AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])])
 
 # Check for GPUDirect
@@ -106,7 +106,7 @@ AC_ARG_WITH([gpuDirect],
         [], [with_gpuDirect=check])
 
 AS_IF([test "x$with_gpuDirect" != xno], [
-        LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64"
+        LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -L$with_gpuDirect/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64:$with_gpuDirect/lib"
         CPPFLAGS="$CPPFLAGS -I$with_gpuDirect/include"
 
         AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [
@@ -119,7 +119,7 @@ AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
         [AC_MSG_ERROR([Library containing cuFileDriverOpen symbol not found])])
     ])
 ])
-AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect = xyes])
+AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect != xno])
 AM_COND_IF([HAVE_GPU_DIRECT],[
   AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])
   ])
