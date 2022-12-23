@@ -126,7 +126,17 @@ static int test_initialize(IOR_test_t * test){
   backend = test->params.backend;
 
 #ifdef HAVE_CUDA
-  cudaError_t cret = cudaSetDevice(test->params.gpuID);
+  int device_count;
+  cudaError_t cret = cudaGetDeviceCount(& device_count);
+  if(cret != cudaSuccess){
+    ERRF("cudaGetDeviceCount() error: %d %s", (int) cret, cudaGetErrorString(cret));
+  }  
+  {
+  char val[20];
+  sprintf(val, "%d", device_count);
+  PrintKeyVal("cudaDevices", val);
+  }
+  cret = cudaSetDevice(test->params.gpuID);
   if(cret != cudaSuccess){
     WARNF("cudaSetDevice(%d) error: %s", test->params.gpuID, cudaGetErrorString(cret));
   }

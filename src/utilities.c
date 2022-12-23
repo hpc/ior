@@ -96,7 +96,7 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
     return;
 
 #ifdef HAVE_GPU_DIRECT
-  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
     update_write_memory_pattern_gpu(item, buf, bytes, rand_seed,  pretendRank, dataPacketType);
     return;
   }
@@ -136,7 +136,7 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
  */
 void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
 #ifdef HAVE_GPU_DIRECT
-  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
     generate_memory_pattern_gpu(buf, bytes, rand_seed,  pretendRank, dataPacketType);
     return;
   }
@@ -170,7 +170,7 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
 }
 
 void invalidate_buffer_pattern(char * buffer, size_t bytes, ior_memory_flags type){
-  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
 #ifdef HAVE_GPU_DIRECT
     cudaMemset(buffer, 0x42, bytes > 512 ? 512 : bytes);
 #endif
@@ -182,7 +182,7 @@ void invalidate_buffer_pattern(char * buffer, size_t bytes, ior_memory_flags typ
 int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){  
   int error = 0;
 #ifdef HAVE_GPU_DIRECT
-  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY){
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
     error = verify_memory_pattern_gpu(item, buffer, bytes, rand_seed, pretendRank, dataPacketType);
     return error;
   }
@@ -1043,7 +1043,7 @@ void *aligned_buffer_alloc(size_t size, ior_memory_flags type)
   char *buf, *tmp;
   char *aligned;
 
-  if(type == IOR_MEMORY_TYPE_GPU_MANAGED){
+  if(type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_CPU || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
 #ifdef HAVE_CUDA
     // use unified memory here to allow drop-in-replacement
     if (cudaMallocManaged((void**) & buf, size, cudaMemAttachGlobal) != cudaSuccess){

@@ -70,7 +70,7 @@ static void PrintKeyValEnd(){
   needNextToken = 1;
 }
 
-static void PrintKeyVal(char * key, char * value){
+void PrintKeyVal(char * key, char * value){
   if(value != NULL && value[0] != 0 && value[strlen(value) -1 ] == '\n'){
     // remove \n
     value[strlen(value) -1 ] = 0;
@@ -450,6 +450,11 @@ void ShowSetup(IOR_param_t *params)
   if (params->memoryPerNode != 0){
     PrintKeyVal("memoryPerNode", HumanReadable(params->memoryPerNode, BASE_TWO));
   }
+  
+  PrintKeyVal("memoryBuffer", params->gpuMemoryFlags == IOR_MEMORY_TYPE_CPU ? "CPU" :  params->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY ? "GPU" : "Managed");
+  PrintKeyVal("dataAccess", params->gpuMemoryFlags > IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU ? "GPU" : "CPU");
+  PrintKeyVal("GPUDirect", params->gpuDirect ? "1" : "0");
+
   PrintKeyValInt("repetitions", params->repetitions);
   PrintKeyVal("xfersize", HumanReadable(params->transferSize, BASE_TWO));
   PrintKeyVal("blocksize", HumanReadable(params->blockSize, BASE_TWO));
