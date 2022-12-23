@@ -131,12 +131,23 @@ static int test_initialize(IOR_test_t * test){
   if(cret != cudaSuccess){
     ERRF("cudaGetDeviceCount() error: %d %s", (int) cret, cudaGetErrorString(cret));
   }  
-  {
-  char val[20];
-  sprintf(val, "%d", device_count);
-  PrintKeyVal("cudaDevices", val);
+  if (rank == 0){
+        char val[20];
+        sprintf(val, "%d", device_count);
+        PrintKeyVal("cudaDevices", val);
   }
-  cret = cudaSetDevice(test->params.gpuID);
+  // if set to -1 use round robin per task
+  if(test->params.gpuID == -1){
+     int device = 0;
+     if(test->params.tasksBlockMapping){
+        device = (rank % test->params.numTasksOnNode0) % device_count;
+     }else{
+        device = (rank / test->params.numNodes) % device_count;
+     }
+     cret = cudaSetDevice(device);
+  }else{
+     cret = cudaSetDevice(test->params.gpuID);
+  }  
   if(cret != cudaSuccess){
     WARNF("cudaSetDevice(%d) error: %s", test->params.gpuID, cudaGetErrorString(cret));
   }
