@@ -125,33 +125,10 @@ static int test_initialize(IOR_test_t * test){
   verbose = test->params.verbose;
   backend = test->params.backend;
 
-#ifdef HAVE_CUDA
-  int device_count;
-  cudaError_t cret = cudaGetDeviceCount(& device_count);
-  if(cret != cudaSuccess){
-    ERRF("cudaGetDeviceCount() error: %d %s", (int) cret, cudaGetErrorString(cret));
-  }  
-  if (rank == 0){
-        char val[20];
-        sprintf(val, "%d", device_count);
-        PrintKeyVal("cudaDevices", val);
+  if(test->params.gpuMemoryFlags != IOR_MEMORY_TYPE_CPU){
+    initCUDA(test->params.tasksBlockMapping, test->params.numNodes, test->params.numTasksOnNode0, test->params.gpuID);
   }
-  // if set to -1 use round robin per task
-  if(test->params.gpuID == -1){
-     int device = 0;
-     if(test->params.tasksBlockMapping){
-        device = (rank % test->params.numTasksOnNode0) % device_count;
-     }else{
-        device = (rank / test->params.numNodes) % device_count;
-     }
-     cret = cudaSetDevice(device);
-  }else{
-     cret = cudaSetDevice(test->params.gpuID);
-  }  
-  if(cret != cudaSuccess){
-    WARNF("cudaSetDevice(%d) error: %s", test->params.gpuID, cudaGetErrorString(cret));
-  }
-#endif
+  
 
   if(backend->initialize){
     backend->initialize(test->params.backend_options);
@@ -1473,6 +1450,10 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
         IOR_param_t defaults;
         init_IOR_Param_t(&defaults, com);
 
+        if (test->gpuDirect && test->gpuMemoryFlags == IOR_MEMORY_TYPE_CPU )
+          ERR("GPUDirect requires a non-CPU memory type");
+        if (test->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY && ! test->gpuDirect )
+          ERR("Using GPU Device memory only requires the usage of GPUDirect");
         if (test->stoneWallingStatusFile && test->keepFile == 0)
           ERR("a StoneWallingStatusFile is only sensible when splitting write/read into multiple executions of ior, please use -k");
         if (test->stoneWallingStatusFile && test->stoneWallingWearOut == 0 && test->writeFile)
