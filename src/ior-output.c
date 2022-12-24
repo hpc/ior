@@ -645,7 +645,7 @@ void PrintLongSummaryOneTest(IOR_test_t *test)
 
         if (params->writeFile)
                 PrintLongSummaryOneOperation(test, WRITE);
-        if (params->readFile)
+        if (params->readFile || params->checkRead)
                 PrintLongSummaryOneOperation(test, READ);
 }
 
@@ -686,7 +686,7 @@ void PrintLongSummaryAllTests(IOR_test_t *tests_head)
   PrintLongSummaryHeader();
 
   for (tptr = tests_head; tptr != NULL; tptr = tptr->next) {
-          PrintLongSummaryOneTest(tptr);
+    PrintLongSummaryOneTest(tptr);
   }
 
   PrintArrayEnd();
