@@ -94,7 +94,9 @@ struct benchmark_options{
   int read_only;
   int stonewall_timer;
   int stonewall_timer_wear_out;
-  int gpu_memory_flags;              /* use the GPU to store the data */
+  ior_memory_flags gpuMemoryFlags;  /* use the GPU to store the data */
+  int gpuDirect;                /* use gpuDirect, this influences gpuMemoryFlags as well */
+  int gpuID;                       /* the GPU to use for gpuDirect or memory options */
 
   char * latency_file_prefix;
   int latency_keep_all;
@@ -149,7 +151,9 @@ void init_options(){
   .iterations = 3,
   .file_size = 3901,
   .packetTypeStr = "t",
-  .run_info_file = "md-workbench.status"};
+  .run_info_file = "md-workbench.status",
+  .gpuID = -1,
+  };
 }
 
 static void mdw_wait(double runtime){
@@ -555,8 +559,8 @@ void run_precreate(phase_stat_t * s, int current_index){
     }
   }
 
-  char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
-  generate_memory_pattern(buf, o.file_size, o.random_seed, o.rank, o.dataPacketType, o.gpu_memory_flags);
+  char * buf = aligned_buffer_alloc(o.file_size, o.gpuMemoryFlags);
+  generate_memory_pattern(buf, o.file_size, o.random_seed, o.rank, o.dataPacketType, o.gpuMemoryFlags);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   double op_time;
@@ -572,7 +576,7 @@ void run_precreate(phase_stat_t * s, int current_index){
       if (NULL == aiori_fh){
         FAIL("Unable to open file %s", obj_name);
       }
-      update_write_memory_pattern(f * o.dset_count + d, buf, o.file_size, o.random_seed, o.rank, o.dataPacketType, o.gpu_memory_flags);
+      update_write_memory_pattern(f * o.dset_count + d, buf, o.file_size, o.random_seed, o.rank, o.dataPacketType, o.gpuMemoryFlags);
       if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
         s->obj_create.suc++;
       }else{
@@ -590,15 +594,15 @@ void run_precreate(phase_stat_t * s, int current_index){
       }
     }
   }
-  aligned_buffer_free(buf, o.gpu_memory_flags);
+  aligned_buffer_free(buf, o.gpuMemoryFlags);
 }
 
 /* FIFO: create a new file, write to it. Then read from the first created file, delete it... */
 void run_benchmark(phase_stat_t * s, int * current_index_p){
   char obj_name[MAX_PATHLEN];
   int ret;
-  char * buf = aligned_buffer_alloc(o.file_size, o.gpu_memory_flags);
-  invalidate_buffer_pattern(buf, o.file_size, o.gpu_memory_flags);
+  char * buf = aligned_buffer_alloc(o.file_size, o.gpuMemoryFlags);
+  invalidate_buffer_pattern(buf, o.file_size, o.gpuMemoryFlags);
   double op_timer; // timer for individual operations
   size_t pos = -1; // position inside the individual measurement array
   int start_index = *current_index_p;
@@ -653,7 +657,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
       if ( o.file_size == (int) o.backend->xfer(READ, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options) ) {
         if(o.verify_read){
-            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_seed, readRank, o.dataPacketType, o.gpu_memory_flags) == 0){
+            if(verify_memory_pattern(prevFile * o.dset_count + d, buf, o.file_size, o.random_seed, readRank, o.dataPacketType, o.gpuMemoryFlags) == 0){
               s->obj_read.suc++;
             }else{
               s->obj_read.err++;
@@ -694,8 +698,8 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       op_timer = GetTimeStamp();
       aiori_fh = o.backend->create(obj_name, IOR_WRONLY | IOR_CREAT, o.backend_options);
       if (NULL != aiori_fh){
-        generate_memory_pattern(buf, o.file_size, o.random_seed, writeRank, o.dataPacketType, o.gpu_memory_flags);
-        update_write_memory_pattern(newFileIndex * o.dset_count + d, buf, o.file_size, o.random_seed, writeRank, o.dataPacketType, o.gpu_memory_flags);
+        generate_memory_pattern(buf, o.file_size, o.random_seed, writeRank, o.dataPacketType, o.gpuMemoryFlags);
+        update_write_memory_pattern(newFileIndex * o.dset_count + d, buf, o.file_size, o.random_seed, writeRank, o.dataPacketType, o.gpuMemoryFlags);
         
         if ( o.file_size == (int) o.backend->xfer(WRITE, aiori_fh, (IOR_size_t *) buf, o.file_size, 0, o.backend_options)) {
           s->obj_create.suc++;
@@ -765,7 +769,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
     *current_index_p += f;
   }
   s->repeats = pos + 1;
-  aligned_buffer_free(buf, o.gpu_memory_flags);
+  aligned_buffer_free(buf, o.gpuMemoryFlags);
 }
 
 void run_cleanup(phase_stat_t * s, int start_index){
@@ -827,7 +831,13 @@ static option_help options [] = {
   {'W', "stonewall-wear-out", "Stop with stonewall after specified time and use a soft wear-out phase -- all processes perform the same number of iterations", OPTION_FLAG, 'd', & o.stonewall_timer_wear_out},
   {'X', "verify-read", "Verify the data on read", OPTION_FLAG, 'd', & o.verify_read},
   {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|random|o|i|t|r]", OPTION_OPTIONAL_ARGUMENT, 's', & o.packetTypeStr},
-  {0, "allocateBufferOnGPU", "Allocate the buffer on the GPU.", OPTION_FLAG, 'd', & o.gpu_memory_flags},
+#ifdef HAVE_CUDA
+  {0, "allocateBufferOnGPU", "Allocate I/O buffers on the GPU: X=1 uses managed memory - verifications are run on CPU; X=2 managed memory - verifications on GPU; X=3 device memory with verifications on GPU.", OPTION_OPTIONAL_ARGUMENT, 'd', & o.gpuMemoryFlags},
+  {0, "GPUid", "Select the GPU to use, use -1 for round-robin among local procs.", OPTION_OPTIONAL_ARGUMENT, 'd', & o.gpuID},
+#ifdef HAVE_GPU_DIRECT
+  {0, "gpuDirect", "Allocate I/O buffers on the GPU and use gpuDirect to store data; this option is incompatible with any option requiring CPU access to data.", OPTION_FLAG, 'd', & o.gpuDirect},
+#endif
+#endif
   {0, "start-item", "The iteration number of the item to start with, allowing to offset the operations", OPTION_OPTIONAL_ARGUMENT, 'l', & o.start_item_number},
   {0, "print-detailed-stats", "Print detailed machine parsable statistics.", OPTION_FLAG, 'd', & o.print_detailed_stats},
   {0, "read-only", "Run read-only during benchmarking phase (no deletes/writes), probably use with -2", OPTION_FLAG, 'd', & o.read_only},
@@ -938,8 +948,14 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
     o.backend->initialize(o.backend_options);
   }
 
+  int tasksBlockMapping = QueryNodeMapping(o.com, true);
+  int numNodes = GetNumNodes(o.com);
+  int numTasksOnNode0 = GetNumTasksOnNode0(o.com);
+  if(o.gpuMemoryFlags != IOR_MEMORY_TYPE_CPU){
+    initCUDA(tasksBlockMapping, o.rank, numNodes, numTasksOnNode0, o.gpuID);
+  }
+    
   int current_index = 0;
-
   if ( (o.phase_cleanup || o.phase_benchmark) && ! o.phase_precreate ){
     current_index = return_position();
   }

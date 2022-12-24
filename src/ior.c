@@ -126,7 +126,7 @@ static int test_initialize(IOR_test_t * test){
   backend = test->params.backend;
 
   if(test->params.gpuMemoryFlags != IOR_MEMORY_TYPE_CPU){
-    initCUDA(test->params.tasksBlockMapping, test->params.numNodes, test->params.numTasksOnNode0, test->params.gpuID);
+    initCUDA(test->params.tasksBlockMapping, rank, test->params.numNodes, test->params.numTasksOnNode0, test->params.gpuID);
   }
   
 

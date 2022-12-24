@@ -2433,9 +2433,9 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     int tasksBlockMapping = QueryNodeMapping(testComm, true);
 
     if(o.gpuMemoryFlags != IOR_MEMORY_TYPE_CPU){
-       initCUDA(tasksBlockMapping, numNodes, numTasksOnNode0, o.gpuID);
+       initCUDA(tasksBlockMapping, rank, numNodes, numTasksOnNode0, o.gpuID);
     }
-    
+
     /* setup total number of items and number of items per dir */
     if (o.depth <= 0) {
         o.num_dirs_in_tree = 1;
