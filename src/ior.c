@@ -273,6 +273,7 @@ void init_IOR_Param_t(IOR_param_t * p, MPI_Comm com)
         p->numTasks = -1;
         p->numNodes = -1;
         p->numTasksOnNode0 = -1;
+        p->gpuID = -1;
 
         p->repetitions = 1;
         p->repCounter = -1;
