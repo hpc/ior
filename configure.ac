@@ -109,27 +109,38 @@ AS_IF([test "x$with_gpuDirect" != xno], [
         LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -L$with_gpuDirect/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64:$with_gpuDirect/lib"
         CPPFLAGS="$CPPFLAGS -I$with_gpuDirect/include"
 
-        AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [
+        AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [                
                 if test "x$with_gpuDirect" != xcheck; then
-                        AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])
+                        AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])                       
                 fi
+                with_gpuDirect=no
         ])
-AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
-        AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [],
-        [AC_MSG_ERROR([Library containing cuFileDriverOpen symbol not found])])
-    ])
+        AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
+                AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [], [
+                        AC_MSG_ERROR([Library containing cuFileDriverOpen symbol not found])
+                        with_gpuDirect=no
+                ])
+        ])
 ])
-AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect != xno])
+
+# Check for NVCC
+NVCC=nvcc
+AC_ARG_VAR(varNVCC, "Name/path of the NVIDIA compiler")
+AC_ARG_WITH([nvcc],
+              AS_HELP_STRING([--with-nvcc], [Use the NVCC as specified]),
+              [AS_IF([test "$with_nvcc" != "yes"], NVCC=$with_nvcc)],
+              [], [with_nvcc=check])
+
+AC_PATH_PROG(NVCC, nvcc)
+AM_CONDITIONAL([HAVE_NVCC], test -n "$NVCC")
+
+# Use GPU Direct only if NVCC and HAVE_GPU_DIRECT is supported
+AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect != xno && test x$NVCC != x ])
 AM_COND_IF([HAVE_GPU_DIRECT],[
   AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])
   ])
 
-varNVCC=nvcc
-AC_ARG_WITH(nvcc,
-              AS_HELP_STRING([--with-nvcc], [Use the NVCC as specified]),
-              [AS_IF([test "$with_nvcc" != "yes"], varNVCC=$with_nvcc)],
-              [])
-AC_SUBST(NVCC, $varNVCC)
+
 
 # Check for system capabilities
 AC_SYS_LARGEFILE
