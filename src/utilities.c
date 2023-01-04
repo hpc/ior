@@ -435,6 +435,36 @@ int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
     return ret;
 }
 
+void initCUDA(int blockMapping, int rank, int numNodes, int tasksPerNode, int useGPUID){  
+#ifdef HAVE_CUDA
+  int device_count;
+  cudaError_t cret = cudaGetDeviceCount(& device_count);
+  if(cret != cudaSuccess){
+    ERRF("cudaGetDeviceCount() error: %d %s", (int) cret, cudaGetErrorString(cret));
+  }  
+  //if (rank == 0){
+  //      char val[20];
+  //      sprintf(val, "%d", device_count);
+  //      PrintKeyVal("cudaDevices", val);
+  //}
+  // if set to -1 use round robin per task
+  if(useGPUID == -1){
+     int device = 0;
+     if(blockMapping){
+        device = (rank % tasksPerNode) % device_count;
+     }else{
+        device = (rank / numNodes) % device_count;
+     }
+     cret = cudaSetDevice(device);
+  }else{
+     cret = cudaSetDevice(useGPUID);
+  }  
+  if(cret != cudaSuccess){
+    WARNF("cudaSetDevice(%d) error: %s", useGPUID, cudaGetErrorString(cret));
+  }
+#endif
+}
+
 /*
  * There is a more direct way to determine the node count in modern MPI
  * versions so we use that if possible.
