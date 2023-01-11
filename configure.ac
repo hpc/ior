@@ -96,7 +96,7 @@ AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
         [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
     ])
 ])
-AM_CONDITIONAL([HAVE_CUDA], [test x$with_cuda != xno])
+AM_CONDITIONAL([HAVE_CUDA], [test x$ac_cv_search_cudaMalloc != x ])
 AM_COND_IF([HAVE_CUDA],[AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])])
 
 # Check for GPUDirect
@@ -109,7 +109,7 @@ AS_IF([test "x$with_gpuDirect" != xno], [
         LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -L$with_gpuDirect/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64:$with_gpuDirect/lib"
         CPPFLAGS="$CPPFLAGS -I$with_gpuDirect/include"
 
-        AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [                
+        AC_CHECK_HEADERS([cufile.h], [], [                
                 if test "x$with_gpuDirect" != xcheck; then
                         AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])                       
                 fi
@@ -117,7 +117,7 @@ AS_IF([test "x$with_gpuDirect" != xno], [
         ])
         AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
                 AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [], [
-                        AC_MSG_ERROR([Library containing cuFileDriverOpen symbol not found])
+                        AC_MSG_WARN([Library containing cuFileDriverOpen symbol not found])
                         with_gpuDirect=no
                 ])
         ])
@@ -135,7 +135,7 @@ AC_PATH_PROG(NVCC, nvcc)
 AM_CONDITIONAL([HAVE_NVCC], test -n "$NVCC")
 
 # Use GPU Direct only if NVCC and HAVE_GPU_DIRECT is supported
-AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect != xno && test x$NVCC != x ])
+AM_CONDITIONAL([HAVE_GPU_DIRECT], test x$with_gpuDirect != xno -a x$NVCC != x )
 AM_COND_IF([HAVE_GPU_DIRECT],[
   AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])
   ])
