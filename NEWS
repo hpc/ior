@@ -1,12 +1,34 @@
-Version 3.4.0+dev
+Version 4.0.0rc1+dev
 --------------------------------------------------------------------------------
 
 New major features:
 
+- Add PMDK backend (Adrian Jackson)
+- Add CHFS backend (Osamu Tatebe)
+- Add AIO backend (Julian Kunkel)
+- New S3 backend (Julian Kunkel)
+- New md-workbench benchmark
+- New BFS backend (Osamu Tatebe)
+- Add GPUDirect Storage support (Julian Kunkel)
+
 New minor features:
+
+- Updated DAOS backend to match latest DAOS APIs (Mohamad Chaarawi)
+- Updated HDF5 backend (Jordan Henderson)
+- Improved Spectrum Scale hint support (Pidad D'Souza)
+- Add CSV output (Sebastian Oeste)
+- Improved Gfarm support (Osamu Tatebe)
+- Updated HDFS backend
+- MDTest now has a directory renaming test
+- Add prologue/epilogue support (GUAN Xin)
+- Add stronger randomized data using golden primes (Glenn K. Lockwood)
+- Add dummy backend (Julian Kunkel)
+- Improved CephFS support (Pablo Llopis)
+- Improved PnetCDF support (Wei-keng Liao)
 
 Bugfixes:
 
+- Expansive fixes to mdtest correctness (Julian Kunkel)
 
 Version 3.3.0
 --------------------------------------------------------------------------------
