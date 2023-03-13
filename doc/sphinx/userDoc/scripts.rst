@@ -21,10 +21,10 @@ get applied until after the ``-f`` option (and its constituent runs) are complet
 Input scripts are specified using the long-form option names that correspond to
 each command-line option.  In addition to long-form options,
 
-    * ``IOR START`` and ``IOR STOP`` (case-insensitive) mark the beginning and end
-      of the script
+    * ``IOR START`` and ``IOR STOP`` (case-insensitive) mark the beginning and
+      end of the script.
     * ``RUN`` (case-insensitive) dispatches the test using all of the options
-       specified before it
+      specified before it.
     * All previous set parameter stay set for the next test. They are not reset
       to the default! For default the must be rest manually.
     * White space is ignored in script, as are comments starting with ``#``.
