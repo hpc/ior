@@ -23,7 +23,8 @@ each command-line option.  In addition to long-form options,
 
     * ``IOR START`` and ``IOR STOP`` (case-insensitive) mark the beginning and end
       of the script
-    * ``RUN`` dispatches the test using all of the options specified before it
+    * ``RUN`` (case-insensitive) dispatches the test using all of the options
+       specified before it
     * All previous set parameter stay set for the next test. They are not reset
       to the default! For default the must be rest manually.
     * White space is ignored in script, as are comments starting with ``#``.
