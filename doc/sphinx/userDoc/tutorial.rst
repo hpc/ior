@@ -15,7 +15,7 @@ There are two ways of running IOR:
 
        .. code-block:: shell
 
-        $ ./IOR -w -r -o filename
+        $ ./ior -w -r -o filename
 
        This performs a write and a read to the file 'filename'.
 
@@ -26,7 +26,7 @@ There are two ways of running IOR:
 
        .. code-block:: shell
 
-        $ ./IOR -W -f script
+        $ ./ior -W -f script
 
        This defaults all tests in 'script' to use write data checking.
 
