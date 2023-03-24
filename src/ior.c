@@ -1199,7 +1199,8 @@ static void TestIoSys(IOR_test_t *test)
           GetTestFileName(testFileName, params);
           int ret = backend->stat(testFileName, & sb, params->backend_options);
           if(ret == 0) {
-            WARNF("The file \"%s\" exists already and will be overwritten", testFileName);
+            WARNF("The file \"%s\" exists already and will be %s", testFileName,
+		  params->useExistingTestFile ? "overwritten" : "deleted");
           }
         }
 
