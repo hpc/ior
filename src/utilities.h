@@ -64,6 +64,12 @@ void DelaySecs(int delay);
 void updateParsedOptions(IOR_param_t * options, options_all_t * global_options);
 size_t NodeMemoryStringToBytes(char *size_str);
 
+typedef struct OpTimer OpTimer;
+OpTimer* OpTimerInit(char * filename);
+void OpTimerValue(OpTimer* otimer_in, double now, double runTime);
+void OpTimerFlush(OpTimer* otimer_in);
+void OpTimerFree(OpTimer* otimer_in);
+
 /* Returns -1, if cannot be read  */
 int64_t ReadStoneWallingIterations(char * const filename, MPI_Comm com);
 void StoreStoneWallingIterations(char * const filename, int64_t count);
