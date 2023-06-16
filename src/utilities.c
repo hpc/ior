@@ -238,6 +238,7 @@ int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_s
 /* Data structure to store information about per-operation timer */
 struct OpTimer{
     FILE * fd;
+    int size; /* per op */
     double * time;
     double * value;
     int pos;
@@ -246,11 +247,12 @@ struct OpTimer{
 /* by default store 1M operations into the buffer before flushing */
 #define OP_BUFFER_SIZE 1000000
 
-OpTimer* OpTimerInit(char * filename){
+OpTimer* OpTimerInit(char * filename, int size){
   if(filename == NULL) {
     return NULL;
   }
   OpTimer * ot = safeMalloc(sizeof(OpTimer));
+  ot->size = size;
   ot->value = safeMalloc(sizeof(double)*OP_BUFFER_SIZE);
   ot->time = safeMalloc(sizeof(double)*OP_BUFFER_SIZE);
   ot->pos = 0;
@@ -258,7 +260,7 @@ OpTimer* OpTimerInit(char * filename){
   if(ot->fd < 0){
     ERR("Could not create OpTimer");
   }
-  char buff[] = "time,runtime\n";
+  char buff[] = "time,runtime,tp\n";
   int ret = fwrite(buff, strlen(buff), 1, ot->fd);
   if(ret != 1){
     FAIL("Cannot write header to OpTimer file");
@@ -271,7 +273,7 @@ void OpTimerFlush(OpTimer* ot){
     return;
   }  
   for(int i=0; i < ot->pos; i++){
-    fprintf(ot->fd, "%.8e,%.8e\n", ot->time[i], ot->value[i]);
+    fprintf(ot->fd, "%.8e,%.8e,%e\n", ot->time[i], ot->value[i], ot->size/ot->value[i]);
   }
   ot->pos = 0;
 }
@@ -287,10 +289,11 @@ void OpTimerValue(OpTimer* ot, double now, double runTime){
   }
 }
 
-void OpTimerFree(OpTimer* ot){
-  if(ot == NULL) {
+void OpTimerFree(OpTimer** otp){
+  if(otp == NULL || *otp == NULL) {
     return;
-  }    
+  }
+  OpTimer * ot = *otp;
   OpTimerFlush(ot);
   ot->pos = 0;
   free(ot->value);
@@ -299,6 +302,7 @@ void OpTimerFree(OpTimer* ot){
   ot->time = NULL;
   fclose(ot->fd);
   free(ot);
+  *otp = NULL;
 }
 
 void* safeMalloc(uint64_t size){

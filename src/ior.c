@@ -1759,7 +1759,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         if(test->savePerOpDataCSV != NULL) {
                 char fname[FILENAME_MAX];
                 sprintf(fname, "%s-%d-%05d.csv", test->savePerOpDataCSV, rep, rank);
-                ot = OpTimerInit(fname);
+                ot = OpTimerInit(fname, test->transferSize);
         }
         // start timer after random offset was generated        
         startForStonewall = GetTimeStamp();
@@ -1875,7 +1875,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
           point->pairs_accessed = pairCnt;
         }
 
-        OpTimerFree(ot);
+        OpTimerFree(& ot);
         totalErrorCount += CountErrors(test, access, errors);
 
         if (access == WRITE && test->fsync == TRUE) {
