@@ -90,6 +90,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_CHFS_AIORI
 	&chfs_aiori,
 #endif
+#ifdef USE_FINCHFS_AIORI
+	&finchfs_aiori,
+#endif
         NULL
 };
 
