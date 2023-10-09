@@ -378,6 +378,14 @@ PKG_CHECK_MODULES([CHFS], [chfs],
   [with_chfs=no])
 AM_CONDITIONAL([USE_CHFS_AIORI], [test x$with_chfs != xno])
 
+# FINCHFS support
+PKG_CHECK_MODULES([FINCHFS], [finchfs],
+  [AC_DEFINE([USE_FINCHFS_AIORI], [], [Build FINCHFS backend AIORI])
+   FINCHFS_RPATH=$(pkg-config --libs-only-L finchfs | sed 's/-L/-Wl,-rpath=/g')
+   AC_SUBST(FINCHFS_RPATH)],
+  [with_finchfs=no])
+AM_CONDITIONAL([USE_FINCHFS_AIORI], [test x$with_finchfs != xno])
+
 # aws4c is needed for the S3 backend (see --with-S3, below).
 # Version 0.5.2 of aws4c is available at https://github.com/jti-lanl/aws4c.git
 # Install it something like this:
