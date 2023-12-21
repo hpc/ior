@@ -172,7 +172,8 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
-#define INFO(level, format, ...)					\
+
+#define DINFO(level, format, ...)					\
 do {                                                                    \
         if (verbose >= level)						\
                 printf("[%d] "format"\n", rank, ##__VA_ARGS__);         \
@@ -513,8 +514,8 @@ DFS_Init(aiori_mod_opt_t * options)
                 daos_pool_info_t pool_info;
                 daos_cont_info_t co_info;
 
-                INFO(VERBOSE_1, "DFS Pool = %s", o->pool);
-                INFO(VERBOSE_1, "DFS Container = %s", o->cont);
+                DINFO(VERBOSE_1, "DFS Pool = %s", o->pool);
+                DINFO(VERBOSE_1, "DFS Container = %s", o->cont);
 
 #if CHECK_DAOS_API_VERSION(1, 4)
                 rc = daos_pool_connect(o->pool, o->group, DAOS_PC_RW, &poh, &pool_info, NULL);
@@ -538,7 +539,7 @@ DFS_Init(aiori_mod_opt_t * options)
 #endif
                 /* If NOEXIST we create it */
                 if (rc == -DER_NONEXIST) {
-                        INFO(VERBOSE_1, "Creating DFS Container ...\n");
+                        DINFO(VERBOSE_1, "Creating DFS Container ...\n");
 #if CHECK_DAOS_API_VERSION(1, 4)
                         if (uuid_parse(o->cont, co_uuid) != 0)
                                 /** user passes in label */
@@ -633,7 +634,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
 
 	if (o->destroy) {
                 if (rank == 0) {
-                        INFO(VERBOSE_1, "Destroying DFS Container: %s", o->cont);
+                        DINFO(VERBOSE_1, "Destroying DFS Container: %s", o->cont);
 #if CHECK_DAOS_API_VERSION(1, 4)
                         daos_cont_destroy(poh, o->cont, 1, NULL);
 #else
@@ -652,7 +653,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
         }
 
         if (rank == 0)
-                INFO(VERBOSE_1, "Disconnecting from DAOS POOL");
+                DINFO(VERBOSE_1, "Disconnecting from DAOS POOL");
 
         rc = daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
@@ -660,7 +661,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
 	MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
         if (rank == 0)
-                INFO(VERBOSE_1, "Finalizing DAOS..");
+                DINFO(VERBOSE_1, "Finalizing DAOS..");
 
 	rc = daos_fini();
         DCHECK(rc, "Failed to finalize DAOS");
