@@ -63,6 +63,28 @@ enum handleType {
         CONT_HANDLE,
 	DFS_HANDLE
 };
+/**************************** P R O T O T Y P E S *****************************/
+static void DFS_Init(aiori_mod_opt_t *);
+static void DFS_Finalize(aiori_mod_opt_t *);
+static aiori_fd_t *DFS_Create(char *, int, aiori_mod_opt_t *);
+static aiori_fd_t *DFS_Open(char *, int, aiori_mod_opt_t *);
+static IOR_offset_t DFS_Xfer(int, aiori_fd_t *, IOR_size_t *, IOR_offset_t,
+                             IOR_offset_t, aiori_mod_opt_t *);
+static void DFS_Close(aiori_fd_t *, aiori_mod_opt_t *);
+static void DFS_Delete(char *, aiori_mod_opt_t *);
+static char* DFS_GetVersion();
+static void DFS_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
+static void DFS_Sync(aiori_mod_opt_t *);
+static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, char *);
+static int DFS_Statfs (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t *);
+static int DFS_Stat (const char *, struct stat *, aiori_mod_opt_t *);
+static int DFS_Mkdir (const char *, mode_t, aiori_mod_opt_t *);
+static int DFS_Rename(const char *, const char *, aiori_mod_opt_t *);
+static int DFS_Rmdir (const char *, aiori_mod_opt_t *);
+static int DFS_Access (const char *, int, aiori_mod_opt_t *);
+static option_help * DFS_options(aiori_mod_opt_t **, aiori_mod_opt_t *);
+static void DFS_init_xfer_options(aiori_xfer_hint_t *);
+static int DFS_check_params(aiori_mod_opt_t *);
 
 /************************** O P T I O N S *****************************/
 typedef struct {
@@ -106,28 +128,6 @@ static option_help * DFS_options(aiori_mod_opt_t ** init_backend_options,
         return help;
 }
 
-/**************************** P R O T O T Y P E S *****************************/
-static void DFS_Init(aiori_mod_opt_t *);
-static void DFS_Finalize(aiori_mod_opt_t *);
-static aiori_fd_t *DFS_Create(char *, int, aiori_mod_opt_t *);
-static aiori_fd_t *DFS_Open(char *, int, aiori_mod_opt_t *);
-static IOR_offset_t DFS_Xfer(int, aiori_fd_t *, IOR_size_t *, IOR_offset_t,
-                             IOR_offset_t, aiori_mod_opt_t *);
-static void DFS_Close(aiori_fd_t *, aiori_mod_opt_t *);
-static void DFS_Delete(char *, aiori_mod_opt_t *);
-static char* DFS_GetVersion();
-static void DFS_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static void DFS_Sync(aiori_mod_opt_t *);
-static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, char *);
-static int DFS_Statfs (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t *);
-static int DFS_Stat (const char *, struct stat *, aiori_mod_opt_t *);
-static int DFS_Mkdir (const char *, mode_t, aiori_mod_opt_t *);
-static int DFS_Rename(const char *, const char *, aiori_mod_opt_t *);
-static int DFS_Rmdir (const char *, aiori_mod_opt_t *);
-static int DFS_Access (const char *, int, aiori_mod_opt_t *);
-static option_help * DFS_options();
-static void DFS_init_xfer_options(aiori_xfer_hint_t *);
-static int DFS_check_params(aiori_mod_opt_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
