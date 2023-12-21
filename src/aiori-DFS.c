@@ -547,7 +547,7 @@ DFS_Init(aiori_mod_opt_t * options)
                         else
                                 /** user passes in uuid */
 #endif
-                        rc = dfs_cont_create(poh, co_uuid, NULL, &coh, NULL);
+                        rc = dfs_cont_create(poh, &co_uuid, NULL, &coh, NULL);
                         if (rc)
                                 DCHECK(rc, "Failed to create container");
                         cont_create = true;
