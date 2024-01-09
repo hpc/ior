@@ -118,6 +118,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
             fclose(fd);
           }
           params->saveRankDetailsCSV = strdup(value);
+        } else if (strcasecmp(option, "savePerOpDataCSV") == 0){
+          params->savePerOpDataCSV = strdup(value);
         } else if (strcasecmp(option, "summaryFormat") == 0) {
                 if(strcasecmp(value, "default") == 0){
                   outputFormat = OUTPUT_DEFAULT;
@@ -473,6 +475,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O summaryFile=FILE                 -- store result data into this file", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputting the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O saveRankPerformanceDetailsCSV=<FILE> -- store the performance of each rank into the named CSV file.", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O savePerOpDataCSV=<FILE> -- store the performance of each rank into an individual file prefixed with this option.", .arg = OPTION_OPTIONAL_ARGUMENT},
     {0, "dryRun",      "do not perform any I/Os just run evtl. inputs print dummy output", OPTION_FLAG, 'd', & params->dryRun},
     LAST_OPTION,
   };

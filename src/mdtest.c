@@ -178,6 +178,7 @@ typedef struct {
   int global_dir_layout;
   #endif /* HAVE_LUSTRE_LUSTREAPI */
   char * saveRankDetailsCSV;       /* save the details about the performance to a file */
+  char * savePerOpDataCSV; 
   const char *prologue;
   const char *epilogue;
 
@@ -197,6 +198,7 @@ static mdtest_options_t o;
 
 /* This structure describes the processing status for stonewalling */
 typedef struct{
+  OpTimer * ot; /* Operation timer*/
   double start_time;
 
   int stone_wall_timer_seconds;
@@ -238,6 +240,7 @@ void VerboseMessage (int root_level, int any_level, int line, char * format, ...
         fflush(out_logfile);
     }
 }
+char const * mdtest_test_name(int i);
 
 void parse_dirpath(char *dirpath_arg) {
     char * tmp, * token;
@@ -443,11 +446,13 @@ void create_remove_items_helper(const int dirs, const int create, const char *pa
 
     for (uint64_t i = progress->items_start; i < progress->items_per_dir ; ++i) {
         if (!dirs) {
+            double start = GetTimeStamp();
             if (create) {
                 create_file (path, itemNum + i);
             } else {
                 remove_file (path, itemNum + i);
             }
+            if(progress->ot) OpTimerValue(progress->ot, start - progress->start_time, GetTimeStamp() - start);
         } else {
             create_remove_dirs (path, create, itemNum + i);
         }
@@ -644,14 +649,16 @@ void mdtest_stat(const int random, const int dirs, const long dir_iter, const ch
 
         /* below temp used to be hiername */
         VERBOSE(3,5,"mdtest_stat %4s: %s", (dirs ? "dir" : "file"), item);
+        double start = GetTimeStamp();
         if (-1 == o.backend->stat (item, &buf, o.backend_options)) {
             WARNF("unable to stat %s %s", dirs ? "directory" : "file", item);
         }
+        if(progress->ot) OpTimerValue(progress->ot, start - progress->start_time, GetTimeStamp() - start);        
     }
 }
 
 /* reads all of the items created as specified by the input parameters */
-void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
+void mdtest_read(int random, int dirs, const long dir_iter, char *path, rank_progress_t * progress) {
     uint64_t parent_dir, item_num = 0;
     char item[MAX_PATHLEN], temp[MAX_PATHLEN];
     aiori_fd_t *aiori_fh;
@@ -732,6 +739,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
 
         o.hints.filePerProc = ! o.shared_file;
 
+        double start = GetTimeStamp();
         /* open file for reading */
         aiori_fh = o.backend->open (item, O_RDONLY, o.backend_options);
         if (NULL == aiori_fh) {
@@ -746,7 +754,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
                 WARNF("unable to read file %s", item);
                 o.verification_error += 1;
                 continue;
-            }
+            }     
             int pretend_rank = (2 * o.nstride + rank) % o.size;
             if(o.verify_read){
               if (o.shared_file) {
@@ -759,6 +767,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path) {
               }
             }
         }
+        if(progress->ot) OpTimerValue(progress->ot, start - progress->start_time, GetTimeStamp() - start);
 
         /* close file */
         o.backend->close (aiori_fh, o.backend_options);
@@ -1200,7 +1209,7 @@ void file_test_create(const int iteration, const int ntasks, const char *path, r
         }
         MPI_Barrier(testComm);
     }
-
+      
     /* create files */
     create_remove_items(0, 0, 1, 0, temp_path, 0, progress);
     if(o.stone_wall_timer_seconds){
@@ -1244,6 +1253,11 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     /* create phase */
     if (o.create_only ) {
       phase_prepare();
+      if(o.savePerOpDataCSV != NULL) {
+        char path[MAX_PATHLEN];
+        sprintf(path, "%s-%s-%05d.csv", o.savePerOpDataCSV, mdtest_test_name(MDTEST_FILE_CREATE_NUM), rank);
+        progress->ot = OpTimerInit(path, o.write_bytes > 0 ? o.write_bytes : 1);
+      }      
       t_start = GetTimeStamp();
 #ifdef HAVE_GPFSCREATESHARING_T
       /* Enable createSharingHint */
@@ -1270,6 +1284,7 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       }
 #endif  /* HAVE_GPFSCREATESHARING_T */
       t_end = GetTimeStamp();
+      OpTimerFree(& progress->ot);
       updateResult(res, MDTEST_FILE_CREATE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }else{
       if (o.stoneWallingStatusFile){
@@ -1298,7 +1313,13 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     /* stat phase */
     if (o.stat_only ) {
       phase_prepare();
+      if(o.savePerOpDataCSV != NULL) {
+        char path[MAX_PATHLEN];
+        sprintf(path, "%s-%s-%05d.csv", o.savePerOpDataCSV, mdtest_test_name(MDTEST_FILE_STAT_NUM), rank);
+        progress->ot = OpTimerInit(path, 1);
+      }            
       t_start = GetTimeStamp();
+      progress->start_time = t_start;
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
@@ -1318,13 +1339,20 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
       t_end_before_barrier = GetTimeStamp();
       phase_end();
       t_end = GetTimeStamp();
+      OpTimerFree(& progress->ot);
       updateResult(res, MDTEST_FILE_STAT_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
     /* read phase */
     if (o.read_only ) {
       phase_prepare();
+      if(o.savePerOpDataCSV != NULL) {
+        char path[MAX_PATHLEN];
+        sprintf(path, "%s-%s-%05d.csv", o.savePerOpDataCSV, mdtest_test_name(MDTEST_FILE_READ_NUM), rank);
+        progress->ot = OpTimerInit(path, o.read_bytes > 0 ? o.read_bytes : 1);
+      }            
       t_start = GetTimeStamp();
+      progress->start_time = t_start;
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
@@ -1340,23 +1368,28 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
 
         /* read files */
         if (o.random_seed > 0) {
-                mdtest_read(1,0, dir_iter, temp_path);
+                mdtest_read(1, 0, dir_iter, temp_path, progress);
         } else {
-                mdtest_read(0,0, dir_iter, temp_path);
+                mdtest_read(0, 0, dir_iter, temp_path, progress);
         }
       }
       t_end_before_barrier = GetTimeStamp();
       phase_end();
       t_end = GetTimeStamp();
+      OpTimerFree(& progress->ot);
       updateResult(res, MDTEST_FILE_READ_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
     /* remove phase */
     if (o.remove_only) {
       phase_prepare();
+      if(o.savePerOpDataCSV != NULL) {
+        sprintf(temp_path, "%s-%s-%05d.csv", o.savePerOpDataCSV, mdtest_test_name(MDTEST_FILE_REMOVE_NUM), rank);
+        progress->ot = OpTimerInit(temp_path, o.write_bytes > 0 ? o.write_bytes : 1);
+      }      
       t_start = GetTimeStamp();
+      progress->start_time = t_start;
       progress->items_start = 0;
-
       for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
         prep_testdir(iteration, dir_iter);
         if (o.unique_dir_per_task) {
@@ -1369,19 +1402,19 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
         }
 
         VERBOSE(3,5,"file_test: rm directories path is '%s'", temp_path );
-
         if (o.collective_creates) {
             if (rank == 0) {
                 collective_create_remove(0, 0, ntasks, temp_path, progress);
             }
         } else {
-            VERBOSE(3,5,"gonna create %s", temp_path);
+            VERBOSE(3,5,"gonna remove %s", temp_path);
             create_remove_items(0, 0, 0, 0, temp_path, 0, progress);
         }
       }
       t_end_before_barrier = GetTimeStamp();
       phase_end();
       t_end = GetTimeStamp();
+      OpTimerFree(& progress->ot);
       updateResult(res, MDTEST_FILE_REMOVE_NUM, o.items, t_start, t_end, t_end_before_barrier);
     }
 
@@ -2322,8 +2355,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 #endif
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
+      {0, "savePerOpDataCSV", "Store the performance of each rank into an individual file prefixed with this option.", OPTION_OPTIONAL_ARGUMENT, 's', & o.savePerOpDataCSV},
       {0, "showRankStatistics", "Include statistics per rank", OPTION_FLAG, 'd', & o.show_perrank_statistics},
-
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
@@ -2364,7 +2397,6 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     for (i = 1; i < argc; i++) {
         snprintf(&cmd_buffer[strlen(cmd_buffer)], 4096-strlen(cmd_buffer), " '%s'", argv[i]);
     }
-
     VERBOSE(0,-1,"-- started at %s --\n", PrintTimestamp());
     VERBOSE(0,-1,"mdtest-%s was launched with %d total task(s) on %d node(s)", RELEASE_VERS, o.size, numNodes);
     VERBOSE(0,-1,"Command line used: %s", cmd_buffer);
