@@ -336,7 +336,12 @@ AC_ARG_WITH([daos],
     [], [with_daos=no])
 AS_IF([test "x$with_daos" != xno], [
     DAOS="yes"
-    LDFLAGS="$LDFLAGS -L$with_daos/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_daos/lib64"
+    if test -d $with_daos/lib/x86_64-linux-gnu/; then
+        DAOS_LIB_DIR=$with_daos/lib/x86_64-linux-gnu
+    else
+        DAOS_LIB_DIR=$with_daos/lib64
+    fi
+    LDFLAGS="$LDFLAGS -L$DAOS_LIB_DIR -Wl,--enable-new-dtags -Wl,-rpath=$DAOS_LIB_DIR"
     CPPFLAGS="$CPPFLAGS -I$with_daos/include"
     AC_CHECK_HEADERS(gurt/common.h,, [unset DAOS])
     AC_CHECK_HEADERS(daos.h,, [unset DAOS])
