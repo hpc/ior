@@ -817,7 +817,7 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                                 fprintf(out_logfile, "task %d removing %s\n", rank,
                                         testFileName);
                         }
-                        backend->delete(testFileName, test->backend_options);
+                        backend->remove(testFileName, test->backend_options);
                 }
                 if (test->reorderTasksRandom == TRUE) {
                         rankOffset = tmpRankOffset;
@@ -829,7 +829,7 @@ static void RemoveFile(char *testFileName, int filePerProc, IOR_param_t * test)
                                 fprintf(out_logfile, "task %d removing %s\n", rank,
                                         testFileName);
                         }
-                        backend->delete(testFileName, test->backend_options);
+                        backend->remove(testFileName, test->backend_options);
                 }
         }
 }

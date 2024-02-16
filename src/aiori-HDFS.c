@@ -131,7 +131,7 @@ ior_aiori_t hdfs_aiori = {
 	.open = HDFS_Open,
 	.xfer = HDFS_Xfer,
 	.close = HDFS_Close,
-	.delete = HDFS_Delete,
+	.remove = HDFS_Delete,
   .get_options = HDFS_options,
 	.get_version = aiori_get_version,
   .xfer_hints = hdfs_xfer_hints,
@@ -632,7 +632,7 @@ static void HDFS_Close(aiori_fd_t * fd, aiori_mod_opt_t * param) {
 /*
  * Delete a file through the HDFS interface.
  *
- * NOTE: The signature for ior_aiori.delete doesn't include a parameter to
+ * NOTE: The signature for ior_aiori.remove doesn't include a parameter to
  * select recursive deletes.  We'll assume that that is never needed.
  */
 static void HDFS_Delete( char *testFileName, aiori_mod_opt_t * param ) {

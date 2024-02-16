@@ -681,7 +681,7 @@ void run_benchmark(phase_stat_t * s, int * current_index_p){
       }
 
       op_timer = GetTimeStamp();
-      o.backend->delete(obj_name, o.backend_options);
+      o.backend->remove(obj_name, o.backend_options);
       bench_runtime = add_timed_result(op_timer, s->phase_start_timer, s->time_delete, pos, & s->max_op_time, & op_time);
       if(o.relative_waiting_factor > 1e-9) {
         mdw_wait(op_time);
@@ -786,7 +786,7 @@ void run_cleanup(phase_stat_t * s, int start_index){
       def_obj_name(obj_name, o.rank, d, f + start_index);
 
       op_timer = GetTimeStamp();
-      o.backend->delete(obj_name, o.backend_options);
+      o.backend->remove(obj_name, o.backend_options);
       add_timed_result(op_timer, s->phase_start_timer, s->time_delete, pos, & s->max_op_time, & op_time);
 
       if (o.verbosity >= 2){

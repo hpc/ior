@@ -362,7 +362,7 @@ static void remove_file (const char *path, uint64_t itemNum) {
     sprintf(curr_item, "%s/file.%s"LLU"", path, o.rm_name, itemNum);
     VERBOSE(3,5,"create_remove_items_helper (non-dirs remove): curr_item is '%s'", curr_item);
     if (!(o.shared_file && rank != 0)) {
-        o.backend->delete (curr_item, o.backend_options);
+        o.backend->remove (curr_item, o.backend_options);
     }
 }
 
@@ -492,7 +492,7 @@ void collective_helper(const int dirs, const int create, const char* path, uint6
             }
         } else if (!(o.shared_file && rank != 0)) {
             //remove files
-            o.backend->delete (curr_item, o.backend_options);
+            o.backend->remove (curr_item, o.backend_options);
         }
         if(CHECK_STONE_WALL(progress)){
           progress->items_done = i + 1;

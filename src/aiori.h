@@ -97,7 +97,7 @@ typedef struct ior_aiori {
         IOR_offset_t (*xfer)(int access, aiori_fd_t *, IOR_size_t *,
                              IOR_offset_t size, IOR_offset_t offset, aiori_mod_opt_t * module_options);
         void (*close)(aiori_fd_t *, aiori_mod_opt_t * module_options);
-        void (*delete)(char *, aiori_mod_opt_t * module_options);
+        void (*remove)(char *, aiori_mod_opt_t * module_options);
         char* (*get_version)(void);
         void (*fsync)(aiori_fd_t *, aiori_mod_opt_t * module_options);
         IOR_offset_t (*get_file_size)(aiori_mod_opt_t * module_options, char * filename);
