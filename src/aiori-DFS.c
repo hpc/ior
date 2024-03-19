@@ -664,11 +664,14 @@ DFS_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
 
         mode = S_IFREG | mode;
 	if (hints->filePerProc || rank == 0) {
-                fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
+                fd_oflag |= O_CREAT | O_RDWR;
 
                 parent = lookup_insert_dir(dir_name, NULL);
                 if (parent == NULL)
                         DERR("Failed to lookup parent: %s", dir_name);
+
+                if (flags & IOR_EXCL)
+                        fd_oflag |= O_EXCL;
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                               objectClass, o->chunk_size, NULL, &obj);
