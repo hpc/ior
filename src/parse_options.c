@@ -456,7 +456,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'Q', NULL,        "taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->taskPerNodeOffset},
     {'r', NULL,        "readFile -- read existing file", OPTION_FLAG, 'd', & params->readFile},
     {'R', NULL,        "checkRead -- verify that the output of read matches the expected signature (used with -G)", OPTION_FLAG, 'd', & params->checkRead},
-    {'s', NULL,        "segmentCount -- number of segments", OPTION_OPTIONAL_ARGUMENT, 'd', & params->segmentCount},
+    {'s', NULL,        "segmentCount -- number of segments", OPTION_OPTIONAL_ARGUMENT, 'l', & params->segmentCount},
     {'t', NULL,        "transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'l', & params->transferSize},
     {'T', NULL,        "maxTimeDuration -- max time in minutes executing repeated test; it aborts only between iterations and not within a test!", OPTION_OPTIONAL_ARGUMENT, 'd', & params->maxTimeDuration},
     {'u', NULL,        "uniqueDir -- use unique directory name for each file-per-process", OPTION_FLAG, 'd', & params->uniqueDir},

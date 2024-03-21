@@ -49,8 +49,11 @@ AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
 
+AC_CHECK_TYPES([MPI_Count], [], [], [[#include <mpi.h>]])
+
 # Checks for library functions.
 AC_CHECK_FUNCS([sysconf gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname statfs statvfs])
+AC_CHECK_FUNCS([MPI_File_read_c])
 AC_SEARCH_LIBS([sqrt], [m], [],
         [AC_MSG_ERROR([Math library not found])])
 
@@ -140,6 +143,8 @@ AM_COND_IF([HAVE_GPU_DIRECT],[
   AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])
   ])
 
+
+AC_CHECK_FUNCS
 
 
 # Check for system capabilities

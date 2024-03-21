@@ -322,6 +322,73 @@ static aiori_fd_t *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * m
 /*
  * Write or read access to file using the MPIIO interface.
  */
+
+#ifndef HAVE_MPI_FILE_READ_C
+static int MPI_File_read_c(MPI_File f, void * buf, MPI_Count c,
+                MPI_Datatype t, MPI_Status *s)
+{
+        if (c > INT_MAX)
+                ERR("count too large for this MPI implementation");
+        return MPI_File_read(f, buf, c, t, s);
+}
+
+static int MPI_File_read_at_c(MPI_File f, MPI_Offset off, void * buf, MPI_Count c,
+                MPI_Datatype t, MPI_Status *s)
+{
+        if (c > INT_MAX)
+                ERR("count too large for this MPI implementation");
+        return MPI_File_read_at(f, off, buf, c, t, s);
+}
+
+static int MPI_File_read_all_c(MPI_File f, void * buf, MPI_Count c,
+                MPI_Datatype t, MPI_Status *s)
+{
+        if (c > INT_MAX)
+                ERR("count too large for this MPI implementation");
+        return MPI_File_read_all(f, buf, c, t, s);
+}
+
+static int MPI_File_read_at_all_c(MPI_File f, MPI_Offset off, void * buf, MPI_Count c,
+                MPI_Datatype t, MPI_Status *s)
+{
+        if (c > INT_MAX)
+                ERR("count too large for this MPI implementation");
+        return MPI_File_read_at_all(f, off, buf, c, t, s);
+}
+
+static int MPI_File_write_c(MPI_File f, const void * buf, MPI_Count c,
+                MPI_Datatype t, MPI_Status *s)
+{
+        if (c > INT_MAX)
+                ERR("count too large for this MPI implementation");
+        return MPI_File_write(f, buf, c, t, s);
+}
+
+static int MPI_File_write_at_c(MPI_File f, MPI_Offset off, const void * buf, MPI_Count c,
+                MPI_Datatype t, MPI_Status *s)
+{
+        if (c > INT_MAX)
+                ERR("count too large for this MPI implementation");
+        return MPI_File_write_at(f, off, buf, c, t, s);
+}
+
+static int MPI_File_write_all_c(MPI_File f, const void * buf, MPI_Count c,
+                MPI_Datatype t, MPI_Status *s)
+{
+        if (c > INT_MAX)
+                ERR("count too large for this MPI implementation");
+        return MPI_File_write_all(f, buf, c, t, s);
+}
+
+static int MPI_File_write_at_all_c(MPI_File f, MPI_Offset off, const void * buf, MPI_Count c,
+                MPI_Datatype t, MPI_Status *s)
+{
+        if (c > INT_MAX)
+                ERR("count too large for this MPI implementation");
+        return MPI_File_write_at_all(f, off, buf, c, t, s);
+}
+#endif
+
 static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer,
                                IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * module_options)
 {
@@ -334,13 +401,13 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
           return length;
         mpiio_fd_t * mfd = (mpiio_fd_t*) fdp;
 
-        int (MPIAPI * Access) (MPI_File, void *, int,
+        int (MPIAPI * Access) (MPI_File, void *, MPI_Count,
                                MPI_Datatype, MPI_Status *);
-        int (MPIAPI * Access_at) (MPI_File, MPI_Offset, void *, int,
+        int (MPIAPI * Access_at) (MPI_File, MPI_Offset, void *, MPI_Count,
                                   MPI_Datatype, MPI_Status *);
-        int (MPIAPI * Access_all) (MPI_File, void *, int,
+        int (MPIAPI * Access_all) (MPI_File, void *, MPI_Count,
                                    MPI_Datatype, MPI_Status *);
-        int (MPIAPI * Access_at_all) (MPI_File, MPI_Offset, void *, int,
+        int (MPIAPI * Access_at_all) (MPI_File, MPI_Offset, void *, MPI_Count,
                                       MPI_Datatype, MPI_Status *);
         /*
          * this needs to be properly implemented:
@@ -352,24 +419,24 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
 
         /* point functions to appropriate MPIIO calls */
         if (access == WRITE) {  /* WRITE */
-                Access = (int (MPIAPI *)(MPI_File, void *, int,
-                          MPI_Datatype, MPI_Status *)) MPI_File_write;
-                Access_at = (int (MPIAPI *)(MPI_File, MPI_Offset, void *, int,
-                             MPI_Datatype, MPI_Status *))  MPI_File_write_at;
-                Access_all = (int (MPIAPI *) (MPI_File, void *, int,
-                              MPI_Datatype, MPI_Status *)) MPI_File_write_all;
-                Access_at_all = (int (MPIAPI *) (MPI_File, MPI_Offset, void *, int,
-                                 MPI_Datatype, MPI_Status *)) MPI_File_write_at_all;
+                Access = (int (MPIAPI *)(MPI_File, void *, MPI_Count,
+                          MPI_Datatype, MPI_Status *)) MPI_File_write_c;
+                Access_at = (int (MPIAPI *)(MPI_File, MPI_Offset, void *, MPI_Count,
+                             MPI_Datatype, MPI_Status *))  MPI_File_write_at_c;
+                Access_all = (int (MPIAPI *) (MPI_File, void *, MPI_Count,
+                              MPI_Datatype, MPI_Status *)) MPI_File_write_all_c;
+                Access_at_all = (int (MPIAPI *) (MPI_File, MPI_Offset, void *, MPI_Count,
+                                 MPI_Datatype, MPI_Status *)) MPI_File_write_at_all_c;
                 /*
                  * this needs to be properly implemented:
                  *
                  *   Access_ordered = MPI_File_write_ordered;
                  */
         } else {                /* READ or CHECK */
-                Access = MPI_File_read;
-                Access_at = MPI_File_read_at;
-                Access_all = MPI_File_read_all;
-                Access_at_all = MPI_File_read_at_all;
+                Access = MPI_File_read_c;
+                Access_at = MPI_File_read_at_c;
+                Access_all = MPI_File_read_all_c;
+                Access_at_all = MPI_File_read_at_all_c;
                 /*
                  * this needs to be properly implemented:
                  *
