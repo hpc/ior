@@ -2307,6 +2307,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {'T', NULL,        "only stat files/dirs", OPTION_FLAG, 'd', & o.stat_only},
       {'E', NULL,        "only read files/dir", OPTION_FLAG, 'd', & o.read_only},
       {'r', NULL,        "only remove files or directories left behind by previous runs", OPTION_FLAG, 'd', & o.remove_only},
+      {'U', NULL,        "enable rename directory phase", OPTION_FLAG, 'd', & o.rename_dirs},
       {'D', NULL,        "perform test on directories only (no files)", OPTION_FLAG, 'd', & o.dirs_only},
       {'e', NULL,        "bytes to read from each file", OPTION_OPTIONAL_ARGUMENT, 'l', & o.read_bytes},
       {'f', NULL,        "first number of tasks on which the test will run", OPTION_OPTIONAL_ARGUMENT, 'd', & first},
