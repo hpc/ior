@@ -111,6 +111,7 @@ ior_aiori_t cephfs_aiori = {
         .access = CEPHFS_Access,
         .stat = CEPHFS_Stat,
         .sync = CEPHFS_Sync,
+        .enable_mdtest = true,
 };
 
 #define CEPHFS_ERR(__err_str, __ret) do { \
