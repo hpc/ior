@@ -64,16 +64,6 @@ static void CheckRunSettings(IOR_test_t *tests)
                 if(params->dualMount && !params->filePerProc) {
                   ERR("Dual Mount can only be used with File Per Process");
                 }
-
-                if(params->gpuDirect){
-                  if(params->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_MANAGED){
-                    ERR("GPUDirect cannot be used with managed memory");
-                  }
-                  params->gpuMemoryFlags = IOR_MEMORY_TYPE_GPU_DEVICE_ONLY;
-                  if(params->checkRead || params->checkWrite){
-                    ERR("GPUDirect data cannot yet be checked");
-                  }
-                }
         }
 }
 
@@ -128,6 +118,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
             fclose(fd);
           }
           params->saveRankDetailsCSV = strdup(value);
+        } else if (strcasecmp(option, "savePerOpDataCSV") == 0){
+          params->savePerOpDataCSV = strdup(value);
         } else if (strcasecmp(option, "summaryFormat") == 0) {
                 if(strcasecmp(value, "default") == 0){
                   outputFormat = OUTPUT_DEFAULT;
@@ -435,8 +427,8 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O minTimeDuration=0           -- minimum Runtime for the run (will repeat from beginning of the file if time is not yet over)", .arg = OPTION_OPTIONAL_ARGUMENT},
 #ifdef HAVE_CUDA
-    {.help="  -O allocateBufferOnGPU=X           -- allocate I/O buffers on the GPU: X=1 uses managed memory, X=2 device memory.", .arg = OPTION_OPTIONAL_ARGUMENT},
-    {.help="  -O GPUid=X                         -- select the GPU to use.", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O allocateBufferOnGPU=X           -- allocate I/O buffers on the GPU: X=1 uses managed memory - verifications are run on CPU; X=2 managed memory - verifications on GPU; X=3 device memory with verifications on GPU.", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O GPUid=X                         -- select the GPU to use, use -1 for round-robin among local procs.", .arg = OPTION_OPTIONAL_ARGUMENT},
 #ifdef HAVE_GPU_DIRECT
     {0, "gpuDirect",        "allocate I/O buffers on the GPU and use gpuDirect to store data; this option is incompatible with any option requiring CPU access to data.", OPTION_FLAG, 'd', & params->gpuDirect},
 #endif
@@ -464,7 +456,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'Q', NULL,        "taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->taskPerNodeOffset},
     {'r', NULL,        "readFile -- read existing file", OPTION_FLAG, 'd', & params->readFile},
     {'R', NULL,        "checkRead -- verify that the output of read matches the expected signature (used with -G)", OPTION_FLAG, 'd', & params->checkRead},
-    {'s', NULL,        "segmentCount -- number of segments", OPTION_OPTIONAL_ARGUMENT, 'd', & params->segmentCount},
+    {'s', NULL,        "segmentCount -- number of segments", OPTION_OPTIONAL_ARGUMENT, 'l', & params->segmentCount},
     {'t', NULL,        "transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'l', & params->transferSize},
     {'T', NULL,        "maxTimeDuration -- max time in minutes executing repeated test; it aborts only between iterations and not within a test!", OPTION_OPTIONAL_ARGUMENT, 'd', & params->maxTimeDuration},
     {'u', NULL,        "uniqueDir -- use unique directory name for each file-per-process", OPTION_FLAG, 'd', & params->uniqueDir},
@@ -483,6 +475,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O summaryFile=FILE                 -- store result data into this file", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O summaryFormat=[default,JSON,CSV] -- use the format for outputting the summary", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O saveRankPerformanceDetailsCSV=<FILE> -- store the performance of each rank into the named CSV file.", .arg = OPTION_OPTIONAL_ARGUMENT},
+    {.help="  -O savePerOpDataCSV=<FILE> -- store the performance of each rank into an individual file prefixed with this option.", .arg = OPTION_OPTIONAL_ARGUMENT},
     {0, "dryRun",      "do not perform any I/Os just run evtl. inputs print dummy output", OPTION_FLAG, 'd', & params->dryRun},
     LAST_OPTION,
   };

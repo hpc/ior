@@ -49,8 +49,11 @@ AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h strings.h sys/ioctl.h sys/
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
 
+AC_CHECK_TYPES([MPI_Count], [], [], [[#include <mpi.h>]])
+
 # Checks for library functions.
 AC_CHECK_FUNCS([sysconf gettimeofday memset mkdir pow putenv realpath regcomp sqrt strcasecmp strchr strerror strncasecmp strstr uname statfs statvfs])
+AC_CHECK_FUNCS([MPI_File_read_c])
 AC_SEARCH_LIBS([sqrt], [m], [],
         [AC_MSG_ERROR([Math library not found])])
 
@@ -72,6 +75,7 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
         ])
         AC_CHECK_TYPES([gpfsFineGrainWriteSharing_t], [], [], [[#include <gpfs_fcntl.h>]])
         AC_CHECK_TYPES([gpfsFineGrainReadSharing_t], [], [], [[#include <gpfs_fcntl.h>]])
+        AC_CHECK_TYPES([gpfsCreateSharing_t], [], [], [[#include <gpfs_fcntl.h>]])
     ])
 ])
 
@@ -82,7 +86,7 @@ AC_ARG_WITH([cuda],
         [], [with_cuda=check])
 
 AS_IF([test "x$with_cuda" != xno], [
-        LDFLAGS="$LDFLAGS -L$with_cuda/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64"
+        LDFLAGS="$LDFLAGS -L$with_cuda/lib64 -L$with_cuda/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64:$with_cuda/lib"
         CPPFLAGS="$CPPFLAGS -I$with_cuda/include"
 
         AC_CHECK_HEADERS([cuda_runtime.h], [AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])], [
@@ -95,7 +99,7 @@ AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
         [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
     ])
 ])
-AM_CONDITIONAL([HAVE_CUDA], [test x$with_cuda = xyes])
+AM_CONDITIONAL([HAVE_CUDA], [test x$ac_cv_search_cudaMalloc != x ])
 AM_COND_IF([HAVE_CUDA],[AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])])
 
 # Check for GPUDirect
@@ -105,21 +109,42 @@ AC_ARG_WITH([gpuDirect],
         [], [with_gpuDirect=check])
 
 AS_IF([test "x$with_gpuDirect" != xno], [
-        LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64"
+        LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -L$with_gpuDirect/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64:$with_gpuDirect/lib"
         CPPFLAGS="$CPPFLAGS -I$with_gpuDirect/include"
 
-        AC_CHECK_HEADERS([cufile.h], [AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])], [
+        AC_CHECK_HEADERS([cufile.h], [], [                
                 if test "x$with_gpuDirect" != xcheck; then
-                        AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])
+                        AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])                       
                 fi
+                with_gpuDirect=no
         ])
-AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
-        AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [],
-        [AC_MSG_ERROR([Library containing cuFileDriverOpen symbol not found])])
-    ])
+        AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
+                AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [], [
+                        AC_MSG_WARN([Library containing cuFileDriverOpen symbol not found])
+                        with_gpuDirect=no
+                ])
+        ])
 ])
-AM_CONDITIONAL([HAVE_GPU_DIRECT], [test x$with_gpuDirect = xyes])
-AM_COND_IF([HAVE_GPU_DIRECT],[AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])])
+
+# Check for NVCC
+NVCC=nvcc
+AC_ARG_VAR(varNVCC, "Name/path of the NVIDIA compiler")
+AC_ARG_WITH([nvcc],
+              AS_HELP_STRING([--with-nvcc], [Use the NVCC as specified]),
+              [AS_IF([test "$with_nvcc" != "yes"], NVCC=$with_nvcc)],
+              [], [with_nvcc=check])
+
+AC_PATH_PROG(NVCC, nvcc)
+AM_CONDITIONAL([HAVE_NVCC], test -n "$NVCC")
+
+# Use GPU Direct only if NVCC and HAVE_GPU_DIRECT is supported
+AM_CONDITIONAL([HAVE_GPU_DIRECT], test x$with_gpuDirect != xno -a x$NVCC != x )
+AM_COND_IF([HAVE_GPU_DIRECT],[
+  AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])
+  ])
+
+
+AC_CHECK_FUNCS
 
 
 # Check for system capabilities
@@ -192,6 +217,9 @@ AM_COND_IF([USE_HDF5_AIORI],[
         AC_DEFINE([USE_HDF5_AIORI], [], [Build HDF5 backend AIORI])
 	AC_SEARCH_LIBS([H5Pset_all_coll_metadata_ops], [hdf5])
 	AC_CHECK_FUNCS([H5Pset_all_coll_metadata_ops])
+	AC_CHECK_FUNCS([H5Pget_vol_id])
+	AC_CHECK_FUNCS([H5Fis_accessible])
+	AC_CHECK_FUNCS([H5Fdelete])
 ])
 
 
@@ -313,7 +341,12 @@ AC_ARG_WITH([daos],
     [], [with_daos=no])
 AS_IF([test "x$with_daos" != xno], [
     DAOS="yes"
-    LDFLAGS="$LDFLAGS -L$with_daos/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_daos/lib64"
+    if test -d $with_daos/lib/x86_64-linux-gnu/; then
+        DAOS_LIB_DIR=$with_daos/lib/x86_64-linux-gnu
+    else
+        DAOS_LIB_DIR=$with_daos/lib64
+    fi
+    LDFLAGS="$LDFLAGS -L$DAOS_LIB_DIR -Wl,--enable-new-dtags -Wl,-rpath=$DAOS_LIB_DIR"
     CPPFLAGS="$CPPFLAGS -I$with_daos/include"
     AC_CHECK_HEADERS(gurt/common.h,, [unset DAOS])
     AC_CHECK_HEADERS(daos.h,, [unset DAOS])
@@ -348,24 +381,20 @@ if test x$with_gfarm != xno; then
 fi
 
 # CHFS support
-AC_MSG_CHECKING([for CHFS consistent hash file system])
-AC_ARG_WITH([chfs],
-  [AS_HELP_STRING([--with-chfs=CHFS_ROOT],
-    [support IO with CHFS backend @<:@default=no@:>@])],
-  [], [with_chfs=no])
-AC_MSG_RESULT([$with_chfs])
+PKG_CHECK_MODULES([CHFS], [chfs],
+  [AC_DEFINE([USE_CHFS_AIORI], [], [Build CHFS backend AIORI])
+   CHFS_RPATH=$(pkg-config --libs-only-L chfs | sed 's/-L/-Wl,-rpath=/g')
+   AC_SUBST(CHFS_RPATH)],
+  [with_chfs=no])
 AM_CONDITIONAL([USE_CHFS_AIORI], [test x$with_chfs != xno])
-if test x$with_chfs != xno; then
-  AC_DEFINE([USE_CHFS_AIORI], [], [Build CHFS backend AIORI])
-  case x$with_chfs in
-    xyes) ;;
-    *)
-    CPPFLAGS="$CPPFLAGS -I$with_chfs/include"
-    LDFLAGS="$LDFLAGS -L$with_chfs/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_chfs/lib" ;;
-  esac
-  PKG_CHECK_MODULES([MARGO], [margo])
-  PKG_CHECK_MODULES([OPENSSL], [openssl])
-fi
+
+# FINCHFS support
+PKG_CHECK_MODULES([FINCHFS], [finchfs],
+  [AC_DEFINE([USE_FINCHFS_AIORI], [], [Build FINCHFS backend AIORI])
+   FINCHFS_RPATH=$(pkg-config --libs-only-L finchfs | sed 's/-L/-Wl,-rpath=/g')
+   AC_SUBST(FINCHFS_RPATH)],
+  [with_finchfs=no])
+AM_CONDITIONAL([USE_FINCHFS_AIORI], [test x$with_finchfs != xno])
 
 # aws4c is needed for the S3 backend (see --with-S3, below).
 # Version 0.5.2 of aws4c is available at https://github.com/jti-lanl/aws4c.git

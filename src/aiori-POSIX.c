@@ -138,8 +138,10 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     {0, "posix.gpfs.finegrainwritesharing", "    Enable fine grain write sharing", OPTION_FLAG, 'd', & o->gpfs_finegrain_writesharing},
     {0, "posix.gpfs.finegrainreadsharing", "     Enable fine grain read sharing", OPTION_FLAG, 'd', & o->gpfs_finegrain_readsharing},
 #endif
-
+#ifdef HAVE_GPFSCREATESHARING_T
+    {0, "posix.gpfs.createsharing", "        Enable efficient file creation in a shared directory", OPTION_FLAG, 'd', & o->gpfs_createsharing},
 #endif
+#endif // HAVE_GPFS_FCNTL_H
 #ifdef HAVE_LUSTRE_USER
     {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
@@ -171,7 +173,7 @@ ior_aiori_t posix_aiori = {
         .open = POSIX_Open,
         .xfer = POSIX_Xfer,
         .close = POSIX_Close,
-        .delete = POSIX_Delete,
+        .remove = POSIX_Delete,
         .xfer_hints = POSIX_xfer_hints,
         .get_version = aiori_get_version,
         .fsync = POSIX_Fsync,
@@ -736,9 +738,9 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
 #ifdef HAVE_GPU_DIRECT
                         }
 #endif
-                        if (rc == -1)
-                                ERRF("write(%d, %p, %lld) failed",
-                                        fd, (void*)ptr, remaining);
+                        if (rc < 0){
+                          WARNF("write(%d, %p, %lld) failed %s", fd, (void*)ptr, remaining, strerror(errno));
+                        }
                         if (hints->fsyncPerWrite == TRUE){
                           POSIX_Fsync((aiori_fd_t*) &fd, param);
                         }
@@ -762,8 +764,8 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                           return length - remaining;
                         }
                                 
-                        if (rc == -1){
-                          WARNF("read(%d, %p, %lld) failed", fd, (void*)ptr, remaining);
+                        if (rc < 0){
+                          WARNF("read(%d, %p, %lld) failed %s", fd, (void*)ptr, remaining, strerror(errno));
                           return length - remaining;
                         }
                 }

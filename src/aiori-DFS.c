@@ -63,6 +63,28 @@ enum handleType {
         CONT_HANDLE,
 	DFS_HANDLE
 };
+/**************************** P R O T O T Y P E S *****************************/
+static void DFS_Init(aiori_mod_opt_t *);
+static void DFS_Finalize(aiori_mod_opt_t *);
+static aiori_fd_t *DFS_Create(char *, int, aiori_mod_opt_t *);
+static aiori_fd_t *DFS_Open(char *, int, aiori_mod_opt_t *);
+static IOR_offset_t DFS_Xfer(int, aiori_fd_t *, IOR_size_t *, IOR_offset_t,
+                             IOR_offset_t, aiori_mod_opt_t *);
+static void DFS_Close(aiori_fd_t *, aiori_mod_opt_t *);
+static void DFS_Delete(char *, aiori_mod_opt_t *);
+static char* DFS_GetVersion();
+static void DFS_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
+static void DFS_Sync(aiori_mod_opt_t *);
+static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, char *);
+static int DFS_Statfs (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t *);
+static int DFS_Stat (const char *, struct stat *, aiori_mod_opt_t *);
+static int DFS_Mkdir (const char *, mode_t, aiori_mod_opt_t *);
+static int DFS_Rename(const char *, const char *, aiori_mod_opt_t *);
+static int DFS_Rmdir (const char *, aiori_mod_opt_t *);
+static int DFS_Access (const char *, int, aiori_mod_opt_t *);
+static option_help * DFS_options(aiori_mod_opt_t **, aiori_mod_opt_t *);
+static void DFS_init_xfer_options(aiori_xfer_hint_t *);
+static int DFS_check_params(aiori_mod_opt_t *);
 
 /************************** O P T I O N S *****************************/
 typedef struct {
@@ -89,9 +111,9 @@ static option_help * DFS_options(aiori_mod_opt_t ** init_backend_options,
         *init_backend_options = (aiori_mod_opt_t *) o;
 
         option_help h [] = {
-                {0, "dfs.pool", "Pool label or uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->pool},
+                {0, "dfs.pool", "Pool label", OPTION_OPTIONAL_ARGUMENT, 's', &o->pool},
                 {0, "dfs.group", "DAOS system name", OPTION_OPTIONAL_ARGUMENT, 's', &o->group},
-                {0, "dfs.cont", "Container label or uuid", OPTION_OPTIONAL_ARGUMENT, 's', &o->cont},
+                {0, "dfs.cont", "Container label", OPTION_OPTIONAL_ARGUMENT, 's', &o->cont},
                 {0, "dfs.chunk_size", "File chunk size in bytes (e.g.: 8, 4k, 2m, 1g)", OPTION_OPTIONAL_ARGUMENT, 'd', &o->chunk_size},
                 {0, "dfs.oclass", "File object class", OPTION_OPTIONAL_ARGUMENT, 's', &o->oclass},
                 {0, "dfs.dir_oclass", "Directory object class", OPTION_OPTIONAL_ARGUMENT, 's',
@@ -106,28 +128,6 @@ static option_help * DFS_options(aiori_mod_opt_t ** init_backend_options,
         return help;
 }
 
-/**************************** P R O T O T Y P E S *****************************/
-static void DFS_Init(aiori_mod_opt_t *);
-static void DFS_Finalize(aiori_mod_opt_t *);
-static aiori_fd_t *DFS_Create(char *, int, aiori_mod_opt_t *);
-static aiori_fd_t *DFS_Open(char *, int, aiori_mod_opt_t *);
-static IOR_offset_t DFS_Xfer(int, aiori_fd_t *, IOR_size_t *, IOR_offset_t,
-                             IOR_offset_t, aiori_mod_opt_t *);
-static void DFS_Close(aiori_fd_t *, aiori_mod_opt_t *);
-static void DFS_Delete(char *, aiori_mod_opt_t *);
-static char* DFS_GetVersion();
-static void DFS_Fsync(aiori_fd_t *, aiori_mod_opt_t *);
-static void DFS_Sync(aiori_mod_opt_t *);
-static IOR_offset_t DFS_GetFileSize(aiori_mod_opt_t *, char *);
-static int DFS_Statfs (const char *, ior_aiori_statfs_t *, aiori_mod_opt_t *);
-static int DFS_Stat (const char *, struct stat *, aiori_mod_opt_t *);
-static int DFS_Mkdir (const char *, mode_t, aiori_mod_opt_t *);
-static int DFS_Rename(const char *, const char *, aiori_mod_opt_t *);
-static int DFS_Rmdir (const char *, aiori_mod_opt_t *);
-static int DFS_Access (const char *, int, aiori_mod_opt_t *);
-static option_help * DFS_options();
-static void DFS_init_xfer_options(aiori_xfer_hint_t *);
-static int DFS_check_params(aiori_mod_opt_t *);
 
 /************************** D E C L A R A T I O N S ***************************/
 
@@ -139,7 +139,7 @@ ior_aiori_t dfs_aiori = {
         .open		= DFS_Open,
         .xfer		= DFS_Xfer,
         .close		= DFS_Close,
-        .delete		= DFS_Delete,
+        .remove		= DFS_Delete,
         .get_version	= DFS_GetVersion,
         .fsync		= DFS_Fsync,
         .sync		= DFS_Sync,
@@ -172,7 +172,7 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
-#define INFO(level, format, ...)					\
+#define DINFO(level, format, ...)					\
 do {                                                                    \
         if (verbose >= level)						\
                 printf("[%d] "format"\n", rank, ##__VA_ARGS__);         \
@@ -462,7 +462,6 @@ DFS_Init(aiori_mod_opt_t * options)
 {
         DFS_options_t *o = (DFS_options_t *)options;
         bool pool_connect, cont_create, cont_open, dfs_mounted;
-        uuid_t co_uuid;
 	int rc;
 
         dfs_init_count++;
@@ -513,45 +512,23 @@ DFS_Init(aiori_mod_opt_t * options)
                 daos_pool_info_t pool_info;
                 daos_cont_info_t co_info;
 
-                INFO(VERBOSE_1, "DFS Pool = %s", o->pool);
-                INFO(VERBOSE_1, "DFS Container = %s", o->cont);
+                DINFO(VERBOSE_1, "DFS Pool = %s", o->pool);
+                DINFO(VERBOSE_1, "DFS Container = %s", o->cont);
 
-#if CHECK_DAOS_API_VERSION(1, 4)
                 rc = daos_pool_connect(o->pool, o->group, DAOS_PC_RW, &poh, &pool_info, NULL);
                 DCHECK(rc, "Failed to connect to pool %s", o->pool);
                 pool_connect = true;
 
                 rc = daos_cont_open(poh, o->cont, DAOS_COO_RW, &coh, &co_info, NULL);
-#else
-                uuid_t pool_uuid;
-
-                rc = uuid_parse(o->pool, pool_uuid);
-                DCHECK(rc, "Failed to parse 'Pool uuid': %s", o->pool);
-                rc = uuid_parse(o->cont, co_uuid);
-                DCHECK(rc, "Failed to parse 'Cont uuid': %s", o->cont);
-
-                rc = daos_pool_connect(pool_uuid, o->group, DAOS_PC_RW, &poh, &pool_info, NULL);
-                DCHECK(rc, "Failed to connect to pool %s", o->pool);
-                pool_connect = true;
-
-                rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
-#endif
                 /* If NOEXIST we create it */
                 if (rc == -DER_NONEXIST) {
-                        INFO(VERBOSE_1, "Creating DFS Container ...\n");
-#if CHECK_DAOS_API_VERSION(1, 4)
-                        if (uuid_parse(o->cont, co_uuid) != 0)
-                                /** user passes in label */
-                                rc = dfs_cont_create_with_label(poh, o->cont, NULL, &co_uuid, &coh, NULL);
-                        else
-                                /** user passes in uuid */
-#endif
-                        rc = dfs_cont_create(poh, co_uuid, NULL, &coh, NULL);
+                        DINFO(VERBOSE_1, "Creating DFS Container ...\n");
+                        rc = dfs_cont_create_with_label(poh, o->cont, NULL, NULL, &coh, NULL);
                         if (rc)
                                 DCHECK(rc, "Failed to create container");
                         cont_create = true;
                 } else if (rc) {
-                        DCHECK(rc, "Failed to create container");
+                        DCHECK(rc, "Failed to open container %s", o->cont);
                 }
                 cont_open = true;
 
@@ -579,11 +556,7 @@ out:
                 if (cont_open)
                         daos_cont_close(coh, NULL);
                 if (cont_create && rank == 0) {
-#if CHECK_DAOS_API_VERSION(1, 4)
                         daos_cont_destroy(poh, o->cont, 1, NULL);
-#else
-                        daos_cont_destroy(poh, co_uuid, 1, NULL);
-#endif
                 }
                 if (pool_connect)
                         daos_pool_disconnect(poh, NULL);
@@ -633,14 +606,8 @@ DFS_Finalize(aiori_mod_opt_t *options)
 
 	if (o->destroy) {
                 if (rank == 0) {
-                        INFO(VERBOSE_1, "Destroying DFS Container: %s", o->cont);
-#if CHECK_DAOS_API_VERSION(1, 4)
+                        DINFO(VERBOSE_1, "Destroying DFS Container: %s", o->cont);
                         daos_cont_destroy(poh, o->cont, 1, NULL);
-#else
-                        uuid_t uuid;
-                        uuid_parse(o->cont, uuid);
-                        rc = daos_cont_destroy(poh, uuid, 1, NULL);
-#endif
                         DCHECK(rc, "Failed to destroy container %s", o->cont);
                 }
 
@@ -652,7 +619,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
         }
 
         if (rank == 0)
-                INFO(VERBOSE_1, "Disconnecting from DAOS POOL");
+                DINFO(VERBOSE_1, "Disconnecting from DAOS POOL");
 
         rc = daos_pool_disconnect(poh, NULL);
         DCHECK(rc, "Failed to disconnect from pool");
@@ -660,7 +627,7 @@ DFS_Finalize(aiori_mod_opt_t *options)
 	MPI_CHECK(MPI_Barrier(testComm), "barrier error");
 
         if (rank == 0)
-                INFO(VERBOSE_1, "Finalizing DAOS..");
+                DINFO(VERBOSE_1, "Finalizing DAOS..");
 
 	rc = daos_fini();
         DCHECK(rc, "Failed to finalize DAOS");
@@ -697,11 +664,14 @@ DFS_Create(char *testFileName, int flags, aiori_mod_opt_t *param)
 
         mode = S_IFREG | mode;
 	if (hints->filePerProc || rank == 0) {
-                fd_oflag |= O_CREAT | O_RDWR | O_EXCL;
+                fd_oflag |= O_CREAT | O_RDWR;
 
                 parent = lookup_insert_dir(dir_name, NULL);
                 if (parent == NULL)
                         DERR("Failed to lookup parent: %s", dir_name);
+
+                if (flags & IOR_EXCL)
+                        fd_oflag |= O_EXCL;
 
                 rc = dfs_open(dfs, parent, name, mode, fd_oflag,
                               objectClass, o->chunk_size, NULL, &obj);

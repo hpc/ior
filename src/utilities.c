@@ -91,9 +91,16 @@ enum OutputFormat_t outputFormat;
  * @param pretendRank unique identifier for this process
  * @param dataPacketType identifier to designate pattern to fill buffer
  */
-void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
   if (dataPacketType == DATA_TIMESTAMP || bytes < 8)
     return;
+
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
+    update_write_memory_pattern_gpu(item, buf, bytes, rand_seed,  pretendRank, dataPacketType);
+    return;
+  }
+#endif
 
   size_t size = bytes / sizeof(uint64_t);
   uint64_t * buffi = (uint64_t*) buf;
@@ -127,7 +134,13 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
  * @param pretendRank unique identifier for this process
  * @param dataPacketType identifier to designate pattern to fill buffer
  */
-void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
+    generate_memory_pattern_gpu(buf, bytes, rand_seed,  pretendRank, dataPacketType);
+    return;
+  }
+#endif
   uint64_t * buffi = (uint64_t*) buf;
   // first half of 64 bits use the rank
   const size_t size = bytes / 8;
@@ -156,8 +169,24 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
   }
 }
 
-int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
+void invalidate_buffer_pattern(char * buffer, size_t bytes, ior_memory_flags type){
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
+#ifdef HAVE_GPU_DIRECT
+    cudaMemset(buffer, 0x42, bytes > 512 ? 512 : bytes);
+#endif
+  }else{
+    buffer[0] = ~buffer[0]; // changes the buffer, no memset to reduce the memory pressure
+  }
+}
+
+int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType, ior_memory_flags type){  
   int error = 0;
+#ifdef HAVE_GPU_DIRECT
+  if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
+    error = verify_memory_pattern_gpu(item, buffer, bytes, rand_seed, pretendRank, dataPacketType);
+    return error;
+  }
+#endif
   // always read all data to ensure that performance numbers stay the same
   uint64_t * buffi = (uint64_t*) buffer;
     
@@ -204,6 +233,76 @@ int verify_memory_pattern(uint64_t item, char * buffer, size_t bytes, int rand_s
   }
   
   return error;
+}
+
+/* Data structure to store information about per-operation timer */
+struct OpTimer{
+    FILE * fd;
+    int size; /* per op */
+    double * time;
+    double * value;
+    int pos;
+};
+
+/* by default store 1M operations into the buffer before flushing */
+#define OP_BUFFER_SIZE 1000000
+
+OpTimer* OpTimerInit(char * filename, int size){
+  if(filename == NULL) {
+    return NULL;
+  }
+  OpTimer * ot = safeMalloc(sizeof(OpTimer));
+  ot->size = size;
+  ot->value = safeMalloc(sizeof(double)*OP_BUFFER_SIZE);
+  ot->time = safeMalloc(sizeof(double)*OP_BUFFER_SIZE);
+  ot->pos = 0;
+  ot->fd = fopen(filename, "w");
+  if(ot->fd < 0){
+    ERR("Could not create OpTimer");
+  }
+  char buff[] = "time,runtime,tp\n";
+  int ret = fwrite(buff, strlen(buff), 1, ot->fd);
+  if(ret != 1){
+    FAIL("Cannot write header to OpTimer file");
+  }
+  return ot;
+}
+
+void OpTimerFlush(OpTimer* ot){
+  if(ot == NULL) {
+    return;
+  }  
+  for(int i=0; i < ot->pos; i++){
+    fprintf(ot->fd, "%.8e,%.8e,%e\n", ot->time[i], ot->value[i], ot->size/ot->value[i]);
+  }
+  ot->pos = 0;
+}
+
+void OpTimerValue(OpTimer* ot, double now, double runTime){
+  if(ot == NULL) {
+    return;
+  }  
+  ot->time[ot->pos] = now;
+  ot->value[ot->pos++] = runTime;
+  if(ot->pos == OP_BUFFER_SIZE){
+    OpTimerFlush(ot);
+  }
+}
+
+void OpTimerFree(OpTimer** otp){
+  if(otp == NULL || *otp == NULL) {
+    return;
+  }
+  OpTimer * ot = *otp;
+  OpTimerFlush(ot);
+  ot->pos = 0;
+  free(ot->value);
+  free(ot->time);
+  ot->value = NULL;
+  ot->time = NULL;
+  fclose(ot->fd);
+  free(ot);
+  *otp = NULL;
 }
 
 void* safeMalloc(uint64_t size){
@@ -404,6 +503,36 @@ int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
     MPI_Bcast(&ret, 1, MPI_INT, 0, comm);
     free(node_map);
     return ret;
+}
+
+void initCUDA(int blockMapping, int rank, int numNodes, int tasksPerNode, int useGPUID){  
+#ifdef HAVE_CUDA
+  int device_count;
+  cudaError_t cret = cudaGetDeviceCount(& device_count);
+  if(cret != cudaSuccess){
+    ERRF("cudaGetDeviceCount() error: %d %s", (int) cret, cudaGetErrorString(cret));
+  }  
+  //if (rank == 0){
+  //      char val[20];
+  //      sprintf(val, "%d", device_count);
+  //      PrintKeyVal("cudaDevices", val);
+  //}
+  // if set to -1 use round robin per task
+  if(useGPUID == -1){
+     int device = 0;
+     if(blockMapping){
+        device = (rank % tasksPerNode) % device_count;
+     }else{
+        device = (rank / numNodes) % device_count;
+     }
+     cret = cudaSetDevice(device);
+  }else{
+     cret = cudaSetDevice(useGPUID);
+  }  
+  if(cret != cudaSuccess){
+    WARNF("cudaSetDevice(%d) error: %s", useGPUID, cudaGetErrorString(cret));
+  }
+#endif
 }
 
 /*
@@ -1014,7 +1143,7 @@ void *aligned_buffer_alloc(size_t size, ior_memory_flags type)
   char *buf, *tmp;
   char *aligned;
 
-  if(type == IOR_MEMORY_TYPE_GPU_MANAGED){
+  if(type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_CPU || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
 #ifdef HAVE_CUDA
     // use unified memory here to allow drop-in-replacement
     if (cudaMallocManaged((void**) & buf, size, cudaMemAttachGlobal) != cudaSuccess){

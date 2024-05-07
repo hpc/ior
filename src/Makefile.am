@@ -46,7 +46,8 @@ extraLDADD    += -lcudart
 endif
 
 if HAVE_GPU_DIRECT
-extraLDADD    += -lcufile
+extraLDADD    += -lcufile -lstdc++
+extraSOURCES  += utilities-gpu.cu
 endif
 
 if USE_HDF5_AIORI
@@ -111,8 +112,16 @@ endif
 
 if USE_CHFS_AIORI
 extraSOURCES += aiori-CHFS.c
-extraCPPFLAGS += @MARGO_CFLAGS@ @OPENSSL_CFLAGS@
-extraLDADD += -lchfs @MARGO_LIBS@ @OPENSSL_LIBS@
+extraCPPFLAGS += @CHFS_CFLAGS@
+extraLDFLAGS += @CHFS_RPATH@
+extraLDADD += @CHFS_LIBS@
+endif
+
+if USE_FINCHFS_AIORI
+extraSOURCES += aiori-FINCHFS.c
+extraCPPFLAGS += @FINCHFS_CFLAGS@
+extraLDFLAGS += @FINCHFS_RPATH@
+extraLDADD += @FINCHFS_LIBS@
 endif
 
 if USE_S3_4C_AIORI
@@ -176,3 +185,6 @@ all-local: build.conf
 build.conf:
 	@echo LDFLAGS=$(LDFLAGS) $(extraLDFLAGS) $(extraLDADD) $(LIBS) > build.conf
 	@echo CFLAGS=$(CFLAGS) $(extraCPPFLAGS) >> build.conf
+
+.cu.o:
+	$(NVCC) $(CFLAGS) -c -o $@ $<

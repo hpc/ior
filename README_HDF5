@@ -1,0 +1,77 @@
+Building
+--------
+
+If the HDF5 library is installed in a standard location on the
+system, the following should suffice for building IOR with HDF5
+support: 
+
+./bootstrap
+./configure [other options] --with-hdf5
+
+If the HDF5 library is installed in a non-standard location, one
+may need to point IOR to their installed HDF5 using the CFLAGS
+and LDFLAGS environment variables. For example,
+
+./bootstrap
+./configure [other options] --with-hdf5 CFLAGS="-I /path/to/installed/hdf5/include" LDFLAGS="-L /path/to/installed/hdf5/lib"
+
+
+Running
+-------
+
+ior -a HDF5 [ior options] [hdf5 options]
+
+
+HDF5-specific options
+---------------------
+
+--hdf5.collectiveMetadata[=1]   (default: off/0)
+
+Instructs the HDF5 I/O interface to enable collective reading of metadata by way of
+the H5Pset_all_coll_metadata_ops (http://portal.hdfgroup.org/display/HDF5/H5P_SET_ALL_COLL_METADATA_OPS)
+API routine. Refer to https://portal.hdfgroup.org/pages/viewpage.action?pageId=50076863
+for more information about collective metadata I/O in HDF5 and why one may wish to
+enable this feature.
+
+
+--hdf5.showHints[=1]   (default: off/0)
+
+Instructs the HDF5 I/O interface to display the MPI hints that were passed to HDF5.
+
+
+--hdf5.individualDataSets   (not currently functional)
+
+Instructs the HDF5 I/O interface to assign a single dataset per task, rather than all
+tasks performing I/O on a single shared dataset.
+
+
+--hdf5.noFill[=1]   (default: 0)
+
+Instructs the HDF5 I/O interface to avoid pre-filling HDF5 datasets with fill value data
+by setting dataset fill times to H5D_FILL_TIME_NEVER. Refer to
+http://portal.hdfgroup.org/display/HDF5/H5P_SET_FILL_TIME for more information on HDF5
+fill times.
+
+
+--hdf5.hintsFileName=STRING
+
+Specifies the full name of a file containing key-value strings for MPI hints to be passed
+to HDF5 via H5Pset_fapl_mpio. Refer to the IOR FAQ (https://ior.readthedocs.io/en/latest/userDoc/faq.html)
+for information on the format of these strings.
+
+
+--hdf5.setAlignment=A
+
+Specifies the alignment 'A' in bytes (e.g.: 8, 4k, 2m, 1g) of objects in HDF5 files.
+Refer to http://portal.hdfgroup.org/display/HDF5/H5P_SET_ALIGNMENT for more information
+about HDF5 file object alignment.
+
+
+--hdf5.chunkSize=S
+
+Specifies the size 'S' (in terms of dataset elements) of data chunks within HDF5 datasets.
+Note that achieving good I/O performance for chunked HDF5 datasets can involve fine-tuning
+of the relationship between the HDF5 data chunk size and the block and transfer sizes
+used for IOR, among other factors. Refer to http://portal.hdfgroup.org/display/HDF5/Chunking+in+HDF5
+for more information about data chunking in HDF5.
+

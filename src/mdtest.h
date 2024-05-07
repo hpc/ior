@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <utilities.h>
 
 typedef enum {
   MDTEST_DIR_CREATE_NUM = 0,
