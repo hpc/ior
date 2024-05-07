@@ -32,15 +32,6 @@
 #include <sys/stat.h>
 #include <assert.h>
 
-
-#ifdef HAVE_LUSTRE_USER
-#  ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
-#    include <linux/lustre/lustre_user.h>
-#  elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
-#    include <lustre/lustre_user.h>
-#  endif
-#endif /* HAVE_LUSTRE_USER */
-
 #ifdef HAVE_GPFS_H
 #  include <gpfs.h>
 #endif
@@ -123,6 +114,9 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     memset(o, 0, sizeof(posix_options_t));
     o->direct_io = 0;
     o->lustre_stripe_count = -1;
+    if(LOV_USER_MAGIC != LOV_USER_MAGIC_V1){
+       strcpy(o->lustre_pool, "");
+    }
     o->lustre_start_ost = -1;
     o->beegfs_numTargets = -1;
     o->beegfs_chunkSize = -1;
@@ -151,6 +145,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
 #ifdef HAVE_LUSTRE_USER
     {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
+    {0, "posix.lustre.pool", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_pool},
     {0, "posix.lustre.startost", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_start_ost},
     {0, "posix.lustre.ignorelocks", "", OPTION_FLAG, 'd', & o->lustre_ignore_locks},
 #endif /* HAVE_LUSTRE_USER */
@@ -207,8 +202,25 @@ int POSIX_check_params(aiori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
   if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
         ERR("beegfsChunkSize must be a power of two and >64k");
-  if(o->lustre_stripe_count != -1 || o->lustre_stripe_size != 0)
+  if(o->lustre_stripe_count != -1 || o->lustre_stripe_size != 0 || o->lustre_pool != ""){
     o->lustre_set_striping = 1;
+    /* Setting a lustre pool via the API is only support for Lustre API versions higher than V1 */
+    /* This code checks that the user hasn't just specified a pool with no stripe size or stripe count */
+    /* on the V1 API because in that scenario we cannot do anything. If that is the case disable trying */
+    /* to set the stripe. If stripe count and/or stripe size are set the operation can continue but the */
+    /* pool will not be applied. */
+    if(o->lustre_pool != "" && LOV_USER_MAGIC == LOV_USER_MAGIC_V1){
+        WARN("Lustre pool specified, but the Lustre User API on this system does not support that.");
+      if(o->lustre_stripe_count == -1 && o->lustre_stripe_size == 0){
+        o->lustre_set_striping = 0;
+        ERR("Setting Lustre pool is not supported for the version of the Lustre API used on this system");
+      }
+    }else{
+      if(o->lustre_pool != "" && o->lustre_stripe_count <= 0 ){
+        o->lustre_stripe_count = 1;
+      }
+    }
+  }
   if(o->gpuDirect && ! o->direct_io){
     ERR("GPUDirect required direct I/O to be used!");
   }
@@ -524,7 +536,9 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         opts.lmm_stripe_size = o->lustre_stripe_size;
                         opts.lmm_stripe_offset = o->lustre_start_ost;
                         opts.lmm_stripe_count = o->lustre_stripe_count;
-
+                        #if(LOV_USER_MAGIC != LOV_USER_MAGIC_V1)
+                          opts.lmm_pool_name = o->lustre_pool;
+                        #endif
                         /* File needs to be opened O_EXCL because we cannot set
                          * Lustre striping information on a pre-existing file.*/
 

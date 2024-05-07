@@ -2,6 +2,17 @@
 #define AIORI_POSIX_H
 
 #include "aiori.h"
+#ifdef HAVE_LUSTRE_USER
+#  ifdef HAVE_LINUX_LUSTRE_LUSTRE_USER_H
+#    include <linux/lustre/lustre_user.h>
+#  elif defined(HAVE_LUSTRE_LUSTRE_USER_H)
+#    include <lustre/lustre_user.h>
+#  endif
+#define LUSTRE_POOL_NAME_MAX LOV_MAXPOOLNAME
+#else
+#define LUSTRE_POOL_NAME_MAX 15
+#endif /* HAVE_LUSTRE_USER */
+
 
 /************************** O P T I O N S *****************************/
 typedef struct{
@@ -11,6 +22,8 @@ typedef struct{
   /* Lustre variables */
   int lustre_set_striping;         /* flag that we need to set lustre striping */
   int lustre_stripe_count;
+  int lustre_set_pool;
+  char lustre_pool[LUSTRE_POOL_NAME_MAX];
   int lustre_stripe_size;
   int lustre_start_ost;
   int lustre_ignore_locks;

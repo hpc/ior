@@ -43,6 +43,8 @@ src/testlib
 src/test/.deps/
 src/test/.dirstamp
 src/test/lib.o
+src/build.conf
+src/md-workbench
 build/
 
 doc/doxygen/build
