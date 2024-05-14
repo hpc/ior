@@ -114,9 +114,11 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     memset(o, 0, sizeof(posix_options_t));
     o->direct_io = 0;
     o->lustre_stripe_count = -1;
+#ifdef HAVE_LUSTRE_USER
     if(LOV_USER_MAGIC != LOV_USER_MAGIC_V1){
        strcpy(o->lustre_pool, "");
     }
+#endif /* HAVE_LUSTRE_USER */
     o->lustre_start_ost = -1;
     o->beegfs_numTargets = -1;
     o->beegfs_chunkSize = -1;
@@ -209,6 +211,7 @@ int POSIX_check_params(aiori_mod_opt_t * param){
     /* on the V1 API because in that scenario we cannot do anything. If that is the case disable trying */
     /* to set the stripe. If stripe count and/or stripe size are set the operation can continue but the */
     /* pool will not be applied. */
+#ifdef HAVE_LUSTRE_USER
     if(o->lustre_pool != "" && LOV_USER_MAGIC == LOV_USER_MAGIC_V1){
         WARN("Lustre pool specified, but the Lustre User API on this system does not support that.");
       if(o->lustre_stripe_count == -1 && o->lustre_stripe_size == 0){
@@ -220,6 +223,7 @@ int POSIX_check_params(aiori_mod_opt_t * param){
         o->lustre_stripe_count = 1;
       }
     }
+#endif /* HAVE_LUSTRE_USER */
   }
   if(o->gpuDirect && ! o->direct_io){
     ERR("GPUDirect required direct I/O to be used!");
