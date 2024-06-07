@@ -25,7 +25,7 @@ typedef struct{
   int lustre_set_striping;         /* flag that we need to set lustre striping */
   int lustre_stripe_count;
   int lustre_set_pool;            /* flag that we need to set a lustre pool */
-  char lustre_pool[LUSTRE_POOL_NAME_MAX];
+  char * lustre_pool;
   int lustre_stripe_size;
   int lustre_start_ost;
   int lustre_ignore_locks;

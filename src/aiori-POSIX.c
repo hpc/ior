@@ -116,7 +116,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     o->lustre_set_striping = 0;
     o->lustre_stripe_count = 0;
     o->lustre_stripe_size = 0;
-    strcpy(o->lustre_pool, "");
+    o->lustre_pool = NULL;
     o->lustre_set_pool = 0;
     o->lustre_start_ost = -1;
     o->beegfs_numTargets = -1;
@@ -150,7 +150,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     {0, "posix.lustre.ignorelocks", "", OPTION_FLAG, 'd', & o->lustre_ignore_locks},
 #endif /* HAVE_LUSTRE_USER */
 #ifdef HAVE_LUSTRE_LUSTREAPI
-    {0, "posix.lustre.pool", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_pool},
+    {0, "posix.lustre.pool", "Name for Lustre pool to use", OPTION_OPTIONAL_ARGUMENT, 's', & o->lustre_pool},
 #endif
 #ifdef HAVE_GPU_DIRECT
     {0, "gpuDirect",        "allocate I/O buffers on the GPU", OPTION_FLAG, 'd', & o->gpuDirect},
@@ -159,6 +159,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
   };
   option_help * help = malloc(sizeof(h));
   memcpy(help, h, sizeof(h));
+
   return help;
 }
 
@@ -205,7 +206,7 @@ int POSIX_check_params(aiori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
   if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
         ERR("beegfsChunkSize must be a power of two and >64k");
-  if(o->lustre_stripe_count != 0 || o->lustre_stripe_size != 0 || !strcmp(o->lustre_pool,"")){
+  if(o->lustre_stripe_count != 0 || o->lustre_stripe_size != 0 || (o->lustre_pool)){
 #if defined(HAVE_LUSTRE_USER) || defined(HAVE_LUSTRE_LUSTREAPI)
     o->lustre_set_striping = 1;
 #else
@@ -213,12 +214,12 @@ int POSIX_check_params(aiori_mod_opt_t * param){
     o->lustre_set_striping = 0;
 #endif
   }
-  if(!strcmp(o->lustre_pool, "")){
+  if((o->lustre_pool)){
           if(o->lustre_stripe_count == 0 || o->lustre_stripe_size == 0){
                   ERR("Lustre pool specified but no stripe count or stripe size specified");
           }
 #ifdef HAVE_LUSTRE_LUSTREAPI
-    o->lustre_set_pool = 1;
+          o->lustre_set_pool = 1;
 #else
     WARN("Lustre pool option set but the Lustre API is not available to do this");
     o->lustre_set_pool = 0;
@@ -522,51 +523,75 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 #endif
         if (o->lustre_set_striping || o->lustre_set_pool) {
 #ifdef HAVE_LUSTRE_LUSTREAPI
-                fd_oflag |= O_CREAT | O_EXCL | O_RDWR;
-                fd_mode = S_IRWXU;
-                if(o->lustre_set_pool){
-                        pfd->fd = llapi_file_open_pool(testFileName, fd_oflag, fd_mode, o->lustre_stripe_size, 
-                                                       o->lustre_start_ost, o->lustre_stripe_count, 0,
-                                                       o->lustre_pool);
-                }else{
-                        pfd->fd = llapi_file_open(testFileName, fd_oflag, fd_mode, o->lustre_stripe_size, 
-                                                  o->lustre_start_ost, o->lustre_stripe_count, 0);
-                } 
 
-                if (pfd->fd < 0)
-                        ERRF("Unable to open '%s': %s\n",
-                             testFileName, strerror(errno));
+                if (!hints->filePerProc && rank != 0) {
+                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+                        fd_oflag |= O_RDWR;
+                        pfd->fd = open64(testFileName, fd_oflag, mode);
+                        if (pfd->fd < 0){
+                                ERRF("open64(\"%s\", %d, %#o) failed. Error: %s",
+                                        testFileName, fd_oflag, mode, strerror(errno));
+                        }
+                } else {
 
-#else
-                struct lov_user_md opts = { 0 };
+                        fd_oflag |= O_CREAT | O_EXCL | O_RDWR;
+                        fd_mode = S_IRWXU;
+                        if(o->lustre_set_pool){
+                                pfd->fd = llapi_file_open_pool(testFileName, fd_oflag, fd_mode, o->lustre_stripe_size, 
+                                                               o->lustre_start_ost, o->lustre_stripe_count, 0,
+                                                               o->lustre_pool);
+                        }else{
+                                pfd->fd = llapi_file_open(testFileName, fd_oflag, fd_mode, o->lustre_stripe_size, 
+                                                          o->lustre_start_ost, o->lustre_stripe_count, 0);
+                        } 
 
-                /* Setup Lustre IOCTL striping pattern structure */
-                opts.lmm_magic = LOV_USER_MAGIC;
-                opts.lmm_stripe_size = o->lustre_stripe_size;
-                opts.lmm_stripe_offset = o->lustre_start_ost;
-                opts.lmm_stripe_count = o->lustre_stripe_count;
-                /* File needs to be opened O_EXCL because we cannot set
-                 * Lustre striping information on a pre-existing file.*/
+                        if (pfd->fd < 0)
+                                ERRF("Unable to open '%s': %s\n",
+                                     testFileName, strerror(errno));
 
-                fd_oflag |= O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
-                pfd->fd = open64(testFileName, fd_oflag, mode);
+                        if (!hints->filePerProc)
+                                MPI_CHECK(MPI_Barrier(testComm),
+                                          "barrier error");                        
 
-                if (pfd->fd < 0)
-                        ERRF("Unable to open '%s': %s\n",
-                             testFileName, strerror(errno));
-
-                if (ioctl(pfd->fd, LL_IOC_LOV_SETSTRIPE, &opts)) {
-                        char *errmsg = "stripe already set";
-                        if (errno != EEXIST && errno != EALREADY)
-                                errmsg = strerror(errno);
-                        ERRF("Error on ioctl for '%s' (%d): %s\n",
-                             testFileName, pfd->fd, errmsg);
                 }
 
+#else
+                if (!hints->filePerProc && rank != 0) {
+                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+                        fd_oflag |= O_RDWR;
+                        pfd->fd = open64(testFileName, fd_oflag, mode);
+                        if (pfd->fd < 0){
+                                ERRF("open64(\"%s\", %d, %#o) failed. Error: %s",
+                                        testFileName, fd_oflag, mode, strerror(errno));
+                        }
+                } else {
+                        struct lov_user_md opts = { 0 };
+                        /* Setup Lustre IOCTL striping pattern structure */
+                        opts.lmm_magic = LOV_USER_MAGIC;
+                        opts.lmm_stripe_size = o->lustre_stripe_size;
+                        opts.lmm_stripe_offset = o->lustre_start_ost;
+                        opts.lmm_stripe_count = o->lustre_stripe_count;
+                        /* File needs to be opened O_EXCL because we cannot set
+                         * Lustre striping information on a pre-existing file.*/
+                        fd_oflag |= O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
+                        pfd->fd = open64(testFileName, fd_oflag, mode);
+                        if (pfd->fd < 0) {
+                                ERRF("Unable to open '%s': %s\n",
+                                        testFileName, strerror(errno));
+                        } else if (ioctl(pfd->fd, LL_IOC_LOV_SETSTRIPE, &opts)) {
+                                char *errmsg = "stripe already set";
+                                if (errno != EEXIST && errno != EALREADY)
+                                        errmsg = strerror(errno);
+                                ERRF("Error on ioctl for '%s' (%d): %s\n",
+                                        testFileName, pfd->fd, errmsg);
+                        }
+
+                        if (!hints->filePerProc)
+                                MPI_CHECK(MPI_Barrier(testComm),
+                                          "barrier error");                        
+
+                }
 #endif
-                if (!hints->filePerProc)
-                        MPI_CHECK(MPI_Barrier(testComm),
-                                  "barrier error");
                 
         } else {
 #endif /* HAVE_LUSTRE_USER || HAVE_LUSTRE_LUSTREAPI */
