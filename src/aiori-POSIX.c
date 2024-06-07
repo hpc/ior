@@ -205,7 +205,7 @@ int POSIX_check_params(aiori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
   if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
         ERR("beegfsChunkSize must be a power of two and >64k");
-  if(o->lustre_stripe_count != 0 || o->lustre_stripe_size != 0 || o->lustre_pool != ""){
+  if(o->lustre_stripe_count != 0 || o->lustre_stripe_size != 0 || !strcmp(o->lustre_pool,"")){
 #if defined(HAVE_LUSTRE_USER) || defined(HAVE_LUSTRE_LUSTREAPI)
     o->lustre_set_striping = 1;
 #else
@@ -213,7 +213,7 @@ int POSIX_check_params(aiori_mod_opt_t * param){
     o->lustre_set_striping = 0;
 #endif
   }
-  if(o->lustre_pool != ""){
+  if(!strcmp(o->lustre_pool, "")){
           if(o->lustre_stripe_count == 0 || o->lustre_stripe_size == 0){
                   ERR("Lustre pool specified but no stripe count or stripe size specified");
           }
