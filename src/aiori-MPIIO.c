@@ -650,25 +650,23 @@ IOR_offset_t MPIIO_GetFileSize(aiori_mod_opt_t * module_options, char *testFileN
           return 0;
         IOR_offset_t aggFileSizeFromStat, tmpMin, tmpMax, tmpSum;
         MPI_File fd;
-        MPI_Comm comm;
         MPI_Info mpiHints = MPI_INFO_NULL;
 
-        if (hints->filePerProc == TRUE) {
-                comm = MPI_COMM_SELF;
-        } else {
-                comm = testComm;
+        if (hints->filePerProc || rank == 0) {
+                if(test)
+                        SetHints(&mpiHints, test->hintsFileName);
+                MPI_CHECK(MPI_File_open(MPI_COMM_SELF, testFileName, MPI_MODE_RDONLY,
+                                        mpiHints, &fd),
+                          "cannot open file to get file size");
+                MPI_CHECK(MPI_File_get_size(fd, (MPI_Offset *) & aggFileSizeFromStat),
+                          "cannot get file size");
+                MPI_CHECK(MPI_File_close(&fd), "cannot close file");
+                if (mpiHints != MPI_INFO_NULL)
+                        MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
         }
-
-        if(test)
-                SetHints(&mpiHints, test->hintsFileName);
-        MPI_CHECK(MPI_File_open(comm, testFileName, MPI_MODE_RDONLY,
-                                mpiHints, &fd),
-                  "cannot open file to get file size");
-        MPI_CHECK(MPI_File_get_size(fd, (MPI_Offset *) & aggFileSizeFromStat),
-                  "cannot get file size");
-        MPI_CHECK(MPI_File_close(&fd), "cannot close file");
-        if (mpiHints != MPI_INFO_NULL)
-                MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
-
+        if (!hints->filePerProc) {
+                MPI_CHECK(MPI_Bcast(&aggFileSizeFromStat, 1, MPI_INT64_T, 0, testComm),
+                          "cannot broadcast file_size");
+        }
         return (aggFileSizeFromStat);
 }

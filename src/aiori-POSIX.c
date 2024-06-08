@@ -221,8 +221,8 @@ int POSIX_check_params(aiori_mod_opt_t * param){
 #ifdef HAVE_LUSTRE_LUSTREAPI
           o->lustre_set_pool = 1;
 #else
-    WARN("Lustre pool option set but the Lustre API is not available to do this");
-    o->lustre_set_pool = 0;
+          WARN("Lustre pool option set but the Lustre API is not available to do this");
+          o->lustre_set_pool = 0;
 #endif
   }
   if(o->gpuDirect && ! o->direct_io){
