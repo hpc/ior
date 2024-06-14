@@ -113,17 +113,16 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
   }else{
     memset(o, 0, sizeof(posix_options_t));
     o->direct_io = 0;
-    o->lustre_stripe_count = -1;
-#ifdef HAVE_LUSTRE_USER
-    if(LOV_USER_MAGIC != LOV_USER_MAGIC_V1){
-       strcpy(o->lustre_pool, "");
-    }
-#endif /* HAVE_LUSTRE_USER */
+    o->lustre_set_striping = 0;
+    o->lustre_stripe_count = 0;
+    o->lustre_stripe_size = 0;
+    o->lustre_pool = NULL;
+    o->lustre_set_pool = 0;
     o->lustre_start_ost = -1;
     o->beegfs_numTargets = -1;
     o->beegfs_chunkSize = -1;
   }
-
+ 
   *init_backend_options = (aiori_mod_opt_t*) o;
 
   option_help h [] = {
@@ -144,13 +143,15 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
     {0, "posix.gpfs.createsharing", "        Enable efficient file creation in a shared directory", OPTION_FLAG, 'd', & o->gpfs_createsharing},
 #endif
 #endif // HAVE_GPFS_FCNTL_H
-#ifdef HAVE_LUSTRE_USER
+#if defined(HAVE_LUSTRE_USER) || defined(HAVE_LUSTRE_LUSTREAPI)
     {0, "posix.lustre.stripecount", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_count},
     {0, "posix.lustre.stripesize", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_stripe_size},
-    {0, "posix.lustre.pool", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_pool},
     {0, "posix.lustre.startost", "", OPTION_OPTIONAL_ARGUMENT, 'd', & o->lustre_start_ost},
     {0, "posix.lustre.ignorelocks", "", OPTION_FLAG, 'd', & o->lustre_ignore_locks},
 #endif /* HAVE_LUSTRE_USER */
+#ifdef HAVE_LUSTRE_LUSTREAPI
+    {0, "posix.lustre.pool", "Name for Lustre pool to use", OPTION_OPTIONAL_ARGUMENT, 's', & o->lustre_pool},
+#endif
 #ifdef HAVE_GPU_DIRECT
     {0, "gpuDirect",        "allocate I/O buffers on the GPU", OPTION_FLAG, 'd', & o->gpuDirect},
 #endif
@@ -158,6 +159,7 @@ option_help * POSIX_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_o
   };
   option_help * help = malloc(sizeof(h));
   memcpy(help, h, sizeof(h));
+
   return help;
 }
 
@@ -204,26 +206,24 @@ int POSIX_check_params(aiori_mod_opt_t * param){
   posix_options_t * o = (posix_options_t*) param;
   if (o->beegfs_chunkSize != -1 && (!ISPOWEROFTWO(o->beegfs_chunkSize) || o->beegfs_chunkSize < (1<<16)))
         ERR("beegfsChunkSize must be a power of two and >64k");
-  if(o->lustre_stripe_count != -1 || o->lustre_stripe_size != 0 || o->lustre_pool != ""){
+  if(o->lustre_stripe_count != 0 || o->lustre_stripe_size != 0 || (o->lustre_pool)){
+#if defined(HAVE_LUSTRE_USER) || defined(HAVE_LUSTRE_LUSTREAPI)
     o->lustre_set_striping = 1;
-    /* Setting a lustre pool via the API is only support for Lustre API versions higher than V1 */
-    /* This code checks that the user hasn't just specified a pool with no stripe size or stripe count */
-    /* on the V1 API because in that scenario we cannot do anything. If that is the case disable trying */
-    /* to set the stripe. If stripe count and/or stripe size are set the operation can continue but the */
-    /* pool will not be applied. */
-#ifdef HAVE_LUSTRE_USER
-    if(o->lustre_pool != "" && LOV_USER_MAGIC == LOV_USER_MAGIC_V1){
-        WARN("Lustre pool specified, but the Lustre User API on this system does not support that.");
-      if(o->lustre_stripe_count == -1 && o->lustre_stripe_size == 0){
-        o->lustre_set_striping = 0;
-        ERR("Setting Lustre pool is not supported for the version of the Lustre API used on this system");
-      }
-    }else{
-      if(o->lustre_pool != "" && o->lustre_stripe_count <= 0 ){
-        o->lustre_stripe_count = 1;
-      }
-    }
-#endif /* HAVE_LUSTRE_USER */
+#else
+    WARN("Lustre striping options set but not available");
+    o->lustre_set_striping = 0;
+#endif
+  }
+  if((o->lustre_pool)){
+          if(o->lustre_stripe_count == 0 || o->lustre_stripe_size == 0){
+                  ERR("Lustre pool specified but no stripe count or stripe size specified");
+          }
+#ifdef HAVE_LUSTRE_LUSTREAPI
+          o->lustre_set_pool = 1;
+#else
+          WARN("Lustre pool option set but the Lustre API is not available to do this");
+          o->lustre_set_pool = 0;
+#endif
   }
   if(o->gpuDirect && ! o->direct_io){
     ERR("GPUDirect required direct I/O to be used!");
@@ -504,6 +504,7 @@ void lustre_disable_file_locks(const int fd) {
 aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int fd_oflag = O_BINARY;
+        int fd_mode;
         int mode = 0664;
         posix_fd * pfd = safeMalloc(sizeof(posix_fd));
         posix_options_t * o = (posix_options_t*) param;
@@ -514,16 +515,47 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
         if(hints->dryRun)
           return (aiori_fd_t*) 0;
 
-#ifdef HAVE_LUSTRE_USER
+#if defined(HAVE_LUSTRE_USER) || defined(HAVE_LUSTRE_LUSTREAPI)
 /* Add a #define for FASYNC if not available, as it forms part of
  * the Lustre O_LOV_DELAY_CREATE definition. */
 #ifndef FASYNC
 #define FASYNC          00020000   /* fcntl, for BSD compatibility */
 #endif
-        if (o->lustre_set_striping) {
-                /* In the single-shared-file case, task 0 has to create the
-                   file with the Lustre striping options before any other
-                   processes open the file */
+        if (o->lustre_set_striping || o->lustre_set_pool) {
+#ifdef HAVE_LUSTRE_LUSTREAPI
+
+                if (!hints->filePerProc && rank != 0) {
+                        MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+                        fd_oflag |= O_RDWR;
+                        pfd->fd = open64(testFileName, fd_oflag, mode);
+                        if (pfd->fd < 0){
+                                ERRF("open64(\"%s\", %d, %#o) failed. Error: %s",
+                                        testFileName, fd_oflag, mode, strerror(errno));
+                        }
+                } else {
+
+                        fd_oflag |= O_CREAT | O_EXCL | O_RDWR;
+                        fd_mode = S_IRWXU;
+                        if(o->lustre_set_pool){
+                                pfd->fd = llapi_file_open_pool(testFileName, fd_oflag, fd_mode, o->lustre_stripe_size, 
+                                                               o->lustre_start_ost, o->lustre_stripe_count, 0,
+                                                               o->lustre_pool);
+                        }else{
+                                pfd->fd = llapi_file_open(testFileName, fd_oflag, fd_mode, o->lustre_stripe_size, 
+                                                          o->lustre_start_ost, o->lustre_stripe_count, 0);
+                        } 
+
+                        if (pfd->fd < 0)
+                                ERRF("Unable to open '%s': %s\n",
+                                     testFileName, strerror(errno));
+
+                        if (!hints->filePerProc)
+                                MPI_CHECK(MPI_Barrier(testComm),
+                                          "barrier error");                        
+
+                }
+
+#else
                 if (!hints->filePerProc && rank != 0) {
                         MPI_CHECK(MPI_Barrier(testComm), "barrier error");
                         fd_oflag |= O_RDWR;
@@ -534,18 +566,13 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                         }
                 } else {
                         struct lov_user_md opts = { 0 };
-
                         /* Setup Lustre IOCTL striping pattern structure */
                         opts.lmm_magic = LOV_USER_MAGIC;
                         opts.lmm_stripe_size = o->lustre_stripe_size;
                         opts.lmm_stripe_offset = o->lustre_start_ost;
                         opts.lmm_stripe_count = o->lustre_stripe_count;
-                        #if(LOV_USER_MAGIC != LOV_USER_MAGIC_V1)
-                          opts.lmm_pool_name = o->lustre_pool;
-                        #endif
                         /* File needs to be opened O_EXCL because we cannot set
                          * Lustre striping information on a pre-existing file.*/
-
                         fd_oflag |= O_CREAT | O_EXCL | O_RDWR | O_LOV_DELAY_CREATE;
                         pfd->fd = open64(testFileName, fd_oflag, mode);
                         if (pfd->fd < 0) {
@@ -558,12 +585,16 @@ aiori_fd_t *POSIX_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
                                 ERRF("Error on ioctl for '%s' (%d): %s\n",
                                         testFileName, pfd->fd, errmsg);
                         }
+
                         if (!hints->filePerProc)
                                 MPI_CHECK(MPI_Barrier(testComm),
-                                          "barrier error");
+                                          "barrier error");                        
+
                 }
+#endif
+                
         } else {
-#endif /* HAVE_LUSTRE_USER */
+#endif /* HAVE_LUSTRE_USER || HAVE_LUSTRE_LUSTREAPI */
 
                 fd_oflag |= O_CREAT | O_RDWR;
 
