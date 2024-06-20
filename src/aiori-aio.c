@@ -84,7 +84,6 @@ static void aio_initialize(aiori_mod_opt_t * param){
   if(io_setup(o->max_pending, & o->ioctx) != 0){
     ERRF("Couldn't initialize io context %s", strerror(errno));
   }
-  printf("%d\n", (o->max_pending));
 
   o->iocbs = malloc(sizeof(struct iocb *) * o->granularity);
   o->iocbs_pos = 0;
