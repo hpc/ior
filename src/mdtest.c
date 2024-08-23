@@ -1566,7 +1566,11 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
     }
   }
 
-  VERBOSE(0, -1, "\nSUMMARY %s (in ops/sec): (of %d iterations)", print_time ? "time" : "rate", iterations);
+  if(print_time){
+    VERBOSE(0, -1, "\nSUMMARY time (in ms/op): (of %d iterations)", iterations);
+  }else{
+    VERBOSE(0, -1, "\nSUMMARY rate (in ops/sec): (of %d iterations)", iterations);
+  }
   PRINT("   Operation     ");
   if(o.show_perrank_statistics){
     PRINT("per Rank: Max            Min           Mean      per Iteration:");
