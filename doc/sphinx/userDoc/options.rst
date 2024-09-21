@@ -18,59 +18,62 @@ Command line options
 --------------------
 
 These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``).
+Flags
+  -c, --collective              Use collective I/O
+  -C                            reorderTasks -- changes task ordering for readback (useful to avoid client cache)
+  -e                            fsync -- perform a fsync() operation at the end of each read/write phase
+  -E                            useExistingTestFile -- do not remove test file before write access
+  -F                            filePerProc -- file-per-process
+  -g                            intraTestBarriers -- use barriers between open, write/read, and close
+  -k                            keepFile -- don't remove the test file(s) on program exit
+  -K                            keepFileWithError  -- keep error-filled file(s) after data-checking
+  -m                            multiFile -- use number of reps (-i) for multiple file count
+  -r                            readFile -- read existing file
+  -R                            checkRead -- verify that the output of read matches the expected signature (used with -G)
+  -u                            uniqueDir -- use unique directory name for each file-per-process
+  -v                            verbose -- output information (repeating flag increases level)
+  -w                            writeFile -- write file
+  -W                            checkWrite -- check read after write
+  -x                            singleXferAttempt -- do not retry transfer if incomplete
+  -y                            dualMount -- use dual mount points for a filesystem
+  -Y                            fsyncPerWrite -- perform sync operation after every write operation
+  -z                            randomOffset -- access is to random, not sequential, offsets within a file
+  -Z                            reorderTasksRandom -- changes task ordering to random ordering for readback
+  --warningAsErrors             Any warning should lead to an error.
+  --dryRun                      do not perform any I/Os just run evtl. inputs print dummy output
 
-  -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]
-  -A N  refNum -- user reference number to include in long summary
-  -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
-  -c    collective -- collective I/O
-  -C    reorderTasksConstant -- changes task ordering to n+1 ordering for readback
-  -d N  interTestDelay -- delay between reps in seconds
-  -D N  deadlineForStonewalling -- seconds before stopping write or read phase
-  -e    fsync -- perform fsync upon POSIX write close
-  -E    useExistingTestFile -- do not remove test file before write access
-  -f S  scriptFile -- test script name
-  -F    filePerProc -- file-per-process
-  -g    intraTestBarriers -- use barriers between open, write/read, and close
-  -G N  setTimeStampSignature -- set value for time stamp signature
-  -h    showHelp -- displays options and help
-  -H    showHints -- show hints
-  -i N  repetitions -- number of repetitions of test
-  -I    individualDataSets -- datasets not shared by all procs [not working]
-  -j N  outlierThreshold -- warn on outlier N seconds from mean
-  -J N  setAlignment -- HDF5 alignment in bytes (e.g.: 8, 4k, 2m, 1g)
-  -k    keepFile -- don't remove the test file(s) on program exit
-  -K    keepFileWithError  -- keep error-filled file(s) after data-checking
-  -l    data packet type-- type of packet that will be created [offset|incompressible|timestamp|o|i|t]
-  -m    multiFile -- use number of reps (-i) for multiple file count
-  -M N  memoryPerNode -- hog memory on the node (e.g.: 2g, 75%)
-  -n    noFill -- no fill in HDF5 file creation
-  -N N  numTasks -- number of tasks that should participate in the test
-  -o S  testFile -- full name for test
-  -O S  string of IOR directives (e.g. -O checkRead=1,GPUid=2)
-  -p    preallocate -- preallocate file size
-  -P    useSharedFilePointer -- use shared file pointer [not working]
-  -q    quitOnError -- during file error-checking, abort on error
-  -Q N  taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N) [!HDF5]
-  -r    readFile -- read existing file
-  -R    checkRead -- check read after read
-  -s N  segmentCount -- number of segments
-  -S    useStridedDatatype -- put strided access into datatype [not working]
-  -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)
-  -T N  maxTimeDuration -- max time in minutes to run tests
-  -u    uniqueDir -- use unique directory name for each file-per-process
-  -U S  hintsFileName -- full name for hints file
-  -v    verbose -- output information (repeating flag increases level)
-  -V    useFileView -- use MPI_File_set_view
-  -w    writeFile -- write file
-  -W    checkWrite -- check read after write
-  -x    singleXferAttempt -- do not retry transfer if incomplete
-  -X N  reorderTasksRandomSeed -- random seed for -Z option
-  -Y    fsyncPerWrite -- perform fsync after each POSIX write
-  -z    randomOffset -- access is to random, not sequential, offsets within a file
-  -Z    reorderTasksRandom -- changes task ordering to random ordering for readback
-
-
-* S is a string, N is an integer number.
+Optional arguments
+  -a=POSIX                      API for I/O [POSIX|DUMMY|MPIIO|MMAP]
+  -A=0                          refNum -- user supplied reference number to include in the summary
+  -b=1048576                    blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
+  -d=0                          interTestDelay -- delay between reps in seconds
+  -D=0                          deadlineForStonewalling -- seconds before stopping write or read phase
+  -O stoneWallingWearOut=1           -- once the stonewalling timeout is over, all process finish to access the amount of data
+  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut
+  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read
+  -O minTimeDuration=0           -- minimum Runtime for the run (will repeat from beginning of the file if time is not yet over)
+  -O allocateBufferOnGPU=X           -- allocate I/O buffers on the GPU: X=1 uses managed memory - verifications are run on CPU; X=2 managed memory - verifications on GPU; X=3 device memory with verifications on GPU.
+  -O GPUid=X                         -- select the GPU to use.
+  -f=STRING                     scriptFile -- test script name
+  -G=0                          setTimeStampSignature -- set value for time stamp signature/random seed
+  -i=1                          repetitions -- number of repetitions of test
+  -j=0                          outlierThreshold -- warn on outlier N seconds from mean
+  -l, --dataPacketType=STRING   datapacket type-- type of packet that will be created [offset|incompressible|timestamp|random|o|i|t|r]
+  -M=STRING                     memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)
+  -N=-1                         numTasks -- number of tasks that are participating in the test (overrides MPI)
+  -o=testFile                   testFile -- full name for test
+  -O=STRING                     string of IOR directives (e.g. -O checkRead=1,GPUid=2)
+  -Q=1                          taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N)
+  -s=1                          segmentCount -- number of segments
+  -t=262144                     transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)
+  -T=0                          maxTimeDuration -- max time in minutes executing repeated test; it aborts only between iterations and not within a test!
+  -X=0                          reorderTasksRandomSeed -- random seed for -Z option
+  --randomPrefill=0             For random -z access only: Prefill the file with this blocksize, e.g., 2m
+  --random-offset-seed=-1       The seed for -z
+  -O summaryFile=FILE                 -- store result data into this file
+  -O summaryFormat=[default,JSON,CSV] -- use the format for outputting the summary
+  -O saveRankPerformanceDetailsCSV=<FILE> -- store the performance of each rank into the named CSV file.
+ing to random ordering for readback
 
 * For transfer and block sizes, the case-insensitive K, M, and G
   suffices are recognized.  I.e., '4k' or '4K' is accepted as 4096.
@@ -119,10 +122,6 @@ GENERAL
   * ``reorderTasksRandomSeed`` - random seed for ``reordertasksrandom`` option. (default: 0)
         * When > 0, use the same seed for all iterations
         * When < 0, different seed for each iteration
-
-  * ``quitOnError`` - upon error encountered on ``checkWrite`` or ``checkRead``,
-    display current error and then stop execution.  Otherwise, count errors and
-    continue (default: 0)
 
   * ``numTasks`` - number of tasks that should participate in the test.  0
     denotes all tasks.  (default: 0)
