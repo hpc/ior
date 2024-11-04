@@ -334,6 +334,23 @@ AM_COND_IF([USE_CEPHFS_AIORI],[
         AC_DEFINE([USE_CEPHFS_AIORI], [], [Build CEPHFS backend AIORI])
 ])
 
+# libnfs Backend
+AC_ARG_WITH([libnfs],
+    [AS_HELP_STRING([--with-libnfs],
+	    [support IO with libnfs backend @<:@default=no@:>@])],
+    [],
+    [with_libnfs=no])
+AM_CONDITIONAL([USE_LIBNFS_AIORI], [test x$with_libnfs != xno])
+AS_IF([test "x$with_libnfs" != xno], [
+        AC_DEFINE([USE_LIBNFS_AIORI], [], [Build libnfs backend AIORI using libnfs])
+        # a path to the installation directory is passed -> setup include directory and lib path
+        # if no argument is passed or explicit "yes" -> use standard install location
+        AS_IF([test "x$with_libnfs" != xyes], [
+                LDFLAGS="$LDFLAGS -L$with_libnfs/lib/x86_64-linux-gnu"
+                CPPFLAGS="$CPPFLAGS -I$with_libnfs/include"
+        ])
+])
+
 # DAOS-FS Backend (DFS)
 AC_ARG_WITH([daos],
     [AS_HELP_STRING([--with-daos],
