@@ -156,10 +156,20 @@ void LIBNFS_XferHints(aiori_xfer_hint_t * params) {
 }
 
 int LIBNFS_MakeDirectory(const char *path, mode_t mode, aiori_mod_opt_t * module_options) {
+    if (nfs_mkdir2(nfs_context, path, mode)) {
+        printf("create directory failed");
+        return 1;
+    }
+
     return 0;
 }
 
 int LIBNFS_RemoveDirectory(const char *path, aiori_mod_opt_t * module_options) {
+    if (nfs_rmdir(nfs_context, path)) {
+        printf("remove directory failed");
+        return 1;
+    }
+
     return 0;
 }
 
@@ -206,23 +216,25 @@ int LIBNFS_StatFS(const char *file_path, ior_aiori_statfs_t *stat, aiori_mod_opt
     return 0;
 }
 
-void LIBNFS_Sync(aiori_mod_opt_t *module_options) {
-    int i = 0;
-    i++;
-}
-
 void LIBNFS_FSync(aiori_fd_t *file_descriptor, aiori_mod_opt_t * module_options) {
-  //TODO can we support fsync?
-    int i = 0;
-    i++;
+    struct nfsfh *file = (struct nfsfh *)file_descriptor; 
+    if (nfs_fsync(nfs_context, file)) {
+        printf("nfs fsync failed\n");
+    }
 }
 
 int LIBNFS_Access(const char *path, int mode, aiori_mod_opt_t *module_options) {
-    return 0;
+    return nfs_access(nfs_context, path, mode);    
 }
 
-IOR_offset_t LIBNFS_GetFileSize(aiori_mod_opt_t *module_options, char *filename) {
-    return (IOR_offset_t)0;
+IOR_offset_t LIBNFS_GetFileSize(aiori_mod_opt_t *module_options, char *path) {
+    struct nfs_stat_64 nfs_stat;    
+    int stat_result = nfs_stat64(nfs_context, path, &nfs_stat);
+    if (stat_result) {
+        return stat_result;
+    }
+
+    return (IOR_offset_t)nfs_stat.nfs_size;
 }
 
 option_help *LIBNFS_GetOptions(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t* init_values) {
@@ -243,11 +255,6 @@ option_help *LIBNFS_GetOptions(aiori_mod_opt_t ** init_backend_options, aiori_mo
     option_help * help = malloc(sizeof(h));
     memcpy(help, h, sizeof(h));
     return help;
-}
-
-int LIBNFS_CheckParams(aiori_mod_opt_t *module_options) {
-    //TODO Validate the Serveradress??
-    return 0;
 }
 
 void LIBNFS_Initialize(aiori_mod_opt_t * options) {
@@ -302,12 +309,13 @@ ior_aiori_t libnfs_aiori = {
                                .rmdir = LIBNFS_RemoveDirectory,
                                .stat = LIBNFS_Stat,
                                .statfs = LIBNFS_StatFS,
-                               .sync = LIBNFS_Sync,
+                               .sync = NULL,
                                .fsync = LIBNFS_FSync,
                                .access = LIBNFS_Access,
                                .get_file_size = LIBNFS_GetFileSize,
                                .get_options = LIBNFS_GetOptions,
-                               .check_params = LIBNFS_CheckParams,
+                               .check_params = NULL,
                                .initialize = LIBNFS_Initialize,
-                               .finalize = LIBNFS_Finalize
+                               .finalize = LIBNFS_Finalize,
+                               .enable_mdtest = true
 };
