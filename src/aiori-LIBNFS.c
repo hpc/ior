@@ -12,11 +12,12 @@
 #include "aiori.h"
 
 typedef struct {
-    char *server;
-    char *root_path;
+    char *url;
 } libnfs_options_t;
 
 static struct nfs_context *nfs_context;
+
+static struct nfs_url *nfs_url;
 
 /******************************************************************************\
 *
@@ -146,7 +147,7 @@ IOR_offset_t LIBNFS_Xfer(
         return read_result;
     } 
 
-    return (IOR_offset_t)0;
+    return (IOR_offset_t)0; 
 }
 
 void LIBNFS_XferHints(aiori_xfer_hint_t * params) {
@@ -226,19 +227,16 @@ IOR_offset_t LIBNFS_GetFileSize(aiori_mod_opt_t *module_options, char *filename)
 
 option_help *LIBNFS_GetOptions(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t* init_values) {
     libnfs_options_t *libnfs_options = malloc(sizeof(libnfs_options_t));
-
     if (init_values != NULL) {
         memcpy(libnfs_options, init_values, sizeof(libnfs_options_t));
     } else {
         memset(libnfs_options, 0, sizeof(libnfs_options_t));
-        libnfs_options->root_path = "/";
     }
 
     *init_backend_options = (aiori_mod_opt_t *) libnfs_options;
 
     option_help h [] = {
-        {0, "libnfs.server", "The serveradress (name or ip adress)", OPTION_REQUIRED_ARGUMENT, 's', &libnfs_options->server},
-        {0, "libnfs.root_path", "The path in which the benchmark can work", OPTION_OPTIONAL_ARGUMENT, 's', &libnfs_options->root_path},
+        {0, "libnfs.url", "The URL (RFC2224) specifing the server, path and options", OPTION_REQUIRED_ARGUMENT, 's', &libnfs_options->url},
         LAST_OPTION
     };
 
@@ -253,17 +251,27 @@ int LIBNFS_CheckParams(aiori_mod_opt_t *module_options) {
 }
 
 void LIBNFS_Initialize(aiori_mod_opt_t * options) {
-    if (nfs_context)
+    if (nfs_context || nfs_url)
     {
         return;
     }
 
     libnfs_options_t *libnfs_options = (libnfs_options_t *)options;
     nfs_context = nfs_init_context();
-    nfs_set_version(nfs_context, 4); //TODO Should Version 3 be supported?    
-    int mount_result = nfs_mount(nfs_context, libnfs_options->server, libnfs_options->root_path);
+    if (!nfs_context) {
+        fprintf(stderr, "Error while creating nfs context\n");
+        return;
+    }
+
+    nfs_url = nfs_parse_url_full(nfs_context, libnfs_options->url);
+    if (!nfs_url) {
+        fprintf(stderr, "Error while parsing libnfs.url\n");
+        return;
+    }
+
+    int mount_result = nfs_mount(nfs_context, nfs_url->server, nfs_url->path);
     if (mount_result) {
-        fprintf(stderr, "Error while mounting on nfs server: %s, path: %s\n", libnfs_options->server, libnfs_options->root_path);
+        fprintf(stderr, "Error while mounting on nfs server: %s, path: %s\n", nfs_url->server, nfs_url->path);
         return;
     }
 }
@@ -271,6 +279,12 @@ void LIBNFS_Initialize(aiori_mod_opt_t * options) {
 void LIBNFS_Finalize(aiori_mod_opt_t * options) {
     if (nfs_context) {
         nfs_destroy_context(nfs_context);
+        nfs_context = NULL;
+    }
+
+    if (nfs_url) {
+        nfs_destroy_url(nfs_url);
+        nfs_url = NULL;
     }
 }
 
