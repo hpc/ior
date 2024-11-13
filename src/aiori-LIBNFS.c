@@ -118,7 +118,7 @@ IOR_offset_t LIBNFS_Xfer(
     
     struct nfsfh *file = (struct nfsfh *)file_descriptor;
     //set offset
-    uint64_t current_offset = -1;    
+    uint64_t current_offset;    
     nfs_lseek(nfs_context, file, offset, SEEK_SET, &current_offset);
     if (current_offset != offset) {
         fprintf(stderr, "Error while lseek... expected offset: %lld but current offset: %" PRIu64 "\n", offset, current_offset);
@@ -128,7 +128,7 @@ IOR_offset_t LIBNFS_Xfer(
     if (access == WRITE) {
         //TODO multiple attempts?
 
-        int write_result = nfs_write(nfs_context, file, (uint64_t)size, (void *)buffer);
+        int write_result = nfs_write(nfs_context, file, (void *)buffer, (uint64_t)size);
         if (write_result < 0) {
             fprintf(stderr, "Error while writing to file\n");
             return 0;
@@ -138,7 +138,7 @@ IOR_offset_t LIBNFS_Xfer(
     }
 
     if (access == READ) {
-        int read_result = nfs_read(nfs_context, file, (uint64_t)size, (void*) buffer);
+        int read_result = nfs_read(nfs_context, file, (void*)buffer, (size_t)size);
         if (read_result < 0) {
             fprintf(stderr, "Error while reading file\n");
             return 0;
