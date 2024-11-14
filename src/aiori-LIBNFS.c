@@ -62,7 +62,6 @@ int Map_IOR_Open_Flags_To_LIBNFS_Flags(int ior_open_flags) {
 *
 \******************************************************************************/
 
-
 char *LIBNFS_GetVersion(){
     return "Version 1.0";
 }
@@ -91,8 +90,9 @@ aiori_fd_t *LIBNFS_Create(char *file_path, int ior_flags, aiori_mod_opt_t *)
 {
     struct nfsfh *newFileFh;
     int libnfs_flags = Map_IOR_Open_Flags_To_LIBNFS_Flags(ior_flags);
-    int open_result = nfs_open2(nfs_context, file_path, libnfs_flags, 0777, &newFileFh);
-    nfs_chmod(nfs_context, file_path, 0777); // mode parameter in nfs_open2 does not work, but with extra call nfs_chmod it works?
+    int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+    int open_result = nfs_open2(nfs_context, file_path, libnfs_flags, mode, &newFileFh);
+    nfs_chmod(nfs_context, file_path, mode); // mode parameter in nfs_open2 does not work, but with extra call nfs_chmod it works?
     if (open_result) {
         fprintf(stderr, "Error while creating the file %s\n", file_path);
         return NULL;
