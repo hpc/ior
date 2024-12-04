@@ -8,7 +8,7 @@ If libnfs is installed in a standard location, you can use the following command
 If you have installed libnfs in a custom location or compiled it by yourself, you need to specify the include directory and the library path by setting the CFLAGS and LDFLAGS variables:
 
 ./bootstrap
-./configure [other options] --with-hdf5 CFLAGS="-I /path/to/libnfs/include" LDFLAGS="-L /path/to/libnfs/lib"
+./configure [other options] --with-libnfs CFLAGS="-I /path/to/libnfs/include" LDFLAGS="-L /path/to/libnfs/lib"
 
 If you compiled libnfs by yourself, don't forget to add the library path to the $LD_LIBRARY_PATH environment variable, or copy the library to the same directory as the executable.
 
