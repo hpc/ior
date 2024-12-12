@@ -9,11 +9,8 @@
 #include <inttypes.h>
 #include <fcntl.h>
 #include <nfsc/libnfs.h>
+#include "aiori-LIBNFS.h"
 #include "aiori.h"
-
-typedef struct {
-    char *url;
-} libnfs_options_t;
 
 static struct nfs_context *nfs_context;
 
@@ -26,8 +23,7 @@ static struct nfs_url *nfs_url;
 \******************************************************************************/
 
 int Map_IOR_Open_Flags_To_LIBNFS_Flags(int ior_open_flags) {
-    int libnfs_flags = 0;
-    int test = ior_open_flags & IOR_RDONLY;
+    int libnfs_flags = 0;    
     if (ior_open_flags & IOR_RDONLY) {
         libnfs_flags |= O_RDONLY;
     }
