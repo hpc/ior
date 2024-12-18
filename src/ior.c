@@ -1350,7 +1350,7 @@ static void TestIoSys(IOR_test_t *test)
                                 rankOffset = (params->taskPerNodeOffset * shift) % params->numTasks;
                         }
                         /* random process offset reading */
-                        if (params->reorderTasksRandom) {
+                        if (params->reorderTasksRandom == 1) {
                                 /* this should not intefere with randomOffset within a file because GetOffsetArrayRandom */
                                 /* seeds every rand() call  */
                                 int nodeoffset;
@@ -1373,6 +1373,31 @@ static void TestIoSys(IOR_test_t *test)
                                 if (verbose >= VERBOSE_2) {
                                         file_hits_histogram(params);
                                 }
+                        }
+                        if (params->reorderTasksRandom > 1) { /* Shuffling rank offset */
+                                int nodeoffset;
+                                unsigned int iseed0;
+                                nodeoffset = params->taskPerNodeOffset;
+                                nodeoffset = (nodeoffset < params->numNodes) ? nodeoffset : params->numNodes - 1;
+                                if (params->reorderTasksRandomSeed < 0)
+                                        iseed0 = -1 * params->reorderTasksRandomSeed + rep;
+                                else
+                                        iseed0 = params->reorderTasksRandomSeed;
+                                srand(iseed0);
+                                int * rankOffsets = safeMalloc(sizeof(int) * params->numTasks);
+                                for(int i=0; i < params->numTasks; i++)
+                                {
+                                        rankOffsets[i] = i;
+                                }
+                                for(int i=0; i < params->numTasks; i++)
+                                {
+                                        int tgt = i + rand() % (params->numTasks - i);
+                                        int tmp = rankOffsets[tgt];
+                                        rankOffsets[tgt] = rankOffsets[i];
+                                        rankOffsets[i] = tmp;
+                                }
+                                rankOffset = rankOffsets[rank];
+                                free(rankOffsets);
                         }
                         /* Using globally passed rankOffset, following function generates testFileName to read */
                         GetTestFileName(testFileName, params);
