@@ -5,7 +5,7 @@ This folder contains integration tests for the libnfs backend of the IOR/MDTEST 
 
 ## How to build the test
 
-First you have to install the Cmocka dev library if it is not already installed.
+First you have to install the Cmocka dev library if it is not already installed. Then do the following steps:  
 
 1. create a build folder
 2. call ```cmake .. -DLibnfsIncludePath=/path/to/libnfs/include -DLibnfsLibPath=/path/to/libnfs/build/lib``` in the created build folder with the corresponding paths to your libnfs installation/build. Alternatively, the paths can also be adjusted in the CMakeLists.txt file.
@@ -23,7 +23,9 @@ Example:
 ./libnfs_integration_tests "~/libnfs_integration_test" "nfs://127.0.0.1//?uid=0&gid=0&version=4"
 ```
 
-The Path NFS-path / shows to the folder ~/libnfs_integration_test.
+The Path NFS-path / shows to the folder ~/libnfs_integration_test.  
+
+**Warning:** The used test folder and the NFS-server should only be used for testing purposes and should not be mixed with production data! Data in the test folder will be deleted before every test case.
 
 ## How do the tests work
 The tests call some functions from the libnfs backend implementation, e.g. create function from the aiori_fd_t structure. It is expected that a file has been created in the folder via nfs. Since the test program also has local access to this folder, it can check without NFS whether a file has been created by using the POSIX interface to verify.
