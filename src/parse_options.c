@@ -467,7 +467,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'X', NULL,        "reorderTasksRandomSeed -- random seed for -Z option", OPTION_OPTIONAL_ARGUMENT, 'd', & params->reorderTasksRandomSeed},
     {'y', NULL,        "dualMount -- use dual mount points for a filesystem", OPTION_FLAG, 'd', & params->dualMount},
     {'Y', NULL,        "fsyncPerWrite -- perform sync operation after every write operation", OPTION_FLAG, 'd', & params->fsyncPerWrite},
-    {'z', NULL,        "randomOffset -- access is to random, not sequential, offsets within a file", OPTION_FLAG, 'd', & params->randomOffset},
+    {'z', NULL,        "randomOffset -- access is to shuffled, not sequential, offsets within a file, specify twice for random (potentially overlapping)", OPTION_FLAG, 'd', & params->randomOffset},
     {0, "randomPrefill", "For random -z access only: Prefill the file with this blocksize, e.g., 2m", OPTION_OPTIONAL_ARGUMENT, 'l', & params->randomPrefillBlocksize},
     {0, "random-offset-seed",        "The seed for -z", OPTION_OPTIONAL_ARGUMENT, 'd', & params->randomSeed},
     {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random select regions for readback, use twice for shuffling", OPTION_FLAG, 'd', & params->reorderTasksRandom},
