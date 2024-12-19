@@ -11,6 +11,13 @@ TYPE="basic"
 
 source $ROOT/test-lib.sh
 
+
+IOR 2 -a POSIX -w     -C              -k -e -i1 -m -t 100k -b 200k
+# Random read the file previously created
+IOR 2 -a POSIX -r                     -k -e -i1 -m -t 100k -b 200k -s 10 -z -z
+
+exit 1
+
 MDTEST 1 -a POSIX
 MDTEST 2 -a POSIX -W 2
 MDTEST 1 -C -T -r -F -I 1 -z 1 -b 1 -L -u
@@ -22,6 +29,9 @@ IOR 1 -a POSIX -w    -z                  -F -k -e -i2 -m -t 100k -b 200k
 IOR 1 -a MMAP -r    -z                  -F -k -e -i1 -m -t 100k -b 200k
 
 IOR 2 -a POSIX -w     -C              -k -e -i1 -m -t 100k -b 200k
+# Random read the file previously created
+IOR 2 -a POSIX -r                     -k -e -i1 -m -t 100k -b 200k -s 10 -z -z
+
 
 IOR 2 -a POSIX -w    -z  -C             -F -k -e -i1 -m -t 100k -b 200k
 IOR 2 -a POSIX -w    -z  -C -Q 1        -F -k -e -i1 -m -t 100k -b 200k
