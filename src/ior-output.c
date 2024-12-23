@@ -705,7 +705,7 @@ void PrintShortSummary(IOR_test_t * test)
         if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
-        PrintArrayEnd();
+        //PrintArrayEnd();
 
         reps = params->repetitions;
 

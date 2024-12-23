@@ -1162,15 +1162,6 @@ static void TestIoSys(IOR_test_t *test)
         void *hog_buf;
         IOR_io_buffers ioBuffers;
 
-        if (rank == 0 && verbose >= VERBOSE_1) {
-                fprintf(out_logfile, "Participating tasks : %d\n", params->numTasks);
-                fflush(out_logfile);
-        }
-        if (rank == 0 && params->reorderTasks == TRUE && verbose >= VERBOSE_1) {
-                fprintf(out_logfile,
-                        "Using reorderTasks '-C' (useful to avoid read cache in client)\n");
-                fflush(out_logfile);
-        }
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
@@ -1261,7 +1252,7 @@ static void TestIoSys(IOR_test_t *test)
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
-                        if (rank == 0 && verbose >= VERBOSE_1) {
+                        if (rank == 0 && verbose >= VERBOSE_3) {
                                 fprintf(out_logfile,
                                         "Commencing write performance test: %s",
                                         CurrentTimeString());
@@ -1419,7 +1410,7 @@ static void TestIoSys(IOR_test_t *test)
                         if (params->intraTestBarriers)
                                 MPI_CHECK(MPI_Barrier(testComm),
                                           "barrier error");
-                        if (rank == 0 && verbose >= VERBOSE_1) {
+                        if (rank == 0 && verbose >= VERBOSE_3) {
                                 fprintf(out_logfile,
                                         "Commencing read performance test: %s\n",
                                         CurrentTimeString());
