@@ -1,5 +1,5 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
+/* -*- mode: c; c-basic-offset: 2; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=2:tabstop=2:
  */
 /******************************************************************************\
 *                                                                              *
@@ -1350,7 +1350,7 @@ static void TestIoSys(IOR_test_t *test)
                                 rankOffset = (params->taskPerNodeOffset * shift) % params->numTasks;
                         }
                         /* random process offset reading */
-                        if (params->reorderTasksRandom) {
+                        if (params->reorderTasksRandom == 1) {
                                 /* this should not intefere with randomOffset within a file because GetOffsetArrayRandom */
                                 /* seeds every rand() call  */
                                 int nodeoffset;
@@ -1374,8 +1374,36 @@ static void TestIoSys(IOR_test_t *test)
                                         file_hits_histogram(params);
                                 }
                         }
+                        if (params->reorderTasksRandom > 1) { /* Shuffling rank offset */
+                                int nodeoffset;
+                                unsigned int iseed0;
+                                nodeoffset = params->taskPerNodeOffset;
+                                nodeoffset = (nodeoffset < params->numNodes) ? nodeoffset : params->numNodes - 1;
+                                if (params->reorderTasksRandomSeed < 0)
+                                        iseed0 = -1 * params->reorderTasksRandomSeed + rep;
+                                else
+                                        iseed0 = params->reorderTasksRandomSeed;
+                                srand(iseed0);
+                                int * rankOffsets = safeMalloc(sizeof(int) * params->numTasks);
+                                for(int i=0; i < params->numTasks; i++)
+                                {
+                                        rankOffsets[i] = i;
+                                }
+                                for(int i=0; i < params->numTasks; i++)
+                                {
+                                        int tgt = i + rand() % (params->numTasks - i);
+                                        int tmp = rankOffsets[tgt];
+                                        rankOffsets[tgt] = rankOffsets[i];
+                                        rankOffsets[i] = tmp;
+                                }
+                                rankOffset = rankOffsets[rank];
+                                free(rankOffsets);
+                        }
                         /* Using globally passed rankOffset, following function generates testFileName to read */
                         GetTestFileName(testFileName, params);
+                        if(params->randomOffset > 1){
+                          params->expectedAggFileSize = backend->get_file_size(params->backend_options, testFileName);
+                        }
 
                         if (verbose >= VERBOSE_3) {
                                 fprintf(out_logfile, "task %d reading %s\n", rank,
@@ -1495,7 +1523,7 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
         }
         if (test->blockSize < test->transferSize)
                 ERR("block size must not be smaller than transfer size");
-        if (test->randomOffset && test->blockSize == test->transferSize)
+        if (test->randomOffset == 1 && test->blockSize == test->transferSize)
             ERR("IOR will randomize access within a block and repeats the same pattern for all segments, therefore choose blocksize > transferSize");
         if (! test->randomOffset && test->randomPrefillBlocksize)
           ERR("Setting the randomPrefill option without using random is not useful");
@@ -1558,6 +1586,33 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
         }
 }
 
+static int init_random_seed(IOR_param_t * test, int pretendRank){
+  int seed;
+  if (test->filePerProc) {
+    /* set up seed, each process can determine which regions to access individually */
+    if (test->randomSeed == -1) {
+            seed = time(NULL);
+            test->randomSeed = seed;
+    } else {
+        seed = test->randomSeed + pretendRank;
+    }
+  }else{
+    /* Shared file requires that the seed is synchronized */
+    if (test->randomSeed == -1) {
+      // all processes need to have the same seed.
+      if(rank == 0){
+        seed = time(NULL);
+      }
+      MPI_CHECK(MPI_Bcast(& seed, 1, MPI_INT, 0, test->testComm), "cannot broadcast random seed value");
+      test->randomSeed = seed;
+    }else{
+      seed = test->randomSeed;
+    }
+  }
+  srandom(seed);
+  return seed;
+}
+
 /**
  * Returns a precomputed array of IOR_offset_t for the inner benchmark loop.
  * They get created sequentially and mixed up in the end.
@@ -1579,28 +1634,7 @@ IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, IOR_offs
         IOR_offset_t offsetCnt = 0;
         IOR_offset_t *offsetArray;
 
-        if (test->filePerProc) {
-          /* set up seed, each process can determine which regions to access individually */
-          if (test->randomSeed == -1) {
-                  seed = time(NULL);
-                  test->randomSeed = seed;
-          } else {
-              seed = test->randomSeed + pretendRank;
-          }
-        }else{
-          /* Shared file requires that the seed is synchronized */
-          if (test->randomSeed == -1) {
-            // all processes need to have the same seed.
-            if(rank == 0){
-              seed = time(NULL);
-            }
-            MPI_CHECK(MPI_Bcast(& seed, 1, MPI_INT, 0, test->testComm), "cannot broadcast random seed value");
-            test->randomSeed = seed;
-          }else{
-            seed = test->randomSeed;
-          }
-        }
-        srandom(seed);
+        seed = init_random_seed(test, pretendRank);
 
         /* count needed offsets (pass 1) */
         if (test->filePerProc) {
@@ -1741,10 +1775,14 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
 
         IOR_offset_t offsets;
         IOR_offset_t * offsets_rnd;
-        if (test->randomOffset) {
+        if (test->randomOffset == 1) {
           offsets_rnd = GetOffsetArrayRandom(test, pretendRank, & offsets);
         }else{
           offsets = (test->blockSize / test->transferSize);
+        }
+        if (test->randomOffset > 1){
+          int seed = init_random_seed(test, pretendRank);
+          srand(seed + pretendRank);
         }
 
         void * randomPrefillBuffer = NULL;
@@ -1774,9 +1812,9 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
           // must synchronize processes to ensure they are not running ahead
           MPI_Barrier(test->testComm);
         }
-
         do{ // to ensure the benchmark runs a certain time
           for (i = 0; i < test->segmentCount && !hitStonewall; i++) {
+            IOR_offset_t offset;
             if(randomPrefillBuffer && test->deadlineForStonewalling != 0){
               // prefill the whole segment with data, this needs to be done collectively
               double t_start = GetTimeStamp();
@@ -1786,14 +1824,27 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                 fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
               }
             }
+            if (test->randomOffset > 1){
+                size_t sizerand = test->expectedAggFileSize; 
+                if(test->filePerProc){
+                  sizerand /= test->numTasks;
+                }
+                offset = rand() % (sizerand / test->blockSize) * test->blockSize - test->transferSize;
+                if(i == 0 && access == WRITE){ // always write the last block first
+                  if(test->filePerProc || rank == 0){
+                    offset = (sizerand / test->blockSize - 1) * test->blockSize - test->transferSize;
+                  }
+                }
+            }
             for (j = 0; j < offsets &&  !hitStonewall ; j++) {
-              IOR_offset_t offset;
-              if (test->randomOffset) {
+              if (test->randomOffset == 1) {
                 if(test->filePerProc){
                   offset = offsets_rnd[j] + (i * test->blockSize);
                 }else{
                   offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
                 }
+              }else if (test->randomOffset > 1){
+                offset += test->transferSize;
               }else{
                 offset = j * test->transferSize;
                 if (test->filePerProc) {
@@ -1848,15 +1899,24 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
               i++;
             }
             for ( ; pairCnt < point->pairs_accessed; i++) {
+              IOR_offset_t offset;
               if(i == test->segmentCount) i = 0; // wrap over, necessary to deal with minTimeDuration
+              if (test->randomOffset > 1){
+                  size_t sizerand = test->expectedAggFileSize; 
+                  if(test->filePerProc){
+                    sizerand /= test->numTasks;
+                  }
+                  offset = rand() % (sizerand / test->blockSize) * test->blockSize - test->transferSize;
+              }
               for ( ; j < offsets && pairCnt < point->pairs_accessed ; j++) {
-                IOR_offset_t offset;
-                if (test->randomOffset) {
+                if (test->randomOffset == 1) {
                   if(test->filePerProc){
                     offset = offsets_rnd[j] + (i * test->blockSize);
                   }else{
                     offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
                   }
+                }else if (test->randomOffset > 1){
+                  offset += test->transferSize;
                 }else{
                   offset = j * test->transferSize;
                   if (test->filePerProc) {

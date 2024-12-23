@@ -137,7 +137,7 @@ static IOR_offset_t DUMMY_GetFileSize(aiori_mod_opt_t * options, char *testFileN
 
 static IOR_offset_t DUMMY_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer, IOR_offset_t length, IOR_offset_t offset, aiori_mod_opt_t * options){
   if(verbose > 4){
-    fprintf(out_logfile, "DUMMY xfer: %p\n", file);
+    fprintf(out_logfile, "DUMMY %d xfer: %p, %lld, %lld\n", rank, file, offset, length);
   }
   dummy_options_t * o = (dummy_options_t*) options;
   if (o->delay_xfer){

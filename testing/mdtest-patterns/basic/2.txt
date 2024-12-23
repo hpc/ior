@@ -16,7 +16,7 @@ V-3: Rank   0  create_remove_items (start): temp_path is '/dev/shm/mdest/test-di
 V-3: Rank   0  file_test: stat path is '/dev/shm/mdest/test-dir.0-0/mdtest_tree.0.0'
 V-3: Rank   0  mdtest_stat file: /dev/shm/mdest/test-dir.0-0/mdtest_tree.0.0/mdtest_tree.0.1/file.mdtest.0.1
 V-3: Rank   0  file_test: rm directories path is '/dev/shm/mdest/test-dir.0-0/mdtest_tree.0.0'
-V-3: Rank   0  gonna create /dev/shm/mdest/test-dir.0-0/mdtest_tree.0.0
+V-3: Rank   0  gonna remove /dev/shm/mdest/test-dir.0-0/mdtest_tree.0.0
 V-3: Rank   0  create_remove_items (start): temp_path is '/dev/shm/mdest/test-dir.0-0/mdtest_tree.0.0'
 V-3: Rank   0  create_remove_items (start): temp_path is '/dev/shm/mdest/test-dir.0-0/mdtest_tree.0.0'
 V-3: Rank   0  create_remove_items (for loop): temp_path is '/dev/shm/mdest/test-dir.0-0/mdtest_tree.0.0/mdtest_tree.0.1/'

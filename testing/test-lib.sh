@@ -53,7 +53,7 @@ function IOR(){
   else
     echo -n "OK "
   fi
-  echo " $WHAT"
+  echo " $I $WHAT"
   I=$((${I}+1))
 }
 
