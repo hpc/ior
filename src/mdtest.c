@@ -2636,17 +2636,15 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     for (i = first; i <= last; i += stride) {
         sleep(1);
         
-        if(i < last){
-          MPI_Group testgroup;
-          range.last = i - 1;
-          MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
-          MPI_Comm_create(world_com, testgroup, &testComm);
-          MPI_Group_free(&testgroup);
-          if(testComm == MPI_COMM_NULL){
+        MPI_Group testgroup;
+        range.last = i - 1;
+        MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
+        MPI_Comm_create(world_com, testgroup, &testComm);
+        MPI_Group_free(&testgroup);
+        if(testComm == MPI_COMM_NULL){
+            /* tasks not in the group do not participate in this test, this joins the processes right before the MPI_Comm_free below that participate */
+            MPI_CHECK(MPI_Barrier(world_com), "MPI_Barrier(world_com) error");
             continue;
-          }
-        }else{
-          MPI_Comm_dup(world_com, & testComm);
         }
         MPI_Comm_size(testComm, &o.size);
 
@@ -2686,6 +2684,10 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
             VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
         }
         aggregated_results->total_errors += total_errors;
+
+        /* this joins the processes in the MPI_COMM_NULL check above which do not participate in the test */
+        MPI_CHECK(MPI_Barrier(world_com), "MPI_Barrier(world_com) error");
+
         MPI_Comm_free(&testComm);
     }
     
