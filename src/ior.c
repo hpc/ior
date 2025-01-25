@@ -787,9 +787,8 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
          * minimum (best) latency achieved. So what is reported is the average
          * latency of all ops from a single task, then taking the minimum of
          * that between all tasks. */
-        latency = (timer[IOR_TIMER_RDWR_STOP] - timer[IOR_TIMER_RDWR_START]) / (params->blockSize / params->transferSize);
-        MPI_CHECK(MPI_Reduce(&latency, &minlatency, 1, MPI_DOUBLE,
-                             MPI_MIN, 0, testComm), "MPI_Reduce()");
+        latency = (timer[IOR_TIMER_RDWR_STOP] - timer[IOR_TIMER_RDWR_START]) / point->pairs_accessed;
+        MPI_CHECK(MPI_Reduce(&latency, &minlatency, 1, MPI_DOUBLE, MPI_MIN, 0, testComm), "MPI_Reduce()");
 
         /* Only rank 0 tallies and prints the results. */
         if (rank != 0)
