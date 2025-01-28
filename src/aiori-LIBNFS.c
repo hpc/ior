@@ -8,9 +8,11 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <nfsc/libnfs.h>
 #include "aiori-LIBNFS.h"
 #include "aiori.h"
+#include "aiori-debug.h"
 
 static struct nfs_context *nfs_context;
 
@@ -67,8 +69,7 @@ aiori_fd_t *LIBNFS_Open(char *file_path, int ior_flags, aiori_mod_opt_t *) {
     int libnfs_flags = Map_IOR_Open_Flags_To_LIBNFS_Flags(ior_flags);
     int open_result = nfs_open(nfs_context, file_path, libnfs_flags, &newFileFh);
     if (open_result) {
-        fprintf(stderr, "Error while opening the file %s\n", file_path);
-        return NULL;
+        ERRF("Error while opening the file %s \n nfs error: %s\n", file_path, nfs_get_error(nfs_context));
     }
 
     return (aiori_fd_t *)newFileFh;
@@ -78,7 +79,7 @@ void LIBNFS_Close(aiori_fd_t * file_descriptor, aiori_mod_opt_t * module_options
     struct nfsfh *file = (struct nfsfh *)file_descriptor;
     int close_result = nfs_close(nfs_context, file);
     if (close_result) {
-        fprintf(stderr, "Error while closing the file\n");
+        ERRF("Error while closing a file \n nfs error: %s\n", nfs_get_error(nfs_context));        
     }
 }
 
@@ -90,8 +91,7 @@ aiori_fd_t *LIBNFS_Create(char *file_path, int ior_flags, aiori_mod_opt_t *)
     int open_result = nfs_open2(nfs_context, file_path, libnfs_flags, mode, &newFileFh);
     nfs_chmod(nfs_context, file_path, mode); // mode parameter in nfs_open2 does not work, but with extra call nfs_chmod it works?
     if (open_result) {
-        fprintf(stderr, "Error while creating the file %s\n", file_path);
-        return NULL;
+        ERRF("Error while creating the file %s \n nfs error: %s\n", file_path, nfs_get_error(nfs_context));
     }
 
     return (aiori_fd_t *)newFileFh;
@@ -100,7 +100,7 @@ aiori_fd_t *LIBNFS_Create(char *file_path, int ior_flags, aiori_mod_opt_t *)
 void LIBNFS_Remove(char* file_path, aiori_mod_opt_t * module_options) {
     int unlink_result = nfs_unlink(nfs_context, file_path);
     if (unlink_result) {
-        fprintf(stderr, "Error while unlinking the file %s\n", file_path);
+        ERRF("Error while unlinking the file %s \n nfs error: %s\n", file_path, nfs_get_error(nfs_context));
     }
 }
 
@@ -117,8 +117,7 @@ IOR_offset_t LIBNFS_Xfer(
     uint64_t current_offset;    
     nfs_lseek(nfs_context, file, offset, SEEK_SET, &current_offset);
     if (current_offset != offset) {
-        fprintf(stderr, "Error while lseek... expected offset: %lld but current offset: %" PRIu64 "\n", offset, current_offset);
-        return 0;
+        ERRF("Error while calling lseek... expected offset: %lld but current offset: %" PRIu64 "\n nfs error: %s\n", offset, current_offset, nfs_get_error(nfs_context));
     }
 
     if (access == WRITE) {
@@ -126,8 +125,7 @@ IOR_offset_t LIBNFS_Xfer(
 
         int write_result = nfs_write(nfs_context, file, (void *)buffer, (uint64_t)size);
         if (write_result < 0) {
-            fprintf(stderr, "Error while writing to file\n");
-            return 0;
+            ERRF("Error while writing to file \n nfs error: %s\n", nfs_get_error(nfs_context));
         }
 
         return write_result;
@@ -136,8 +134,7 @@ IOR_offset_t LIBNFS_Xfer(
     if (access == READ) {
         int read_result = nfs_read(nfs_context, file, (void*)buffer, (size_t)size);
         if (read_result < 0) {
-            fprintf(stderr, "Error while reading file\n");
-            return 0;
+            ERRF("Error while reading to file \n nfs error: %s\n", nfs_get_error(nfs_context));
         }
 
         return read_result;
@@ -153,8 +150,7 @@ void LIBNFS_XferHints(aiori_xfer_hint_t * params) {
 
 int LIBNFS_MakeDirectory(const char *path, mode_t mode, aiori_mod_opt_t * module_options) {
     if (nfs_mkdir2(nfs_context, path, mode)) {
-        printf("create directory failed");
-        return 1;
+        ERRF("Error while creating directory \n nfs error: %s\n", nfs_get_error(nfs_context));
     }
 
     return 0;
@@ -162,8 +158,7 @@ int LIBNFS_MakeDirectory(const char *path, mode_t mode, aiori_mod_opt_t * module
 
 int LIBNFS_RemoveDirectory(const char *path, aiori_mod_opt_t * module_options) {
     if (nfs_rmdir(nfs_context, path)) {
-        printf("remove directory failed");
-        return 1;
+        ERRF("Error while removing directory \n nfs error: %s\n", nfs_get_error(nfs_context));
     }
 
     return 0;
@@ -173,7 +168,11 @@ int LIBNFS_Stat(const char *path, struct stat *stat, aiori_mod_opt_t * module_op
     struct nfs_stat_64 nfs_stat;
     int stat_result = nfs_stat64(nfs_context, path, &nfs_stat);
     if (stat_result) {
-        return stat_result;
+        if (-stat_result == ENOENT) {
+            return ENOENT;
+        }
+
+        ERRF("Error while calling stat on path %s \n nfs error: %s\n", path, nfs_get_error(nfs_context));
     }
 
     stat->st_blksize = nfs_stat.nfs_blksize;
@@ -195,10 +194,11 @@ int LIBNFS_Stat(const char *path, struct stat *stat, aiori_mod_opt_t * module_op
     return 0;
 }
 
-int LIBNFS_StatFS(const char *file_path, ior_aiori_statfs_t *stat, aiori_mod_opt_t * module_options) {
+int LIBNFS_StatFS(const char *path, ior_aiori_statfs_t *stat, aiori_mod_opt_t * module_options) {
     struct nfs_statvfs_64 stat_fs;
-    int stat_result = nfs_statvfs64(nfs_context, file_path, &stat_fs);
+    int stat_result = nfs_statvfs64(nfs_context, path, &stat_fs);
     if (stat_result) {
+        ERRF("Error while calling statfs on path %s \n nfs error: %s\n", path, nfs_get_error(nfs_context));
         return stat_result;
     }
 
@@ -215,7 +215,7 @@ int LIBNFS_StatFS(const char *file_path, ior_aiori_statfs_t *stat, aiori_mod_opt
 void LIBNFS_FSync(aiori_fd_t *file_descriptor, aiori_mod_opt_t * module_options) {
     struct nfsfh *file = (struct nfsfh *)file_descriptor; 
     if (nfs_fsync(nfs_context, file)) {
-        printf("nfs fsync failed\n");
+        ERRF("Error while calling fsync \n nfs error: %s\n", nfs_get_error(nfs_context));
     }
 }
 
@@ -227,7 +227,7 @@ IOR_offset_t LIBNFS_GetFileSize(aiori_mod_opt_t *module_options, char *path) {
     struct nfs_stat_64 nfs_stat;    
     int stat_result = nfs_stat64(nfs_context, path, &nfs_stat);
     if (stat_result) {
-        return stat_result;
+        ERRF("Error while calling stat on path %s (to evaluate the file size) \n nfs error: %s\n", path, nfs_get_error(nfs_context));
     }
 
     return (IOR_offset_t)nfs_stat.nfs_size;
@@ -262,20 +262,17 @@ void LIBNFS_Initialize(aiori_mod_opt_t * options) {
     libnfs_options_t *libnfs_options = (libnfs_options_t *)options;
     nfs_context = nfs_init_context();
     if (!nfs_context) {
-        fprintf(stderr, "Error while creating nfs context\n");
-        return;
+        ERRF("Error while creating the nfs context \n nfs error: %s\n", nfs_get_error(nfs_context));
     }
 
     nfs_url = nfs_parse_url_full(nfs_context, libnfs_options->url);
     if (!nfs_url) {
-        fprintf(stderr, "Error while parsing libnfs.url\n");
-        return;
+        ERRF("Error while parsing the argument libnfs.url \n nfs error: %s\n", nfs_get_error(nfs_context));
     }
 
     int mount_result = nfs_mount(nfs_context, nfs_url->server, nfs_url->path);
     if (mount_result) {
-        fprintf(stderr, "Error while mounting on nfs server: %s, path: %s\n", nfs_url->server, nfs_url->path);
-        return;
+        ERRF("Error while mounting nfs server: %s, path: %s \n nfs error: %s\n", nfs_url->server, nfs_url->path, nfs_get_error(nfs_context));
     }
 }
 
