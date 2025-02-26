@@ -18,6 +18,8 @@ static struct nfs_context *nfs_context;
 
 static struct nfs_url *nfs_url;
 
+static struct aiori_xfer_hint_t *hint_parameter;
+
 /******************************************************************************\
 *
 *  Helper Functions
@@ -51,7 +53,6 @@ int Map_IOR_Open_Flags_To_LIBNFS_Flags(int ior_open_flags) {
     }
 
     return libnfs_flags;
-    //TODO IOR_EXCL and IOR_DIRECT are not supported?
 }
 
 /******************************************************************************\
@@ -89,7 +90,7 @@ aiori_fd_t *LIBNFS_Create(char *file_path, int ior_flags, aiori_mod_opt_t *)
     int libnfs_flags = Map_IOR_Open_Flags_To_LIBNFS_Flags(ior_flags);
     int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     int open_result = nfs_open2(nfs_context, file_path, libnfs_flags, mode, &newFileFh);
-    nfs_chmod(nfs_context, file_path, mode); // mode parameter in nfs_open2 does not work, but with extra call nfs_chmod it works?
+    nfs_chmod(nfs_context, file_path, mode);
     if (open_result) {
         ERRF("Error while creating the file %s \n nfs error: %s\n", file_path, nfs_get_error(nfs_context));
     }
@@ -113,7 +114,6 @@ IOR_offset_t LIBNFS_Xfer(
     aiori_mod_opt_t * module_options) {
     
     struct nfsfh *file = (struct nfsfh *)file_descriptor;
-    //set offset
     uint64_t current_offset;    
     nfs_lseek(nfs_context, file, offset, SEEK_SET, &current_offset);
     if (current_offset != offset) {
@@ -121,8 +121,6 @@ IOR_offset_t LIBNFS_Xfer(
     }
 
     if (access == WRITE) {
-        //TODO multiple attempts?
-
         int write_result = nfs_write(nfs_context, file, (void *)buffer, (uint64_t)size);
         if (write_result < 0) {
             ERRF("Error while writing to file \n nfs error: %s\n", nfs_get_error(nfs_context));
@@ -144,8 +142,7 @@ IOR_offset_t LIBNFS_Xfer(
 }
 
 void LIBNFS_XferHints(aiori_xfer_hint_t * params) {
-    int i = 0;
-    i++;
+    hint_parameter = params;
 }
 
 int LIBNFS_MakeDirectory(const char *path, mode_t mode, aiori_mod_opt_t * module_options) {
@@ -188,9 +185,6 @@ int LIBNFS_Stat(const char *path, struct stat *stat, aiori_mod_opt_t * module_op
     stat->st_atime = nfs_stat.nfs_atime;
     stat->st_mtime = nfs_stat.nfs_mtime;
     stat->st_ctime = nfs_stat.nfs_ctime;
-    // stat->st_atimensec = nfs_stat.nfs_atime_nsec;
-    // stat->st_mtimensec = nfs_stat.nfs_mtime_nsec;
-    // stat->st_ctimensec = nfs_stat.nfs_ctime_nsec;
     return 0;
 }
 
@@ -310,5 +304,5 @@ ior_aiori_t libnfs_aiori = {
                                .check_params = NULL,
                                .initialize = LIBNFS_Initialize,
                                .finalize = LIBNFS_Finalize,
-                               .enable_mdtest = true
+                               .enable_mdtest = true,
 };
