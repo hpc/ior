@@ -93,6 +93,9 @@ ior_aiori_t *available_aiori[] = {
 #ifdef USE_FINCHFS_AIORI
 	&finchfs_aiori,
 #endif
+#ifdef USE_LIBNFS_AIORI
+	&libnfs_aiori,
+#endif
         NULL
 };
 

@@ -141,6 +141,7 @@ extern ior_aiori_t cephfs_aiori;
 extern ior_aiori_t gfarm_aiori;
 extern ior_aiori_t chfs_aiori;
 extern ior_aiori_t finchfs_aiori;
+extern ior_aiori_t libnfs_aiori;
 
 const ior_aiori_t *aiori_select (const char *api);
 int aiori_count (void);

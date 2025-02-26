@@ -1,0 +1,26 @@
+Building
+--------
+If libnfs is installed in a standard location, you can use the following commands:
+
+./bootstrap
+./configure --with-libnfs
+
+If you have installed libnfs in a custom location or compiled it by yourself, you need to specify the include directory and the library path by setting the CFLAGS and LDFLAGS variables:
+
+./bootstrap
+./configure [other options] --with-libnfs CFLAGS="-I /path/to/libnfs/include" LDFLAGS="-L /path/to/libnfs/lib"
+
+If you compiled libnfs by yourself, don't forget to add the library path to the $LD_LIBRARY_PATH environment variable, or copy the library to the same directory as the executable.
+
+Running
+-------
+
+./ior -a LIBNFS [ior_options] [libnfs_options]
+./mdtest -a LIBNFS [ior_options] [libnfs_options]
+
+Options
+-------
+
+required:
+--libnfs.url 
+    A URL in RFC2224 style defining the nfs server, the path where the Benchmark will run und other options. For all options and URL Examples see the README of the libnfs Repo https://raw.githubusercontent.com/sahlberg/libnfs/refs/heads/master/README .

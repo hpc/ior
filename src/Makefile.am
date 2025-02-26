@@ -99,6 +99,10 @@ extraSOURCES += aiori-CEPHFS.c
 extraLDADD += -lcephfs
 endif
 
+if USE_LIBNFS_AIORI
+extraSOURCES += aiori-LIBNFS.c
+extraLDADD += -lnfs
+endif
 
 if USE_DAOS_AIORI
 extraSOURCES += aiori-DFS.c
