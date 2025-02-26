@@ -511,7 +511,7 @@ static void DestroyTests(IOR_test_t *tests_head)
  */
 static void DistributeHints(MPI_Comm com)
 {
-        char hint[MAX_HINTS][MAX_STR], fullHint[MAX_STR], hintVariable[MAX_STR];
+        char hint[MAX_HINTS][MAX_STR], fullHint[MAX_STR], hintVariable[MAX_STR], hintValue[MAX_STR];
         int hintCount = 0, i;
 
         if (rank == 0) {
@@ -537,9 +537,10 @@ static void DistributeHints(MPI_Comm com)
                           "cannot broadcast hints");
                 strcpy(fullHint, hint[i]);
                 strcpy(hintVariable, strtok(fullHint, "="));
+                strcpy(hintValue, strtok(NULL, "="));
                 if (getenv(hintVariable) == NULL) {
                         /* doesn't exist in this task's environment; better set it */
-                        if (putenv(hint[i]) != 0)
+                        if (setenv(hintVariable, hintValue, 1) != 0)
                                 WARN("cannot set environment variable");
                 }
         }
