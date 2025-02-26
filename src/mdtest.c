@@ -286,7 +286,7 @@ static void phase_prepare(){
     system(o.prologue);
   }
   if (o.barriers) {
-    MPI_Barrier(testComm);
+    MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
   }
 }
 
@@ -303,7 +303,7 @@ static void phase_end(){
   }
 
   if (o.barriers) {
-    MPI_Barrier(testComm);
+    MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
   }
 }
 
@@ -314,7 +314,7 @@ static void phase_end(){
 
 void unique_dir_access(int opt, char *to) {
     if (opt == MK_UNI_DIR) {
-        MPI_Barrier(testComm);
+        MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
         sprintf( to, "%s/%s", o.testdir, o.unique_chdir_dir );
     } else if (opt == STAT_SUB_DIR) {
         sprintf( to, "%s/%s", o.testdir, o.unique_stat_dir );
@@ -952,11 +952,11 @@ void directory_test(const int iteration, const int ntasks, const char *path, ran
     char temp_path[MAX_PATHLEN];
     mdtest_results_t * res = & o.summary_table[iteration];
 
-    MPI_Comm_size(testComm, &size);
+    MPI_CHECK(MPI_Comm_size(testComm, &size), "MPI_Comm_size error");
 
     VERBOSE(1,-1,"Entering directory_test on %s", path );
 
-    MPI_Barrier(testComm);
+    MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
 
     /* create phase */
     if(o.create_only) {
@@ -1134,16 +1134,16 @@ int updateStoneWallIterations(int iteration, uint64_t items_done, double tstart,
   long long unsigned max_iter = 0;
 
   VERBOSE(1,1,"stonewall hit with %lld items", (long long) items_done );
-  MPI_Allreduce(& items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm);
+  MPI_CHECK(MPI_Allreduce(& items_done, & max_iter, 1, MPI_LONG_LONG_INT, MPI_MAX, testComm), "MPI_Allreduce error");
   o.summary_table[iteration].stonewall_time[MDTEST_FILE_CREATE_NUM] = GetTimeStamp() - tstart;
   o.summary_table[iteration].stonewall_last_item[MDTEST_FILE_CREATE_NUM] = items_done;
   *out_max_iter = max_iter;
 
   // continue to the maximum...
   long long min_accessed = 0;
-  MPI_Reduce(& items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm);
+  MPI_CHECK(MPI_Reduce(& items_done, & min_accessed, 1, MPI_LONG_LONG_INT, MPI_MIN, 0, testComm), "MPI_Reduce error");
   long long sum_accessed = 0;
-  MPI_Reduce(& items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm);
+  MPI_CHECK(MPI_Reduce(& items_done, & sum_accessed, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, testComm), "MPI_Reduce error");
   o.summary_table[iteration].stonewall_item_sum[MDTEST_FILE_CREATE_NUM] = sum_accessed;
   o.summary_table[iteration].stonewall_item_min[MDTEST_FILE_CREATE_NUM] = min_accessed * o.size;
 
@@ -1207,7 +1207,7 @@ void file_test_create(const int iteration, const int ntasks, const char *path, r
         if (rank == 0) {
             collective_create_remove(1, 0, ntasks, temp_path, progress);
         }
-        MPI_Barrier(testComm);
+        MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
     }
       
     /* create files */
@@ -1244,11 +1244,11 @@ void file_test(const int iteration, const int ntasks, const char *path, rank_pro
     char temp_path[MAX_PATHLEN];
     mdtest_results_t * res = & o.summary_table[iteration];
 
-    MPI_Comm_size(testComm, &size);
+    MPI_CHECK(MPI_Comm_size(testComm, &size), "MPI_Comm_size error");
 
     VERBOSE(3,5,"Entering file_test on %s", path);
 
-    MPI_Barrier(testComm);
+    MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
 
     /* create phase */
     if (o.create_only ) {
@@ -1471,7 +1471,7 @@ static void StoreRankInformation(int iterations, mdtest_results_t * agg){
     }
 
     mdtest_results_t * results = safeMalloc(size * o.size);
-    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+    MPI_CHECK(MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, results, size / sizeof(double), MPI_DOUBLE, 0, testComm), "MPI_Gather error");
 
     char buff[4096];
     char * cpos = buff;
@@ -1510,7 +1510,7 @@ static void StoreRankInformation(int iterations, mdtest_results_t * agg){
     free(results);
   }else{
     /* this is a hack for now assuming all datatypes in the structure are double */
-    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+    MPI_CHECK(MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm), "MPI_Gather error");
   }
 }
 
@@ -1729,7 +1729,7 @@ void summarize_results(int iterations, mdtest_results_t * results) {
   if(rank == 0){
     all_results = safeMalloc(size * o.size);
     memset(all_results, 0, size * o.size);
-    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, all_results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+    MPI_CHECK(MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, all_results, size / sizeof(double), MPI_DOUBLE, 0, testComm), "MPI_Gather error");
     // calculate the aggregated values for all processes
     for(int j=0; j < iterations; j++){
       for(int i=0; i < MDTEST_LAST_NUM; i++){
@@ -1767,11 +1767,11 @@ void summarize_results(int iterations, mdtest_results_t * results) {
       }
     }
   }else{
-    MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+    MPI_CHECK(MPI_Gather(o.summary_table, size / sizeof(double), MPI_DOUBLE, NULL, size / sizeof(double), MPI_DOUBLE, 0, testComm), "MPI_Gather error");
   }
 
   /* share global results across processes as these are returned by the API */
-  MPI_Bcast(results, size / sizeof(double), MPI_DOUBLE, 0, testComm);
+  MPI_CHECK(MPI_Bcast(results, size / sizeof(double), MPI_DOUBLE, 0, testComm), "MPI_Bcast error");
 
   /* update relevant result values with local values as these are returned by the API */
   for(int j=0; j < iterations; j++){
@@ -2076,7 +2076,7 @@ static void mdtest_iteration(int i, int j, mdtest_results_t * summary_table){
     }
 
     /* create hierarchical directory structure */
-    MPI_Barrier(testComm);
+    MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
 
     startCreate = GetTimeStamp();
     for (int dir_iter = 0; dir_iter < o.directory_loops; dir_iter ++){
@@ -2122,7 +2122,7 @@ static void mdtest_iteration(int i, int j, mdtest_results_t * summary_table){
         }
       }
     }
-    MPI_Barrier(testComm);
+    MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
     endCreate = GetTimeStamp();
     summary_table->rate[MDTEST_TREE_CREATE_NUM] = o.num_dirs_in_tree / (endCreate - startCreate);
     summary_table->time[MDTEST_TREE_CREATE_NUM] = (endCreate - startCreate);
@@ -2183,7 +2183,7 @@ static void mdtest_iteration(int i, int j, mdtest_results_t * summary_table){
       VERBOSE(3,-1,"main: Using o.testdir, '%s'", o.testdir );
   }
 
-  MPI_Barrier(testComm);
+  MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
   if (o.remove_only) {
       progress->items_start = 0;
       startCreate = GetTimeStamp();
@@ -2232,7 +2232,7 @@ static void mdtest_iteration(int i, int j, mdtest_results_t * summary_table){
         }
       }
 
-      MPI_Barrier(testComm);
+      MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
       endCreate = GetTimeStamp();
       summary_table->rate[MDTEST_TREE_REMOVE_NUM] = o.num_dirs_in_tree / (endCreate - startCreate);
       summary_table->time[MDTEST_TREE_REMOVE_NUM] = endCreate - startCreate;
@@ -2378,8 +2378,8 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     
     o.dataPacketType = parsePacketType(packetType[0]);
 
-    MPI_Comm_rank(testComm, &rank);
-    MPI_Comm_size(testComm, &o.size);
+    MPI_CHECK(MPI_Comm_rank(testComm, &rank), "MPI_Comm_rank error");
+    MPI_CHECK(MPI_Comm_size(testComm, &o.size), "MPI_Comm_size error");
 
     if(o.backend->xfer_hints){
       o.backend->xfer_hints(& o.hints);
@@ -2388,7 +2388,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       o.backend->check_params(o.backend_options);
     }
     if (o.backend->initialize){
-	    o.backend->initialize(o.backend_options);
+      o.backend->initialize(o.backend_options);
     }
 
     o.pid = getpid();
@@ -2415,14 +2415,14 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       if (o.random_seed == 0) {
         /* Ensure all procs have the same random number */
           o.random_seed = time(NULL);
-          MPI_Barrier(testComm);
-          MPI_Bcast(& o.random_seed, 1, MPI_INT, 0, testComm);
+          MPI_CHECK(MPI_Barrier(testComm), "MPI_Barrier error");
+          MPI_CHECK(MPI_Bcast(& o.random_seed, 1, MPI_INT, 0, testComm), "MPI_Bcast error");
       }
       o.random_seed += rank;
     }
     if( o.random_buffer_offset == -1 ){
         o.random_buffer_offset = time(NULL);
-        MPI_Bcast(& o.random_buffer_offset, 1, MPI_INT, 0, testComm);
+        MPI_CHECK(MPI_Bcast(& o.random_buffer_offset, 1, MPI_INT, 0, testComm), "MPI_Bcast error");
     }
     if ((o.items > 0) && (o.items_per_dir > 0) && (! o.unique_dir_per_task)) {
       o.directory_loops = o.items / o.items_per_dir;
@@ -2596,7 +2596,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     if (gethostname(o.hostname, MAX_PATHLEN) == -1) {
         perror("gethostname");
-        MPI_Abort(testComm, 2);
+        MPI_CHECK(MPI_Abort(testComm, 2), "MPI_Abort error");
     }
 
     if (last == 0) {
@@ -2628,7 +2628,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     strcpy(o.read_name, "mdtest.shared.");
     strcpy(o.rm_name, "mdtest.shared.");
 
-    MPI_Comm_group(testComm, &worldgroup);
+    MPI_CHECK(MPI_Comm_group(testComm, &worldgroup), "MPI_Comm_group error");
     
     last = o.size < last ? o.size : last;
     
@@ -2636,19 +2636,17 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     for (i = first; i <= last; i += stride) {
         sleep(1);
         
-        if(i < last){
-          MPI_Group testgroup;
-          range.last = i - 1;
-          MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup);
-          MPI_Comm_create(world_com, testgroup, &testComm);
-          MPI_Group_free(&testgroup);
-          if(testComm == MPI_COMM_NULL){
+        MPI_Group testgroup;
+        range.last = i - 1;
+        MPI_CHECK(MPI_Group_range_incl(worldgroup, 1, (void *)&range, &testgroup), "MPI_Group_range_incl error");
+        MPI_CHECK(MPI_Comm_create(world_com, testgroup, &testComm), "MPI_Comm_create error");
+        MPI_CHECK(MPI_Group_free(&testgroup), "MPI_Group_free error");
+        if(testComm == MPI_COMM_NULL){
+            /* tasks not in the group do not participate in this test, this joins the processes right before the MPI_Comm_free below that participate */
+            MPI_CHECK(MPI_Barrier(world_com), "MPI_Barrier(world_com) error");
             continue;
-          }
-        }else{
-          MPI_Comm_dup(world_com, & testComm);
         }
-        MPI_Comm_size(testComm, &o.size);
+        MPI_CHECK(MPI_Comm_size(testComm, &o.size), "MPI_Comm_size error");
 
         if (rank == 0) {
             uint64_t items_all = i * o.items;
@@ -2681,15 +2679,19 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
           StoreRankInformation(iterations, aggregated_results);
         }
         int total_errors = 0;
-        MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm);
+        MPI_CHECK(MPI_Reduce(& o.verification_error, & total_errors, 1, MPI_INT, MPI_SUM, 0,  testComm), "MPI_Reduce error");
         if(rank == 0 && total_errors){
             VERBOSE(0, -1, "\nERROR: verifying the data on read (%lld errors)! Take the performance values with care!\n", total_errors);
         }
         aggregated_results->total_errors += total_errors;
-        MPI_Comm_free(&testComm);
+
+        /* this joins the processes in the MPI_COMM_NULL check above which do not participate in the test */
+        MPI_CHECK(MPI_Barrier(world_com), "MPI_Barrier(world_com) error");
+
+        MPI_CHECK(MPI_Comm_free(&testComm), "MPI_Comm_free error");
     }
     
-    MPI_Group_free(&worldgroup);
+    MPI_CHECK(MPI_Group_free(&worldgroup), "MPI_Group_free error");
     testComm = world_com;
 
     if (created_root_dir && o.remove_only && o.backend->rmdir(o.testdirpath, o.backend_options) != 0) {

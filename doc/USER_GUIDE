@@ -109,7 +109,7 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -x    singleXferAttempt -- do not retry transfer if incomplete
   -X N  reorderTasksRandomSeed -- random seed for -Z option
   -Y    fsyncPerWrite -- perform fsync after each POSIX write
-  -z    randomOffset -- access is to random, not sequential, offsets within a file
+  -z    randomOffset -- access is to shuffled, not sequential, offsets within a file; specify twice for random (potentially overlapping)
   -Z    reorderTasksRandom -- changes task ordering to random ordering for readback
 
 
@@ -284,7 +284,9 @@ GENERAL:
                                   * setting this to zero (0) unsets this option
                                   * this option is incompatible w/data checking
 
-  * randomOffset         - access is to random, not sequential, offsets within a file [0=FALSE]
+  * randomOffset         - If 1 then access is shuffled, not sequential, offsets within a file [0=FALSE]
+                           If 2 then access is totally random, and may read
+                           the some blocks more than once, and others never.
                            NOTES: * this option is currently incompatible with:
                                     -checkRead
                                     -storeFileOffset
