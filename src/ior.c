@@ -1365,7 +1365,7 @@ static void TestIoSys(IOR_test_t *test)
                                         file_hits_histogram(params);
                                 }
                         }
-                        if (params->reorderTasksRandom > 1) { /* Shuffling rank offset */
+                        if (params->reorderTasksRandom > 1) { /* Shuffling ranks for read back */
                                 int nodeoffset;
                                 unsigned int iseed0;
                                 nodeoffset = params->taskPerNodeOffset;
@@ -1387,7 +1387,7 @@ static void TestIoSys(IOR_test_t *test)
                                         rankOffsets[tgt] = rankOffsets[i];
                                         rankOffsets[i] = tmp;
                                 }
-                                rankOffset = rankOffsets[rank];
+                                rankOffset = rankOffsets[rank] - rank;
                                 free(rankOffsets);
                         }
                         /* Using globally passed rankOffset, following function generates testFileName to read */
