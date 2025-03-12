@@ -1387,7 +1387,7 @@ static void TestIoSys(IOR_test_t *test)
                                         rankOffsets[tgt] = rankOffsets[i];
                                         rankOffsets[i] = tmp;
                                 }
-                                rankOffset = rankOffsets[rank];
+                                rankOffset = rankOffsets[rank] - rank; // must subtract as we talk about rankOffset and not the actual rank!
                                 free(rankOffsets);
                         }
                         /* Using globally passed rankOffset, following function generates testFileName to read */
