@@ -506,9 +506,9 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                                  * deal with us reporting that we wrote N times more
                                  * data than requested. */
                                 length = hints->transferSize;
-                                MPI_CHECK(MPI_Get_elements_x(&status, MPI_INT, &elementsAccessed),
+                                MPI_CHECK(MPI_Get_elements_x(&status, MPI_BYTE, &elementsAccessed),
                                           "can't get elements accessed" );
-                                xferBytes = elementsAccessed * sizeof(MPI_BYTE);
+                                xferBytes = elementsAccessed;
                         }
                 } else {
                         /*
@@ -548,11 +548,11 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                                                   "cannot access explicit, noncollective");
                                 }
                         }
-                        MPI_CHECK(MPI_Get_elements_x(&status, MPI_INT, &elementsAccessed),
+                        MPI_CHECK(MPI_Get_elements_x(&status, MPI_BYTE, &elementsAccessed),
                                    "can't get elements accessed" );
 
                         expectedBytes = length;
-                        xferBytes = elementsAccessed * sizeof(MPI_BYTE);
+                        xferBytes = elementsAccessed;
                 }
 
                 /* Retrying collective xfers would require syncing after every IO to check if any
