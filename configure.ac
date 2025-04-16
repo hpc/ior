@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.62])
+AC_PREREQ([2.71])
 
 AC_INIT([META_PACKAGE_NAME],[META_PACKAGE_VERSION],[],[META_PACKAGE_NAME])
 AC_CONFIG_MACRO_DIR([config])
@@ -10,7 +10,7 @@ X_AC_META
 
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_SRCDIR([src/ior.c])
-AC_CONFIG_HEADER([src/config.h])
+AC_CONFIG_HEADERS([src/config.h])
 
 AC_CANONICAL_HOST
 
@@ -38,8 +38,7 @@ AX_PROG_CC_MPI(,,[
 ])
 
 AC_PROG_RANLIB
-# No reason not to require modern C at this point
-AC_PROG_CC_C99
+AC_PROG_CC
 
 # Checks for libraries.
 
