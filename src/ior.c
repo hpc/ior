@@ -1195,6 +1195,12 @@ static void TestIoSys(IOR_test_t *test)
           }
         }
 
+#ifndef IOR_SKIP_DELETE
+        /* touch the file system to load up any client-side libraries */
+        GetTestFileName(testFileName, params);
+        backend->delete(testFileName, params->backend_options);
+#endif
+
         for (rep = 0; rep < params->repetitions; rep++) {
                 /* Get iteration start time in seconds in task 0 and broadcast to
                    all tasks */

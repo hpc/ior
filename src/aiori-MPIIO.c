@@ -626,8 +626,7 @@ void MPIIO_Delete(char *testFileName, aiori_mod_opt_t * module_options)
   mpiio_options_t * param = (mpiio_options_t*) module_options;
   if(hints->dryRun)
     return;
-  MPI_CHECKF(MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL),
-             "cannot delete file: %s", testFileName);
+  MPI_File_delete(testFileName, (MPI_Info) MPI_INFO_NULL);
 }
 
 /*
