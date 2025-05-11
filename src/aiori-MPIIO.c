@@ -146,13 +146,26 @@ int MPIIO_Access(const char *path, int mode, aiori_mod_opt_t *module_options)
 
     SetHints(&mpiHints, param->hintsFileName);
 
-    int ret = MPI_File_open(MPI_COMM_SELF, path, mpi_mode, mpiHints, &fd);
+    // first perform a stat to check whether this is a directory
+    struct stat st;
+    int ret = stat(path, &st);
+
+    if (ret == 0)
+    {
+        // if this is a directory, redirect to aiori_posix_access
+        if (S_ISDIR(st.st_mode))
+            return aiori_posix_access(path, mode, module_options);
+    }
+
+    // otherwise check if we can access the file with MPI (we also verify MPI
+    // handles a file that doesn't exist or otherwise fails in stat above)
+    ret = MPI_File_open(MPI_COMM_SELF, path, mpi_mode, mpiHints, &fd);
 
     if (!ret)
         MPI_File_close(&fd);
 
     if (mpiHints != MPI_INFO_NULL)
-            MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
+        MPI_CHECK(MPI_Info_free(&mpiHints), "MPI_Info_free failed");
     return ret;
 }
 
