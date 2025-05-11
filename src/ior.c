@@ -1774,6 +1774,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         if (test->randomOffset > 1){
           int seed = init_random_seed(test, pretendRank);
           srand(seed + pretendRank);
+          srand64(((uint64_t) seed) * (pretendRank + 1));
         }
 
         void * randomPrefillBuffer = NULL;
@@ -1820,12 +1821,15 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                 if(test->filePerProc){
                   sizerand /= test->numTasks;
                 }
-                offset = rand() % (sizerand / test->blockSize) * test->blockSize - test->transferSize;
+                uint64_t rpos;
+                rpos = rand64();
+                offset = rpos % (sizerand / test->blockSize) * test->blockSize - test->transferSize;
                 if(i == 0 && access == WRITE){ // always write the last block first
                   if(test->filePerProc || rank == 0){
                     offset = (sizerand / test->blockSize - 1) * test->blockSize - test->transferSize;
                   }
-                }
+                }                
+                continue;
             }
             for (j = 0; j < offsets &&  !hitStonewall ; j++) {
               if (test->randomOffset == 1) {
@@ -1897,7 +1901,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                   if(test->filePerProc){
                     sizerand /= test->numTasks;
                   }
-                  offset = rand() % (sizerand / test->blockSize) * test->blockSize - test->transferSize;
+                  offset = rand64() % (sizerand / test->blockSize) * test->blockSize - test->transferSize;
               }
               for ( ; j < offsets && pairCnt < point->pairs_accessed ; j++) {
                 if (test->randomOffset == 1) {

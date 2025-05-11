@@ -124,6 +124,30 @@ void update_write_memory_pattern(uint64_t item, char * buf, size_t bytes, int ra
   }
 }
 
+/* Create 64 bit random number, see https://www.pcg-random.org/posts/does-it-beat-the-minimal-standard.html */
+typedef struct {
+  uint64_t high;
+  uint64_t low;
+} iint128_t;
+
+static iint128_t  randstate = {.high = 0, .low = 1};
+static iint128_t  randmulti = {.high = 0x0fc94e3bf4e9ab32, .low = 0x866458cd56f5e605};
+
+void srand64(uint64_t state){
+  randstate.high = 0;
+  randstate.low = state;
+}
+
+uint64_t rand64() {
+  iint128_t res;
+  res = randmulti;
+  /* this is for testing only, produces some fair random number */
+  res.low = randstate.low * randmulti.low;
+  res.high = randstate.high * randmulti.high + (res.low >> 32);
+  randstate = res;
+  return res.high;
+}
+
 /**
  * Fills a buffer with bytes of a given pattern.  Not performance-sensitive
  * because it is called once per test.
