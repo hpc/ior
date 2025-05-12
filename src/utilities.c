@@ -138,7 +138,7 @@ void srand64(uint64_t state){
   randstate.low = state;
 }
 
-uint64_t rand64() {
+uint64_t rand64(void) {
   iint128_t res;
   res = randmulti;
   /* this is for testing only, produces some fair random number */
