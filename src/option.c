@@ -321,7 +321,7 @@ static void option_parse_token(char ** argv, int * flag_parsed_next, int * requi
               switch(o->type){
                 case('p'):{
                   // call the function in the variable
-                  void(*fp)() = o->variable;
+                  void(*fp)(void*) = o->variable;
                   fp(arg);
                   break;
                 }
