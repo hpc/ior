@@ -113,6 +113,7 @@ typedef struct
     IOR_offset_t blockSize;          /* contiguous bytes to write per task */
     IOR_offset_t transferSize;       /* size of transfer in bytes */
     IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
+    IOR_offset_t fileSizeForRead;
     IOR_offset_t randomPrefillBlocksize;   /* prefill option for random IO, the amount of data used for prefill */
 
     char * savePerOpDataCSV;            /* save details about each I/O operation into this file */

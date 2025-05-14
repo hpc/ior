@@ -1393,7 +1393,7 @@ static void TestIoSys(IOR_test_t *test)
                         /* Using globally passed rankOffset, following function generates testFileName to read */
                         GetTestFileName(testFileName, params);
                         if(params->randomOffset > 1){
-                          params->expectedAggFileSize = backend->get_file_size(params->backend_options, testFileName);
+                          params->fileSizeForRead = backend->get_file_size(params->backend_options, testFileName);
                         }
 
                         if (verbose >= VERBOSE_3) {
@@ -1817,7 +1817,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
               }
             }
             if (test->randomOffset > 1){
-                size_t sizerand = test->expectedAggFileSize; 
+                size_t sizerand = test->fileSizeForRead; 
                 if(test->filePerProc){
                   sizerand /= test->numTasks;
                 }
@@ -1829,7 +1829,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                     offset = (sizerand / test->blockSize - 1) * test->blockSize - test->transferSize;
                   }
                 }                
-                continue;
             }
             for (j = 0; j < offsets &&  !hitStonewall ; j++) {
               if (test->randomOffset == 1) {
@@ -1897,7 +1896,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
               IOR_offset_t offset;
               if(i == test->segmentCount) i = 0; // wrap over, necessary to deal with minTimeDuration
               if (test->randomOffset > 1){
-                  size_t sizerand = test->expectedAggFileSize; 
+                  size_t sizerand = test->fileSizeForRead; 
                   if(test->filePerProc){
                     sizerand /= test->numTasks;
                   }
