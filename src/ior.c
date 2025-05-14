@@ -1829,7 +1829,6 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                     offset = (sizerand / test->blockSize - 1) * test->blockSize - test->transferSize;
                   }
                 }                
-                continue;
             }
             for (j = 0; j < offsets &&  !hitStonewall ; j++) {
               if (test->randomOffset == 1) {
