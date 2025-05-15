@@ -1818,9 +1818,9 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
             }
             if (test->randomOffset > 1){
                 size_t sizerand = test->fileSizeForRead; 
-                if(test->filePerProc){
-                  sizerand /= test->numTasks;
-                }
+                //if(test->filePerProc){
+                //  sizerand /= test->numTasks;
+                //}
                 uint64_t rpos;
                 rpos = rand64();
                 offset = rpos % (sizerand / test->blockSize) * test->blockSize - test->transferSize;
