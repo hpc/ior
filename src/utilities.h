@@ -80,4 +80,7 @@ char * PrintTimestamp(void); // TODO remove this function
 unsigned long GetProcessorAndCore(int *chip, int *core);
 void *aligned_buffer_alloc(size_t size, ior_memory_flags type);
 void aligned_buffer_free(void *buf, ior_memory_flags type);
+
+void srand64(uint64_t state);
+uint64_t rand64(void);
 #endif  /* !_UTILITIES_H */
