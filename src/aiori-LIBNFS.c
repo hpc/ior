@@ -88,9 +88,8 @@ aiori_fd_t *LIBNFS_Create(char *file_path, int ior_flags, aiori_mod_opt_t *)
 {
     struct nfsfh *newFileFh;
     int libnfs_flags = Map_IOR_Open_Flags_To_LIBNFS_Flags(ior_flags);
-    int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+    int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
     int open_result = nfs_open2(nfs_context, file_path, libnfs_flags, mode, &newFileFh);
-    nfs_chmod(nfs_context, file_path, mode);
     if (open_result) {
         ERRF("Error while creating the file %s \n nfs error: %s\n", file_path, nfs_get_error(nfs_context));
     }
