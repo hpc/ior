@@ -13,6 +13,7 @@
 #include "aiori-LIBNFS.h"
 #include "aiori.h"
 #include "aiori-debug.h"
+#include "utilities.h"
 
 static struct nfs_context *nfs_context;
 
@@ -145,18 +146,43 @@ void LIBNFS_XferHints(aiori_xfer_hint_t * params) {
 }
 
 int LIBNFS_MakeDirectory(const char *path, mode_t mode, aiori_mod_opt_t * module_options) {
-    if (nfs_mkdir2(nfs_context, path, mode)) {
-        ERRF("Error while creating directory \n nfs error: %s\n", nfs_get_error(nfs_context));
+
+    char *path_copy = strdup(path);
+    if (path_copy == NULL) {
+        ERR("Failed to create copy of path\n");
     }
 
+    // remove trailing '/'
+    if (path_copy[strlen(path_copy) -1] == '/') {
+	    path_copy[strlen(path_copy) -1] = '\0';
+    }
+
+    if (nfs_mkdir2(nfs_context, path_copy, mode)) {
+       free(path_copy);
+       ERRF("Error while creating directory \n nfs error: %s\n", nfs_get_error(nfs_context));
+    }
+
+    free(path_copy);
     return 0;
 }
 
 int LIBNFS_RemoveDirectory(const char *path, aiori_mod_opt_t * module_options) {
-    if (nfs_rmdir(nfs_context, path)) {
+    char * path_copy = strdup(path);
+    if (path_copy == NULL) {
+        ERR("Failed to create copy of path\n");
+    }
+
+    // remove trailing '/'
+    if (path_copy[strlen(path_copy) -1] == '/') {
+	    path_copy[strlen(path_copy) -1] = '\0';
+    }
+
+    if (nfs_rmdir(nfs_context, path_copy)) {
+	free(path_copy);
         ERRF("Error while removing directory \n nfs error: %s\n", nfs_get_error(nfs_context));
     }
 
+    free(path_copy);
     return 0;
 }
 
