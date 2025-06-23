@@ -237,7 +237,7 @@ option_help *LIBNFS_GetOptions(aiori_mod_opt_t ** init_backend_options, aiori_mo
     *init_backend_options = (aiori_mod_opt_t *) libnfs_options;
 
     option_help h [] = {
-        {0, "libnfs.url", "The URL (RFC2224) specifing the server, path and options", OPTION_REQUIRED_ARGUMENT, 's', &libnfs_options->url},
+        {0, "libnfs.url", "The URL (RFC2224) specifing the server, path and options", OPTION_OPTIONAL_ARGUMENT, 's', &libnfs_options->url},
         LAST_OPTION
     };
 
