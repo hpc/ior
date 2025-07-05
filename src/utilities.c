@@ -496,6 +496,8 @@ void DumpBuffer(void *buffer,
 int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
     char localhost[MAX_PATHLEN], roothost[MAX_PATHLEN];
     int num_ranks;
+    int rank; // local rank
+    MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &num_ranks);
     int *node_map = (int*)malloc(sizeof(int) * num_ranks);
     if ( ! node_map ) {
