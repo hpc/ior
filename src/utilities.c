@@ -499,10 +499,7 @@ int QueryNodeMapping(MPI_Comm comm, int print_nodemap) {
     int rank; // local rank
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &num_ranks);
-    int *node_map = (int*)malloc(sizeof(int) * num_ranks);
-    if ( ! node_map ) {
-        FAIL("malloc");
-    }
+    int *node_map = (int*)safeMalloc(sizeof(int) * num_ranks);
     if (gethostname(localhost, MAX_PATHLEN) != 0) {
         FAIL("gethostname()");
     }

@@ -888,7 +888,7 @@ static void store_position(int position){
   fclose(f);
 }
 
-mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logfile){
+mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_com, FILE * out_logfile_local){
   int ret;
   int printhelp = 0;
   char * limit_memory_P = NULL;
@@ -896,7 +896,8 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
   init_clock(world_com);
 
   o.com = world_com;
-  o.logfile = out_logfile;
+  out_logfile = out_logfile_local;
+  o.logfile = out_logfile_local;
 
   MPI_Comm_rank(o.com, & o.rank);
   MPI_Comm_size(o.com, & o.size);
