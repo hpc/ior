@@ -1796,28 +1796,12 @@ void summarize_results(int iterations, mdtest_results_t * results) {
 }
 
 /* Checks to see if the test setup is valid.  If it isn't, fail. */
-void md_validate_tests() {
-
+void md_validate_tests_rank0() {
     if (((o.stone_wall_timer_seconds > 0) && (o.branch_factor > 1)) || ! o.barriers) {
         FAIL( "Error, stone wall timer does only work with a branch factor <= 1 (current is %d) and with barriers\n", o.branch_factor);
     }
 
-    if (!o.create_only && ! o.stat_only && ! o.read_only && !o.remove_only && !o.rename_dirs) {
-        o.create_only = o.stat_only = o.read_only = o.remove_only = o.rename_dirs = 1;
-        VERBOSE(1,-1,"main: Setting create/stat/read/remove_only to True" );
-    }
-
     VERBOSE(1,-1,"Entering md_validate_tests..." );
-
-    /* if dirs_only and files_only were both left unset, set both now */
-    if (!o.dirs_only && !o.files_only) {
-        o.dirs_only = o.files_only = 1;
-    }
-
-    /* if shared file 'S' access, no directory tests */
-    if (o.shared_file) {
-        o.dirs_only = 0;
-    }
 
     /* check for no barriers with shifting processes for different phases.
        that is, one may not specify both -B and -N as it will introduce
@@ -1892,7 +1876,7 @@ void md_validate_tests() {
     if(o.create_only && o.read_only && o.read_bytes > o.write_bytes)
       FAIL("When writing and reading files, read bytes must be smaller than write bytes");
 
-    if (rank == 0 && o.saveRankDetailsCSV){
+    if (o.saveRankDetailsCSV){
       // check that the file is writeable, truncate it and add header
       FILE* fd = fopen(o.saveRankDetailsCSV, "w");
       if (fd == NULL){
@@ -1912,6 +1896,30 @@ void md_validate_tests() {
       }
       fwrite("\n", 1, 1, fd);
       fclose(fd);
+    }
+}
+
+void md_validate_tests() {
+    if (!o.create_only && ! o.stat_only && ! o.read_only && !o.remove_only && !o.rename_dirs) {
+        o.create_only = o.stat_only = o.read_only = o.remove_only = o.rename_dirs = 1;
+        VERBOSE(1,-1,"main: Setting create/stat/read/remove_only to True" );
+    }
+
+    /* if dirs_only and files_only were both left unset, set both now */
+    if (!o.dirs_only && !o.files_only) {
+        o.dirs_only = o.files_only = 1;
+    }
+
+    /* if shared file 'S' access, no directory tests */
+    if (o.shared_file) {
+        o.dirs_only = 0;
+    }
+
+    /* In order to avoid printing warning output duplicated N times (by N ranks),
+     * only have rank 0 perform further validation.
+     */
+    if (rank == 0) {
+        md_validate_tests_rank0();
     }
 }
 
