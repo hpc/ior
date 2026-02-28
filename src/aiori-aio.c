@@ -10,6 +10,7 @@
 #include <libaio.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <sys/ioctl.h>
 #include <fcntl.h>
@@ -38,6 +39,12 @@ typedef struct{
 
   int in_flight; // total pending ops
   IOR_offset_t pending_bytes; // track pending IO volume for error checking
+
+  void ** buffer_pool;
+  int * free_pool_indices;
+  int free_pool_pos;
+  int pool_size;
+  IOR_offset_t pool_buffer_size;
 } aio_options_t;
 
 option_help * aio_options(aiori_mod_opt_t ** init_backend_options, aiori_mod_opt_t * init_values){
@@ -88,10 +95,51 @@ static void aio_initialize(aiori_mod_opt_t * param){
   o->iocbs = malloc(sizeof(struct iocb *) * o->granularity);
   o->iocbs_pos = 0;
   o->in_flight = 0;
+
+  o->buffer_pool = NULL;
+  o->free_pool_indices = NULL;
+  o->free_pool_pos = 0;
+  o->pool_size = 0;
+  o->pool_buffer_size = 0;
+}
+
+static void aio_free_pool(aio_options_t * o){
+  if (o->buffer_pool){
+    for (int i = 0; i < o->pool_size; i++){
+      aligned_buffer_free(o->buffer_pool[i], 0);
+    }
+    free(o->buffer_pool);
+    o->buffer_pool = NULL;
+  }
+  if (o->free_pool_indices){
+    free(o->free_pool_indices);
+    o->free_pool_indices = NULL;
+  }
+  o->pool_size = 0;
+  o->pool_buffer_size = 0;
+}
+
+static void complete_all(aio_options_t * o);
+
+static void aio_setup_pool(aio_options_t * o, IOR_offset_t size){
+  if (o->buffer_pool && o->pool_buffer_size >= size) return;
+  complete_all(o);
+  aio_free_pool(o);
+  o->buffer_pool = malloc(sizeof(void *) * o->max_pending);
+  o->free_pool_indices = malloc(sizeof(int) * o->max_pending);
+  for (int i = 0; i < o->max_pending; i++){
+    o->buffer_pool[i] = aligned_buffer_alloc(size, 0);
+    o->free_pool_indices[i] = i;
+  }
+  o->free_pool_pos = o->max_pending;
+  o->pool_size = o->max_pending;
+  o->pool_buffer_size = size;
 }
 
 static void aio_finalize(aiori_mod_opt_t * param){
   aio_options_t * o = (aio_options_t*) param;
+  complete_all(o);
+  aio_free_pool(o);
   io_destroy(o->ioctx);
 }
 
@@ -138,26 +186,41 @@ static void submit_pending(aio_options_t * o){
   o->iocbs_pos = 0;
 }
 
+static void aio_reap_one(aio_options_t * o, struct io_event * event){
+  if((long)event->res < 0){
+    ERRF("AIO, error in io_event result: %s", strerror(-(long)event->res));
+  }else{
+    o->pending_bytes -= event->res;
+  }
+  struct iocb * iocb = (struct iocb *) event->obj;
+  int pool_idx = (int)(uintptr_t) iocb->data;
+  if (pool_idx != -1){
+    o->free_pool_indices[o->free_pool_pos++] = pool_idx;
+  }
+  free(iocb);
+}
+
 /* complete all pending ops */
 static void complete_all(aio_options_t * o){
   submit_pending(o);
 
-  struct io_event events[o->in_flight];
-  int num_events;
-  num_events = io_getevents(o->ioctx, o->in_flight, o->in_flight, events, NULL);
-  for (int i = 0; i < num_events; i++) {
-    struct io_event event = events[i];
-    if(event.res == -1){
-      ERR("AIO, error in io_getevents(), IO incomplete!");
-    }else{
-      o->pending_bytes -= event.res;
+  while(o->in_flight > 0){
+    int to_reap = o->in_flight > 512 ? 512 : o->in_flight;
+    struct io_event events[to_reap];
+    int num_events;
+    num_events = io_getevents(o->ioctx, 1, to_reap, events, NULL);
+    if(num_events < 0){
+      if(errno == EINTR) continue;
+      ERRF("AIO, error in io_getevents(): %s", strerror(errno));
     }
-    free(event.obj);
+    for (int i = 0; i < num_events; i++) {
+      aio_reap_one(o, & events[i]);
+    }
+    o->in_flight -= num_events;
   }
   if(o->pending_bytes != 0){
     ERRF("AIO, error in flushing data, pending bytes: %lld", o->pending_bytes);
   }
-  o->in_flight = 0;
 }
 
 /* called if we must make *some* progress */
@@ -165,19 +228,22 @@ static void process_some(aio_options_t * o){
   if(o->in_flight == 0){
     return;
   }
-  struct io_event events[o->in_flight];
+  /* we must submit anything that is pending otherwise we might block forever
+     waiting for more events than actually in flight in the kernel */
+  submit_pending(o);
+
+  int to_reap = o->in_flight < o->granularity ? o->in_flight : o->granularity;
+  if(to_reap > 512) to_reap = 512;
+  struct io_event events[to_reap];
   int num_events;
-  int mn = o->in_flight < o->granularity ? o->in_flight : o->granularity;
-  num_events = io_getevents(o->ioctx, mn, o->in_flight, events, NULL);
+  num_events = io_getevents(o->ioctx, to_reap, to_reap, events, NULL);
+  if(num_events < 0){
+    if(errno == EINTR) return;
+    ERRF("AIO, error in io_getevents(): %s", strerror(errno));
+  }
   //printf("Completed: %d\n", num_events);
   for (int i = 0; i < num_events; i++) {
-    struct io_event event = events[i];
-    if(event.res == -1){
-      ERR("AIO, error in io_getevents(), IO incomplete!");
-    }else{
-      o->pending_bytes -= event.res;
-    }
-    free(event.obj);
+    aio_reap_one(o, & events[i]);
   }
   o->in_flight -= num_events;
 }
@@ -187,17 +253,51 @@ static IOR_offset_t aio_Xfer(int access, aiori_fd_t *fd, IOR_size_t * buffer,
   aio_options_t * o = (aio_options_t*) param;
   aio_fd_t * afd = (aio_fd_t*) fd;
 
+  /* If we are doing verification, we must be synchronous because IOR expects
+     the data to be in the buffer immediately after this call. */
+  if (access == READCHECK || access == WRITECHECK){
+    complete_all(o); // ensure no races with previous ops
+    struct iocb iocb;
+    struct iocb * piocb = & iocb;
+    io_prep_pread(piocb, *(int*)afd->pfd, buffer, length, offset);
+    piocb->data = (void*)(uintptr_t)-1; // not from pool
+    int res = io_submit(o->ioctx, 1, & piocb);
+    if (res != 1) ERRF("AIO submit failed: %s", strerror(errno));
+    struct io_event event;
+    res = io_getevents(o->ioctx, 1, 1, & event, NULL);
+    if (res != 1) ERRF("AIO getevents failed: %s", strerror(errno));
+    if ((long)event.res < 0) ERRF("AIO error: %s", strerror(-(long)event.res));
+    return event.res;
+  }
+
   if(o->in_flight >= o->max_pending){
     process_some(o);
   }
+
+  // ensure pool is ready
+  aio_setup_pool(o, length);
+
+  // get a buffer from pool. If none available (shouldn't happen because of process_some), wait.
+  while (o->free_pool_pos == 0){
+    process_some(o);
+  }
+  int pool_idx = o->free_pool_indices[--o->free_pool_pos];
+  void * pbuf = o->buffer_pool[pool_idx];
+
+  if (access == WRITE){
+    memcpy(pbuf, buffer, length);
+  }
+
   o->pending_bytes += length;
 
   struct iocb * iocb = malloc(sizeof(struct iocb));
   if(access == WRITE){
-    io_prep_pwrite(iocb, *(int*)afd->pfd, buffer, length, offset);
+    io_prep_pwrite(iocb, *(int*)afd->pfd, pbuf, length, offset);
   }else{
-    io_prep_pread(iocb,  *(int*)afd->pfd, buffer, length, offset);
+    io_prep_pread(iocb,  *(int*)afd->pfd, pbuf, length, offset);
   }
+  iocb->data = (void*)(uintptr_t)pool_idx;
+
   o->iocbs[o->iocbs_pos] = iocb;
   o->iocbs_pos++;
   o->in_flight++;
