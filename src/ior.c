@@ -1195,10 +1195,11 @@ static void TestIoSys(IOR_test_t *test)
           }
         }
 
-#ifndef IOR_SKIP_DELETE
+#ifdef IOR_REMOVE
+        /* This conflicts with any test that keeps files, thus only useful for standalone runs*/
         /* touch the file system to load up any client-side libraries */
         GetTestFileName(testFileName, params);
-        backend->delete(testFileName, params->backend_options);
+        backend->remove(testFileName, params->backend_options);
 #endif
 
         for (rep = 0; rep < params->repetitions; rep++) {
