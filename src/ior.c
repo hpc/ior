@@ -1195,6 +1195,13 @@ static void TestIoSys(IOR_test_t *test)
           }
         }
 
+#ifdef IOR_REMOVE
+        /* This conflicts with any test that keeps files, thus only useful for standalone runs*/
+        /* touch the file system to load up any client-side libraries */
+        GetTestFileName(testFileName, params);
+        backend->remove(testFileName, params->backend_options);
+#endif
+
         for (rep = 0; rep < params->repetitions; rep++) {
                 /* Get iteration start time in seconds in task 0 and broadcast to
                    all tasks */
@@ -1297,7 +1304,7 @@ static void TestIoSys(IOR_test_t *test)
                                 fprintf(out_logfile, "%s\n", CurrentTimeString());
                         }
                         if (params->reorderTasks) {
-                                /* move two nodes away from writing node */
+                                /* move two nodes away from writing node times the number of -C flags specified */
                                 int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
                                 if (params->tasksBlockMapping) {
                                     shift = params->numTasksOnNode0; /* switch to by-slot (contiguous block) mapping */
