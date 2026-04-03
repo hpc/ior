@@ -1297,12 +1297,12 @@ static void TestIoSys(IOR_test_t *test)
                                 fprintf(out_logfile, "%s\n", CurrentTimeString());
                         }
                         if (params->reorderTasks) {
-                                /* move two nodes away from writing node times the number of -C flags specified */
+                                /* move two nodes away from writing node */
                                 int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
                                 if (params->tasksBlockMapping) {
                                     shift = params->numTasksOnNode0; /* switch to by-slot (contiguous block) mapping */
                                 }
-                                rankOffset = (shift + params->reorderTasks * shift) % params->numTasks;
+                                rankOffset = ((params->taskPerNodeOffset + 1) * shift) % params->numTasks;
                         }
                         
                         GetTestFileName(testFileName, params);
@@ -1333,12 +1333,12 @@ static void TestIoSys(IOR_test_t *test)
                         /* Get rankOffset [file offset] for this process to read, based on -C,-Z,-Q,-X options */
                         /* Constant process offset reading */
                         if (params->reorderTasks) {
-                                /*  move one node away from writing node times the number of -C flags specified */
+                                /*  move one node away from writing node */
                                 int shift = 1; /* assume a by-node (round-robin) mapping of tasks to nodes */
                                 if (params->tasksBlockMapping) {
                                     shift=params->numTasksOnNode0; /* switch to a by-slot (contiguous block) mapping */
                                 }
-                                rankOffset = (params->taskPerNodeOffset * shift * params->reorderTasks) % params->numTasks;
+                                rankOffset = (params->taskPerNodeOffset * shift) % params->numTasks;
                         }                        
                         /* random process offset reading */
                         if (params->reorderTasksRandom == 1) {

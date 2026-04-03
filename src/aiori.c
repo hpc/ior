@@ -78,6 +78,9 @@ ior_aiori_t *available_aiori[] = {
         &s3_plus_aiori,
         &s3_emc_aiori,
 #endif
+#ifdef USE_S3_CURL_AIORI
+        &s3_curl_aiori,
+#endif
 #ifdef USE_RADOS_AIORI
         &rados_aiori,
 #endif
