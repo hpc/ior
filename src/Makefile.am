@@ -146,6 +146,12 @@ extraSOURCES  += aiori-S3-libs3.c
 extraLDADD    += -ls3
 endif
 
+if USE_S3_CURL_AIORI
+extraSOURCES  += aiori-S3-curl.c
+extraLDADD    += -lcurl
+extraLDADD    += -lcrypto
+endif
+
 if WITH_LUSTRE
 extraLDADD  += -llustreapi
 endif

@@ -136,6 +136,7 @@ extern ior_aiori_t S3_libS3_aiori;
 extern ior_aiori_t s3_4c_aiori;
 extern ior_aiori_t s3_plus_aiori;
 extern ior_aiori_t s3_emc_aiori;
+extern ior_aiori_t s3_curl_aiori;
 extern ior_aiori_t rados_aiori;
 extern ior_aiori_t cephfs_aiori;
 extern ior_aiori_t gfarm_aiori;

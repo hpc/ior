@@ -439,6 +439,40 @@ AM_COND_IF([AWS4C_DIR],[
 
 
 
+# Amazon S3 support using libcurl
+AC_ARG_WITH([S3-curl],
+        [AS_HELP_STRING([--with-S3-curl],
+           [support IO with Amazon S3 using libcurl @<:@default=no@:>@])],
+        [],
+        [with_S3_curl=no])
+AM_CONDITIONAL([USE_S3_CURL_AIORI], [test x$with_S3_curl = xyes])
+AM_COND_IF([USE_S3_CURL_AIORI],[
+        AC_DEFINE([USE_S3_CURL_AIORI], [], [Build Amazon-S3 backend AIORI using libcurl])
+])
+
+err=0
+AS_IF([test "x$with_S3_curl" != xno], [
+        AC_MSG_NOTICE([beginning of S3-curl checks])
+
+        ORIG_CPPFLAGS=$CPPFLAGS
+        ORIG_LDFLAGS=$LDFLAGS
+
+        AC_CHECK_HEADERS([curl/curl.h openssl/hmac.h openssl/evp.h], [], [err=1])
+
+        ORIG_LIBS=$LIBS
+        AC_CHECK_LIB([curl], [curl_easy_init], [], [err=1])
+        AC_CHECK_LIB([crypto], [HMAC], [], [err=1])
+        LIBS=$ORIG_LIBS
+
+        AC_MSG_NOTICE([end of S3-curl checks])
+        if test "$err" == 1; then
+                AC_MSG_FAILURE([S3-curl support is missing.  dnl Make sure you have libcurl and openssl development libraries installed.  dnl])
+        fi
+
+        CPPFLAGS=$ORIG_CPPFLAGS
+        LDFLAGS=$ORIG_LDFLAGS
+])
+
 # Amazon S3 support using the libs3 API
 AC_ARG_WITH([S3-libs3],
         [AS_HELP_STRING([--with-S3-libs3],
