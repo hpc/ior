@@ -48,11 +48,25 @@ extraLDFLAGS   += @CUDA_LDFLAGS@
 extraLDADD     += @CUDA_LIBS@
 endif
 
+if HAVE_HIP
+extraSOURCES  += hip_runtime.c utilities-gpu.hip
+extraCPPFLAGS  += @HIP_CPPFLAGS@
+extraLDFLAGS   += @HIP_LDFLAGS@
+extraLDADD     += @HIP_LIBS@
+endif
+
 if HAVE_CUFILE
 extraSOURCES  += gpu_io_cufile.c
 extraCPPFLAGS += @CUFILE_CPPFLAGS@
 extraLDFLAGS  += @CUFILE_LDFLAGS@
 extraLDADD    += @CUFILE_LIBS@ -lstdc++
+endif
+
+if HAVE_HIPFILE
+extraSOURCES  += gpu_io_hipfile.c
+extraCPPFLAGS += @HIPFILE_CPPFLAGS@
+extraLDFLAGS  += @HIPFILE_LDFLAGS@
+extraLDADD    += @HIPFILE_LIBS@ -lstdc++
 endif
 
 if USE_HDF5_AIORI
@@ -203,3 +217,6 @@ build.conf:
 
 .cu.o:
 	$(NVCC) $(CPPFLAGS) $(extraCPPFLAGS) -c -o $@ $<
+
+.hip.o:
+	$(HIPCC) $(CPPFLAGS) $(extraCPPFLAGS) -c -o $@ $<
