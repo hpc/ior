@@ -135,6 +135,7 @@ typedef struct
     int randomSeed;                  /* random seed for write/read check */
     unsigned int incompressibleSeed; /* random seed for incompressible file creation */
     int randomOffset;                /* access is to random offsets */
+    uint64_t memoryAlign;            /* alignment of I/O buffers, 0 = page size */
     size_t memoryPerTask;            /* additional memory used per task */
     size_t memoryPerNode;            /* additional memory used per node */
     char * memoryPerNodeStr;         /* for parsing */

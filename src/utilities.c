@@ -37,6 +37,10 @@
 #include <sys/types.h>
 #include <time.h>
 
+#ifdef __linux__
+#  include <sys/mman.h>          /* madvise() */
+#endif
+
 #ifdef HAVE_CUDA
 #include <cuda_runtime.h>
 #endif
@@ -1157,6 +1161,21 @@ unsigned long GetProcessorAndCore(int *chip, int *core){
 
 
 
+/* Alignment applied to I/O buffers; 0 means the system page size, which is
+   all O_DIRECT requires.  See aligned_buffer_set_alignment(). */
+static size_t memoryAlignment = 0;
+
+/*
+ * Set the alignment used by aligned_buffer_alloc() for subsequent
+ * allocations.  A value of 0 restores the default (the system page size).
+ * Must be a power of two and at least the page size; the caller is
+ * responsible for validating that.
+ */
+void aligned_buffer_set_alignment(size_t alignment)
+{
+  memoryAlignment = alignment;
+}
+
 /*
  * Allocate a page-aligned (required by O_DIRECT) buffer.
  */
@@ -1188,16 +1207,36 @@ void *aligned_buffer_alloc(size_t size, ior_memory_flags type)
     }
 
 #ifdef HAVE_SYSCONF
-  long pageSize = sysconf(_SC_PAGESIZE);
+  size_t pageSize = (size_t) sysconf(_SC_PAGESIZE);
 #else
   size_t pageSize = getpagesize();
 #endif
+  size_t alignment = memoryAlignment ? memoryAlignment : pageSize;
+  size_t total;
 
-  pageMask = pageSize - 1;
-  buf = safeMalloc(size + pageSize + sizeof(void *));
+  pageMask = alignment - 1;
+  total = size + alignment + sizeof(void *);
+  buf = malloc(total);
+  if (buf == NULL)
+    ERR("Could not allocate an aligned buffer");
   /* find the alinged buffer */
   tmp = buf + sizeof(char *);
-  aligned = tmp + pageSize - ((size_t) tmp & pageMask);
+  aligned = tmp + alignment - ((size_t) tmp & pageMask);
+
+#ifdef MADV_HUGEPAGE
+  /* Ask for huge pages before the buffer is first touched: once a page has
+     been faulted in as a base page, only khugepaged can collapse it, which
+     is asynchronous and may not happen at all during a short run.  Only the
+     aligned region is advised -- madvise() requires a page-aligned start,
+     which the malloc()ed pointer is not.  A failure here is not fatal, the
+     buffer is simply backed by base pages. */
+  if (alignment > pageSize)
+    (void) madvise(aligned, size, MADV_HUGEPAGE);
+#endif
+
+  /* matches the zeroing that safeMalloc() used to provide */
+  memset(buf, 0, total);
+
   /* write a pointer to the original malloc()ed buffer into the bytes
      preceding "aligned", so that the aligned buffer can later be free()ed */
   tmp = aligned - sizeof(void *);
