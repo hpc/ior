@@ -8,7 +8,7 @@ endif
 noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h mdtest.h aiori-debug.h aiori-POSIX.h md-workbench.h gpu_runtime.h gpu_io.h
 
 lib_LIBRARIES = libaiori.a
-libaiori_a_SOURCES = ior.c mdtest.c utilities.c parse_options.c ior-output.c option.c md-workbench.c
+libaiori_a_SOURCES = ior.c mdtest.c utilities.c utilities-rand.c parse_options.c ior-output.c option.c md-workbench.c
 
 extraSOURCES = aiori.c aiori-DUMMY.c
 extraLDADD =
