@@ -906,6 +906,7 @@ static void InitTests(IOR_test_t *tests)
 static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
                              int pretendRank)
 {
+        aligned_buffer_set_alignment((size_t) test->memoryAlign);
         ioBuffers->buffer = aligned_buffer_alloc(test->transferSize, test->gpuMemoryFlags);
 }
 
@@ -1478,6 +1479,15 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
         IOR_param_t defaults;
         init_IOR_Param_t(&defaults, com);
 
+        if (test->memoryAlign != 0) {
+          uint64_t pageSize = (uint64_t) sysconf(_SC_PAGESIZE);
+          if (test->memoryAlign & (test->memoryAlign - 1))
+            ERR("memoryAlign must be a power of two");
+          if (test->memoryAlign < pageSize)
+            ERR("memoryAlign must be at least the system page size");
+          if (test->memoryAlign > (uint64_t) 1 << 30)
+            ERR("memoryAlign is unreasonably large (> 1g)");
+        }
         if (test->gpuDirect && test->gpuMemoryFlags == IOR_MEMORY_TYPE_CPU )
           ERR("GPUDirect requires a non-CPU memory type");
         if (test->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY && ! test->gpuDirect )

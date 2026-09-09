@@ -449,6 +449,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'K', NULL,        "keepFileWithError  -- keep error-filled file(s) after data-checking", OPTION_FLAG, 'd', & params->keepFileWithError},
     {'l', "dataPacketType",        "datapacket type-- type of packet that will be created [offset|incompressible|timestamp|random|o|i|t|r]", OPTION_OPTIONAL_ARGUMENT, 's', &  params->buffer_type},
     {'m', NULL,        "multiFile -- use number of reps (-i) for multiple file count", OPTION_FLAG, 'd', & params->multiFile},
+    {0, "memoryAlign", "align I/O buffers to this boundary instead of the page size (e.g.: 2m); on Linux the buffer is also advised MADV_HUGEPAGE, so this is how to obtain huge-page-backed I/O buffers", OPTION_OPTIONAL_ARGUMENT, 'u', & params->memoryAlign},
     {'M', NULL,        "memoryPerNode -- hog memory on the node  (e.g.: 2g, 75%)", OPTION_OPTIONAL_ARGUMENT, 's', & params->memoryPerNodeStr},
     {'N', NULL,        "numTasks -- number of tasks that are participating in the test (overrides MPI)", OPTION_OPTIONAL_ARGUMENT, 'd', & params->numTasks},
     {'o', NULL,        "testFile -- full name for test", OPTION_OPTIONAL_ARGUMENT, 's', & params->testFileName},
