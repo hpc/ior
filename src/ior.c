@@ -1162,6 +1162,10 @@ static void TestIoSys(IOR_test_t *test)
         void *hog_buf;
         IOR_io_buffers ioBuffers;
 
+        /* show the processor assigned to each task in rank order */
+        if (verbose >= VERBOSE_2)
+                ShowTaskToProcessor(params);
+
         /* show test setup */
         if (rank == 0 && verbose >= VERBOSE_0)
                 ShowSetup(params);
