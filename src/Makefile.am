@@ -49,7 +49,7 @@ extraLDADD     += @CUDA_LIBS@
 endif
 
 if HAVE_HIP
-extraSOURCES  += hip_runtime.c utilities-gpu.hip
+extraSOURCES  += hip_runtime.c utilities-gpu-h.hip
 extraCPPFLAGS  += @HIP_CPPFLAGS@
 extraLDFLAGS   += @HIP_LDFLAGS@
 extraLDADD     += @HIP_LIBS@
