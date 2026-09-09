@@ -43,6 +43,7 @@
 #include "ior-internal.h"
 #include "aiori.h"
 #include "utilities.h"
+#include "utilities-rand.h"
 #include "parse_options.h"
 
 enum {
@@ -1788,10 +1789,12 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         }else{
           offsets = (test->blockSize / test->transferSize);
         }
-        if (test->randomOffset > 1){
+        if (test->randomOffset == 2){
           int seed = init_random_seed(test, pretendRank);
           srand(seed + pretendRank);
           srand64(((uint64_t) seed) * (pretendRank + 1));
+        }else if (test->randomOffset == 3){
+          test->random_range = u_lfsr_range_init(test->fileSizeForRead / test->blockSize, pretendRank + 1);
         }
 
         void * randomPrefillBuffer = NULL;
@@ -1833,7 +1836,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                 fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
               }
             }
-            if (test->randomOffset > 1){
+            if (test->randomOffset == 2){
                 size_t sizerand = test->fileSizeForRead; 
                 //if(test->filePerProc){
                 //  sizerand /= test->numTasks;
@@ -1854,8 +1857,10 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                 }else{
                   offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
                 }
-              }else if (test->randomOffset > 1){
+              }else if (test->randomOffset == 2){
                 offset += test->transferSize;
+              }else if (test->randomOffset == 3){
+                offset = u_lfsr_range_step (test->random_range);
               }else{
                 offset = j * test->transferSize;
                 if (test->filePerProc) {
@@ -1912,7 +1917,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
             for ( ; pairCnt < point->pairs_accessed; i++) {
               IOR_offset_t offset;
               if(i == test->segmentCount) i = 0; // wrap over, necessary to deal with minTimeDuration
-              if (test->randomOffset > 1){
+              if (test->randomOffset == 2){
                   size_t sizerand = test->fileSizeForRead; 
                   if(test->filePerProc){
                     sizerand /= test->numTasks;
@@ -1926,8 +1931,10 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                   }else{
                     offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
                   }
-                }else if (test->randomOffset > 1){
+                }else if (test->randomOffset == 2){
                   offset += test->transferSize;
+                }else if (test->randomOffset == 3){
+                  offset = u_lfsr_range_step (test->random_range);
                 }else{
                   offset = j * test->transferSize;
                   if (test->filePerProc) {
