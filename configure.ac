@@ -166,6 +166,11 @@ AM_CONDITIONAL([HAVE_HIPCC], [test -n "$HIPCC"])
 AS_IF([test "x$have_hip" = xyes && test "x$HIPCC" = x], [
         AC_MSG_FAILURE([HIP runtime support requires hipcc for utilities-gpu.hip])
 ])
+AC_SUBST([CUDA_CPPFLAGS])
+AC_SUBST([CUDA_LDFLAGS])
+AC_SUBST([CUDA_LIBS])
+AM_CONDITIONAL([HAVE_CUDA], [test "x$have_cuda" = xyes])
+AM_COND_IF([HAVE_CUDA], [AC_DEFINE([HAVE_CUDA], [1], [CUDA GPU runtime available])])
 
 AS_IF([test "x$have_cuda" = xyes && test "x$have_hip" = xyes], [
         AC_MSG_WARN([Both CUDA and HIP detected; CUDA takes precedence.])
