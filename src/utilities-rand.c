@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdint.h>
+#include <assert.h>
 
 //#include <utilities-rand.h>
 
@@ -143,7 +144,7 @@ void u_lfsr_print (LFSRConfig * lfsr, uint64_t file_base_offset)
 LFSRRange * u_lfsr_range_init (uint64_t blocks, unsigned seed){
   LFSRRange * range = malloc(sizeof(LFSRRange)); // todo safe_malloc()
   memset(range, 0, sizeof (LFSRRange));
-  uint64_t b = blocks;
+  uint64_t b = blocks & (~(uint64_t) 7);
   uint8_t bit_offset = 1;
   uint8_t rnds_count = 0;
 
@@ -187,20 +188,21 @@ uint64_t u_lfsr_range_step (LFSRRange * range){
   int x = rand_r (& range->seed) % range->rnds_count;
   LFSR_ELEM * rnds = range->elem;
   uint64_t block_to_read = rnds[x].lfsr.state;
-  uint64_t base_offset = rnds[x].file_base_offset;
-  uint64_t offset = base_offset + block_to_read;
   u_lfsr_step (&rnds[x].lfsr);
+
+  uint64_t base_offset = rnds[x].file_base_offset;  
+
   if (rnds[x].lfsr.state == range->init_seed)
   {
-      block_to_read = 0;
-      base_offset = rnds[x].file_base_offset;
-      offset = base_offset + block_to_read;
       // the current one is exhausted
       for (int j = x; j < range->rnds_count; j++)
       {
           rnds[j] = rnds[j + 1];
       }
       range->rnds_count--;
+      return base_offset;
   }
-  return offset;
+  uint64_t offset = base_offset + block_to_read;
+  assert(offset > 0);
+ return offset;
 }
