@@ -1860,7 +1860,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
               }else if (test->randomOffset == 2){
                 offset += test->transferSize;
               }else if (test->randomOffset == 3){
-                offset = u_lfsr_range_step (test->random_range);
+                offset = u_lfsr_range_step (test->random_range) * test->blockSize;
               }else{
                 offset = j * test->transferSize;
                 if (test->filePerProc) {
@@ -1934,7 +1934,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                 }else if (test->randomOffset == 2){
                   offset += test->transferSize;
                 }else if (test->randomOffset == 3){
-                  offset = u_lfsr_range_step (test->random_range);
+                  offset = u_lfsr_range_step (test->random_range) * test->blockSize;
                 }else{
                   offset = j * test->transferSize;
                   if (test->filePerProc) {
