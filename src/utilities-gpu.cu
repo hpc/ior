@@ -1,14 +1,15 @@
 /*
-  This file contains CUDA code for creating and checking memory patterns on the device.
+  This file contains GPU code for creating and checking memory patterns
+  on the device.  Built with nvcc under HAVE_CUDA.
 */
-#include <cuda_runtime.h>
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
 #include <stdint.h>
 
+#include <cuda_runtime.h>
+#include "gpu_runtime.h"
 #include "iordef.h"
 
 #define RANDALGO_GOLDEN_RATIO_PRIME        0x9e37fffffffc0001UL
@@ -69,14 +70,14 @@ extern "C" int verify_memory_pattern_gpu(uint64_t item, char * buffer, size_t by
   size_t blocks = (bytes+2047)/2048;
   size_t threads = 256;  
   int * derror_found;
-  cudaMalloc(&derror_found, sizeof(int));
-  cudaMemcpy(derror_found, & errors, sizeof(int), cudaMemcpyHostToDevice);
+  gpu_runtime_malloc((void**) & derror_found, sizeof(int));
+  gpu_runtime_memcpy(derror_found, & errors, sizeof(int), GPU_MEMCPY_HOST_TO_DEVICE);
   if(dataPacketType == DATA_TIMESTAMP){
     cu_verify_memory_timestamp<<<blocks, threads>>>(item, (uint64_t*) buffer, bytes/sizeof(uint64_t), rand_seed, ((uint64_t) pretendRank) << 32, derror_found);
   }else if(dataPacketType == DATA_INCOMPRESSIBLE){
     
   }
-  cudaMemcpy(& errors, derror_found, sizeof(int), cudaMemcpyDeviceToHost);
-  cudaFree(derror_found);
+  gpu_runtime_memcpy(& errors, derror_found, sizeof(int), GPU_MEMCPY_DEVICE_TO_HOST);
+  gpu_runtime_free(derror_found);
   return errors;
 }

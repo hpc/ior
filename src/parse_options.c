@@ -426,7 +426,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O stoneWallingWearOutIterations=N -- stop after processing this number of iterations, needed for reading data back written with stoneWallingWearOut", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O stoneWallingStatusFile=FILE     -- this file keeps the number of iterations from stonewalling during write and allows to use them for read", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O minTimeDuration=0           -- minimum Runtime for the run (will repeat from beginning of the file if time is not yet over)", .arg = OPTION_OPTIONAL_ARGUMENT},
-#ifdef HAVE_CUDA
+#ifdef HAVE_GPU
     {.help="  -O allocateBufferOnGPU=X           -- allocate I/O buffers on the GPU: X=1 uses managed memory - verifications are run on CPU; X=2 managed memory - verifications on GPU; X=3 device memory with verifications on GPU.", .arg = OPTION_OPTIONAL_ARGUMENT},
     {.help="  -O GPUid=X                         -- select the GPU to use, use -1 for round-robin among local procs.", .arg = OPTION_OPTIONAL_ARGUMENT},
 #ifdef HAVE_GPU_DIRECT

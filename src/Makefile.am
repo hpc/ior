@@ -5,7 +5,7 @@ if USE_CAPS
 bin_PROGRAMS += IOR MDTEST MD-WORKBENCH
 endif
 
-noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h mdtest.h aiori-debug.h aiori-POSIX.h md-workbench.h
+noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h mdtest.h aiori-debug.h aiori-POSIX.h md-workbench.h gpu_runtime.h gpu_io.h
 
 lib_LIBRARIES = libaiori.a
 libaiori_a_SOURCES = ior.c mdtest.c utilities.c parse_options.c ior-output.c option.c md-workbench.c
@@ -33,7 +33,7 @@ mdtest_CPPFLAGS =
 if USE_HDFS_AIORI
 # TBD: figure out how to find the appropriate -I and -L dirs.  Maybe we can
 #      get them from the corresponding bin/ dir in $PATH, or pick an
-#      environment var to use (and set it in modulefiles), or provide a
+#      environment var to use (and set it up in modulefiles), or provide a
 #      config-flag, to set a variable we use here.
 extraSOURCES  += aiori-HDFS.c
 extraCPPFLAGS += -I/opt/hadoop-2.2.0/include
@@ -42,12 +42,17 @@ extraLDADD    += -lhdfs
 endif
 
 if HAVE_CUDA
-extraLDADD    += -lcudart
+extraSOURCES  += cuda_runtime.c utilities-gpu.cu
+extraCPPFLAGS  += @CUDA_CPPFLAGS@
+extraLDFLAGS   += @CUDA_LDFLAGS@
+extraLDADD     += @CUDA_LIBS@
 endif
 
-if HAVE_GPU_DIRECT
-extraLDADD    += -lcufile -lstdc++
-extraSOURCES  += utilities-gpu.cu
+if HAVE_CUFILE
+extraSOURCES  += gpu_io_cufile.c
+extraCPPFLAGS += @CUFILE_CPPFLAGS@
+extraLDFLAGS  += @CUFILE_LDFLAGS@
+extraLDADD    += @CUFILE_LIBS@ -lstdc++
 endif
 
 if USE_HDF5_AIORI
@@ -197,4 +202,4 @@ build.conf:
 	@echo CFLAGS=$(CFLAGS) $(extraCPPFLAGS) >> build.conf
 
 .cu.o:
-	$(NVCC) $(CFLAGS) -c -o $@ $<
+	$(NVCC) $(CPPFLAGS) $(extraCPPFLAGS) -c -o $@ $<

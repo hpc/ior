@@ -832,7 +832,7 @@ static option_help options [] = {
   {'W', "stonewall-wear-out", "Stop with stonewall after specified time and use a soft wear-out phase -- all processes perform the same number of iterations", OPTION_FLAG, 'd', & o.stonewall_timer_wear_out},
   {'X', "verify-read", "Verify the data on read", OPTION_FLAG, 'd', & o.verify_read},
   {0, "dataPacketType", "type of packet that will be created [offset|incompressible|timestamp|random|o|i|t|r]", OPTION_OPTIONAL_ARGUMENT, 's', & o.packetTypeStr},
-#ifdef HAVE_CUDA
+#ifdef HAVE_GPU
   {0, "allocateBufferOnGPU", "Allocate I/O buffers on the GPU: X=1 uses managed memory - verifications are run on CPU; X=2 managed memory - verifications on GPU; X=3 device memory with verifications on GPU.", OPTION_OPTIONAL_ARGUMENT, 'd', & o.gpuMemoryFlags},
   {0, "GPUid", "Select the GPU to use, use -1 for round-robin among local procs.", OPTION_OPTIONAL_ARGUMENT, 'd', & o.gpuID},
 #ifdef HAVE_GPU_DIRECT
@@ -954,7 +954,7 @@ mdworkbench_results_t* md_workbench_run(int argc, char ** argv, MPI_Comm world_c
   int numNodes = GetNumNodes(o.com);
   int numTasksOnNode0 = GetNumTasksOnNode0(o.com);
   if(o.gpuMemoryFlags != IOR_MEMORY_TYPE_CPU){
-    initCUDA(tasksBlockMapping, o.rank, numNodes, numTasksOnNode0, o.gpuID);
+    initGPU(tasksBlockMapping, o.rank, numNodes, numTasksOnNode0, o.gpuID);
   }
     
   int current_index = 0;
