@@ -188,12 +188,9 @@ uint64_t u_lfsr_range_step (LFSRRange * range){
   int x = rand_r (& range->seed) % range->rnds_count;
   LFSR_ELEM * rnds = range->elem;
   uint64_t block_to_read = rnds[x].lfsr.state;
-  u_lfsr_step (&rnds[x].lfsr);
-
   uint64_t base_offset = rnds[x].file_base_offset;  
 
-  if (rnds[x].lfsr.state == range->init_seed)
-  {
+  if(rnds[x].lfsr.state == 0){
       // the current one is exhausted
       for (int j = x; j < range->rnds_count; j++)
       {
@@ -201,6 +198,13 @@ uint64_t u_lfsr_range_step (LFSRRange * range){
       }
       range->rnds_count--;
       return base_offset;
+  }
+
+  u_lfsr_step (&rnds[x].lfsr);
+
+  if (rnds[x].lfsr.state == range->init_seed)
+  {
+    rnds[x].lfsr.state = 0;
   }
   uint64_t offset = base_offset + block_to_read;
   assert(offset > 0);

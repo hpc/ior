@@ -4,7 +4,7 @@
 
 int main(){
 
-  LFSRRange * range = u_lfsr_range_init (8+16, 1); // with 1023
+  LFSRRange * range = u_lfsr_range_init (8+32, 1); // with 1023
 
   uint64_t pos = 1;
   uint64_t count = 0;
