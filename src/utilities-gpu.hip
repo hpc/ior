@@ -1,6 +1,6 @@
 /*
   This file contains GPU code for creating and checking memory patterns
-  on the device.  Built with nvcc under HAVE_CUDA.
+  on the device.  Built with hipcc under HAVE_HIP.
 */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -8,13 +8,13 @@
 
 #include <stdint.h>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include "gpu_runtime.h"
 #include "iordef.h"
 
 #define RANDALGO_GOLDEN_RATIO_PRIME        0x9e37fffffffc0001UL
 
-__global__ 
+__global__
 void cu_generate_memory_timestamp(uint64_t * buf, size_t length, int rand_seed, uint64_t pretendRank){
   size_t pos = blockIdx.x * blockDim.x + threadIdx.x;
   if(pos < length){
@@ -22,7 +22,7 @@ void cu_generate_memory_timestamp(uint64_t * buf, size_t length, int rand_seed, 
   }
 }
 
-__global__ 
+__global__
 void cu_generate_memory_incompressible(uint64_t * buf, size_t length, uint64_t seed){
   size_t pos = blockIdx.x * blockDim.x + threadIdx.x;
   if(pos < length){
@@ -30,7 +30,7 @@ void cu_generate_memory_incompressible(uint64_t * buf, size_t length, uint64_t s
   }
 }
 
-__global__ 
+__global__
 void cu_verify_memory_timestamp(uint64_t item, uint64_t * buf, size_t length, int rand_seed, uint64_t pretendRank, int * errors){
   size_t pos = blockIdx.x * blockDim.x + threadIdx.x;
   if(pos < length){
@@ -41,14 +41,14 @@ void cu_verify_memory_timestamp(uint64_t item, uint64_t * buf, size_t length, in
   }
 }
 
-extern "C" void generate_memory_pattern_gpu(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){    
+extern "C" void generate_memory_pattern_gpu(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
   size_t blocks = (bytes+2047)/2048;
   size_t threads = 256;
   switch(dataPacketType){
     case(DATA_RANDOM):
       // Nothing to do, will work on updates
       break;
-    case(DATA_INCOMPRESSIBLE):{      
+    case(DATA_INCOMPRESSIBLE):{
       cu_generate_memory_incompressible<<<blocks, threads>>>((uint64_t*) buf, bytes/sizeof(uint64_t), rand_seed + pretendRank);
       break;
     }case(DATA_OFFSET):{
@@ -68,14 +68,14 @@ extern "C" void update_write_memory_pattern_gpu(uint64_t item, char * buf, size_
 extern "C" int verify_memory_pattern_gpu(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
   int errors = 0;
   size_t blocks = (bytes+2047)/2048;
-  size_t threads = 256;  
+  size_t threads = 256;
   int * derror_found;
   gpu_runtime_malloc((void**) & derror_found, sizeof(int));
   gpu_runtime_memcpy(derror_found, & errors, sizeof(int), GPU_MEMCPY_HOST_TO_DEVICE);
   if(dataPacketType == DATA_TIMESTAMP){
     cu_verify_memory_timestamp<<<blocks, threads>>>(item, (uint64_t*) buffer, bytes/sizeof(uint64_t), rand_seed, ((uint64_t) pretendRank) << 32, derror_found);
   }else if(dataPacketType == DATA_INCOMPRESSIBLE){
-    
+
   }
   gpu_runtime_memcpy(& errors, derror_found, sizeof(int), GPU_MEMCPY_DEVICE_TO_HOST);
   gpu_runtime_free(derror_found);

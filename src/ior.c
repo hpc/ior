@@ -33,8 +33,8 @@
 # include <sys/utsname.h>        /* uname() */
 #endif
 
-#ifdef HAVE_CUDA
-#include <cuda_runtime.h>
+#ifdef HAVE_GPU
+#include "gpu_runtime.h"
 #endif
 
 #include <assert.h>
@@ -126,7 +126,7 @@ static int test_initialize(IOR_test_t * test){
   backend = test->params.backend;
 
   if(test->params.gpuMemoryFlags != IOR_MEMORY_TYPE_CPU){
-    initCUDA(test->params.tasksBlockMapping, rank, test->params.numNodes, test->params.numTasksOnNode0, test->params.gpuID);
+    initGPU(test->params.tasksBlockMapping, rank, test->params.numNodes, test->params.numTasksOnNode0, test->params.gpuID);
   }
   
 

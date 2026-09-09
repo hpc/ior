@@ -78,69 +78,230 @@ AS_IF([test "$ac_cv_header_gpfs_h" = "yes" -o "$ac_cv_header_gpfs_fcntl_h" = "ye
     ])
 ])
 
-# Check for CUDA
+# ---------------------------------------------------------------------------
+# GPU runtime: CUDA or HIP
+# ---------------------------------------------------------------------------
+
+# CUDA runtime
 AC_ARG_WITH([cuda],
-        [AS_HELP_STRING([--with-cuda],
-                [support configurable CUDA @<:@default=check@:>@])],
+        [AS_HELP_STRING([--with-cuda@<:@=PREFIX@:>@],
+                [enable CUDA runtime support @<:@default=check@:>@])],
         [], [with_cuda=check])
 
+have_cuda=no
 AS_IF([test "x$with_cuda" != xno], [
-        LDFLAGS="$LDFLAGS -L$with_cuda/lib64 -L$with_cuda/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64:$with_cuda/lib"
-        CPPFLAGS="$CPPFLAGS -I$with_cuda/include"
+        AS_IF([test "x$with_cuda" != xyes && test "x$with_cuda" != xcheck], [
+                CUDA_CPPFLAGS="-I$with_cuda/include"
+                CUDA_LDFLAGS="-L$with_cuda/lib64 -L$with_cuda/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_cuda/lib64:$with_cuda/lib"
+        ])
 
-        AC_CHECK_HEADERS([cuda_runtime.h], [AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])], [
+        save_CPPFLAGS="$CPPFLAGS"; save_LDFLAGS="$LDFLAGS"; save_LIBS="$LIBS"
+        CPPFLAGS="$CPPFLAGS $CUDA_CPPFLAGS"
+        LDFLAGS="$LDFLAGS $CUDA_LDFLAGS"
+
+        AC_CHECK_HEADERS([cuda_runtime.h], [], [
                 if test "x$with_cuda" != xcheck; then
                         AC_MSG_FAILURE([--with-cuda was given, <cuda_runtime.h> not found])
                 fi
         ])
-AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
-        AC_SEARCH_LIBS([cudaMalloc], [cudart cudart_static], [],
-        [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
-    ])
+        AS_IF([test "$ac_cv_header_cuda_runtime_h" = "yes"], [
+                AC_SEARCH_LIBS([cudaMalloc], [cudart cudart_static], [
+                        have_cuda=yes
+                        AS_IF([test "x$ac_cv_search_cudaMalloc" = "xnone required"],
+                              [CUDA_LIBS=""], [CUDA_LIBS="$ac_cv_search_cudaMalloc"])
+                ], [AC_MSG_ERROR([Library containing cudaMalloc symbol not found])])
+        ])
+
+        CPPFLAGS="$save_CPPFLAGS"; LDFLAGS="$save_LDFLAGS"; LIBS="$save_LIBS"
 ])
-AM_CONDITIONAL([HAVE_CUDA], [test x$ac_cv_search_cudaMalloc != x ])
-AM_COND_IF([HAVE_CUDA],[AC_DEFINE([HAVE_CUDA], [], [CUDA GPU API found])])
+AC_SUBST([CUDA_CPPFLAGS])
+AC_SUBST([CUDA_LDFLAGS])
+AC_SUBST([CUDA_LIBS])
+AM_CONDITIONAL([HAVE_CUDA], [test "x$have_cuda" = xyes])
+AM_COND_IF([HAVE_CUDA], [AC_DEFINE([HAVE_CUDA], [1], [CUDA GPU runtime available])])
 
-# Check for GPUDirect
-AC_ARG_WITH([gpuDirect],
-        [AS_HELP_STRING([--with-gpuDirect],
-                [support configurable GPUDirect @<:@default=check@:>@])],
-        [], [with_gpuDirect=check])
+# HIP runtime
+AC_ARG_WITH([hip],
+        [AS_HELP_STRING([--with-hip@<:@=PREFIX@:>@],
+                [enable HIP runtime support @<:@default=check@:>@])],
+        [], [with_hip=check])
 
-AS_IF([test "x$with_gpuDirect" != xno], [
-        LDFLAGS="$LDFLAGS -L$with_gpuDirect/lib64 -L$with_gpuDirect/lib -Wl,--enable-new-dtags -Wl,-rpath=$with_gpuDirect/lib64:$with_gpuDirect/lib"
-        CPPFLAGS="$CPPFLAGS -I$with_gpuDirect/include"
+have_hip=no
+AS_IF([test "x$with_hip" != xno], [
+        AS_IF([test "x$with_hip" != xyes && test "x$with_hip" != xcheck], [
+                HIP_CPPFLAGS="-I$with_hip/include -D__HIP_PLATFORM_AMD__"
+                HIP_LDFLAGS="-L$with_hip/lib -L$with_hip/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$with_hip/lib:$with_hip/lib64"
+        ],[
+                HIP_CPPFLAGS="-D__HIP_PLATFORM_AMD__"
+        ])
 
-        AC_CHECK_HEADERS([cufile.h], [], [                
-                if test "x$with_gpuDirect" != xcheck; then
-                        AC_MSG_FAILURE([--with-gpuDirect was given, <cufile.h> not found])                       
+        save_CPPFLAGS="$CPPFLAGS"; save_LDFLAGS="$LDFLAGS"; save_LIBS="$LIBS"
+        CPPFLAGS="$CPPFLAGS $HIP_CPPFLAGS"
+        LDFLAGS="$LDFLAGS $HIP_LDFLAGS"
+
+        AC_CHECK_HEADERS([hip/hip_runtime.h], [], [
+                if test "x$with_hip" != xcheck; then
+                        AC_MSG_FAILURE([--with-hip was given, <hip/hip_runtime.h> not found])
                 fi
-                with_gpuDirect=no
         ])
-        AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
-                AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [], [
-                        AC_MSG_WARN([Library containing cuFileDriverOpen symbol not found])
-                        with_gpuDirect=no
-                ])
+        AS_IF([test "$ac_cv_header_hip_hip_runtime_h" = "yes"], [
+                AC_SEARCH_LIBS([hipMalloc], [amdhip64], [
+                        have_hip=yes
+                        AS_IF([test "x$ac_cv_search_hipMalloc" = "xnone required"],
+                              [HIP_LIBS=""], [HIP_LIBS="$ac_cv_search_hipMalloc"])
+                ], [AC_MSG_WARN([Library containing hipMalloc symbol not found])])
         ])
-])
 
-# Check for NVCC
+        CPPFLAGS="$save_CPPFLAGS"; LDFLAGS="$save_LDFLAGS"; LIBS="$save_LIBS"
+])
+AC_SUBST([HIP_CPPFLAGS])
+AC_SUBST([HIP_LDFLAGS])
+AC_SUBST([HIP_LIBS])
+
+# HIPCC compiler
+AC_ARG_VAR([HIPCC], [HIP compiler])
+AC_PATH_PROG([HIPCC], [hipcc])
+AM_CONDITIONAL([HAVE_HIPCC], [test -n "$HIPCC"])
+
+AS_IF([test "x$have_hip" = xyes && test "x$HIPCC" = x], [
+        AC_MSG_FAILURE([HIP runtime support requires hipcc for utilities-gpu.hip])
+])
+AC_SUBST([CUDA_CPPFLAGS])
+AC_SUBST([CUDA_LDFLAGS])
+AC_SUBST([CUDA_LIBS])
+AM_CONDITIONAL([HAVE_CUDA], [test "x$have_cuda" = xyes])
+AM_COND_IF([HAVE_CUDA], [AC_DEFINE([HAVE_CUDA], [1], [CUDA GPU runtime available])])
+
+AS_IF([test "x$have_cuda" = xyes && test "x$have_hip" = xyes], [
+        AC_MSG_WARN([Both CUDA and HIP detected; CUDA takes precedence.])
+        have_hip=no
+])
+AM_CONDITIONAL([HAVE_HIP], [test "x$have_hip" = xyes])
+AM_COND_IF([HAVE_HIP], [AC_DEFINE([HAVE_HIP], [1], [HIP GPU runtime available])])
+
+AM_CONDITIONAL([HAVE_GPU], [test "x$have_cuda" = xyes || test "x$have_hip" = xyes])
+AM_COND_IF([HAVE_GPU], [AC_DEFINE([HAVE_GPU], [1], [GPU runtime available])])
+
+# NVCC compiler
 NVCC=nvcc
 AC_ARG_VAR(varNVCC, "Name/path of the NVIDIA compiler")
 AC_ARG_WITH([nvcc],
               AS_HELP_STRING([--with-nvcc], [Use the NVCC as specified]),
               [AS_IF([test "$with_nvcc" != "yes"], NVCC=$with_nvcc)],
               [], [with_nvcc=check])
-
 AC_PATH_PROG(NVCC, nvcc)
-AM_CONDITIONAL([HAVE_NVCC], test -n "$NVCC")
+AM_CONDITIONAL([HAVE_NVCC], [test -n "$NVCC"])
 
-# Use GPU Direct only if NVCC and HAVE_GPU_DIRECT is supported
-AM_CONDITIONAL([HAVE_GPU_DIRECT], test x$with_gpuDirect != xno -a x$NVCC != x )
-AM_COND_IF([HAVE_GPU_DIRECT],[
-  AC_DEFINE([HAVE_GPU_DIRECT], [], [GPUDirect API found])
-  ])
+# CUDA runtime requires NVCC for utilities-gpu.cu
+AS_IF([test "x$have_cuda" = xyes && test "x$NVCC" = x], [
+        AC_MSG_FAILURE([CUDA runtime support requires nvcc for utilities-gpu.cu])
+])
+
+# ---------------------------------------------------------------------------
+# GPU Direct Storage backend: cuFile or hipFile
+# ---------------------------------------------------------------------------
+
+# Backend selector
+AC_ARG_WITH([gpu-direct-backend],
+        [AS_HELP_STRING([--with-gpu-direct-backend=cufile|hipfile|none],
+                [select one GPU Direct Storage backend @<:@default=none@:>@])],
+        [gpu_direct_backend="$withval"], [gpu_direct_backend=none])
+
+# Legacy alias: --with-gpuDirect -> cufile
+AC_ARG_WITH([gpuDirect],
+        [AS_HELP_STRING([--with-gpuDirect@<:@=PREFIX@:>@],
+                [deprecated alias for --with-gpu-direct-backend=cufile])],
+        [legacy_gpu_direct=yes
+         AS_CASE([$withval],
+            [no],    [gpu_direct_backend=none],
+            [yes],   [gpu_direct_backend=cufile],
+            [check], [gpu_direct_backend=cufile],
+            [*],     [gpu_direct_backend=cufile
+                      cufile_prefix="$withval"])],
+        [legacy_gpu_direct=no])
+
+AS_CASE([$gpu_direct_backend],
+    [cufile],  [],
+    [hipfile], [],
+    [none],    [],
+    [AC_MSG_FAILURE([--with-gpu-direct-backend must be cufile, hipfile, or none])])
+
+# cuFile backend
+have_cufile=no
+AS_IF([test "x$gpu_direct_backend" = xcufile], [
+        AS_IF([test "x$have_cuda" != xyes], [
+                AC_MSG_FAILURE([cuFile backend requires CUDA runtime support])
+        ])
+        AC_ARG_WITH([cufile],
+                [AS_HELP_STRING([--with-cufile@<:@=PREFIX@:>@],
+                        [cuFile install prefix])],
+                [cufile_prefix="$withval"], [])
+        AS_IF([test "x$cufile_prefix" != x && test "x$cufile_prefix" != xyes], [
+                CUFILE_CPPFLAGS="-I$cufile_prefix/include"
+                CUFILE_LDFLAGS="-L$cufile_prefix/lib64 -L$cufile_prefix/lib -Wl,--enable-new-dtags -Wl,-rpath=$cufile_prefix/lib64:$cufile_prefix/lib"
+        ])
+        save_CPPFLAGS="$CPPFLAGS"; save_LDFLAGS="$LDFLAGS"; save_LIBS="$LIBS"
+        CPPFLAGS="$CPPFLAGS $CUFILE_CPPFLAGS"
+        LDFLAGS="$LDFLAGS $CUFILE_LDFLAGS"
+        AC_CHECK_HEADERS([cufile.h], [], [
+                AC_MSG_FAILURE([cuFile backend selected, but cufile.h not found])
+        ])
+        AS_IF([test "$ac_cv_header_cufile_h" = "yes"], [
+                AC_SEARCH_LIBS([cuFileDriverOpen], [cufile], [
+                        have_cufile=yes
+                        AS_IF([test "x$ac_cv_search_cuFileDriverOpen" = "xnone required"],
+                              [CUFILE_LIBS=""], [CUFILE_LIBS="$ac_cv_search_cuFileDriverOpen"])
+                ], [
+                        AC_MSG_FAILURE([cuFile backend selected, but libcuFile not found])
+                ])
+        ])
+        CPPFLAGS="$save_CPPFLAGS"; LDFLAGS="$save_LDFLAGS"; LIBS="$save_LIBS"
+])
+AC_SUBST([CUFILE_CPPFLAGS])
+AC_SUBST([CUFILE_LDFLAGS])
+AC_SUBST([CUFILE_LIBS])
+AM_CONDITIONAL([HAVE_CUFILE], [test "x$have_cufile" = xyes])
+AM_COND_IF([HAVE_CUFILE], [AC_DEFINE([HAVE_CUFILE], [1], [cuFile GPU Direct Storage backend])])
+
+# hipFile backend
+have_hipfile=no
+AS_IF([test "x$gpu_direct_backend" = xhipfile], [
+        AS_IF([test "x$have_hip" != xyes], [
+                AC_MSG_FAILURE([hipFile backend requires HIP runtime support])
+        ])
+        AC_ARG_WITH([hipfile],
+                [AS_HELP_STRING([--with-hipfile@<:@=PREFIX@:>@],
+                        [hipFile install prefix])],
+                [hipfile_prefix="$withval"], [])
+        AS_IF([test "x$hipfile_prefix" != x && test "x$hipfile_prefix" != xyes], [
+                HIPFILE_CPPFLAGS="-I$hipfile_prefix/include"
+                HIPFILE_LDFLAGS="-L$hipfile_prefix/lib -L$hipfile_prefix/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$hipfile_prefix/lib:$hipfile_prefix/lib64"
+        ])
+        save_CPPFLAGS="$CPPFLAGS"; save_LDFLAGS="$LDFLAGS"; save_LIBS="$LIBS"
+        CPPFLAGS="$CPPFLAGS $HIPFILE_CPPFLAGS"
+        LDFLAGS="$LDFLAGS $HIPFILE_LDFLAGS"
+        AC_CHECK_HEADERS([hipfile.h], [], [
+                AC_MSG_FAILURE([hipFile backend selected, but hipfile.h not found])
+        ])
+        AS_IF([test "$ac_cv_header_hipfile_h" = "yes"], [
+                AC_SEARCH_LIBS([hipFileDriverOpen], [hipfile], [
+                        have_hipfile=yes
+                        AS_IF([test "x$ac_cv_search_hipFileDriverOpen" = "xnone required"],
+                              [HIPFILE_LIBS=""], [HIPFILE_LIBS="$ac_cv_search_hipFileDriverOpen"])
+                ], [
+                        AC_MSG_FAILURE([hipFile backend selected, but libhipfile not found])
+                ])
+        ])
+        CPPFLAGS="$save_CPPFLAGS"; LDFLAGS="$save_LDFLAGS"; LIBS="$save_LIBS"
+])
+AC_SUBST([HIPFILE_CPPFLAGS])
+AC_SUBST([HIPFILE_LDFLAGS])
+AC_SUBST([HIPFILE_LIBS])
+AM_CONDITIONAL([HAVE_HIPFILE], [test "x$have_hipfile" = xyes])
+AM_COND_IF([HAVE_HIPFILE], [AC_DEFINE([HAVE_HIPFILE], [1], [hipFile GPU Direct Storage backend])])
+
+AM_CONDITIONAL([HAVE_GPU_DIRECT], [test "x$have_cufile" = xyes || test "x$have_hipfile" = xyes])
+AM_COND_IF([HAVE_GPU_DIRECT], [AC_DEFINE([HAVE_GPU_DIRECT], [1], [GPU Direct Storage backend available])])
 
 
 AC_CHECK_FUNCS
