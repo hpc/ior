@@ -67,9 +67,7 @@
 
 #ifdef __linux__
 # include <sys/ioctl.h>          /* necessary for: */
-# define __USE_GNU               /* O_DIRECT and */
 # include <fcntl.h>              /* IO operations */
-# undef __USE_GNU
 #endif                          /* __linux__ */
 
 #include <errno.h>

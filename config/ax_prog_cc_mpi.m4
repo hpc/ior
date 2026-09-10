@@ -82,6 +82,9 @@ AC_PREREQ(2.50)
 # order.
 AC_REQUIRE([_AX_PROG_CC_MPI],[_AX_PROG_CC_MPI([$1])])
 
+# Enable extensions after selecting the compiler, before testing MPI.
+AC_REQUIRE([AC_USE_SYSTEM_EXTENSIONS])
+
 AS_IF([test x"$_ax_prog_cc_mpi_mpi_wanted" = xno],
   [ _ax_prog_cc_mpi_mpi_found=no ],
   [

@@ -38,6 +38,7 @@ AX_PROG_CC_MPI(,,[
 ])
 
 AC_PROG_RANLIB
+AC_USE_SYSTEM_EXTENSIONS
 AC_PROG_CC
 
 # Checks for libraries.
@@ -278,8 +279,9 @@ AS_IF([test "x$gpu_direct_backend" = xhipfile], [
                 HIPFILE_LDFLAGS="-L$hipfile_prefix/lib -L$hipfile_prefix/lib64 -Wl,--enable-new-dtags -Wl,-rpath=$hipfile_prefix/lib:$hipfile_prefix/lib64"
         ])
         save_CPPFLAGS="$CPPFLAGS"; save_LDFLAGS="$LDFLAGS"; save_LIBS="$LIBS"
-        CPPFLAGS="$CPPFLAGS $HIPFILE_CPPFLAGS"
-        LDFLAGS="$LDFLAGS $HIPFILE_LDFLAGS"
+        CPPFLAGS="$CPPFLAGS $HIP_CPPFLAGS $HIPFILE_CPPFLAGS"
+        LDFLAGS="$LDFLAGS $HIP_LDFLAGS $HIPFILE_LDFLAGS"
+        LIBS="$HIP_LIBS $LIBS"
         AC_CHECK_HEADERS([hipfile.h], [], [
                 AC_MSG_FAILURE([hipFile backend selected, but hipfile.h not found])
         ])
@@ -310,7 +312,8 @@ AC_CHECK_FUNCS
 # Check for system capabilities
 AC_SYS_LARGEFILE
 
-AC_DEFINE([_XOPEN_SOURCE], [700], [C99 compatibility])
+# Use the guarded template supplied by AC_USE_SYSTEM_EXTENSIONS.
+AC_DEFINE([_XOPEN_SOURCE], [700])
 
 # Check for lustre availability
 AC_ARG_WITH([lustre],
@@ -725,7 +728,6 @@ AC_COMPILE_IFELSE(
 
 AC_COMPILE_IFELSE(
   [AC_LANG_SOURCE([[
-      #define _GNU_SOURCE
       #include <unistd.h>
       #include <sys/syscall.h>
       unsigned long GetProcessorAndCore(int *chip, int *core){

@@ -29,6 +29,7 @@ const char  *gpu_io_strerror(gpu_io_status_t status, char *buf, size_t buflen);
 
 gpu_io_status_t gpu_io_driver_open(void);
 gpu_io_status_t gpu_io_driver_close(void);
+gpu_io_status_t gpu_io_shutdown(void);
 
 gpu_io_status_t gpu_io_register_fd(gpu_io_file_t **file, int fd);
 void gpu_io_deregister_fd(gpu_io_file_t **file);
