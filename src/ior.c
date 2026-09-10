@@ -891,8 +891,7 @@ static void InitTests(IOR_test_t *tests)
                 }
 
                 params->tasksBlockMapping = QueryNodeMapping(com,false);
-                params->expectedAggFileSize =
-                  params->blockSize * params->segmentCount * params->numTasks;
+                params->expectedAggFileSize =params->blockSize * params->segmentCount * params->numTasks;
 
                 ValidateTests(&tests->params, com);
                 tests = tests->next;
@@ -1403,6 +1402,11 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         if(params->randomOffset > 1){
                           params->fileSizeForRead = backend->get_file_size(params->backend_options, testFileName);
+                          if(params->randomOffset == 3 && params->segmentCount == -1){
+                            // set maximum number of operations in this case to not exceed the LSFR
+                            params->segmentCount = (params->fileSizeForRead / params->blockSize) & (~7);
+                          }
+                          params->expectedAggFileSize = params->fileSizeForRead;
                         }
 
                         if (verbose >= VERBOSE_3) {
@@ -1514,8 +1518,11 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
                 ERR("test must write, read, or check read/write file");
         if(! test->setTimeStampSignature && test->writeFile != TRUE && test->checkRead == TRUE)
                 ERR("using readCheck only requires to write a timeStampSignature -- use -G");
-        if (test->segmentCount < 0)
-                ERR("segment count must be positive value");
+        if (test->segmentCount < 0){
+                if(! (test->randomOffset == 3 && test->segmentCount == -1)){
+                        ERR("segment count must be positive value");
+                }
+        }
         if ((test->blockSize % sizeof(IOR_size_t)) != 0)
                 ERR("block size must be a multiple of access size");
         if (test->blockSize < 0)
