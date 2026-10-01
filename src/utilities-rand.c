@@ -20,6 +20,9 @@ typedef struct {
 // dummies added to make offsetting into the array easier
 // the first digit is how many taps. The rest are the taps or 0 for not a tap
 //
+// Entries are validated by src/test/rand.c to have the maximal period 2^n - 1.
+// Entries 35-63 were found by a search for the lowest maximal-length taps.
+//
 // An alternative list is here:
 // https://ww2.ams.org/journals/mcom/1973-27-124/S0025-5718-1973-0327722-7/S0025-5718-1973-0327722-7.pdf?t=1779476860989
 static LFSRConfig lfsr_configs[] =
@@ -58,7 +61,36 @@ static LFSRConfig lfsr_configs[] =
     {31, 2, {30,2}},           // 31 validated
     {32, 4, {31,30,29,9}},     // 32 validated
     {33, 2, {32, 12}},         // 33 validated
-    {34, 4, {33,32,31,6}}      // 34 validated
+    {34, 4, {33,32,31,6}},     // 34 validated
+    {35, 2, {34,1}},           // 35 validated
+    {36, 2, {35,10}},          // 36 validated
+    {37, 4, {36,35,34,27}},    // 37 validated
+    {38, 4, {37,36,34,24}},    // 38 validated
+    {39, 2, {38,3}},           // 39 validated
+    {40, 4, {39,38,37,4}},     // 40 validated
+    {41, 2, {40,2}},           // 41 validated
+    {42, 4, {41,40,39,12}},    // 42 validated
+    {43, 4, {42,41,40,30}},    // 43 validated
+    {44, 4, {43,42,40,5}},     // 44 validated
+    {45, 4, {44,43,41,40}},    // 45 validated
+    {46, 4, {45,44,42,36}},    // 46 validated
+    {47, 2, {46,4}},           // 47 validated
+    {48, 4, {47,46,44,19}},    // 48 validated
+    {49, 2, {48,8}},           // 49 validated
+    {50, 4, {49,48,47,33}},    // 50 validated
+    {51, 4, {50,49,48,22}},    // 51 validated
+    {52, 2, {51,2}},           // 52 validated
+    {53, 4, {52,51,50,46}},    // 53 validated
+    {54, 4, {53,52,51,36}},    // 54 validated
+    {55, 2, {54,23}},          // 55 validated
+    {56, 4, {55,54,53,13}},    // 56 validated
+    {57, 2, {56,6}},           // 57 validated
+    {58, 2, {57,18}},          // 58 validated
+    {59, 4, {58,57,56,34}},    // 59 validated
+    {60, 2, {59,0}},           // 60 validated
+    {61, 4, {60,59,58,55}},    // 61 validated
+    {62, 4, {61,60,58,33}},    // 62 validated
+    {63, 2, {62,0}}            // 63 validated
 };
 
 #define NUM_LFSR_CONFIGS (sizeof(lfsr_configs)/sizeof(lfsr_configs[0]))
@@ -75,16 +107,27 @@ typedef struct
     uint8_t lfsr_index;
     LFSR lfsr;
     uint64_t file_base_offset;
+    uint64_t remaining; // blocks of this LFSR not yet returned
 } LFSR_ELEM;
 
 typedef struct {
   LFSR_ELEM elem[NUM_LFSR_CONFIGS];
   uint8_t rnds_count;
-  unsigned seed;
-  unsigned init_seed;
+  uint64_t blocks;
+  uint64_t remaining; // blocks of all LFSRs not yet returned
+  uint64_t rng;       // splitmix64 state to choose the LFSR
 } LFSRRange;
 
-void u_lfsr_init (LFSR * lfsr, uint8_t bits, unsigned seed)
+// splitmix64, a fast 64-bit generator that also mixes nearby seeds well
+static uint64_t splitmix64 (uint64_t * x)
+{
+    uint64_t z = (*x += 0x9e3779b97f4a7c15ull);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+    return z ^ (z >> 31);
+}
+
+void u_lfsr_init (LFSR * lfsr, uint8_t bits, uint64_t seed)
 {
     lfsr->bits = bits;
     lfsr->mask = ((1ull << bits) - 1u);
@@ -141,15 +184,16 @@ void u_lfsr_print (LFSRConfig * lfsr, uint64_t file_base_offset)
     printf (" file_base_offset: %llu\n", (long long unsigned) file_base_offset);
 }
 
-LFSRRange * u_lfsr_range_init (uint64_t blocks, unsigned seed){
+LFSRRange * u_lfsr_range_init (uint64_t blocks, uint64_t seed){
   LFSRRange * range = malloc(sizeof(LFSRRange)); // todo safe_malloc()
   memset(range, 0, sizeof (LFSRRange));
-  uint64_t b = blocks & (~(uint64_t) 7);
+  uint64_t b = blocks;
   uint8_t bit_offset = 1;
   uint8_t rnds_count = 0;
 
-  range->seed = seed;
-  range->init_seed = seed;
+  range->blocks = blocks;
+  range->remaining = blocks;
+  range->rng = seed;
   
   LFSR_ELEM * rnds = range->elem;
 
@@ -159,12 +203,14 @@ LFSRRange * u_lfsr_range_init (uint64_t blocks, unsigned seed){
       if (b & 1)
       {
           rnds[rnds_count].lfsr_index = bit_offset - 1;
-          u_lfsr_init (&rnds[rnds_count].lfsr, bit_offset-1, seed);
+          // any non-zero start state gives the full LFSR sequence
+          u_lfsr_init (&rnds[rnds_count].lfsr, bit_offset-1, splitmix64(&range->rng) | 1);
+          rnds[rnds_count].remaining = 1ull << (bit_offset - 1);
           if (rnds_count != 0)
           {
               rnds[rnds_count].file_base_offset =
                   (  rnds[rnds_count - 1].file_base_offset
-                  + (1 << rnds[rnds_count - 1].lfsr_index)
+                  + (1ull << rnds[rnds_count - 1].lfsr_index)
                   );
           }
           //print_lfsr (&lfsr_configs[rnds[rnds_count].lfsr_index], rnds[rnds_count].file_base_offset);
@@ -183,28 +229,48 @@ uint64_t u_lfsr_range_step (LFSRRange * range){
     // must stop
     return -1;
   }
+  if (range->remaining == 0){
+    // all blocks were returned, start a new permutation
+    LFSRRange * next = u_lfsr_range_init(range->blocks, splitmix64(&range->rng));
+    *range = *next;
+    free(next);
+  }
 
-  // randomly choose LFS
-  int x = rand_r (& range->seed) % range->rnds_count;
+  // randomly choose LFSR weighted by its remaining blocks, so an exhausted one is never chosen
+  uint64_t r = splitmix64(&range->rng) % range->remaining;
+  int x = 0;
+  while (r >= range->elem[x].remaining){
+    r -= range->elem[x].remaining;
+    x++;
+  }
   LFSR_ELEM * rnds = range->elem;
   uint64_t block_to_read = rnds[x].lfsr.state;
-  uint64_t base_offset = rnds[x].file_base_offset;  
-  if(rnds[x].lfsr.state == 0){
-      // the current one is exhausted
-      for (int j = x; j < range->rnds_count; j++)
-      {
-          rnds[j] = rnds[j + 1];
-      }
-      range->rnds_count--;
+  uint64_t base_offset = rnds[x].file_base_offset;
+  range->remaining--;
+  if(--rnds[x].remaining == 0){
+      // the zero state is not in the LFSR sequence, return it last
       return base_offset;
   }
 
-  u_lfsr_step (&rnds[x].lfsr);
-
-  if (rnds[x].lfsr.state == range->init_seed)
-  {
-    rnds[x].lfsr.state = 0;
+  if (rnds[x].lfsr.bits >= 2){
+    u_lfsr_step (&rnds[x].lfsr);
   }
   uint64_t offset = base_offset + block_to_read;
   return offset;
+}
+
+void u_lfsr_range_free (LFSRRange * range){
+  free(range);
+}
+
+// for testing, the taps of the LFSR with this number of bits
+uint64_t u_lfsr_taps (int bits){
+  uint64_t taps = 0;
+  if (bits < 0 || bits >= (int) NUM_LFSR_CONFIGS){
+    return 0;
+  }
+  for (int i = 0; i < lfsr_configs[bits].num_taps; i++){
+    taps |= 1ull << lfsr_configs[bits].taps[i];
+  }
+  return taps;
 }

@@ -5,7 +5,7 @@ if USE_CAPS
 bin_PROGRAMS += IOR MDTEST MD-WORKBENCH
 endif
 
-noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h mdtest.h aiori-debug.h aiori-POSIX.h md-workbench.h gpu_runtime.h gpu_io.h
+noinst_HEADERS = ior.h utilities.h parse_options.h aiori.h iordef.h ior-internal.h option.h mdtest.h aiori-debug.h aiori-POSIX.h md-workbench.h gpu_runtime.h gpu_io.h utilities-rand.h
 
 lib_LIBRARIES = libaiori.a
 libaiori_a_SOURCES = ior.c mdtest.c utilities.c utilities-rand.c parse_options.c ior-output.c option.c md-workbench.c

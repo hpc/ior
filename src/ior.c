@@ -394,9 +394,12 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
 
         if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
+                        // random reads of a shared file by all tasks can move more data than its size
+                        int checkStat = !(access == READ && params->randomOffset > 1 &&
+                                          params->hints.filePerProc == FALSE);
                         if ((params->expectedAggFileSize
                              != point->aggFileSizeFromXfer)
-                            || (point->aggFileSizeFromStat
+                            || (checkStat && point->aggFileSizeFromStat
                                 != point->aggFileSizeFromXfer)) {
                                 WARNF("Expected aggregate file size       = %lld", (long long) params->expectedAggFileSize);
                                 WARNF("Stat() of aggregate file size      = %lld", (long long) point->aggFileSizeFromStat);
@@ -1404,9 +1407,13 @@ static void TestIoSys(IOR_test_t *test)
                           params->fileSizeForRead = backend->get_file_size(params->backend_options, testFileName);
                           if(params->randomOffset == 3 && params->segmentCount == -1){
                             // set maximum number of operations in this case to not exceed the LSFR
-                            params->segmentCount = (params->fileSizeForRead / params->blockSize) & (~7);
+                            params->segmentCount = params->fileSizeForRead / params->blockSize;
                           }
-                          params->expectedAggFileSize = params->fileSizeForRead;
+                          // each task reads segmentCount blocks, possibly of a different file size
+                          IOR_offset_t taskReadSize = params->segmentCount * params->blockSize;
+                          MPI_CHECK(MPI_Allreduce(&taskReadSize, &params->expectedAggFileSize, 1,
+                                                  MPI_LONG_LONG_INT, MPI_SUM, testComm),
+                                    "cannot reduce expected read size");
                         }
 
                         if (verbose >= VERBOSE_3) {
@@ -1968,6 +1975,10 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         }
         if(randomPrefillBuffer){
           aligned_buffer_free(randomPrefillBuffer, test->gpuMemoryFlags);
+        }
+        if(test->random_range){
+          u_lfsr_range_free(test->random_range);
+          test->random_range = NULL;
         }
 
         return (dataMoved);
