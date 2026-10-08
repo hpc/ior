@@ -407,7 +407,16 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
                 }
         }
 
-        point->aggFileSizeForBW = point->aggFileSizeFromXfer;
+        /* With stonewalling, a backend that performs one large transfer per
+         * rank cannot credit the counter per segment, so aggFileSizeFromXfer
+         * can be far smaller than what actually reached the file.  Reporting
+         * bandwidth from it then understates the result by orders of
+         * magnitude.  Prefer the measured size when it is larger. */
+        if (params->deadlineForStonewalling
+            && point->aggFileSizeFromStat > point->aggFileSizeFromXfer)
+                point->aggFileSizeForBW = point->aggFileSizeFromStat;
+        else
+                point->aggFileSizeForBW = point->aggFileSizeFromXfer;
 }
 
 /*
