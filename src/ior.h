@@ -162,6 +162,7 @@ typedef struct
 /* each pointer for a single test */
 typedef struct {
    double time;
+   int completed; /* operation completed with measurable data */
    size_t pairs_accessed; // number of I/Os done, useful for deadlineForStonewalling
 
    double     stonewall_time;
