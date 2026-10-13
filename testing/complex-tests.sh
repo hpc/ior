@@ -18,16 +18,10 @@ MDTEST 2 -I 20 -a DUMMY -W 1 -x stonewall-md.log -C
 MDTEST 2 -I 20 -a DUMMY -x stonewall-md.log -T -v
 MDTEST 2 -I 20 -a DUMMY -x stonewall-md.log -D -v
 
-# Regression test: "-B" (no barriers between phases) must not be rejected
-# by the stonewall-timer validation when no stonewall timer (-W) was
-# requested. md_validate_tests_rank0() used to fail unconditionally
-# whenever barriers were disabled, even without stonewalling:
-#   Error, stone wall timer does only work with a branch factor <= 1
-#   (current is 1) and with barriers
+# Regression: disabling phase barriers without stonewalling is valid.
 MDTEST 2 -a DUMMY -F -B 1 -n 4
 
-# Negative control: stonewalling (-W) really is incompatible with having
-# barriers disabled (-B), so this combination must still be rejected.
+# Stonewalling still requires barriers, so -W and -B must fail.
 WHAT="${IOR_MPIRUN} 2 ${IOR_BIN_DIR}/mdtest -a DUMMY -F -B 1 -W 5 -n 4 -d ${IOR_TMP}/mdest ${MDTEST_EXTRA}"
 $WHAT 1>"${IOR_OUT}/test_out.$I" 2>&1
 if [[ $? == 0 ]]; then
