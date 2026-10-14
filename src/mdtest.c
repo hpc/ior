@@ -1797,7 +1797,7 @@ void summarize_results(int iterations, mdtest_results_t * results) {
 
 /* Checks to see if the test setup is valid.  If it isn't, fail. */
 void md_validate_tests_rank0() {
-    if (((o.stone_wall_timer_seconds > 0) && (o.branch_factor > 1)) || ! o.barriers) {
+    if ((o.stone_wall_timer_seconds > 0) && ((o.branch_factor > 1) || ! o.barriers)) {
         FAIL( "Error, stone wall timer does only work with a branch factor <= 1 (current is %d) and with barriers\n", o.branch_factor);
     }
 
