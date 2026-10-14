@@ -21,9 +21,7 @@
 
 #ifdef __linux__
 #  include <sys/ioctl.h>          /* necessary for: */
-#  define __USE_GNU               /* O_DIRECT and */
 #  include <fcntl.h>              /* IO operations */
-#  undef __USE_GNU
 #endif                          /* __linux__ */
 
 #include <errno.h>
@@ -765,7 +763,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                         if(o->gpuDirect){
                           gpu_io_result_t gio_res;
                           char errbuf[256];
-                          gio_res = gpu_io_write(pfd->gpu_file, ptr, remaining,
+                          gio_res = gpu_io_write(pfd->gpu_file, buffer, remaining,
                                                   offset + mem_offset, mem_offset);
                           rc = gio_res.nbytes;
                           if(rc < 0){
@@ -795,7 +793,7 @@ static IOR_offset_t POSIX_Xfer(int access, aiori_fd_t *file, IOR_size_t * buffer
                         if(o->gpuDirect){
                           gpu_io_result_t gio_res;
                           char errbuf[256];
-                          gio_res = gpu_io_read(pfd->gpu_file, ptr, remaining,
+                          gio_res = gpu_io_read(pfd->gpu_file, buffer, remaining,
                                                  offset + mem_offset, mem_offset);
                           rc = gio_res.nbytes;
                           if(rc < 0){
@@ -939,8 +937,28 @@ IOR_offset_t POSIX_GetFileSize(aiori_mod_opt_t * test, char *testFileName)
         return (aggFileSizeFromStat);
 }
 
+#ifdef HAVE_GPU_DIRECT
+static unsigned int posix_init_count;
+#endif
+
 void POSIX_Initialize(aiori_mod_opt_t * options){
+#ifdef HAVE_GPU_DIRECT
+    ++posix_init_count;
+#endif
 }
 
 void POSIX_Finalize(aiori_mod_opt_t * options){
+#ifdef HAVE_GPU_DIRECT
+    gpu_io_status_t st;
+    char errbuf[256];
+
+    if (posix_init_count == 0)
+        return;
+    if (--posix_init_count != 0)
+        return;
+    st = gpu_io_shutdown();
+    if (!gpu_io_status_ok(st))
+        ERRF("GPU I/O shutdown failed: %s",
+             gpu_io_strerror(st, errbuf, sizeof(errbuf)));
+#endif
 }
