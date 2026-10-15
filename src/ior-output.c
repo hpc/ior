@@ -523,9 +523,9 @@ static struct results *bw_ops_values(const int repetitions,
         if (r->count > 0) {
                 r->mean = r->sum / r->count;
                 for (i = 0; i < r->count; i++)
-                        r->var += pow((r->mean - r->val[i]), 2);
+                r->var += pow((r->mean - r->val[i]), 2);
                 r->var /= r->count;
-                r->sd = sqrt(r->var);
+        r->sd = sqrt(r->var);
         }
 
         return r;
@@ -629,8 +629,8 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
                                       stonewall_time / MEBIBYTE;
         }
 
-        if (outputFormat == OUTPUT_DEFAULT) {
-                fprintf(out_resultfile, "%-9s ", access == WRITE ? "write" : "read");
+        if(outputFormat == OUTPUT_DEFAULT){
+          fprintf(out_resultfile, "%-9s ", access == WRITE ? "write" : "read");
                 PrintDefaultSummaryDouble(bw->max / MEBIBYTE, bw->count > 0, 10, 2);
                 PrintDefaultSummaryDouble(bw->min / MEBIBYTE, bw->count > 0, 10, 2);
                 PrintDefaultSummaryDouble(bw->mean / MEBIBYTE, bw->count > 0, 10, 2);
@@ -645,45 +645,45 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
                                                   stonewall_valid, 10, 2);
                         PrintDefaultSummaryDouble(stonewall_bandwidth,
                                                   stonewall_valid, 13, 2);
-                } else {
+          }else{
                         fprintf(out_resultfile, "%10s %13s ", "NA", "NA");
-                }
-                fprintf(out_resultfile, "%5d ", params->id);
-                fprintf(out_resultfile, "%6d ", params->numTasks);
-                fprintf(out_resultfile, "%3d ", params->numTasksOnNode0);
-                fprintf(out_resultfile, "%4d ", params->repetitions);
+          }
+          fprintf(out_resultfile, "%5d ", params->id);
+          fprintf(out_resultfile, "%6d ", params->numTasks);
+          fprintf(out_resultfile, "%3d ", params->numTasksOnNode0);
+          fprintf(out_resultfile, "%4d ", params->repetitions);
                 fprintf(out_resultfile, "%9d ", completed_repetitions);
-                fprintf(out_resultfile, "%3d ", params->filePerProc);
-                fprintf(out_resultfile, "%5d ", params->reorderTasks);
-                fprintf(out_resultfile, "%8d ", params->taskPerNodeOffset);
-                fprintf(out_resultfile, "%9d ", params->reorderTasksRandom);
-                fprintf(out_resultfile, "%4d ", params->reorderTasksRandomSeed);
-                fprintf(out_resultfile, "%6lld ", params->segmentCount);
-                fprintf(out_resultfile, "%8lld ", params->blockSize);
-                fprintf(out_resultfile, "%8lld ", params->transferSize);
+          fprintf(out_resultfile, "%3d ", params->filePerProc);
+          fprintf(out_resultfile, "%5d ", params->reorderTasks);
+          fprintf(out_resultfile, "%8d ", params->taskPerNodeOffset);
+          fprintf(out_resultfile, "%9d ", params->reorderTasksRandom);
+          fprintf(out_resultfile, "%4d ", params->reorderTasksRandomSeed);
+          fprintf(out_resultfile, "%6lld ", params->segmentCount);
+          fprintf(out_resultfile, "%8lld ", params->blockSize);
+          fprintf(out_resultfile, "%8lld ", params->transferSize);
                 PrintDefaultSummaryDouble(first_point != NULL ?
                                           (double)first_point->aggFileSizeForBW / MEBIBYTE : 0.0,
                                           first_point != NULL, 9, 1);
-                fprintf(out_resultfile, "%3s ", params->api);
+          fprintf(out_resultfile, "%3s ", params->api);
                 fprintf(out_resultfile, "%6d\n", params->referenceNumber);
-        } else if (outputFormat == OUTPUT_JSON) {
-                PrintStartSection();
-                PrintKeyVal("operation", access == WRITE ? "write" : "read");
-                PrintKeyVal("API", params->api);
-                PrintKeyValInt("TestID", params->id);
-                PrintKeyValInt("ReferenceNumber", params->referenceNumber);
-                PrintKeyValInt("segmentCount", params->segmentCount);
-                PrintKeyValInt("blockSize", params->blockSize);
-                PrintKeyValInt("transferSize", params->transferSize);
-                PrintKeyValInt("numTasks", params->numTasks);
-                PrintKeyValInt("tasksPerNode", params->numTasksOnNode0);
-                PrintKeyValInt("repetitions", params->repetitions);
+        }else if (outputFormat == OUTPUT_JSON){
+          PrintStartSection();
+          PrintKeyVal("operation", access == WRITE ? "write" : "read");
+          PrintKeyVal("API", params->api);
+          PrintKeyValInt("TestID", params->id);
+          PrintKeyValInt("ReferenceNumber", params->referenceNumber);
+          PrintKeyValInt("segmentCount", params->segmentCount);
+          PrintKeyValInt("blockSize", params->blockSize);
+          PrintKeyValInt("transferSize", params->transferSize);
+          PrintKeyValInt("numTasks", params->numTasks);
+          PrintKeyValInt("tasksPerNode", params->numTasksOnNode0);
+          PrintKeyValInt("repetitions", params->repetitions);
                 PrintKeyValInt("completedRepetitions", completed_repetitions);
-                PrintKeyValInt("filePerProc", params->filePerProc);
-                PrintKeyValInt("reorderTasks", params->reorderTasks);
-                PrintKeyValInt("taskPerNodeOffset", params->taskPerNodeOffset);
-                PrintKeyValInt("reorderTasksRandom", params->reorderTasksRandom);
-                PrintKeyValInt("reorderTasksRandomSeed", params->reorderTasksRandomSeed);
+          PrintKeyValInt("filePerProc", params->filePerProc);
+          PrintKeyValInt("reorderTasks", params->reorderTasks);
+          PrintKeyValInt("taskPerNodeOffset", params->taskPerNodeOffset);
+          PrintKeyValInt("reorderTasksRandom", params->reorderTasksRandom);
+          PrintKeyValInt("reorderTasksRandomSeed", params->reorderTasksRandomSeed);
                 PrintSummaryKeyValDouble("bwMaxMIB", bw->max / MEBIBYTE, bw->count > 0);
                 PrintSummaryKeyValDouble("bwMinMIB", bw->min / MEBIBYTE, bw->count > 0);
                 PrintSummaryKeyValDouble("bwMeanMIB", bw->mean / MEBIBYTE, bw->count > 0);
@@ -701,12 +701,12 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
                         PrintSummaryKeyValDouble("StoneWallbwMeanMIB",
                                                  stonewall_bandwidth,
                                                  stonewall_valid);
-                }
+          }
                 PrintSummaryKeyValDouble("xsizeMiB",
                                          first_point != NULL ?
                                          (double)first_point->aggFileSizeForBW / MEBIBYTE : 0.0,
                                          first_point != NULL);
-                PrintEndSection();
+          PrintEndSection();
         }
 
         fflush(out_resultfile);
@@ -783,7 +783,7 @@ void PrintShortSummary(IOR_test_t * test)
         if (params->readFile || params->checkRead)
                 read_bw = bw_values(params->repetitions, results, READ);
 
-        if (outputFormat == OUTPUT_DEFAULT) {
+        if(outputFormat == OUTPUT_DEFAULT){
           if (params->writeFile) {
                   if (write_bw->count > 0) {
                           fprintf(out_resultfile,
@@ -795,7 +795,7 @@ void PrintShortSummary(IOR_test_t * test)
                           fprintf(out_resultfile,
                                   "Max Write: NA MiB/sec (NA MB/sec), completed: 0/%d\n",
                                   params->repetitions);
-                  }
+          }
           }
           if (params->readFile || params->checkRead) {
                   if (read_bw->count > 0) {
@@ -808,9 +808,9 @@ void PrintShortSummary(IOR_test_t * test)
                           fprintf(out_resultfile,
                                   "Max Read:  NA MiB/sec (NA MB/sec), completed: 0/%d\n",
                                   params->repetitions);
-                  }
           }
-        } else if (outputFormat == OUTPUT_JSON) {
+          }
+        }else if (outputFormat == OUTPUT_JSON){
           PrintNamedSectionStart("max");
           if (params->writeFile) {
             PrintSummaryKeyValDouble("writeMiB",
