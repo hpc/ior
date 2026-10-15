@@ -313,6 +313,15 @@ AC_CHECK_FUNCS
 AC_SYS_LARGEFILE
 
 # Use the guarded template supplied by AC_USE_SYSTEM_EXTENSIONS.
+# Autoconf 2.69 does not supply one, and autoheader fails without it.
+# config.status rewrites "#undef" in config.h.in to "#define _XOPEN_SOURCE
+# 700" in config.h, so this defines it only if not already set in CFLAGS.
+m4_version_prereq([2.70], [],
+  [AH_VERBATIM([_XOPEN_SOURCE],
+[/* Define to request POSIX.1-2008 with XSI extensions. */
+#ifndef _XOPEN_SOURCE
+# undef _XOPEN_SOURCE
+#endif])])
 AC_DEFINE([_XOPEN_SOURCE], [700])
 
 # Check for lustre availability
