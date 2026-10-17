@@ -1837,6 +1837,16 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         // start timer after random offset was generated        
         startForStonewall = GetTimeStamp();
         hitStonewall = 0;
+        /* With --mpiio.useFileView --mpiio.useStridedDatatype every segment
+         * moves in the first transfer, so the deadline can only be checked once
+         * all the data is done.  Applying it then would record a wear-out count
+         * of 1 and truncate any later read that uses the count. */
+        int deadlineApplies = test->deadlineForStonewalling != 0;
+        if (strcasecmp(test->api, "MPIIO") == 0 && test->backend_options != NULL) {
+                mpiio_options_t *mo = (mpiio_options_t *) test->backend_options;
+                if (mo->useFileView && mo->useStridedDatatype)
+                        deadlineApplies = 0;
+        }
 
         if(randomPrefillBuffer && test->deadlineForStonewalling == 0){
           double t_start = GetTimeStamp();
@@ -1895,7 +1905,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
               dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & errors, test, fd, ioBuffers, access, ot, startForStonewall);
               pairCnt++;
 
-              hitStonewall = ((test->deadlineForStonewalling != 0
+              hitStonewall = ((deadlineApplies
                   && (GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
                   || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
 
