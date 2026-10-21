@@ -36,7 +36,7 @@ void cu_verify_memory_timestamp(uint64_t item, uint64_t * buf, size_t length, in
   if(pos < length){
     int correct = buf[pos] == (pretendRank | rand_seed + pos);
     if(! correct){
-      *errors = 1; // it isn't thread safe but one error reported is enough
+      atomicExch(errors, 1);
     }
   }
 }
@@ -61,23 +61,39 @@ extern "C" void generate_memory_pattern_gpu(char * buf, size_t bytes, int rand_s
 
 extern "C" void update_write_memory_pattern_gpu(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType){
   // nothing to do for dataPacketType == DATA_TIMESTAMP, i.e., won't be called for this parameter
-  size_t blocks = (bytes+2047)/2048;
-  size_t threads = 256;
 }
 
 extern "C" int verify_memory_pattern_gpu(uint64_t item, char * buffer, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
   int errors = 0;
-  size_t blocks = (bytes+2047)/2048;
-  size_t threads = 256;  
-  int * derror_found;
-  gpu_runtime_malloc((void**) & derror_found, sizeof(int));
-  gpu_runtime_memcpy(derror_found, & errors, sizeof(int), GPU_MEMCPY_HOST_TO_DEVICE);
-  if(dataPacketType == DATA_TIMESTAMP){
-    cu_verify_memory_timestamp<<<blocks, threads>>>(item, (uint64_t*) buffer, bytes/sizeof(uint64_t), rand_seed, ((uint64_t) pretendRank) << 32, derror_found);
-  }else if(dataPacketType == DATA_INCOMPRESSIBLE){
-    
-  }
-  gpu_runtime_memcpy(& errors, derror_found, sizeof(int), GPU_MEMCPY_DEVICE_TO_HOST);
-  gpu_runtime_free(derror_found);
-  return errors;
+  int result = -1;
+  int *derror_found = NULL;
+  size_t threads = 256;
+  size_t words = bytes / sizeof(uint64_t);
+  size_t blocks = words / threads + (words % threads != 0);
+
+  if (dataPacketType != DATA_TIMESTAMP || bytes % sizeof(uint64_t) != 0)
+    return -1;
+  if (bytes == 0)
+    return 0;
+  if (!gpu_runtime_ok(gpu_runtime_malloc((void **)&derror_found, sizeof(int))))
+    return -1;
+  if (!gpu_runtime_ok(gpu_runtime_memcpy(derror_found, &errors, sizeof(int),
+                                       GPU_MEMCPY_HOST_TO_DEVICE)))
+    goto out;
+
+  cu_verify_memory_timestamp<<<blocks, threads>>>(
+      item, (uint64_t *)buffer, words, rand_seed,
+      ((uint64_t)pretendRank) << 32, derror_found);
+  if (cudaGetLastError() != cudaSuccess)
+    goto out;
+  if (cudaDeviceSynchronize() != cudaSuccess)
+    goto out;
+  if (!gpu_runtime_ok(gpu_runtime_memcpy(&errors, derror_found, sizeof(int),
+                                       GPU_MEMCPY_DEVICE_TO_HOST)))
+    goto out;
+  result = errors;
+out:
+  if (!gpu_runtime_ok(gpu_runtime_free(derror_found)))
+    result = -1;
+  return result;
 }

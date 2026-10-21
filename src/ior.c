@@ -43,6 +43,7 @@
 #include "ior-internal.h"
 #include "aiori.h"
 #include "utilities.h"
+#include "utilities-rand.h"
 #include "parse_options.h"
 
 enum {
@@ -393,9 +394,12 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
 
         if (strcasecmp(params->api, "HDF5") != 0 && strcasecmp(params->api, "NCMPI") != 0) {
                 if (verbose >= VERBOSE_0 && rank == 0) {
+                        // random reads of a shared file by all tasks can move more data than its size
+                        int checkStat = !(access == READ && params->randomOffset > 1 &&
+                                          params->hints.filePerProc == FALSE);
                         if ((params->expectedAggFileSize
                              != point->aggFileSizeFromXfer)
-                            || (point->aggFileSizeFromStat
+                            || (checkStat && point->aggFileSizeFromStat
                                 != point->aggFileSizeFromXfer)) {
                                 WARNF("Expected aggregate file size       = %lld", (long long) params->expectedAggFileSize);
                                 WARNF("Stat() of aggregate file size      = %lld", (long long) point->aggFileSizeFromStat);
@@ -407,7 +411,16 @@ static void CheckFileSize(IOR_test_t *test, char * testFilename, IOR_offset_t da
                 }
         }
 
-        point->aggFileSizeForBW = point->aggFileSizeFromXfer;
+        /* With stonewalling, a backend that performs one large transfer per
+         * rank cannot credit the counter per segment, so aggFileSizeFromXfer
+         * can be far smaller than what actually reached the file.  Reporting
+         * bandwidth from it then understates the result by orders of
+         * magnitude.  Prefer the measured size when it is larger. */
+        if (params->deadlineForStonewalling
+            && point->aggFileSizeFromStat > point->aggFileSizeFromXfer)
+                point->aggFileSizeForBW = point->aggFileSizeFromStat;
+        else
+                point->aggFileSizeForBW = point->aggFileSizeFromXfer;
 }
 
 /*
@@ -892,8 +905,7 @@ static void InitTests(IOR_test_t *tests)
                 }
 
                 params->tasksBlockMapping = QueryNodeMapping(com,false);
-                params->expectedAggFileSize =
-                  params->blockSize * params->segmentCount * params->numTasks;
+                params->expectedAggFileSize =params->blockSize * params->segmentCount * params->numTasks;
 
                 ValidateTests(&tests->params, com);
                 tests = tests->next;
@@ -1404,6 +1416,15 @@ static void TestIoSys(IOR_test_t *test)
                         GetTestFileName(testFileName, params);
                         if(params->randomOffset > 1){
                           params->fileSizeForRead = backend->get_file_size(params->backend_options, testFileName);
+                          if(params->randomOffset == 3 && params->segmentCount == -1){
+                            // set maximum number of operations in this case to not exceed the LSFR
+                            params->segmentCount = params->fileSizeForRead / params->blockSize;
+                          }
+                          // each task reads segmentCount blocks, possibly of a different file size
+                          IOR_offset_t taskReadSize = params->segmentCount * params->blockSize;
+                          MPI_CHECK(MPI_Allreduce(&taskReadSize, &params->expectedAggFileSize, 1,
+                                                  MPI_LONG_LONG_INT, MPI_SUM, testComm),
+                                    "cannot reduce expected read size");
                         }
 
                         if (verbose >= VERBOSE_3) {
@@ -1515,8 +1536,11 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
                 ERR("test must write, read, or check read/write file");
         if(! test->setTimeStampSignature && test->writeFile != TRUE && test->checkRead == TRUE)
                 ERR("using readCheck only requires to write a timeStampSignature -- use -G");
-        if (test->segmentCount < 0)
-                ERR("segment count must be positive value");
+        if (test->segmentCount < 0){
+                if(! (test->randomOffset == 3 && test->segmentCount == -1)){
+                        ERR("segment count must be positive value");
+                }
+        }
         if ((test->blockSize % sizeof(IOR_size_t)) != 0)
                 ERR("block size must be a multiple of access size");
         if (test->blockSize < 0)
@@ -1790,10 +1814,12 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         }else{
           offsets = (test->blockSize / test->transferSize);
         }
-        if (test->randomOffset > 1){
+        if (test->randomOffset == 2){
           int seed = init_random_seed(test, pretendRank);
           srand(seed + pretendRank);
           srand64(((uint64_t) seed) * (pretendRank + 1));
+        }else if (test->randomOffset == 3){
+          test->random_range = u_lfsr_range_init(test->fileSizeForRead / test->blockSize, pretendRank + 1);
         }
 
         void * randomPrefillBuffer = NULL;
@@ -1813,6 +1839,16 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         // start timer after random offset was generated        
         startForStonewall = GetTimeStamp();
         hitStonewall = 0;
+        /* With --mpiio.useFileView --mpiio.useStridedDatatype every segment
+         * moves in the first transfer, so the deadline can only be checked once
+         * all the data is done.  Applying it then would record a wear-out count
+         * of 1 and truncate any later read that uses the count. */
+        int deadlineApplies = test->deadlineForStonewalling != 0;
+        if (strcasecmp(test->api, "MPIIO") == 0 && test->backend_options != NULL) {
+                mpiio_options_t *mo = (mpiio_options_t *) test->backend_options;
+                if (mo->useFileView && mo->useStridedDatatype)
+                        deadlineApplies = 0;
+        }
 
         if(randomPrefillBuffer && test->deadlineForStonewalling == 0){
           double t_start = GetTimeStamp();
@@ -1835,7 +1871,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                 fprintf(out_logfile, "Random: synchronizing segment count with barrier and prefill took: %fs\n", GetTimeStamp() - t_start);
               }
             }
-            if (test->randomOffset > 1){
+            if (test->randomOffset == 2){
                 size_t sizerand = test->fileSizeForRead; 
                 //if(test->filePerProc){
                 //  sizerand /= test->numTasks;
@@ -1856,8 +1892,10 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                 }else{
                   offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
                 }
-              }else if (test->randomOffset > 1){
+              }else if (test->randomOffset == 2){
                 offset += test->transferSize;
+              }else if (test->randomOffset == 3){
+                offset = u_lfsr_range_step (test->random_range) * test->blockSize;
               }else{
                 offset = j * test->transferSize;
                 if (test->filePerProc) {
@@ -1869,7 +1907,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
               dataMoved += WriteOrReadSingle(offset, pretendRank, test->transferSize, & errors, test, fd, ioBuffers, access, ot, startForStonewall);
               pairCnt++;
 
-              hitStonewall = ((test->deadlineForStonewalling != 0
+              hitStonewall = ((deadlineApplies
                   && (GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
                   || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
 
@@ -1914,7 +1952,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
             for ( ; pairCnt < point->pairs_accessed; i++) {
               IOR_offset_t offset;
               if(i == test->segmentCount) i = 0; // wrap over, necessary to deal with minTimeDuration
-              if (test->randomOffset > 1){
+              if (test->randomOffset == 2){
                   size_t sizerand = test->fileSizeForRead; 
                   if(test->filePerProc){
                     sizerand /= test->numTasks;
@@ -1928,8 +1966,10 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                   }else{
                     offset = offsets_rnd[j] + (i * test->numTasks * test->blockSize);
                   }
-                }else if (test->randomOffset > 1){
+                }else if (test->randomOffset == 2){
                   offset += test->transferSize;
+                }else if (test->randomOffset == 3){
+                  offset = u_lfsr_range_step (test->random_range) * test->blockSize;
                 }else{
                   offset = j * test->transferSize;
                   if (test->filePerProc) {
@@ -1956,6 +1996,10 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         }
         if(randomPrefillBuffer){
           aligned_buffer_free(randomPrefillBuffer, test->gpuMemoryFlags);
+        }
+        if(test->random_range){
+          u_lfsr_range_free(test->random_range);
+          test->random_range = NULL;
         }
 
         return (dataMoved);
