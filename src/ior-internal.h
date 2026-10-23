@@ -28,6 +28,7 @@ void PrintTableHeader();
 IOR_offset_t *GetOffsetArrayRandom(IOR_param_t * test, int pretendRank, IOR_offset_t * out_count);
 
 struct results {
+  int count;
   double min;
   double max;
   double mean;

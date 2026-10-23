@@ -477,57 +477,105 @@ void ShowSetup(IOR_param_t *params)
   fflush(out_resultfile);
 }
 
-static struct results *bw_ops_values(const int reps, IOR_results_t *measured,
-                                     IOR_offset_t transfer_size,
-                                     const double *vals, const int access)
+static struct results *bw_ops_values(const int repetitions,
+                                     IOR_results_t *measured,
+                                     const IOR_offset_t transfer_size,
+                                     const int access)
 {
         struct results *r;
         int i;
 
         r = (struct results *)malloc(sizeof(struct results)
-                                     + (reps * sizeof(double)));
+                                     + (repetitions * sizeof(double)));
         if (r == NULL)
                 ERR("malloc failed");
         r->val = (double *)&r[1];
+        r->count = 0;
+        r->min = r->max = r->mean = r->var = r->sd = r->sum = 0.0;
 
-        for (i = 0; i < reps; i++, measured++) {
+        for (i = 0; i < repetitions; i++, measured++) {
                 IOR_point_t *point = (access == WRITE) ? &measured->write :
                                                          &measured->read;
+                double value;
 
-                r->val[i] = ((double) (point->aggFileSizeForBW))
-                            / transfer_size / vals[i];
+                if (!point->completed || point->time <= 0.0 ||
+                    !isfinite(point->time) || point->aggFileSizeForBW <= 0 ||
+                    transfer_size <= 0)
+                        continue;
 
-                if (i == 0) {
-                        r->min = r->val[i];
-                        r->max = r->val[i];
-                        r->sum = 0.0;
+                value = ((double)point->aggFileSizeForBW) /
+                        (double)transfer_size / point->time;
+                if (!isfinite(value))
+                        continue;
+
+                r->val[r->count] = value;
+                if (r->count == 0) {
+                        r->min = value;
+                        r->max = value;
+                } else {
+                        r->min = MIN(r->min, value);
+                        r->max = MAX(r->max, value);
                 }
-                r->min = MIN(r->min, r->val[i]);
-                r->max = MAX(r->max, r->val[i]);
-                r->sum += r->val[i];
+                r->sum += value;
+                r->count++;
         }
-        r->mean = r->sum / reps;
-        r->var = 0.0;
-        for (i = 0; i < reps; i++) {
+
+        if (r->count > 0) {
+                r->mean = r->sum / r->count;
+                for (i = 0; i < r->count; i++)
                 r->var += pow((r->mean - r->val[i]), 2);
-        }
-        r->var = r->var / reps;
+                r->var /= r->count;
         r->sd = sqrt(r->var);
+        }
 
         return r;
 }
 
-static struct results *bw_values(const int reps, IOR_results_t *measured,
-                                 const double *vals, const int access)
+static struct results *bw_values(const int repetitions,
+                                 IOR_results_t *measured, const int access)
 {
-        return bw_ops_values(reps, measured, 1, vals, access);
+        return bw_ops_values(repetitions, measured, 1, access);
 }
 
-static struct results *ops_values(const int reps, IOR_results_t *measured,
+static struct results *ops_values(const int repetitions,
+                                  IOR_results_t *measured,
                                   IOR_offset_t transfer_size,
-                                  const double *vals, const int access)
+                                  const int access)
 {
-        return bw_ops_values(reps, measured, transfer_size, vals, access);
+        return bw_ops_values(repetitions, measured, transfer_size, access);
+}
+
+static int summary_point_is_valid(const IOR_point_t *point)
+{
+        return point->completed && point->time > 0.0 &&
+               isfinite(point->time) && point->aggFileSizeForBW > 0;
+}
+
+static void PrintKeyValNull(char *key)
+{
+        PrintNextToken();
+        needNextToken = 1;
+        if (outputFormat == OUTPUT_JSON)
+                fprintf(out_resultfile, "\"%s\": null", key);
+        else if (outputFormat == OUTPUT_DEFAULT)
+                fprintf(out_resultfile, "%-20s: NA\n", key);
+}
+
+static void PrintSummaryKeyValDouble(char *key, double value, int valid)
+{
+        if (valid && isfinite(value))
+                PrintKeyValDouble(key, value);
+        else
+                PrintKeyValNull(key);
+}
+
+static void PrintDefaultSummaryDouble(double value, int valid,
+                                      int width, int precision)
+{
+        if (!valid || !isfinite(value))
+                fprintf(out_resultfile, "%*s ", width, "NA");
+        else
+                fprintf(out_resultfile, "%*.*f ", width, precision, value);
 }
 
 /*
@@ -539,53 +587,72 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
         IOR_results_t *results = test->results;
         struct results *bw;
         struct results *ops;
+        IOR_point_t *first_point = NULL;
+        int completed_repetitions = 0;
+        double mean_time;
+        long long stonewall_avg_data_accessed = 0;
+        double stonewall_time = 0.0;
+        double stonewall_mean_time = 0.0;
+        double stonewall_bandwidth = 0.0;
+        int stonewall_valid;
+        double *times;
 
-        int reps;
         if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
-        reps = params->repetitions;
+        times = malloc(sizeof(double) * params->repetitions);
+        if (times == NULL)
+                ERR("malloc failed");
 
-        double * times = malloc(sizeof(double)* reps);
-        long long  stonewall_avg_data_accessed = 0;
-        double stonewall_time = 0;
-        for(int i=0; i < reps; i++){
+        for (int i = 0; i < params->repetitions; i++) {
                 IOR_point_t *point = (access == WRITE) ? &results[i].write :
                                                          &results[i].read;
-                times[i] = point->time;
+                if (!summary_point_is_valid(point))
+                        continue;
+                if (first_point == NULL)
+                        first_point = point;
+                times[completed_repetitions++] = point->time;
                 stonewall_time += point->stonewall_time;
                 stonewall_avg_data_accessed += point->stonewall_avg_data_accessed;
         }
 
-        bw = bw_values(reps, results, times, access);
-        ops = ops_values(reps, results, params->transferSize, times, access);
-
-        IOR_point_t *point = (access == WRITE) ? &results[0].write :
-                                                 &results[0].read;
-
+        bw = bw_values(params->repetitions, results, access);
+        ops = ops_values(params->repetitions, results, params->transferSize,
+                         access);
+        mean_time = completed_repetitions > 0 ?
+                    mean_of_array_of_doubles(times, completed_repetitions) : 0.0;
+        stonewall_valid = completed_repetitions > 0 &&
+                          isfinite(stonewall_time) && stonewall_time > 0.0;
+        if (stonewall_valid) {
+                stonewall_mean_time = stonewall_time / completed_repetitions;
+                stonewall_bandwidth = (double)stonewall_avg_data_accessed /
+                                      stonewall_time / MEBIBYTE;
+        }
 
         if(outputFormat == OUTPUT_DEFAULT){
           fprintf(out_resultfile, "%-9s ", access == WRITE ? "write" : "read");
-          fprintf(out_resultfile, "%10.2f ", bw->max / MEBIBYTE);
-          fprintf(out_resultfile, "%10.2f ", bw->min / MEBIBYTE);
-          fprintf(out_resultfile, "%10.2f ", bw->mean / MEBIBYTE);
-          fprintf(out_resultfile, "%10.2f ", bw->sd / MEBIBYTE);
-          fprintf(out_resultfile, "%10.2f ", ops->max);
-          fprintf(out_resultfile, "%10.2f ", ops->min);
-          fprintf(out_resultfile, "%10.2f ", ops->mean);
-          fprintf(out_resultfile, "%10.2f ", ops->sd);
-          fprintf(out_resultfile, "%10.5f ", mean_of_array_of_doubles(times, reps));
-          if(test->params.stoneWallingWearOut){
-            fprintf(out_resultfile, "%10.2f ", stonewall_time / reps);
-            fprintf(out_resultfile, "%13.2f ", stonewall_avg_data_accessed / stonewall_time / MEBIBYTE);
+                PrintDefaultSummaryDouble(bw->max / MEBIBYTE, bw->count > 0, 10, 2);
+                PrintDefaultSummaryDouble(bw->min / MEBIBYTE, bw->count > 0, 10, 2);
+                PrintDefaultSummaryDouble(bw->mean / MEBIBYTE, bw->count > 0, 10, 2);
+                PrintDefaultSummaryDouble(bw->sd / MEBIBYTE, bw->count > 0, 10, 2);
+                PrintDefaultSummaryDouble(ops->max, ops->count > 0, 10, 2);
+                PrintDefaultSummaryDouble(ops->min, ops->count > 0, 10, 2);
+                PrintDefaultSummaryDouble(ops->mean, ops->count > 0, 10, 2);
+                PrintDefaultSummaryDouble(ops->sd, ops->count > 0, 10, 2);
+                PrintDefaultSummaryDouble(mean_time, completed_repetitions > 0, 10, 5);
+                if (params->stoneWallingWearOut) {
+                        PrintDefaultSummaryDouble(stonewall_mean_time,
+                                                  stonewall_valid, 10, 2);
+                        PrintDefaultSummaryDouble(stonewall_bandwidth,
+                                                  stonewall_valid, 13, 2);
           }else{
-            fprintf(out_resultfile, "%10s ", "NA");
-            fprintf(out_resultfile, "%13s ", "NA");
+                        fprintf(out_resultfile, "%10s %13s ", "NA", "NA");
           }
           fprintf(out_resultfile, "%5d ", params->id);
           fprintf(out_resultfile, "%6d ", params->numTasks);
           fprintf(out_resultfile, "%3d ", params->numTasksOnNode0);
           fprintf(out_resultfile, "%4d ", params->repetitions);
+                fprintf(out_resultfile, "%9d ", completed_repetitions);
           fprintf(out_resultfile, "%3d ", params->filePerProc);
           fprintf(out_resultfile, "%5d ", params->reorderTasks);
           fprintf(out_resultfile, "%8d ", params->taskPerNodeOffset);
@@ -594,10 +661,11 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           fprintf(out_resultfile, "%6lld ", params->segmentCount);
           fprintf(out_resultfile, "%8lld ", params->blockSize);
           fprintf(out_resultfile, "%8lld ", params->transferSize);
-          fprintf(out_resultfile, "%9.1f ", (float)point->aggFileSizeForBW / MEBIBYTE);
+                PrintDefaultSummaryDouble(first_point != NULL ?
+                                          (double)first_point->aggFileSizeForBW / MEBIBYTE : 0.0,
+                                          first_point != NULL, 9, 1);
           fprintf(out_resultfile, "%3s ", params->api);
-          fprintf(out_resultfile, "%6d", params->referenceNumber);
-          fprintf(out_resultfile, "\n");
+                fprintf(out_resultfile, "%6d\n", params->referenceNumber);
         }else if (outputFormat == OUTPUT_JSON){
           PrintStartSection();
           PrintKeyVal("operation", access == WRITE ? "write" : "read");
@@ -610,30 +678,38 @@ static void PrintLongSummaryOneOperation(IOR_test_t *test, const int access)
           PrintKeyValInt("numTasks", params->numTasks);
           PrintKeyValInt("tasksPerNode", params->numTasksOnNode0);
           PrintKeyValInt("repetitions", params->repetitions);
+                PrintKeyValInt("completedRepetitions", completed_repetitions);
           PrintKeyValInt("filePerProc", params->filePerProc);
           PrintKeyValInt("reorderTasks", params->reorderTasks);
           PrintKeyValInt("taskPerNodeOffset", params->taskPerNodeOffset);
           PrintKeyValInt("reorderTasksRandom", params->reorderTasksRandom);
           PrintKeyValInt("reorderTasksRandomSeed", params->reorderTasksRandomSeed);
-          PrintKeyValDouble("bwMaxMIB", bw->max / MEBIBYTE);
-          PrintKeyValDouble("bwMinMIB", bw->min / MEBIBYTE);
-          PrintKeyValDouble("bwMeanMIB", bw->mean / MEBIBYTE);
-          PrintKeyValDouble("bwStdMIB", bw->sd / MEBIBYTE);
-          PrintKeyValDouble("OPsMax", ops->max);
-          PrintKeyValDouble("OPsMin", ops->min);
-          PrintKeyValDouble("OPsMean", ops->mean);
-          PrintKeyValDouble("OPsSD", ops->sd);
-          PrintKeyValDouble("MeanTime", mean_of_array_of_doubles(times, reps));
-          if(test->params.stoneWallingWearOut){
-            PrintKeyValDouble("StoneWallTime", stonewall_time / reps);
-            PrintKeyValDouble("StoneWallbwMeanMIB", stonewall_avg_data_accessed / stonewall_time / MEBIBYTE);
+                PrintSummaryKeyValDouble("bwMaxMIB", bw->max / MEBIBYTE, bw->count > 0);
+                PrintSummaryKeyValDouble("bwMinMIB", bw->min / MEBIBYTE, bw->count > 0);
+                PrintSummaryKeyValDouble("bwMeanMIB", bw->mean / MEBIBYTE, bw->count > 0);
+                PrintSummaryKeyValDouble("bwStdMIB", bw->sd / MEBIBYTE, bw->count > 0);
+                PrintSummaryKeyValDouble("OPsMax", ops->max, ops->count > 0);
+                PrintSummaryKeyValDouble("OPsMin", ops->min, ops->count > 0);
+                PrintSummaryKeyValDouble("OPsMean", ops->mean, ops->count > 0);
+                PrintSummaryKeyValDouble("OPsSD", ops->sd, ops->count > 0);
+                PrintSummaryKeyValDouble("MeanTime", mean_time,
+                                         completed_repetitions > 0);
+                if (params->stoneWallingWearOut) {
+                        PrintSummaryKeyValDouble("StoneWallTime",
+                                                 stonewall_mean_time,
+                                                 stonewall_valid);
+                        PrintSummaryKeyValDouble("StoneWallbwMeanMIB",
+                                                 stonewall_bandwidth,
+                                                 stonewall_valid);
           }
-          PrintKeyValDouble("xsizeMiB", (double) point->aggFileSizeForBW / MEBIBYTE);
+                PrintSummaryKeyValDouble("xsizeMiB",
+                                         first_point != NULL ?
+                                         (double)first_point->aggFileSizeForBW / MEBIBYTE : 0.0,
+                                         first_point != NULL);
           PrintEndSection();
         }
 
         fflush(out_resultfile);
-
         free(bw);
         free(ops);
         free(times);
@@ -662,7 +738,7 @@ void PrintLongSummaryHeader()
                 "Operation", "Max(MiB)", "Min(MiB)", "Mean(MiB)", "StdDev",
                 "Max(OPs)", "Min(OPs)", "Mean(OPs)", "StdDev",
                 "Mean(s)", "Stonewall(s)", "Stonewall(MiB)");
-        fprintf(out_resultfile, " Test# #Tasks tPN reps fPP reord reordoff reordrand seed"
+        fprintf(out_resultfile, " Test# #Tasks tPN reps completed fPP reord reordoff reordrand seed"
                 " segcnt ");
         fprintf(out_resultfile, "%8s %8s %9s %5s", " blksiz", "xsize","aggs(MiB)", "API");
         fprintf(out_resultfile, " RefNum\n");
@@ -696,47 +772,71 @@ void PrintShortSummary(IOR_test_t * test)
 {
         IOR_param_t *params = &test->params;
         IOR_results_t *results = test->results;
-        double max_write_bw = 0.0;
-        double max_read_bw = 0.0;
-        double bw;
-        int reps;
-        int i;
+        struct results *write_bw = NULL;
+        struct results *read_bw = NULL;
 
         if (rank != 0 || verbose <= VERBOSE_0)
                 return;
 
-        //PrintArrayEnd();
-
-        reps = params->repetitions;
-
-        for (i = 0; i < reps; i++) {
-                bw = (double)results[i].write.aggFileSizeForBW / results[i].write.time;
-                max_write_bw = MAX(bw, max_write_bw);
-                bw = (double)results[i].read.aggFileSizeForBW / results[i].read.time;
-                max_read_bw = MAX(bw, max_read_bw);
-        }
+        if (params->writeFile)
+                write_bw = bw_values(params->repetitions, results, WRITE);
+        if (params->readFile || params->checkRead)
+                read_bw = bw_values(params->repetitions, results, READ);
 
         if(outputFormat == OUTPUT_DEFAULT){
           if (params->writeFile) {
-                  fprintf(out_resultfile, "Max Write: %.2f MiB/sec (%.2f MB/sec)\n",
-                          max_write_bw/MEBIBYTE, max_write_bw/MEGABYTE);
+                  if (write_bw->count > 0) {
+                          fprintf(out_resultfile,
+                                  "Max Write: %.2f MiB/sec (%.2f MB/sec), completed: %d/%d\n",
+                                  write_bw->max / MEBIBYTE,
+                                  write_bw->max / MEGABYTE,
+                                  write_bw->count, params->repetitions);
+                  } else {
+                          fprintf(out_resultfile,
+                                  "Max Write: NA MiB/sec (NA MB/sec), completed: 0/%d\n",
+                                  params->repetitions);
           }
-          if (params->readFile) {
-                  fprintf(out_resultfile, "Max Read:  %.2f MiB/sec (%.2f MB/sec)\n",
-                          max_read_bw/MEBIBYTE, max_read_bw/MEGABYTE);
+          }
+          if (params->readFile || params->checkRead) {
+                  if (read_bw->count > 0) {
+                          fprintf(out_resultfile,
+                                  "Max Read:  %.2f MiB/sec (%.2f MB/sec), completed: %d/%d\n",
+                                  read_bw->max / MEBIBYTE,
+                                  read_bw->max / MEGABYTE,
+                                  read_bw->count, params->repetitions);
+                  } else {
+                          fprintf(out_resultfile,
+                                  "Max Read:  NA MiB/sec (NA MB/sec), completed: 0/%d\n",
+                                  params->repetitions);
+          }
           }
         }else if (outputFormat == OUTPUT_JSON){
           PrintNamedSectionStart("max");
           if (params->writeFile) {
-            PrintKeyValDouble("writeMiB", max_write_bw/MEBIBYTE);
-            PrintKeyValDouble("writeMB", max_write_bw/MEGABYTE);
+            PrintSummaryKeyValDouble("writeMiB",
+                                     write_bw->count > 0 ? write_bw->max / MEBIBYTE : 0.0,
+                                     write_bw->count > 0);
+            PrintSummaryKeyValDouble("writeMB",
+                                     write_bw->count > 0 ? write_bw->max / MEGABYTE : 0.0,
+                                     write_bw->count > 0);
+            PrintKeyValInt("writeCompletedRepetitions", write_bw->count);
+            PrintKeyValInt("writeRepetitions", params->repetitions);
           }
-          if (params->readFile) {
-            PrintKeyValDouble("readMiB", max_read_bw/MEBIBYTE);
-            PrintKeyValDouble("readMB", max_read_bw/MEGABYTE);
+          if (params->readFile || params->checkRead) {
+            PrintSummaryKeyValDouble("readMiB",
+                                     read_bw->count > 0 ? read_bw->max / MEBIBYTE : 0.0,
+                                     read_bw->count > 0);
+            PrintSummaryKeyValDouble("readMB",
+                                     read_bw->count > 0 ? read_bw->max / MEGABYTE : 0.0,
+                                     read_bw->count > 0);
+            PrintKeyValInt("readCompletedRepetitions", read_bw->count);
+            PrintKeyValInt("readRepetitions", params->repetitions);
           }
           PrintEndSection();
         }
+
+        free(write_bw);
+        free(read_bw);
 }
 
 void PrintRemoveTiming(double start, double finish, int rep)
