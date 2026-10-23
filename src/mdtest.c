@@ -741,7 +741,7 @@ void mdtest_read(int random, int dirs, const long dir_iter, char *path, rank_pro
 
         double start = GetTimeStamp();
         /* open file for reading */
-        aiori_fh = o.backend->open (item, O_RDONLY, o.backend_options);
+        aiori_fh = o.backend->open (item, IOR_RDONLY, o.backend_options);
         if (NULL == aiori_fh) {
             WARNF("unable to open file %s", item);
             continue;
