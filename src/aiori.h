@@ -73,6 +73,8 @@ typedef struct aiori_xfer_hint_t{
   IOR_offset_t transferSize;       /* size of transfer in bytes */
   IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
   int singleXferAttempt;           /* do not retry transfer if incomplete */
+  int deadlineForStonewalling;     /* stop transfers when the deadline expires */
+  uint64_t maxTransferPairs;       /* stop after this many transfer-sized operations */
 } aiori_xfer_hint_t;
 
 /* this is a dummy structure to create some type safety */
