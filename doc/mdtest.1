@@ -139,6 +139,16 @@ timing. Note that it causes all IO to be flushed from the nodes.
 .TP
 .I "-z" tree_depth
 The depth of the hierarchical directory tree [default: 0].
+.TP
+.I "--summaryFile" filename
+Write the result summary to the named file. The normal run log remains on
+stdout/stderr. When omitted, the summary is written to the normal output stream.
+.TP
+.I "--summaryFormat" format
+Select the summary format: BdefaultR or BJSONR. JSON output is a single
+JSON document; use B--summaryFileR when the summary must be separated from
+the run log. With JSON and no summary file, run logs are redirected to stderr so
+stdout remains valid JSON.
 .SH EXAMPLES
 .SS "Example 1"
 .nf

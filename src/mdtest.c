@@ -179,6 +179,8 @@ typedef struct {
   #endif /* HAVE_LUSTRE_LUSTREAPI */
   char * saveRankDetailsCSV;       /* save the details about the performance to a file */
   char * savePerOpDataCSV; 
+  char * summaryFile;              /* write the result summary to this file */
+  int summary_format;              /* 0 = default text, 1 = JSON */
   const char *prologue;
   const char *epilogue;
 
@@ -194,6 +196,15 @@ typedef struct {
 } mdtest_options_t;
 
 static mdtest_options_t o;
+
+enum {
+  MDTEST_SUMMARY_DEFAULT = 0,
+  MDTEST_SUMMARY_JSON = 1
+};
+
+static FILE *summary_output;
+static int summary_json_started;
+static int summary_json_rows;
 
 
 /* This structure describes the processing status for stonewalling */
@@ -214,7 +225,7 @@ typedef struct{
 /* for making/removing unique directory && stating/deleting subdirectory */
 enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
 
-#define PRINT(...) fprintf(out_logfile, __VA_ARGS__);
+#define PRINT(...) fprintf(summary_output, __VA_ARGS__);
 
 /* a helper function for passing debug and verbose messages.
    use the MACRO as it will insert __LINE__ for you.
@@ -1518,6 +1529,209 @@ static mdtest_results_t* get_result_index(mdtest_results_t* all_results, int pro
   return & all_results[proc * interation_count + iter];
 }
 
+typedef struct {
+  double max;
+  double min;
+  double mean;
+  double stddev;
+} mdtest_summary_stats_t;
+
+static double summary_stddev(double sum_squared_deviation, int count) {
+  return count > 1 ? sqrt(sum_squared_deviation / (count - 1)) : 0.0;
+}
+
+static mdtest_summary_stats_t calculate_summary_stats(int iterations,
+                                                      mdtest_results_t *all_results,
+                                                      int operation,
+                                                      int print_time,
+                                                      int tree_operation) {
+  mdtest_summary_stats_t stats = {0.0, 0.0, 0.0, 0.0};
+  double min = 1e308;
+  double max = 0.0;
+  double sum = 0.0;
+  double variance = 0.0;
+
+  for (int j = 0; j < iterations; j++) {
+    double iteration_value;
+
+    if (tree_operation) {
+      iteration_value = print_time ? o.summary_table[j].time[operation]
+                                   : o.summary_table[j].rate[operation];
+    } else {
+      iteration_value = print_time ? 0.0 : 1e308;
+      for (int k = 0; k < o.size; k++) {
+        mdtest_results_t *cur = get_result_index(all_results, k, j, iterations);
+        double value = print_time ? cur->time[operation] : cur->rate[operation];
+        if (print_time) {
+          iteration_value = iteration_value < value ? value : iteration_value;
+        } else {
+          iteration_value = iteration_value > value ? value : iteration_value;
+        }
+      }
+      if (!print_time) {
+        iteration_value *= o.size;
+      }
+    }
+
+    if (iteration_value < min) {
+      min = iteration_value;
+    }
+    if (iteration_value > max) {
+      max = iteration_value;
+    }
+    sum += iteration_value;
+  }
+
+  stats.min = iterations > 0 ? min : 0.0;
+  stats.max = max;
+  stats.mean = iterations > 0 ? sum / iterations : 0.0;
+  for (int j = 0; j < iterations; j++) {
+    double iteration_value;
+    if (tree_operation) {
+      iteration_value = print_time ? o.summary_table[j].time[operation]
+                                   : o.summary_table[j].rate[operation];
+    } else {
+      iteration_value = print_time ? 0.0 : 1e308;
+      for (int k = 0; k < o.size; k++) {
+        mdtest_results_t *cur = get_result_index(all_results, k, j, iterations);
+        double value = print_time ? cur->time[operation] : cur->rate[operation];
+        if (print_time) {
+          iteration_value = iteration_value < value ? value : iteration_value;
+        } else {
+          iteration_value = iteration_value > value ? value : iteration_value;
+        }
+      }
+      if (!print_time) {
+        iteration_value *= o.size;
+      }
+    }
+    variance += (stats.mean - iteration_value) * (stats.mean - iteration_value);
+  }
+  stats.stddev = summary_stddev(variance, iterations);
+  return stats;
+}
+
+static void json_double(FILE *out, double value) {
+  if (isfinite(value)) {
+    fprintf(out, "%.17g", value);
+  } else {
+    fprintf(out, "null");
+  }
+}
+
+static void write_summary_metric_json(FILE *out, const char *name,
+                                      const char *unit,
+                                      mdtest_summary_stats_t stats) {
+  fprintf(out, "\"%s\":{\"unit\":\"%s\",\"max\":", name, unit);
+  json_double(out, stats.max);
+  fprintf(out, ",\"min\":");
+  json_double(out, stats.min);
+  fprintf(out, ",\"mean\":");
+  json_double(out, stats.mean);
+  fprintf(out, ",\"stddev\":");
+  json_double(out, stats.stddev);
+  fprintf(out, "}");
+}
+
+static void write_summary_row_json(FILE *out, int iterations,
+                                   const char *operation, int print_time,
+                                   mdtest_summary_stats_t stats) {
+  fprintf(out, "%s\n    {\"tasks\":%d,\"iterations\":%d,\"operation\":\"%s\"",
+          summary_json_rows++ > 0 ? "," : "", o.size, iterations, operation);
+  if (print_time) {
+    fprintf(out, ",");
+    write_summary_metric_json(out, "time", "ms/op", stats);
+  } else {
+    fprintf(out, ",");
+    write_summary_metric_json(out, "rate", "ops/sec", stats);
+  }
+  fprintf(out, "}");
+}
+
+static void write_summary_row_json_both(FILE *out, int iterations,
+                                        const char *operation,
+                                        mdtest_summary_stats_t rate_stats,
+                                        mdtest_summary_stats_t time_stats) {
+  fprintf(out, "%s\n    {\"tasks\":%d,\"iterations\":%d,\"operation\":\"%s\"",
+          summary_json_rows++ > 0 ? "," : "", o.size, iterations, operation);
+  fprintf(out, ",");
+  write_summary_metric_json(out, "rate", "ops/sec", rate_stats);
+  fprintf(out, ",");
+  write_summary_metric_json(out, "time", "ms/op", time_stats);
+  fprintf(out, "}");
+}
+
+static void summarize_results_json(int iterations, mdtest_results_t *all_results) {
+  int start, stop;
+
+  if (!summary_json_started) {
+    fprintf(summary_output, "{\n  \"summary\": [");
+    summary_json_started = 1;
+  }
+
+  if (o.files_only && !o.dirs_only) {
+    start = MDTEST_FILE_CREATE_NUM;
+  } else {
+    start = 0;
+  }
+  if (o.dirs_only && !o.files_only) {
+    stop = MDTEST_FILE_CREATE_NUM;
+  } else {
+    stop = MDTEST_TREE_CREATE_NUM;
+  }
+  if (!o.dirs_only && !o.files_only) {
+    start = stop = 0;
+  }
+
+  for (int i = start; i < stop; i++) {
+    const char *operation = mdtest_test_name(i);
+    mdtest_summary_stats_t rate_stats;
+    mdtest_summary_stats_t time_stats;
+
+    if (operation == NULL || i == MDTEST_DIR_READ_NUM) {
+      continue;
+    }
+    rate_stats = calculate_summary_stats(iterations, all_results, i, 0, 0);
+    time_stats = calculate_summary_stats(iterations, all_results, i, 1, 0);
+    if (o.print_rate_and_time) {
+      write_summary_row_json_both(summary_output, iterations, operation,
+                                  rate_stats, time_stats);
+    } else {
+      write_summary_row_json(summary_output, iterations, operation,
+                             o.print_time, o.print_time ? time_stats : rate_stats);
+    }
+  }
+
+  for (int i = MDTEST_TREE_CREATE_NUM; i < MDTEST_LAST_NUM; i++) {
+    const char *operation = mdtest_test_name(i);
+    mdtest_summary_stats_t rate_stats;
+    mdtest_summary_stats_t time_stats;
+
+    if (operation == NULL) {
+      continue;
+    }
+    rate_stats = calculate_summary_stats(iterations, all_results, i, 0, 1);
+    time_stats = calculate_summary_stats(iterations, all_results, i, 1, 1);
+    if (o.print_rate_and_time) {
+      write_summary_row_json_both(summary_output, iterations, operation,
+                                  rate_stats, time_stats);
+    } else {
+      write_summary_row_json(summary_output, iterations, operation,
+                             o.print_time, o.print_time ? time_stats : rate_stats);
+    }
+  }
+}
+
+static void finish_summary_json(void) {
+  if (summary_json_started) {
+    fprintf(summary_output, "\n  ]\n}\n");
+    summary_json_started = 0;
+    summary_json_rows = 0;
+  } else {
+    fprintf(summary_output, "{\n  \"summary\": []\n}\n");
+  }
+}
+
 static void summarize_results_rank0(int iterations,  mdtest_results_t * all_results, int print_time) {
   int start, stop;
   double min, max, mean, sd, sum, var, curr = 0;
@@ -1567,9 +1781,9 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
   }
 
   if(print_time){
-    VERBOSE(0, -1, "\nSUMMARY time (in ms/op): (of %d iterations)", iterations);
+    fprintf(summary_output, "\nSUMMARY time (in ms/op): (of %d iterations)\n", iterations);
   }else{
-    VERBOSE(0, -1, "\nSUMMARY rate (in ops/sec): (of %d iterations)", iterations);
+    fprintf(summary_output, "\nSUMMARY rate (in ops/sec): (of %d iterations)\n", iterations);
   }
   PRINT("   Operation     ");
   if(o.show_perrank_statistics){
@@ -1645,24 +1859,24 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
     for (int j = 0; j < iterations; j++) {
       var += (imean - iter_result[j]) * (imean - iter_result[j]);
     }
-    var = var / (iterations - 1);
+    var = var / (iterations > 1 ? iterations - 1 : 1);
     sd = sqrt(var);
     access = mdtest_test_name(i);
     if (i != 2) {
-      fprintf(out_logfile, "   %-18s ", access);
+      fprintf(summary_output, "   %-18s ", access);
       
       if(o.show_perrank_statistics){
-        fprintf(out_logfile, "%14.3f ", max);
-        fprintf(out_logfile, "%14.3f ", min);
-        fprintf(out_logfile, "%14.3f ", mean);
-        fprintf(out_logfile, "    ");        
+        fprintf(summary_output, "%14.3f ", max);
+        fprintf(summary_output, "%14.3f ", min);
+        fprintf(summary_output, "%14.3f ", mean);
+        fprintf(summary_output, "    ");
       }      
-      fprintf(out_logfile, "    ");
-      fprintf(out_logfile, "%14.3f ", imax);
-      fprintf(out_logfile, "%14.3f ", imin);
-      fprintf(out_logfile, "%14.3f ", imean);
-      fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
-      fflush(out_logfile);
+      fprintf(summary_output, "    ");
+      fprintf(summary_output, "%14.3f ", imax);
+      fprintf(summary_output, "%14.3f ", imin);
+      fprintf(summary_output, "%14.3f ", imean);
+      fprintf(summary_output, "%14.3f\n", iterations == 1 ? 0 : sd);
+      fflush(summary_output);
     }
   }
 
@@ -1702,21 +1916,21 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
           }
           var += (mean -  curr)*(mean -  curr);
       }
-      var = var / (iterations - 1);
+      var = var / (iterations > 1 ? iterations - 1 : 1);
       sd = sqrt(var);
       access = mdtest_test_name(i);
-      fprintf(out_logfile, "   %-22s ", access);
+      fprintf(summary_output, "   %-22s ", access);
       if(o.show_perrank_statistics){
-        fprintf(out_logfile, "%14.3f ", max);
-        fprintf(out_logfile, "%14.3f ", min);
-        fprintf(out_logfile, "%14.3f ", mean);
-        fprintf(out_logfile, "    ");
+        fprintf(summary_output, "%14.3f ", max);
+        fprintf(summary_output, "%14.3f ", min);
+        fprintf(summary_output, "%14.3f ", mean);
+        fprintf(summary_output, "    ");
       }
-      fprintf(out_logfile, "%14.3f ", imax);
-      fprintf(out_logfile, "%14.3f ", imin);
-      fprintf(out_logfile, "%14.3f ", sum / iterations);
-      fprintf(out_logfile, "%14.3f\n", iterations == 1 ? 0 : sd);
-      fflush(out_logfile);
+      fprintf(summary_output, "%14.3f ", imax);
+      fprintf(summary_output, "%14.3f ", imin);
+      fprintf(summary_output, "%14.3f ", sum / iterations);
+      fprintf(summary_output, "%14.3f\n", iterations == 1 ? 0 : sd);
+      fflush(summary_output);
   }
 }
 
@@ -1785,7 +1999,9 @@ void summarize_results(int iterations, mdtest_results_t * results) {
     return;
   }
 
-  if (o.print_rate_and_time){
+  if (o.summary_format == MDTEST_SUMMARY_JSON) {
+    summarize_results_json(iterations, all_results);
+  } else if (o.print_rate_and_time){
     summarize_results_rank0(iterations, all_results, 0);
     summarize_results_rank0(iterations, all_results, 1);
   }else{
@@ -2309,6 +2525,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     memset(& o.hints, 0, sizeof(o.hints));
     
     char * packetType = "t";
+    char * summaryFormat = "default";
 
     option_help options [] = {
       {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & o.api},
@@ -2369,11 +2586,20 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
       {0, "savePerOpDataCSV", "Store the performance of each rank into an individual file prefixed with this option.", OPTION_OPTIONAL_ARGUMENT, 's', & o.savePerOpDataCSV},
+      {0, "summaryFile", "Write the result summary to this file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.summaryFile},
+      {0, "summaryFormat", "Summary output format: default or JSON.", OPTION_OPTIONAL_ARGUMENT, 's', & summaryFormat},
       {0, "showRankStatistics", "Include statistics per rank", OPTION_FLAG, 'd', & o.show_perrank_statistics},
       LAST_OPTION
     };
     options_all_t * global_options = airoi_create_all_module_options(options);
     option_parse(argc, argv, global_options);
+    if (strcasecmp(summaryFormat, "default") == 0) {
+      o.summary_format = MDTEST_SUMMARY_DEFAULT;
+    } else if (strcasecmp(summaryFormat, "JSON") == 0) {
+      o.summary_format = MDTEST_SUMMARY_JSON;
+    } else {
+      FAIL("Unknown summaryFormat: %s", summaryFormat);
+    }
     o.backend = aiori_select(o.api);
     if (o.backend == NULL)
         ERR("Unrecognized I/O API");
@@ -2388,6 +2614,20 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     MPI_CHECK(MPI_Comm_rank(testComm, &rank), "MPI_Comm_rank error");
     MPI_CHECK(MPI_Comm_size(testComm, &o.size), "MPI_Comm_size error");
+
+    summary_output = world_out;
+    summary_json_started = 0;
+    summary_json_rows = 0;
+    if (rank == 0 && o.summaryFile != NULL) {
+      summary_output = fopen(o.summaryFile, "w");
+      if (summary_output == NULL) {
+        FAIL("Cannot open summaryFile for writes: %s", o.summaryFile);
+      }
+    } else if (o.summary_format == MDTEST_SUMMARY_JSON && o.summaryFile == NULL) {
+      /* Keep stdout valid JSON when no summary file was requested. */
+      out_logfile = stderr;
+      out_resultfile = stderr;
+    }
 
     if(o.backend->xfer_hints){
       o.backend->xfer_hints(& o.hints);
@@ -2718,6 +2958,13 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
 
     if (o.write_bytes > 0) {
       aligned_buffer_free(o.write_buffer, o.gpuMemoryFlags);
+    }
+    if (rank == 0 && o.summary_format == MDTEST_SUMMARY_JSON) {
+      finish_summary_json();
+    }
+    if (rank == 0 && o.summaryFile != NULL) {
+      fclose(summary_output);
+      summary_output = world_out;
     }
     free(o.summary_table);
 
