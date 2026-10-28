@@ -777,6 +777,7 @@ ReduceIterResults(IOR_test_t *test, double *timer, const int rep, const int acce
                                                  &test->results[rep].read;
 
         point->time = totalTime;
+        point->accessTime = accessTime;
         point->completed = point->aggFileSizeForBW > 0 &&
                            isfinite(totalTime) && totalTime > 0.0;
 

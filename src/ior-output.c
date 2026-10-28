@@ -480,6 +480,7 @@ void ShowSetup(IOR_param_t *params)
 static struct results *bw_ops_values(const int repetitions,
                                      IOR_results_t *measured,
                                      const IOR_offset_t transfer_size,
+                                     const int use_access_time,
                                      const int access)
 {
         struct results *r;
@@ -497,14 +498,16 @@ static struct results *bw_ops_values(const int repetitions,
                 IOR_point_t *point = (access == WRITE) ? &measured->write :
                                                          &measured->read;
                 double value;
+                double elapsed_time = use_access_time ?
+                                          point->accessTime : point->time;
 
-                if (!point->completed || point->time <= 0.0 ||
-                    !isfinite(point->time) || point->aggFileSizeForBW <= 0 ||
+                if (!point->completed || elapsed_time <= 0.0 ||
+                    !isfinite(elapsed_time) || point->aggFileSizeForBW <= 0 ||
                     transfer_size <= 0)
                         continue;
 
                 value = ((double)point->aggFileSizeForBW) /
-                        (double)transfer_size / point->time;
+                        (double)transfer_size / elapsed_time;
                 if (!isfinite(value))
                         continue;
 
@@ -534,7 +537,7 @@ static struct results *bw_ops_values(const int repetitions,
 static struct results *bw_values(const int repetitions,
                                  IOR_results_t *measured, const int access)
 {
-        return bw_ops_values(repetitions, measured, 1, access);
+        return bw_ops_values(repetitions, measured, 1, 0, access);
 }
 
 static struct results *ops_values(const int repetitions,
@@ -542,7 +545,7 @@ static struct results *ops_values(const int repetitions,
                                   IOR_offset_t transfer_size,
                                   const int access)
 {
-        return bw_ops_values(repetitions, measured, transfer_size, access);
+        return bw_ops_values(repetitions, measured, transfer_size, 1, access);
 }
 
 static int summary_point_is_valid(const IOR_point_t *point)
