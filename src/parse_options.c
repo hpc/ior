@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <ctype.h>
 #include <string.h>
 
@@ -343,7 +344,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         /* open the script */
         file = fopen(scriptName, "r");
         if (file == NULL)
-                ERR("fopen() failed");
+                ERRF("Cannot open script file '%s': %s", scriptName, strerror(errno));
 
         /* search for the "IOR START" line */
         while (fgets(linebuf, MAX_STR, file) != NULL) {
