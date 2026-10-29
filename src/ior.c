@@ -85,6 +85,7 @@ static void ior_set_xfer_hints(IOR_param_t * p){
   hints->transferSize = p->transferSize;
   hints->expectedAggFileSize = p->expectedAggFileSize;
   hints->singleXferAttempt = p->singleXferAttempt;
+  hints->dataPacketType = p->dataPacketType;
   hints->deadlineForStonewalling = p->deadlineForStonewalling;
   hints->maxTransferPairs = p->stoneWallingWearOutIterations;
 

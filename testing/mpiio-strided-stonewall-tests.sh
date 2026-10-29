@@ -154,8 +154,12 @@ READ_STATUS="${TEST_ROOT}/read.status"
 READ_PAIRS=$((SEGMENTS / 2))
 READ_BYTES=$((RANKS * READ_PAIRS * TRANSFER_SIZE))
 printf "%s\n" "${READ_PAIRS}" > "${READ_STATUS}"
-cp "${NO_DEADLINE_DATA}" "${READ_DATA}"
-python3 - "${READ_DATA}" "${READ_BYTES}" <<'PY'
+# Seed the replay fixture through POSIX so it tests the bounded read itself.
+if run_ior status-prepare "${RANKS}" "${READ_DATA}" \
+     "${TEST_ROOT}/read-prepare.json" "${TEST_ROOT}/read-prepare.log" \
+     -a POSIX -w -k -i 1 -s "${SEGMENTS}" -b "${TRANSFER_SIZE}" \
+     -t "${TRANSFER_SIZE}" -G 1; then
+  if ! python3 - "${READ_DATA}" "${READ_BYTES}" <<'PY'
 import sys
 data_file, valid_bytes = sys.argv[1], int(sys.argv[2])
 with open(data_file, "r+b") as stream:
@@ -164,14 +168,63 @@ with open(data_file, "r+b") as stream:
     stream.seek(valid_bytes)
     stream.write(bytes(value ^ 0xFF for value in corrupted))
 PY
-if run_ior status-read "${RANKS}" "${READ_DATA}" \
-     "${READ_SUMMARY}" "${TEST_ROOT}/read.log" \
-     -a MPIIO -R -k -i 1 -s "${SEGMENTS}" -b "${TRANSFER_SIZE}" \
-     -t "${TRANSFER_SIZE}" -G 1 -O "stoneWallingStatusFile=${READ_STATUS}" \
-     "${COMMON[@]}"; then
-  check_summary_bytes status-read "${READ_SUMMARY}" read "${READ_BYTES}"
-  check_file_bytes status-read "${READ_DATA}" "${FULL_BYTES}"
+  then
+    fail "status-read: could not corrupt the suffix fixture"
+  fi
+  if run_ior status-read "${RANKS}" "${READ_DATA}" \
+       "${READ_SUMMARY}" "${TEST_ROOT}/read.log" \
+       -a MPIIO -R -k -i 1 -s "${SEGMENTS}" -b "${TRANSFER_SIZE}" \
+       -t "${TRANSFER_SIZE}" -G 1 -O "stoneWallingStatusFile=${READ_STATUS}" \
+       "${COMMON[@]}"; then
+    check_summary_bytes status-read "${READ_SUMMARY}" read "${READ_BYTES}"
+    check_file_bytes status-read "${READ_DATA}" "${FULL_BYTES}"
+  fi
 fi
+
+VERIFY_SEGMENTS=4
+VERIFY_BLOCK=4096
+VERIFY_BYTES=$((RANKS * VERIFY_SEGMENTS * VERIFY_BLOCK))
+for packet in t o i r; do
+  VERIFY_DATA="${TEST_ROOT}/verify-${packet}.data"
+  VERIFY_SUMMARY="${TEST_ROOT}/verify-${packet}.json"
+  VERIFY_FLAGS=()
+  # Exercise timestamp coalescing collectively; see the independent-I/O #566.
+  if [[ "${packet}" == t ]]; then VERIFY_FLAGS=(-c); fi
+  if run_ior "verify-${packet}" "${RANKS}" "${VERIFY_DATA}" \
+       "${VERIFY_SUMMARY}" "${TEST_ROOT}/verify-${packet}.log" \
+       -a MPIIO -w -W -R -k -i 1 -s "${VERIFY_SEGMENTS}" \
+       -b "${VERIFY_BLOCK}" -t "${TRANSFER_SIZE}" -G 1 \
+       -O "dataPacketType=${packet}" "${VERIFY_FLAGS[@]}" "${COMMON[@]}"; then
+    check_summary_bytes "verify-${packet}" "${VERIFY_SUMMARY}" write "${VERIFY_BYTES}"
+    check_summary_bytes "verify-${packet}" "${VERIFY_SUMMARY}" read "${VERIFY_BYTES}"
+    check_file_bytes "verify-${packet}" "${VERIFY_DATA}" "${VERIFY_BYTES}"
+    run_ior "verify-posix-${packet}" "${RANKS}" "${VERIFY_DATA}" \
+      "${TEST_ROOT}/verify-posix-${packet}.json" "${TEST_ROOT}/verify-posix-${packet}.log" \
+      -a POSIX -R -k -i 1 -s "${VERIFY_SEGMENTS}" \
+      -b "${VERIFY_BLOCK}" -t "${TRANSFER_SIZE}" -G 1 -O "dataPacketType=${packet}" || true
+  fi
+done
+
+PERPROC_DATA="${TEST_ROOT}/verify-perproc.data"
+if run_ior verify-perproc "${RANKS}" "${PERPROC_DATA}" \
+     "${TEST_ROOT}/verify-perproc.json" "${TEST_ROOT}/verify-perproc.log" \
+     -a MPIIO -w -F -k -i 1 -s "${VERIFY_SEGMENTS}" \
+     -b "${VERIFY_BLOCK}" -t "${TRANSFER_SIZE}" -G 1 "${COMMON[@]}"; then
+  for ((process = 0; process < RANKS; process++)); do
+    printf -v process_file '%s.%08d' "${PERPROC_DATA}" "${process}"
+    check_file_bytes "verify-perproc-${process}" "${process_file}" \
+      "$((VERIFY_SEGMENTS * VERIFY_BLOCK))"
+  done
+  run_ior verify-perproc-posix "${RANKS}" "${PERPROC_DATA}" \
+    "${TEST_ROOT}/verify-perproc-posix.json" "${TEST_ROOT}/verify-perproc-posix.log" \
+    -a POSIX -R -F -k -i 1 -s "${VERIFY_SEGMENTS}" \
+    -b "${VERIFY_BLOCK}" -t "${TRANSFER_SIZE}" -G 1 || true
+fi
+
+run_ior verify-shuffled "${RANKS}" "${TEST_ROOT}/verify-shuffled.data" \
+  "${TEST_ROOT}/verify-shuffled.json" "${TEST_ROOT}/verify-shuffled.log" \
+  -a MPIIO -w -r -Z -Z -X 1 -k -i 1 -s "${VERIFY_SEGMENTS}" \
+  -b "${VERIFY_BLOCK}" -t "${TRANSFER_SIZE}" -G 1 "${COMMON[@]}" || true
 
 if (( ERRORS != 0 )); then
   echo "FAILED: ${ERRORS} error(s)"

@@ -73,6 +73,7 @@ typedef struct aiori_xfer_hint_t{
   IOR_offset_t transferSize;       /* size of transfer in bytes */
   IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
   int singleXferAttempt;           /* do not retry transfer if incomplete */
+  ior_dataPacketType_e dataPacketType; /* data pattern used for each transfer */
   int deadlineForStonewalling;     /* stop transfers when the deadline expires */
   uint64_t maxTransferPairs;       /* stop after this many transfer-sized operations */
 } aiori_xfer_hint_t;

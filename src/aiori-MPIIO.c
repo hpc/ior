@@ -482,8 +482,12 @@ static IOR_offset_t MPIIO_Xfer(int access, aiori_fd_t * fdp, IOR_size_t * buffer
                                 MPI_CHECK(MPI_Type_size_x(mfd->transferType, &elementSize), "couldn't get size of type");
                                 if (param->useStridedDatatype) {
                                   int coalesceSegments = hints->deadlineForStonewalling == 0
-                                                          && hints->maxTransferPairs == 0;
-                                  if(coalesceSegments && offset >= (rank+1) * hints->blockSize){
+                                                          && hints->maxTransferPairs == 0
+                                                          && access != WRITECHECK
+                                                          && access != READCHECK
+                                                          && (access != WRITE || hints->dataPacketType == DATA_TIMESTAMP);
+                                  int fileRank = hints->filePerProc ? 0 : (rank + rankOffset) % hints->numTasks;
+                                  if(coalesceSegments && offset >= (fileRank+1) * hints->blockSize){
                                     /* we shall write only once per transferSize */
                                     /* printf("FAKE access %d %lld\n", rank, offset); */
                                     return hints->transferSize;
