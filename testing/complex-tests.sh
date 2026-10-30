@@ -14,6 +14,8 @@ IOR 2 -a DUMMY -w -O stoneWallingStatusFile=stonewall.log -O stoneWallingWearOut
 IOR 2 -a DUMMY -r -O stoneWallingStatusFile=stonewall.log -D 1 -t 1000 -b 1000 -s 30 -k # max 15 still!
 IOR 2 -a DUMMY -r -O stoneWallingStatusFile=stonewall.log -t 1000 -b 1000 -s 30 -k
 
+bash "$ROOT/mpiio-strided-stonewall-tests.sh" || ERRORS=$(($ERRORS + 1))
+
 MDTEST 2 -I 20 -a DUMMY -W 1 -x stonewall-md.log -C
 MDTEST 2 -I 20 -a DUMMY -x stonewall-md.log -T -v
 MDTEST 2 -I 20 -a DUMMY -x stonewall-md.log -D -v

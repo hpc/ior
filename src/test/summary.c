@@ -10,6 +10,7 @@ static void set_sample(IOR_point_t *point, int rate_mib, int iteration)
 {
   point->completed = TRUE;
   point->time = (double)iteration + 1.0;
+  point->accessTime = point->time / 2.0;
   point->aggFileSizeForBW = (IOR_offset_t)rate_mib *
                             (IOR_offset_t)(point->time * MEBIBYTE);
 }
@@ -20,6 +21,7 @@ static int configure_fixture(const char *name, IOR_test_t *test,
   int write_mask = 0;
   int read_mask = 0;
   int repetitions = 4;
+  IOR_offset_t transfer_size = MEBIBYTE;
 
   if (strcmp(name, "full") == 0) {
     write_mask = read_mask = 0xF;
@@ -30,6 +32,9 @@ static int configure_fixture(const char *name, IOR_test_t *test,
     write_mask = 0x5;
   } else if (strcmp(name, "read-only") == 0) {
     read_mask = 0xA;
+  } else if (strcmp(name, "rates") == 0) {
+    write_mask = read_mask = 0xF;
+    transfer_size = MEBIBYTE / 2;
   } else if (strcmp(name, "single") == 0) {
     repetitions = 1;
     write_mask = read_mask = 0x1;
@@ -49,15 +54,17 @@ static int configure_fixture(const char *name, IOR_test_t *test,
   test->params.filePerProc = TRUE;
   test->params.segmentCount = 1;
   test->params.blockSize = MEBIBYTE;
-  test->params.transferSize = MEBIBYTE;
+  test->params.transferSize = transfer_size;
   test->params.referenceNumber = 0;
   test->results = results;
 
   for (int i = 0; i < repetitions; i++) {
     /* Deliberately poison skipped slots; summary code must ignore them. */
     results[i].write.time = 1.0;
+    results[i].write.accessTime = 0.5;
     results[i].write.aggFileSizeForBW = 100 * MEBIBYTE;
     results[i].read.time = 1.0;
+    results[i].read.accessTime = 0.5;
     results[i].read.aggFileSizeForBW = 100 * MEBIBYTE;
     if (write_mask & (1 << i))
       set_sample(&results[i].write, i + 1, i);

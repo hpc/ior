@@ -49,7 +49,6 @@ These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``
   -O S  string of IOR directives (e.g. -O checkRead=1,GPUid=2)
   -p    preallocate -- preallocate file size
   -P    useSharedFilePointer -- use shared file pointer [not working]
-  -q    quitOnError -- during file error-checking, abort on error
   -Q N  taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N) [!HDF5]
   -r    readFile -- read existing file
   -R    checkRead -- check read after read
@@ -120,12 +119,12 @@ GENERAL
         * When > 0, use the same seed for all iterations
         * When < 0, different seed for each iteration
 
-  * ``quitOnError`` - upon error encountered on ``checkWrite`` or ``checkRead``,
-    display current error and then stop execution.  Otherwise, count errors and
-    continue (default: 0)
+  * ``warningAsErrors`` (``--warningAsErrors``) - treat warnings as errors and
+    abort. This includes verification warnings and other warnings, such as
+    those about behavior affecting performance (default: 0)
 
-  * ``numTasks`` - number of tasks that should participate in the test.  0
-    denotes all tasks.  (default: 0)
+  * ``numTasks`` - number of tasks that should participate in the test.  -1
+    denotes all MPI tasks.  (default: -1)
 
   * ``interTestDelay`` - time (in seconds) to delay before beginning a write or
     read phase in a series of tests This does not delay before check-write or
@@ -160,14 +159,14 @@ GENERAL
 
   * ``checkWrite`` - read data back and check for errors against known pattern.
     Can be used independently of ``writeFile``.  Data checking is not timed and
-    does not affect other performance timings.  All errors detected are tallied
-    and returned as the program exit code unless ``quitOnError`` is set.
+    does not affect other performance timings. Detected errors are tallied and
+    a warning is reported after the verification phase.
     (default: 0)
 
   * ``checkRead`` - re-read data and check for errors between reads.  Can be
     used independently of ``readFile``.  Data checking is not timed and does not
-    affect other performance timings.  All errors detected are tallied and
-    returned as the program exit code unless ``quitOnError`` is set.
+    affect other performance timings. Detected errors are tallied and a warning
+    is reported after the verification phase.
     (default: 0)
 
   * ``keepFile`` - do not remove test file(s) on program exit (default: 0)

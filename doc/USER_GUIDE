@@ -92,7 +92,6 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -O S  string of IOR directives (e.g. -O checkRead=1,GPUid=2)
   -p    preallocate -- preallocate file size
   -P    useSharedFilePointer -- use shared file pointer [not working]
-  -q    quitOnError -- during file error-checking, abort on error
   -Q N  taskPerNodeOffset for read tests use with -C & -Z options (-C constant N, -Z at least N) [!HDF5]
   -r    readFile -- read existing file
   -R    checkRead -- check read after read
@@ -158,13 +157,13 @@ GENERAL:
   * reorderTasksRandomSeed - random seed for reordertasksrandom option. [0]
                               >0, same seed for all iterations. <0, different seed for each iteration
 
-  * quitOnError          - upon error encountered on checkWrite or checkRead,
-                           display current error and then stop execution;
-                           if not set, count errors and continue [0=FALSE]
+  * warningAsErrors      - (--warningAsErrors) treat warnings as errors and
+                           abort. This includes verification warnings and
+                           other warnings, such as those about behavior
+                           affecting performance [0=FALSE]
 
   * numTasks             - number of tasks that should participate in the test
-                           [0]
-                           NOTE: -1 denotes all tasks
+                           [-1 denotes all MPI tasks]
 
   * interTestDelay       - this is the time in seconds to delay before
                            beginning a write or read in a series of tests [0]
@@ -208,8 +207,8 @@ GENERAL:
                            pattern; can be used independently of writeFile [0=FALSE]
                            NOTES: * data checking is not timed and does not
                                     affect other performance timings
-                                  * all errors tallied and returned as program
-                                    exit code, unless quitOnError set
+                                  * detected errors are tallied; a warning is
+                                    reported after the verification phase
 
   * checkRead            - reread data and check for errors between reads; can
                            be used independently of readFile [0=FALSE]
@@ -452,7 +451,7 @@ IOR START
   checkWrite=0
   checkRead=0
   keepFile=1
-  quitOnError=0
+  warningAsErrors=0
   segmentCount=1
   blockSize=32k
   outlierThreshold=0
@@ -593,6 +592,10 @@ HOW DOES IOR CALCULATE PERFORMANCE?
   - Latency: computed by taking the average latency of all I/O operations from a
     single task. If ior is run with multiple tasks, then the latency reported is
     the minimum that was computed between all tasks.
+
+  The OPs columns in the long summary aggregate the per-iteration IOPS values
+  and therefore use the same reading and writing time. Bandwidth and Mean(s)
+  continue to use the elapsed STOP-minus-START time.
 
 HOW DO I ACCESS MULTIPLE FILE SYSTEMS IN IOR?
 

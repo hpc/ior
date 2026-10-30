@@ -6,12 +6,13 @@ import subprocess
 
 
 FIXTURES = {
-    "full": (4, {"write": [1, 2, 3, 4], "read": [2, 4, 6, 8]}),
-    "partial": (4, {"write": [1, 3, 4], "read": [2]}),
-    "write-only": (4, {"write": [1, 3]}),
-    "read-only": (4, {"read": [4, 8]}),
-    "single": (1, {"write": [1], "read": [2]}),
-    "zero": (4, {"write": [], "read": []}),
+    "full": (4, {"write": [1, 2, 3, 4], "read": [2, 4, 6, 8]}, 2.0),
+    "partial": (4, {"write": [1, 3, 4], "read": [2]}, 2.0),
+    "write-only": (4, {"write": [1, 3]}, 2.0),
+    "read-only": (4, {"read": [4, 8]}, 2.0),
+    "single": (1, {"write": [1], "read": [2]}, 2.0),
+    "rates": (4, {"write": [1, 2, 3, 4], "read": [2, 4, 6, 8]}, 4.0),
+    "zero": (4, {"write": [], "read": []}, 2.0),
 }
 
 
@@ -43,7 +44,7 @@ def expected_sd(samples):
     return math.sqrt(sum((sample - mean) ** 2 for sample in samples) / len(samples))
 
 
-def check_json(fixture, repetitions, expected):
+def check_json(fixture, repetitions, expected, ops_factor):
     output = subprocess.check_output(
         ["./testsummary", fixture, "json"], universal_newlines=True
     )
@@ -52,27 +53,44 @@ def check_json(fixture, repetitions, expected):
 
     long_rows = {row["operation"]: row for row in data["long"]}
     assert set(long_rows) == set(expected)
-    for operation, samples in expected.items():
+    for operation, bw_samples in expected.items():
         row = long_rows[operation]
+        ops_samples = [sample * ops_factor for sample in bw_samples]
         assert row["repetitions"] == repetitions
-        assert row["completedRepetitions"] == len(samples)
+        assert row["completedRepetitions"] == len(bw_samples)
         for metric in ("bwMaxMIB", "bwMinMIB", "bwMeanMIB", "bwStdMIB",
                        "OPsMax", "OPsMin", "OPsMean", "OPsSD", "MeanTime",
                        "xsizeMiB"):
-            assert (row[metric] is None) == (not samples), (fixture, operation, metric, row[metric])
-        if samples:
-            mean = sum(samples) / len(samples)
-            standard_deviation = expected_sd(samples)
-            for metric in ("bwMaxMIB", "OPsMax"):
-                assert math.isclose(row[metric], max(samples), rel_tol=1e-4, abs_tol=1e-4)
-            for metric in ("bwMinMIB", "OPsMin"):
-                assert math.isclose(row[metric], min(samples), rel_tol=1e-4, abs_tol=1e-4)
-            for metric in ("bwMeanMIB", "OPsMean"):
-                assert math.isclose(row[metric], mean, rel_tol=1e-4, abs_tol=1e-4)
-            for metric in ("bwStdMIB", "OPsSD"):
-                assert math.isclose(
-                    row[metric], standard_deviation, rel_tol=1e-4, abs_tol=1e-4
-                )
+            assert (row[metric] is None) == (not bw_samples), (
+                fixture, operation, metric, row[metric]
+            )
+        if bw_samples:
+            for prefix, samples in (("bw", bw_samples), ("OPs", ops_samples)):
+                suffixes = {
+                    "Max": expected_max(samples),
+                    "Min": min(samples),
+                    "Mean": sum(samples) / len(samples),
+                    "SD": expected_sd(samples),
+                }
+                if prefix == "bw":
+                    metric_names = {
+                        "Max": "bwMaxMIB",
+                        "Min": "bwMinMIB",
+                        "Mean": "bwMeanMIB",
+                        "SD": "bwStdMIB",
+                    }
+                else:
+                    metric_names = {
+                        "Max": "OPsMax",
+                        "Min": "OPsMin",
+                        "Mean": "OPsMean",
+                        "SD": "OPsSD",
+                    }
+                for suffix, expected_value in suffixes.items():
+                    metric = metric_names[suffix]
+                    assert math.isclose(
+                        row[metric], expected_value, rel_tol=1e-4, abs_tol=1e-4
+                    ), (fixture, operation, metric, row[metric], expected_value)
 
     short = data["max"]
     for operation in ("write", "read"):
@@ -88,7 +106,7 @@ def check_json(fixture, repetitions, expected):
             assert math.isclose(maximum, expected_max(samples), rel_tol=1e-12)
 
 
-def check_text(fixture, repetitions, expected):
+def check_text(fixture, repetitions, expected, ops_factor):
     output = subprocess.check_output(
         ["./testsummary", fixture, "text"], universal_newlines=True
     )
@@ -99,23 +117,30 @@ def check_text(fixture, repetitions, expected):
         if match:
             rows[match.group(1)] = line.split()
     assert set(rows) == set(expected)
-    for operation, samples in expected.items():
+    for operation, bw_samples in expected.items():
+        ops_samples = [sample * ops_factor for sample in bw_samples]
         fields = rows[operation]
         assert int(fields[15]) == repetitions
-        assert int(fields[16]) == len(samples)
-        if samples:
-            mean = sum(samples) / len(samples)
-            standard_deviation = expected_sd(samples)
-            for index in (1, 5):
-                assert math.isclose(float(fields[index]), max(samples), rel_tol=1e-2)
-            for index in (2, 6):
-                assert math.isclose(float(fields[index]), min(samples), rel_tol=1e-2)
-            for index in (3, 7):
-                assert math.isclose(float(fields[index]), mean, rel_tol=1e-2)
-            for index in (4, 8):
-                assert math.isclose(
-                    float(fields[index]), standard_deviation, rel_tol=1e-2
+        assert int(fields[16]) == len(bw_samples)
+        if bw_samples:
+            metric_groups = (
+                (1, bw_samples),
+                (5, ops_samples),
+            )
+            for first_index, samples in metric_groups:
+                expected_values = (
+                    expected_max(samples),
+                    min(samples),
+                    sum(samples) / len(samples),
+                    expected_sd(samples),
                 )
+                for offset, expected_value in enumerate(expected_values):
+                    assert math.isclose(
+                        float(fields[first_index + offset]),
+                        expected_value,
+                        rel_tol=1e-2,
+                        abs_tol=5e-3,
+                    )
         else:
             assert all(value == "NA" for value in fields[1:10])
 
@@ -133,14 +158,14 @@ def check_text(fixture, repetitions, expected):
         assert int(row[3]) == len(samples)
         assert int(row[4]) == repetitions
         if samples:
-            assert math.isclose(float(row[1]), max(samples), rel_tol=1e-2)
+            assert math.isclose(float(row[1]), expected_max(samples), rel_tol=1e-2)
         else:
             assert row[1] == row[2] == "NA"
     assert not re.search(r"(?i)(?<![a-z])[-+]?(?:nan|inf(?:inity)?)(?![a-z])", output)
 
 
-for fixture, (repetitions, expected) in FIXTURES.items():
-    check_json(fixture, repetitions, expected)
-    check_text(fixture, repetitions, expected)
+for fixture, (repetitions, expected, ops_factor) in FIXTURES.items():
+    check_json(fixture, repetitions, expected, ops_factor)
+    check_text(fixture, repetitions, expected, ops_factor)
 
 print("summary output regression cases passed")
