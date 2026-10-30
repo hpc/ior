@@ -284,13 +284,13 @@ OpTimer* OpTimerInit(char * filename, int size){
   ot->time = safeMalloc(sizeof(double)*OP_BUFFER_SIZE);
   ot->pos = 0;
   ot->fd = fopen(filename, "w");
-  if(ot->fd < 0){
-    ERR("Could not create OpTimer");
+  if(ot->fd == NULL){
+    FAIL("Cannot create OpTimer file '%s': %s", filename, strerror(errno));
   }
   char buff[] = "time,runtime,tp\n";
   int ret = fwrite(buff, strlen(buff), 1, ot->fd);
   if(ret != 1){
-    FAIL("Cannot write header to OpTimer file");
+    FAIL("Cannot write header to OpTimer file: %s", strerror(errno));
   }
   return ot;
 }
@@ -300,7 +300,9 @@ void OpTimerFlush(OpTimer* ot){
     return;
   }
   for(int i=0; i < ot->pos; i++){
-    fprintf(ot->fd, "%.8e,%.8e,%e\n", ot->time[i], ot->value[i], ot->size/ot->value[i]);
+    if(fprintf(ot->fd, "%.8e,%.8e,%e\n", ot->time[i], ot->value[i], ot->size/ot->value[i]) < 0){
+      FAIL("Cannot write records to OpTimer file: %s", strerror(errno));
+    }
   }
   ot->pos = 0;
 }
@@ -327,7 +329,9 @@ void OpTimerFree(OpTimer** otp){
   free(ot->time);
   ot->value = NULL;
   ot->time = NULL;
-  fclose(ot->fd);
+  if(fclose(ot->fd) != 0){
+    FAIL("Cannot close OpTimer file: %s", strerror(errno));
+  }
   free(ot);
   *otp = NULL;
 }
