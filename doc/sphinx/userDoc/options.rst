@@ -123,8 +123,8 @@ GENERAL
     abort. This includes verification warnings and other warnings, such as
     those about behavior affecting performance (default: 0)
 
-  * ``numTasks`` - number of tasks that should participate in the test.  0
-    denotes all tasks.  (default: 0)
+  * ``numTasks`` - number of tasks that should participate in the test.  -1
+    denotes all MPI tasks.  (default: -1)
 
   * ``interTestDelay`` - time (in seconds) to delay before beginning a write or
     read phase in a series of tests This does not delay before check-write or

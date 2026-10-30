@@ -163,8 +163,7 @@ GENERAL:
                            affecting performance [0=FALSE]
 
   * numTasks             - number of tasks that should participate in the test
-                           [0]
-                           NOTE: -1 denotes all tasks
+                           [-1 denotes all MPI tasks]
 
   * interTestDelay       - this is the time in seconds to delay before
                            beginning a write or read in a series of tests [0]
