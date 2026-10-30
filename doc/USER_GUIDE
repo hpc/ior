@@ -593,6 +593,10 @@ HOW DOES IOR CALCULATE PERFORMANCE?
     single task. If ior is run with multiple tasks, then the latency reported is
     the minimum that was computed between all tasks.
 
+  The OPs columns in the long summary aggregate the per-iteration IOPS values
+  and therefore use the same reading and writing time. Bandwidth and Mean(s)
+  continue to use the elapsed STOP-minus-START time.
+
 HOW DO I ACCESS MULTIPLE FILE SYSTEMS IN IOR?
 
   It is possible when using the filePerProc option to have tasks round-robin
