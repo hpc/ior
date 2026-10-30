@@ -1,3 +1,4 @@
+AM_CPPFLAGS = -I$(top_srcdir)/src
 AM_LDFLAGS = $(extraLDFLAGS)
 LDADD    = ../libaiori.a $(extraLDADD)
 

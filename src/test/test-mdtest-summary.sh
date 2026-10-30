@@ -2,7 +2,8 @@
 set -eu
 
 test_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
-MDTEST_BIN="$(CDPATH= cd "$test_dir/.." && pwd)/mdtest"
+# Automake runs tests from the build tree's src/test directory.
+MDTEST_BIN="${MDTEST_BIN:-$(CDPATH= cd .. && pwd)/mdtest}"
 export MDTEST_BIN
 export MPIEXEC="${MPIEXEC:-mpiexec}"
 export PYTHON="${PYTHON:-python3}"
