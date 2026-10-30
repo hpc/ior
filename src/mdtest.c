@@ -2962,8 +2962,15 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (rank == 0 && o.summary_format == MDTEST_SUMMARY_JSON) {
       finish_summary_json();
     }
+    if (rank == 0 && (o.summaryFile != NULL || o.summary_format == MDTEST_SUMMARY_JSON)) {
+      if (fflush(summary_output) != 0 || ferror(summary_output)) {
+        FAIL("Cannot write summary output to %s", o.summaryFile != NULL ? o.summaryFile : "stdout");
+      }
+    }
     if (rank == 0 && o.summaryFile != NULL) {
-      fclose(summary_output);
+      if (fclose(summary_output) != 0) {
+        FAIL("Cannot close summaryFile: %s", o.summaryFile);
+      }
       summary_output = world_out;
     }
     free(o.summary_table);

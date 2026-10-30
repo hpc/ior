@@ -54,6 +54,30 @@ run_json_stdout() {
     "$PYTHON" "$ROOT/test-mdtest-summary.py" "$output" "$iterations" "$ranks"
 }
 
+run_write_failure() {
+    ranks=$1
+    mode=$2
+    output="$WORK/full-$mode-$ranks.out"
+    log="$WORK/full-$mode-$ranks.err"
+    case "$mode" in
+        text-file)
+            set -- "$MDTEST_BIN" -a DUMMY -F -n 1 -i 1 --summaryFile=/dev/full
+            ;;
+        json-file)
+            set -- "$MDTEST_BIN" -a DUMMY -F -n 1 -i 1 --summaryFormat=JSON --summaryFile=/dev/full
+            ;;
+        json-stdout)
+            set -- sh -c 'exec "$@" > /dev/full' sh "$MDTEST_BIN" -a DUMMY -F -n 1 -i 1 --summaryFormat=JSON
+            ;;
+    esac
+    if $MPIEXEC -n "$ranks" "$@" >"$output" 2>"$log"; then
+        echo "mdtest accepted a failed summary write: $mode, $ranks ranks" >&2
+        return 1
+    fi
+    grep -q "Cannot write summary output to" "$output" "$log"
+    echo "mdtest summary write-failure case passed: $mode, $ranks ranks"
+}
+
 run_default 1 1
 run_default 2 2
 run_text_file 1 1
@@ -62,5 +86,13 @@ run_json_file 1 1
 run_json_file 2 2
 run_json_stdout 1 1
 run_json_stdout 2 2
+
+if [ -c /dev/full ] && [ -w /dev/full ]; then
+    for ranks in 1 2; do
+        run_write_failure "$ranks" text-file
+        run_write_failure "$ranks" json-file
+        run_write_failure "$ranks" json-stdout
+    done
+fi
 
 echo "mdtest summary shell regression cases passed"
