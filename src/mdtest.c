@@ -179,7 +179,6 @@ typedef struct {
   #endif /* HAVE_LUSTRE_LUSTREAPI */
   char * saveRankDetailsCSV;       /* save the details about the performance to a file */
   char * savePerOpDataCSV; 
-  char * summaryFile;              /* write the result summary to this file */
   int summary_format;              /* 0 = default text, 1 = JSON */
   const char *prologue;
   const char *epilogue;
@@ -202,7 +201,6 @@ enum {
   MDTEST_SUMMARY_JSON = 1
 };
 
-static FILE *summary_output;
 static int summary_json_started;
 static int summary_json_rows;
 
@@ -225,7 +223,7 @@ typedef struct{
 /* for making/removing unique directory && stating/deleting subdirectory */
 enum {MK_UNI_DIR, STAT_SUB_DIR, READ_SUB_DIR, RM_SUB_DIR, RM_UNI_DIR};
 
-#define PRINT(...) fprintf(summary_output, __VA_ARGS__);
+#define PRINT(...) fprintf(out_resultfile, __VA_ARGS__);
 
 /* a helper function for passing debug and verbose messages.
    use the MACRO as it will insert __LINE__ for you.
@@ -1665,7 +1663,7 @@ static void summarize_results_json(int iterations, mdtest_results_t *all_results
   int start, stop;
 
   if (!summary_json_started) {
-    fprintf(summary_output, "{\n  \"summary\": [");
+    fprintf(out_resultfile, "{\n  \"summary\": [");
     summary_json_started = 1;
   }
 
@@ -1694,10 +1692,10 @@ static void summarize_results_json(int iterations, mdtest_results_t *all_results
     rate_stats = calculate_summary_stats(iterations, all_results, i, 0, 0);
     time_stats = calculate_summary_stats(iterations, all_results, i, 1, 0);
     if (o.print_rate_and_time) {
-      write_summary_row_json_both(summary_output, iterations, operation,
+      write_summary_row_json_both(out_resultfile, iterations, operation,
                                   rate_stats, time_stats);
     } else {
-      write_summary_row_json(summary_output, iterations, operation,
+      write_summary_row_json(out_resultfile, iterations, operation,
                              o.print_time, o.print_time ? time_stats : rate_stats);
     }
   }
@@ -1713,10 +1711,10 @@ static void summarize_results_json(int iterations, mdtest_results_t *all_results
     rate_stats = calculate_summary_stats(iterations, all_results, i, 0, 1);
     time_stats = calculate_summary_stats(iterations, all_results, i, 1, 1);
     if (o.print_rate_and_time) {
-      write_summary_row_json_both(summary_output, iterations, operation,
+      write_summary_row_json_both(out_resultfile, iterations, operation,
                                   rate_stats, time_stats);
     } else {
-      write_summary_row_json(summary_output, iterations, operation,
+      write_summary_row_json(out_resultfile, iterations, operation,
                              o.print_time, o.print_time ? time_stats : rate_stats);
     }
   }
@@ -1724,11 +1722,11 @@ static void summarize_results_json(int iterations, mdtest_results_t *all_results
 
 static void finish_summary_json(void) {
   if (summary_json_started) {
-    fprintf(summary_output, "\n  ]\n}\n");
+    fprintf(out_resultfile, "\n  ]\n}\n");
     summary_json_started = 0;
     summary_json_rows = 0;
   } else {
-    fprintf(summary_output, "{\n  \"summary\": []\n}\n");
+    fprintf(out_resultfile, "{\n  \"summary\": []\n}\n");
   }
 }
 
@@ -1781,9 +1779,9 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
   }
 
   if(print_time){
-    fprintf(summary_output, "\nSUMMARY time (in ms/op): (of %d iterations)\n", iterations);
+    fprintf(out_resultfile, "\nSUMMARY time (in ms/op): (of %d iterations)\n", iterations);
   }else{
-    fprintf(summary_output, "\nSUMMARY rate (in ops/sec): (of %d iterations)\n", iterations);
+    fprintf(out_resultfile, "\nSUMMARY rate (in ops/sec): (of %d iterations)\n", iterations);
   }
   PRINT("   Operation     ");
   if(o.show_perrank_statistics){
@@ -1863,20 +1861,20 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
     sd = sqrt(var);
     access = mdtest_test_name(i);
     if (i != 2) {
-      fprintf(summary_output, "   %-18s ", access);
+      fprintf(out_resultfile, "   %-18s ", access);
       
       if(o.show_perrank_statistics){
-        fprintf(summary_output, "%14.3f ", max);
-        fprintf(summary_output, "%14.3f ", min);
-        fprintf(summary_output, "%14.3f ", mean);
-        fprintf(summary_output, "    ");
+        fprintf(out_resultfile, "%14.3f ", max);
+        fprintf(out_resultfile, "%14.3f ", min);
+        fprintf(out_resultfile, "%14.3f ", mean);
+        fprintf(out_resultfile, "    ");
       }      
-      fprintf(summary_output, "    ");
-      fprintf(summary_output, "%14.3f ", imax);
-      fprintf(summary_output, "%14.3f ", imin);
-      fprintf(summary_output, "%14.3f ", imean);
-      fprintf(summary_output, "%14.3f\n", iterations == 1 ? 0 : sd);
-      fflush(summary_output);
+      fprintf(out_resultfile, "    ");
+      fprintf(out_resultfile, "%14.3f ", imax);
+      fprintf(out_resultfile, "%14.3f ", imin);
+      fprintf(out_resultfile, "%14.3f ", imean);
+      fprintf(out_resultfile, "%14.3f\n", iterations == 1 ? 0 : sd);
+      fflush(out_resultfile);
     }
   }
 
@@ -1919,18 +1917,18 @@ static void summarize_results_rank0(int iterations,  mdtest_results_t * all_resu
       var = var / (iterations > 1 ? iterations - 1 : 1);
       sd = sqrt(var);
       access = mdtest_test_name(i);
-      fprintf(summary_output, "   %-22s ", access);
+      fprintf(out_resultfile, "   %-22s ", access);
       if(o.show_perrank_statistics){
-        fprintf(summary_output, "%14.3f ", max);
-        fprintf(summary_output, "%14.3f ", min);
-        fprintf(summary_output, "%14.3f ", mean);
-        fprintf(summary_output, "    ");
+        fprintf(out_resultfile, "%14.3f ", max);
+        fprintf(out_resultfile, "%14.3f ", min);
+        fprintf(out_resultfile, "%14.3f ", mean);
+        fprintf(out_resultfile, "    ");
       }
-      fprintf(summary_output, "%14.3f ", imax);
-      fprintf(summary_output, "%14.3f ", imin);
-      fprintf(summary_output, "%14.3f ", sum / iterations);
-      fprintf(summary_output, "%14.3f\n", iterations == 1 ? 0 : sd);
-      fflush(summary_output);
+      fprintf(out_resultfile, "%14.3f ", imax);
+      fprintf(out_resultfile, "%14.3f ", imin);
+      fprintf(out_resultfile, "%14.3f ", sum / iterations);
+      fprintf(out_resultfile, "%14.3f\n", iterations == 1 ? 0 : sd);
+      fflush(out_resultfile);
   }
 }
 
@@ -2526,6 +2524,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     
     char * packetType = "t";
     char * summaryFormat = "default";
+    char * summaryFile = NULL;
 
     option_help options [] = {
       {'a', NULL,        apiStr, OPTION_OPTIONAL_ARGUMENT, 's', & o.api},
@@ -2586,7 +2585,7 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
       {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & aiori_warning_as_errors},
       {0, "saveRankPerformanceDetails", "Save the individual rank information into this CSV file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.saveRankDetailsCSV},
       {0, "savePerOpDataCSV", "Store the performance of each rank into an individual file prefixed with this option.", OPTION_OPTIONAL_ARGUMENT, 's', & o.savePerOpDataCSV},
-      {0, "summaryFile", "Write the result summary to this file.", OPTION_OPTIONAL_ARGUMENT, 's', & o.summaryFile},
+      {0, "summaryFile", "Write the result summary to this file.", OPTION_OPTIONAL_ARGUMENT, 's', & summaryFile},
       {0, "summaryFormat", "Summary output format: default or JSON.", OPTION_OPTIONAL_ARGUMENT, 's', & summaryFormat},
       {0, "showRankStatistics", "Include statistics per rank", OPTION_FLAG, 'd', & o.show_perrank_statistics},
       LAST_OPTION
@@ -2615,18 +2614,16 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     MPI_CHECK(MPI_Comm_rank(testComm, &rank), "MPI_Comm_rank error");
     MPI_CHECK(MPI_Comm_size(testComm, &o.size), "MPI_Comm_size error");
 
-    summary_output = world_out;
     summary_json_started = 0;
     summary_json_rows = 0;
-    if (rank == 0 && o.summaryFile != NULL) {
-      summary_output = fopen(o.summaryFile, "w");
-      if (summary_output == NULL) {
-        FAIL("Cannot open summaryFile for writes: %s", o.summaryFile);
+    if (rank == 0 && summaryFile != NULL) {
+      out_resultfile = fopen(summaryFile, "w");
+      if (out_resultfile == NULL) {
+        FAIL("Cannot open summaryFile for writes: %s", summaryFile);
       }
-    } else if (o.summary_format == MDTEST_SUMMARY_JSON && o.summaryFile == NULL) {
-      /* Keep stdout valid JSON when no summary file was requested. */
+    } else if (o.summary_format == MDTEST_SUMMARY_JSON && summaryFile == NULL) {
+      /* Keep the caller's result stream valid JSON without a separate file. */
       out_logfile = stderr;
-      out_resultfile = stderr;
     }
 
     if(o.backend->xfer_hints){
@@ -2823,7 +2820,13 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     /* display disk usage */
     VERBOSE(3,-1,"main (before display_freespace): o.testdirpath is '%s'", o.testdirpath );
 
-    if (rank == 0) ShowFileSystemSize(o.testdirpath, o.backend, o.backend_options);
+    if (rank == 0) {
+      /* Filesystem details belong to the log, not the selected summary stream. */
+      FILE *summary_stream = out_resultfile;
+      out_resultfile = out_logfile;
+      ShowFileSystemSize(o.testdirpath, o.backend, o.backend_options);
+      out_resultfile = summary_stream;
+    }
     /* set the shift to mimic IOR and shift by procs per node */
     if (o.nstride > 0) {
         if ( numNodes > 1 && tasksBlockMapping ) {
@@ -2962,18 +2965,21 @@ mdtest_results_t * mdtest_run(int argc, char **argv, MPI_Comm world_com, FILE * 
     if (rank == 0 && o.summary_format == MDTEST_SUMMARY_JSON) {
       finish_summary_json();
     }
-    if (rank == 0 && (o.summaryFile != NULL || o.summary_format == MDTEST_SUMMARY_JSON)) {
-      if (fflush(summary_output) != 0 || ferror(summary_output)) {
-        FAIL("Cannot write summary output to %s", o.summaryFile != NULL ? o.summaryFile : "stdout");
+    if (rank == 0 && (summaryFile != NULL || o.summary_format == MDTEST_SUMMARY_JSON)) {
+      if (fflush(out_resultfile) != 0 || ferror(out_resultfile)) {
+        FAIL("Cannot write summary output to %s", summaryFile != NULL ? summaryFile : "caller output stream");
       }
     }
-    if (rank == 0 && o.summaryFile != NULL) {
-      if (fclose(summary_output) != 0) {
-        FAIL("Cannot close summaryFile: %s", o.summaryFile);
+    if (rank == 0 && summaryFile != NULL) {
+      if (fclose(out_resultfile) != 0) {
+        FAIL("Cannot close summaryFile: %s", summaryFile);
       }
-      summary_output = world_out;
+      out_resultfile = world_out;
     }
     free(o.summary_table);
 
+    /* Restore the caller-owned streams after temporary JSON log redirection. */
+    out_logfile = world_out;
+    out_resultfile = world_out;
     return aggregated_results;
 }
