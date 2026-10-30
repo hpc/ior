@@ -45,7 +45,7 @@ An example of a script: ::
       checkWrite=0
       checkRead=0
       keepFile=1
-      quitOnError=0
+      warningAsErrors=0
       segmentCount=1
       blockSize=32k
       outlierThreshold=0
