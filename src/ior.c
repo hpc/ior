@@ -438,7 +438,6 @@ static int CountErrors(IOR_param_t * test, int access, int errors)
                 MPI_CHECK(MPI_Bcast(&allErrors, 1, MPI_INT, 0, testComm),
                           "cannot broadcast allErrors value");
                 if (allErrors != 0) {
-                        totalErrorCount += allErrors;
                         test->errorFound = TRUE;
                 }
                 if (rank == 0 && allErrors != 0) {
