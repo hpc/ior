@@ -85,6 +85,9 @@ static void ior_set_xfer_hints(IOR_param_t * p){
   hints->transferSize = p->transferSize;
   hints->expectedAggFileSize = p->expectedAggFileSize;
   hints->singleXferAttempt = p->singleXferAttempt;
+  hints->dataPacketType = p->dataPacketType;
+  hints->deadlineForStonewalling = p->deadlineForStonewalling;
+  hints->maxTransferPairs = p->stoneWallingWearOutIterations;
 
   if(backend->xfer_hints){
     backend->xfer_hints(hints);
@@ -1337,6 +1340,7 @@ static void TestIoSys(IOR_test_t *test)
                             WARN("Could not read back the stonewalling status from the file!");
                             params->stoneWallingWearOutIterations = 0;
                           }
+                          ior_set_xfer_hints(params);
                         }
                         int operation_flag = READ;
                         if ( params->checkRead ){
@@ -1830,15 +1834,14 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         // start timer after random offset was generated        
         startForStonewall = GetTimeStamp();
         hitStonewall = 0;
-        /* With --mpiio.useFileView --mpiio.useStridedDatatype every segment
-         * moves in the first transfer, so the deadline can only be checked once
-         * all the data is done.  Applying it then would record a wear-out count
-         * of 1 and truncate any later read that uses the count. */
+        /* MPI file views are collective even for independent transfers, so all
+         * ranks must leave a split strided transfer at the same boundary. */
         int deadlineApplies = test->deadlineForStonewalling != 0;
+        int synchronizedTransferBoundaries = test->collective;
         if (strcasecmp(test->api, "MPIIO") == 0 && test->backend_options != NULL) {
                 mpiio_options_t *mo = (mpiio_options_t *) test->backend_options;
                 if (mo->useFileView && mo->useStridedDatatype)
-                        deadlineApplies = 0;
+                        synchronizedTransferBoundaries = 1;
         }
 
         if(randomPrefillBuffer && test->deadlineForStonewalling == 0){
@@ -1902,7 +1905,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                   && (GetTimeStamp() - startForStonewall) > test->deadlineForStonewalling))
                   || (test->stoneWallingWearOutIterations != 0 && pairCnt == test->stoneWallingWearOutIterations) ;
 
-              if ( test->collective && test->deadlineForStonewalling ) {
+              if ( synchronizedTransferBoundaries && test->deadlineForStonewalling ) {
                 // if collective-mode, you'll get a HANG, if some rank 'accidentally' leave this loop
                 // it absolutely must be an 'all or none':
                 MPI_CHECK(MPI_Bcast(&hitStonewall, 1, MPI_INT, 0, testComm), "hitStonewall broadcast failed");
