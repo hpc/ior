@@ -410,6 +410,54 @@ void ShowTestEnd(IOR_test_t *tptr){
 }
 
 /*
+ * Show the processor assigned to each task in rank order.
+ */
+void ShowTaskToProcessor(IOR_param_t *params)
+{
+        char processor[MAX_STR];
+        int processorLen = MAX_STR;
+        char task[MAX_STR];
+
+        MPI_CHECK(MPI_Get_processor_name(processor, &processorLen),
+                                         "cannot get processor name");
+
+        if (rank > 0) {
+                /* wait for the previous rank to signal us */
+                MPI_CHECK(MPI_Recv(NULL, 0, MPI_BYTE, rank - 1, 0,
+                                   params->testComm, MPI_STATUS_IGNORE), "recv error");
+
+                /* send our processor assignment to rank 0 */
+                MPI_CHECK(MPI_Send(processor, processorLen, MPI_CHAR, 0, 1,
+                                   params->testComm), "send error");
+        }
+
+        if (rank < params->numTasks - 1) {
+                /* signal the next rank */
+                MPI_CHECK(MPI_Send(NULL, 0, MPI_BYTE, rank + 1, 0,
+                                   params->testComm), "send error");
+        }
+
+        if (rank == 0) {
+                PrintNamedSectionStart("TaskToProcessor");
+
+                /* print our own processor assignment */
+                PrintKeyVal("0", processor);
+
+                /* receive all the processor assignments from the other ranks and print them out */
+                for(int i = 1; i < params->numTasks; ++i)
+                {
+                        MPI_CHECK(MPI_Recv(processor, MAX_STR, MPI_CHAR, i, 1,
+                                           params->testComm, MPI_STATUS_IGNORE), "recv error");
+                        sprintf(task, "%d", i);
+                        PrintKeyVal(task, processor);
+                }
+                PrintEndSection();
+        }
+
+        MPI_CHECK(MPI_Barrier(params->testComm), "barrier error");
+}
+
+/*
  * Show simple test output with max results for iterations.
  */
 void ShowSetup(IOR_param_t *params)
