@@ -21,6 +21,13 @@ Running
 
 ior -a HDF5 [ior options] [hdf5 options]
 
+For a native HDF5 VOL connector, test shared and per-process file cleanup with:
+
+IOR_MPIRUN="mpiexec -n 2" sh testing/hdf5-delete-tests.sh
+
+Run this from the build directory, or set IOR_BIN to the built IOR executable.
+The test also checks repeated iterations, retained files, and subsequent reads.
+
 
 HDF5-specific options
 ---------------------

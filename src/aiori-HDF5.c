@@ -530,6 +530,22 @@ static void HDF5_Delete(char *testFileName, aiori_mod_opt_t * param)
         HDF5_CHECK(H5Pset_fapl_mpio(accessPropList, comm, mpiHints),
                    "cannot set file access property list");
 
+#if !H5_VERSION_GE(1, 14, 0)
+        /* HDF5 1.12 exposes H5Fdelete, but its native VOL cannot delete files. */
+        hid_t vol_id;
+        int native_vol;
+        HDF5_CHECK(H5Pget_vol_id(accessPropList, &vol_id), "cannot get vol id");
+        native_vol = (vol_id == H5VL_NATIVE);
+        HDF5_CHECK(H5VLclose(vol_id), "cannot close VOL ID");
+        if (native_vol) {
+                HDF5_CHECK(H5Pclose(accessPropList),
+                           "cannot close access property list");
+                MPI_CHECK(MPI_File_delete(testFileName, MPI_INFO_NULL),
+                          "cannot delete file");
+                return;
+        }
+#endif
+
         HDF5_CHECK(H5Fdelete(testFileName, accessPropList),
                    "cannot delete file");
 
