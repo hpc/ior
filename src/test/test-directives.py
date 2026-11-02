@@ -82,6 +82,47 @@ with tempfile.TemporaryDirectory(prefix="ior-directives-") as temporary:
             raise AssertionError("escaped command line did not round-trip through JSON")
     print("quotes, backslashes, controls, and Unicode round-trip through JSON")
 
+    long_value = "x" * 510 + " \t= " + "x" * 509
+    script_cases = [
+        ("maximum-value", ["IOR START", "platform=" + long_value, "RUN", "IOR STOP"], long_value),
+        ("multiple-directives", ["IOR START", "segmentCount=2," * 100 + "platform=complete", "RUN", "IOR STOP"], "complete"),
+        ("indentation", ["IOR START", " " * 2048 + "platform=indented", "RUN", "IOR STOP"], "indented"),
+        ("comment", ["IOR START", "#" + "x" * 1022 + "IOR STOP", "platform=after-comment", "RUN", "IOR STOP"], "after-comment"),
+        ("preamble", ["#" + "x" * 1022 + "IOR START", "IOR START", "platform=after-preamble", "RUN", "IOR STOP"], "after-preamble"),
+        ("eof", ["IOR START", "platform=" + long_value], long_value),
+    ]
+    for form, newline in (("lf", "\n"), ("crlf", "\r\n")):
+        for name, lines, value in script_cases:
+            script = root / (name + "-" + form + ".ior")
+            script.write_bytes((newline.join(lines) + ("" if name == "eof" else newline)).encode())
+            summary = root / (name + "-" + form + ".json")
+            output = root / (name + "-" + form + " data")
+            result = run(common + ["-o", str(output), "-f", str(script), "-O",
+                                   "summaryFormat=JSON,summaryFile=" + str(summary)])
+            if result.returncode != 0:
+                raise AssertionError("complete script line failed: %s/%s\n%s" % (form, name, result.stdout))
+            with summary.open(encoding="utf-8") as stream:
+                report = json.load(stream)
+            if len(report["tests"]) != 1 or report["tests"][0]["Parameters"]["platform"] != value:
+                raise AssertionError("script line was split or changed: %s/%s" % (form, name))
+            if output.read_bytes() != expected:
+                raise AssertionError("long script changed output data: %s/%s" % (form, name))
+    print("complete LF/CRLF script lines, comments, and final unterminated lines verified")
+
+    for directive in ("platform=" + "x" * 1024, "x" * 1024 + "=value"):
+        script = root / "oversized.ior"
+        script.write_bytes(("IOR START\n" + directive + "\nRUN\nIOR STOP\n").encode())
+        result = run(["-a", "POSIX", "-f", str(script)])
+        if result.returncode == 0 or "Syntax error in configuration options:" not in result.stdout:
+            raise AssertionError("oversized script directive was not diagnosed: " + result.stdout)
+    print("script directive boundaries diagnosed without line splitting")
+
+    if sys.platform.startswith("linux"):
+        result = run(common + ["-f", str(root)])
+        if result.returncode == 0 or "Cannot read script file" not in result.stdout:
+            raise AssertionError("script read failure was not diagnosed: " + result.stdout)
+        print("script read failure diagnosed")
+
     for directive in ("platform=", "=value", "platform", "bad name=value",
                       "platform=" + "x" * 4096, "x" * 4096 + "=value"):
         result = run(["-a", "POSIX", "-O", directive])

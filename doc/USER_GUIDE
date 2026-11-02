@@ -445,6 +445,9 @@ to -O; quote its argument in the shell, for example:
 
 Commas separate directives, and # starts a comment through the end of the line.
 Empty or oversized option names and values are reported as syntax errors.
+Each option name and value can contain up to 1023 bytes. A script line may
+contain multiple directives and can be longer than this individual limit;
+long lines, comments, and indentation are read as complete physical lines.
 
 An example of a script:
 ===============> start script <===============

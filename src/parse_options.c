@@ -338,7 +338,7 @@ int contains_only(char *haystack, char *needle)
         end = haystack + strlen(haystack);
         /* skip over leading shitspace */
         for (ptr = haystack; ptr < end; ptr++) {
-                if (!isspace(*ptr))
+                if (!isspace((unsigned char)*ptr))
                         break;
         }
         /* check for "needle" */
@@ -346,11 +346,21 @@ int contains_only(char *haystack, char *needle)
                 return 0;
         /* make sure the rest of the line is only whitespace as well */
         for (ptr += strlen(needle); ptr < end; ptr++) {
-                if (!isspace(*ptr))
+                if (!isspace((unsigned char)*ptr))
                         return 0;
         }
 
         return 1;
+}
+
+static int ReadConfigLine(FILE *file, char **line, size_t *capacity,
+                          const char *scriptName)
+{
+        if (getline(line, capacity, file) >= 0)
+                return 1;
+        if (ferror(file) || !feof(file))
+                ERRF("Cannot read script file '%s': %s", scriptName, strerror(errno));
+        return 0;
 }
 
 /*
@@ -361,8 +371,8 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 {
         int test_num = 0;
         int runflag = 0;
-        char linebuf[MAX_STR];
-        char empty[MAX_STR];
+        char *linebuf = NULL;
+        size_t line_capacity = 0;
         char *ptr;
         FILE *file;
         IOR_test_t *head = NULL;
@@ -381,26 +391,26 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                 ERRF("Cannot open script file '%s': %s", scriptName, strerror(errno));
 
         /* search for the "IOR START" line */
-        while (fgets(linebuf, MAX_STR, file) != NULL) {
+        while (ReadConfigLine(file, &linebuf, &line_capacity, scriptName)) {
                 if (contains_only(linebuf, "ior start")) {
                         break;
                 }
         }
 
         /* Iterate over a block of IOR commands */
-        while (fgets(linebuf, MAX_STR, file) != NULL) {
+        while (ReadConfigLine(file, &linebuf, &line_capacity, scriptName)) {
                 /* skip over leading whitespace */
                 ptr = linebuf;
-                while (isspace(*ptr))
+                while (isspace((unsigned char)*ptr))
                     ptr++;
 
                 /* skip empty lines */
-                if (sscanf(ptr, "%s", empty) == -1)
+                if (*ptr == '\0')
                         continue;
 
                 /* skip lines containing only comments */
-                if (sscanf(ptr, " #%c", empty) == 1)
-                        continue;                
+                if (*ptr == '#')
+                        continue;
 
                 if (contains_only(ptr, "ior stop")) {
                         break;
@@ -433,6 +443,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         }
 
         /* close the script */
+        free(linebuf);
         if (fclose(file) != 0)
                 ERR("fclose() of script file failed");
         AllocResults(tail);          /* copy the actual module options into the test */
