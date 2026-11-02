@@ -436,6 +436,16 @@ run many different tests of IOR under a single execution.  The command line is:
 In IOR/scripts, there are scripts of testcases for simulating I/O behavior of
 various application codes.  Details are included in each script as necessary.
 
+Directives use option=value syntax. Whitespace around the option, equals sign,
+and value is ignored; whitespace inside the value is preserved. For example,
+testFile=/scratch/run one/data uses the complete path. The same rule applies
+to -O; quote its argument in the shell, for example:
+
+  IOR -O 'testFile=/scratch/run one/data,blockSize=8m'
+
+Commas separate directives, and # starts a comment through the end of the line.
+Empty or oversized option names and values are reported as syntax errors.
+
 An example of a script:
 ===============> start script <===============
 IOR START
