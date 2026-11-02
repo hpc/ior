@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that per-operation CSV failures cannot report benchmark success."""
+"""Check per-operation and per-rank CSV output and failure diagnostics."""
 
 import csv
 import os
@@ -31,6 +31,20 @@ def expect_failure(proc, diagnostic):
     if proc.returncode == 0 or diagnostic not in proc.stdout:
         raise AssertionError("status=%d, expected %r\n%s" %
                              (proc.returncode, diagnostic, proc.stdout))
+
+
+def run_rank_details(binary, directory, output):
+    if binary.name == "ior":
+        args = ["-a", "POSIX", "-w", "-r", "-b", "8k", "-t", "4k",
+                "-i", "2", "-o", "data", "-O",
+                "saveRankPerformanceDetailsCSV=" + str(output)]
+    else:
+        args = ["-a", "POSIX", "-F", "-C", "-n", "2", "-i", "1",
+                "-d", str(directory / "data"),
+                "--saveRankPerformanceDetails=" + str(output)]
+    return subprocess.run([str(binary)] + args, cwd=str(directory),
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          universal_newlines=True, env=env, timeout=120)
 
 
 with tempfile.TemporaryDirectory(prefix="ior-op-timer-") as temporary:
@@ -74,3 +88,29 @@ with tempfile.TemporaryDirectory(prefix="ior-op-timer-") as temporary:
             output.unlink()
         else:
             print("/dev/full unavailable; write-failure cases not exercised")
+
+        details_dir = directory / "rank-details"
+        details_dir.mkdir()
+        details = details_dir / "details.csv"
+        proc = run_rank_details(binary, details_dir, details)
+        if proc.returncode != 0:
+            raise AssertionError(proc.stdout)
+        with details.open() as stream:
+            rows = list(csv.reader(stream))
+        expected_rows = 5 if binary.name == "ior" else 3
+        expected_header = ["access", "rank"] if binary.name == "ior" else ["rank", "items"]
+        if rows[0][:2] != expected_header or len(rows) != expected_rows:
+            raise AssertionError(rows)
+        print("%s: normal per-rank CSV contents passed" % binary.name)
+        details.unlink()
+
+        proc = run_rank_details(binary, details_dir, details_dir / "missing" / "details.csv")
+        expect_failure(proc, "Cannot open")
+        print("%s: missing per-rank output directory diagnosed" % binary.name)
+
+        if Path("/dev/full").is_char_device() and os.access("/dev/full", os.W_OK):
+            details.symlink_to("/dev/full")
+            proc = run_rank_details(binary, details_dir, details)
+            expect_failure(proc, "Cannot close rank details CSV file")
+            print("%s: buffered per-rank CSV header failure diagnosed" % binary.name)
+            details.unlink()
