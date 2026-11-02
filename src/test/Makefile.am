@@ -1,6 +1,10 @@
 AM_LDFLAGS = $(extraLDFLAGS)
 LDADD    = ../libaiori.a $(extraLDADD)
 
+if USE_NCMPI_AIORI
+LDADD += -lpnetcdf
+endif
+
 # Add test here
 TESTS = testlib testexample testrand test-summary-output.sh test-ior-exit.sh test-byte-transfers.sh
 check_PROGRAMS = testlib testexample testrand testsummary
