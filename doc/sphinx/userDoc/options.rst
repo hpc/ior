@@ -7,7 +7,7 @@ IOR provides many options, in fact there are now more than there are one letter
 flags in the alphabet.
 For this and to run IOR by a config script, there are some options which are
 only available via directives. When both script and command line options are in
-use, command line options set in front of -f are the defaults which may be
+use, command line options are the defaults which may be
 overridden by the script.
 Directives can also be set from the command line via "-O" option. In combination
 with a script they behave like the normal command line options. But directives and
@@ -32,8 +32,7 @@ These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``
   -F    filePerProc -- file-per-process
   -g    intraTestBarriers -- use barriers between open, write/read, and close
   -G N  setTimeStampSignature -- set value for time stamp signature
-  -h    showHelp -- displays options and help
-  -H    showHints -- show hints
+  -h, --help  display options and help
   -i N  repetitions -- number of repetitions of test
   -I    individualDataSets -- datasets not shared by all procs [not working]
   -j N  outlierThreshold -- warn on outlier N seconds from mean
@@ -57,7 +56,6 @@ These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``
   -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)
   -T N  maxTimeDuration -- max time in minutes to run tests
   -u    uniqueDir -- use unique directory name for each file-per-process
-  -U S  hintsFileName -- full name for hints file
   -v    verbose -- output information (repeating flag increases level)
   -V    useFileView -- use MPI_File_set_view
   -w    writeFile -- write file
@@ -81,7 +79,9 @@ These options are typically prefixed with the module name, an example is: --posi
 Directive Options
 ------------------
 
-For all true/false options below, [1]=true, [0]=false.  All options are case-insensitive.
+For all true/false options below, [1]=true, [0]=false. Many legacy directive
+names are case-insensitive; backend option names beginning with ``--`` are
+case-sensitive.
 
 GENERAL
 ^^^^^^^^^^^^^^
@@ -97,8 +97,6 @@ GENERAL
     If only a single file name is specified in this case, IOR appends the MPI
     rank to the end of each file generated (e.g., ``testFile.00000059``)
     (default: ``testFile``)
-
-  * ``hintsFileName`` - name of the hints file (default: none)
 
   * ``repetitions`` - number of times to run each test (default: 1)
 
@@ -198,8 +196,6 @@ GENERAL
     contain positive integer value as timestamp to be written in data file; if
     set to 0, is disabled (default: 0)
 
-  * ``showHelp`` - display options and help (default: 0)
-
   * ``storeFileOffset`` - use file offset as stored signature when writing file.
     This will affect performance measurements (default: 0)
 
@@ -282,7 +278,23 @@ MPIIO-, HDF5-, AND NCMPI-ONLY
 
   * ``collective`` - uses collective operations for access (default: 0)
 
-  * ``showHints`` - show hint/value pairs attached to open file (default: 0)
+  * ``--mpiio.hintsFileName=FILE``, ``--hdf5.hintsFileName=FILE``, or
+    ``--ncmpi.hintsFileName=FILE`` - read MPI hints from a file (default: none).
+
+  * ``--mpiio.showHints``, ``--hdf5.showHints``, or ``--ncmpi.showHints`` -
+    show MPI hint/value pairs (default: 0). NCMPI can show hints attached to the
+    open file only with PnetCDF 1.2.0 or later.
+
+Use the prefix for the selected backend, if it is included in the build. For
+example, a hints file ``hints.txt`` can contain
+``IOR_HINT__MPI__cb_buffer_size=1048576``. Supported hints depend on the MPI
+implementation. To provide the file and display hints with MPIIO, run ::
+
+    ./ior -a MPIIO --mpiio.hintsFileName=hints.txt --mpiio.showHints -w -r -b 16k -t 4k -o testFile
+
+In a script, use the same names with values, for example
+``--mpiio.hintsFileName=hints.txt`` and ``--mpiio.showHints=1``. Backend option
+names are case-sensitive.
 
 LUSTRE-SPECIFIC
 ^^^^^^^^^^^^^^^^^
