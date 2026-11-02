@@ -18,7 +18,7 @@
 
 /************************** O P T I O N S *****************************/
 typedef struct{
-  /* in case of a change, please update depending MMAP module too */
+  /* Also embedded by backends that delegate operations to POSIX. */
   int direct_io;
 
   /* Lustre variables */

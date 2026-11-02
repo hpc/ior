@@ -55,7 +55,8 @@ ior_aiori_t mmap_aiori = {
 
 /***************************** F U N C T I O N S ******************************/
 typedef struct{
-  int direct_io_ignored; /* this option is ignored */
+  /* First member supplies the full state expected by inherited POSIX callbacks. */
+  posix_options_t posix;
   void* mmap_ptr; /* for internal usage */
 
   int madv_dont_need;
@@ -69,6 +70,11 @@ static option_help * MMAP_options(aiori_mod_opt_t ** init_backend_options, aiori
     memcpy(o, init_values, sizeof(mmap_options_t));
   }else{
     memset(o, 0, sizeof(mmap_options_t));
+    aiori_mod_opt_t *posix_defaults;
+    option_help *posix_help = POSIX_options(&posix_defaults, NULL);
+    o->posix = *(posix_options_t *)posix_defaults;
+    free(posix_help);
+    free(posix_defaults);
   }
 
   *init_backend_options = (aiori_mod_opt_t*) o;
@@ -134,8 +140,9 @@ static void ior_mmap_file(int *file, int mflags, void *param)
 static aiori_fd_t *MMAP_Create(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int *fd;
+        mmap_options_t *o = (mmap_options_t*) param;
 
-        fd = (int*) POSIX_Create(testFileName, flags, param);
+        fd = (int*) POSIX_Create(testFileName, flags, (aiori_mod_opt_t*)&o->posix);
         if (ftruncate(*fd, hints->expectedAggFileSize) != 0)
                 ERR("ftruncate() failed");
         ior_mmap_file(fd, flags, param);
@@ -148,7 +155,8 @@ static aiori_fd_t *MMAP_Create(char *testFileName, int flags, aiori_mod_opt_t * 
 static aiori_fd_t *MMAP_Open(char *testFileName, int flags, aiori_mod_opt_t * param)
 {
         int *fd;
-        fd = (int*) POSIX_Open(testFileName, flags, param);
+        mmap_options_t *o = (mmap_options_t*) param;
+        fd = (int*) POSIX_Open(testFileName, flags, (aiori_mod_opt_t*)&o->posix);
         ior_mmap_file(fd, flags, param);
         return ((aiori_fd_t *)fd);
 }
@@ -195,5 +203,5 @@ static void MMAP_Close(aiori_fd_t *fd, aiori_mod_opt_t * param)
         if (munmap(o->mmap_ptr, hints->expectedAggFileSize) != 0)
                 ERR("munmap failed");
         o->mmap_ptr = NULL;
-        POSIX_Close(fd, param);
+        POSIX_Close(fd, (aiori_mod_opt_t*)&o->posix);
 }
