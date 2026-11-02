@@ -581,6 +581,10 @@ DFS_Finalize(aiori_mod_opt_t *options)
         if (dfs_init_count != 0)
                 return;
 
+        /** test_finalize() frees testComm before the last finalize */
+        if (testComm == MPI_COMM_NULL)
+                testComm = MPI_COMM_WORLD;
+
 	MPI_Barrier(testComm);
 
         while (1) {
