@@ -179,6 +179,7 @@ typedef struct{
   hid_t dataSpace;                /* data space id */
   hid_t fileDataSpace;            /* file data space id */
   hid_t memDataSpace;             /* memory data space id */
+  size_t elementSize;             /* bytes per stored dataset element */
   int newlyOpenedFile;            /* newly opened file */  
   int firstReadCheck;
   int startNewDataSet;
@@ -219,13 +220,13 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
 {
         HDF5_options_t *o = (HDF5_options_t*) param;
         hid_t accessPropList, createPropList;
-        hsize_t memStart[NUM_DIMS],
-            dataSetDims[NUM_DIMS],
-            memStride[NUM_DIMS],
-            memCount[NUM_DIMS], memBlock[NUM_DIMS], memDataSpaceDims[NUM_DIMS];
+        hsize_t dataSetDims[NUM_DIMS], memDataSpaceDims[NUM_DIMS];
         int tasksPerDataSet;
         unsigned fd_mode = (unsigned)0;
         aiori_h5fd_t * fd = safeMalloc(sizeof(aiori_h5fd_t));
+        /* Keep the existing dataset type for aligned writes. */
+        fd->elementSize = hints->transferSize % sizeof(IOR_size_t) == 0
+                          ? sizeof(IOR_size_t) : 1;
         MPI_Comm comm;
         MPI_Info mpiHints = MPI_INFO_NULL;
 
@@ -360,18 +361,9 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
         }
 
         /* set up memory data space for transfer */
-        memStart[0] = (hsize_t) 0;
-        memCount[0] = (hsize_t) 1;
-        memStride[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
-        memBlock[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
         memDataSpaceDims[0] = (hsize_t) hints->transferSize;
         fd->memDataSpace = H5Screate_simple(NUM_DIMS, memDataSpaceDims, NULL);
         HDF5_CHECK(fd->memDataSpace, "cannot create simple memory data space");
-
-        /* define hyperslab for memory data space */
-        HDF5_CHECK(H5Sselect_hyperslab(fd->memDataSpace, H5S_SELECT_SET,
-                                       memStart, memStride, memCount,
-                                       memBlock), "cannot create hyperslab");
 
         /* set up parameters for fpp or different dataset count */
         if (hints->filePerProc) {
@@ -385,7 +377,7 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
                         tasksPerDataSet = hints->numTasks;
                 }
         }
-        dataSetDims[0] = (hsize_t) ((hints->blockSize / sizeof(IOR_size_t))
+        dataSetDims[0] = (hsize_t) ((hints->blockSize / fd->elementSize)
                                     * tasksPerDataSet);
 
         /* create a simple data space containing information on size
@@ -464,12 +456,12 @@ static IOR_offset_t HDF5_Xfer(int access, aiori_fd_t *afd, IOR_size_t * buffer,
 
         /* access the file */
         if (access == WRITE) {  /* WRITE */
-                HDF5_CHECK(H5Dwrite(fd->dataSet, H5T_NATIVE_LLONG,
+                HDF5_CHECK(H5Dwrite(fd->dataSet, fd->elementSize == 1 ? H5T_NATIVE_UCHAR : H5T_NATIVE_LLONG,
                                     fd->memDataSpace, fd->fileDataSpace,
                                     fd->xferPropList, buffer),
                            "cannot write to data set");
         } else {                /* READ or CHECK */
-                HDF5_CHECK(H5Dread(fd->dataSet, H5T_NATIVE_LLONG,
+                HDF5_CHECK(H5Dread(fd->dataSet, fd->elementSize == 1 ? H5T_NATIVE_UCHAR : H5T_NATIVE_LLONG,
                                    fd->memDataSpace, fd->fileDataSpace,
                                    fd->xferPropList, buffer),
                            "cannot read from data set");
@@ -601,14 +593,14 @@ static IOR_offset_t SeekOffset(void *afd, IOR_offset_t offset,
     /* create a hyperslab representing the file data space */
     if (o->individualDataSets) {
             /* start at zero offset if not */
-            hsStart[0] = (hsize_t) ((offset % hints->blockSize) / sizeof(IOR_size_t));
+            hsStart[0] = (hsize_t) ((offset % hints->blockSize) / fd->elementSize);
     } else {
             /* start at a unique offset if shared */
-            hsStart[0] = (hsize_t) ((offset % segmentSize) / sizeof(IOR_size_t));
+            hsStart[0] = (hsize_t) ((offset % segmentSize) / fd->elementSize);
     }
     hsCount[0] = (hsize_t) 1;
-    hsStride[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
-    hsBlock[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
+    hsStride[0] = (hsize_t) (hints->transferSize / fd->elementSize);
+    hsBlock[0] = (hsize_t) (hints->transferSize / fd->elementSize);
 
     /* select hyperslab in file data space */
     HDF5_CHECK(H5Sselect_hyperslab(fd->fileDataSpace, H5S_SELECT_SET, hsStart, hsStride, hsCount, hsBlock),
@@ -669,12 +661,28 @@ static void SetupDataSet(aiori_h5fd_t *fd, int flags, aiori_mod_opt_t * param)
                                                     H5D_FILL_TIME_NEVER),
                                    "cannot set fill time for property list");
                 }
-                fd->dataSet = H5Dcreate(fd->fd, dataSetName, H5T_NATIVE_LLONG, fd->dataSpace, dataSetPropList);
+                fd->dataSet = H5Dcreate(fd->fd, dataSetName, fd->elementSize == 1 ? H5T_NATIVE_UCHAR : H5T_NATIVE_LLONG, fd->dataSpace, dataSetPropList);
                 HDF5_CHECK(fd->dataSet, "cannot create data set");
         } else {                /* READ or CHECK */
                 fd->dataSet = H5Dopen(*(hid_t *) fd, dataSetName);
                 HDF5_CHECK(fd->dataSet, "cannot open data set");
+                hid_t dataType = H5Dget_type(fd->dataSet);
+                HDF5_CHECK(dataType, "cannot get data set type");
+                fd->elementSize = H5Tget_size(dataType);
+                if (H5Tget_class(dataType) != H5T_INTEGER
+                    || (fd->elementSize != 1 && fd->elementSize != sizeof(IOR_size_t)))
+                        ERR("unsupported HDF5 dataset element type");
+                HDF5_CHECK(H5Tclose(dataType), "cannot close data set type");
         }
+
+        if (hints->transferSize % fd->elementSize != 0
+            || hints->blockSize % fd->elementSize != 0)
+                ERR("block/transfer size must be a multiple of the HDF5 dataset element size");
+        hsize_t memStart[NUM_DIMS] = {0}, memCount[NUM_DIMS] = {1};
+        hsize_t memBlock[NUM_DIMS] = {hints->transferSize / fd->elementSize};
+        HDF5_CHECK(H5Sselect_hyperslab(fd->memDataSpace, H5S_SELECT_SET,
+                                      memStart, memBlock, memCount, memBlock),
+                   "cannot create memory hyperslab");
 
         /* retrieve data space from data set for hyperslab */
         fd->fileDataSpace = H5Dget_space(fd->dataSet);

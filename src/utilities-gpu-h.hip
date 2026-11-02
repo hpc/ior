@@ -41,6 +41,19 @@ void cu_verify_memory_timestamp(uint64_t item, uint64_t * buf, size_t length, in
   }
 }
 
+__global__
+void cu_generate_memory_tail(char *buf, size_t bytes){
+  for (size_t i = bytes / sizeof(uint64_t) * sizeof(uint64_t); i < bytes; i++)
+    buf[i] = (char) i;
+}
+
+__global__
+void cu_verify_memory_tail(char *buf, size_t bytes, int *errors){
+  for (size_t i = bytes / sizeof(uint64_t) * sizeof(uint64_t); i < bytes; i++)
+    if (buf[i] != (char) i)
+      atomicExch(errors, 1);
+}
+
 extern "C" void generate_memory_pattern_gpu(char * buf, size_t bytes, int rand_seed, int pretendRank, ior_dataPacketType_e dataPacketType){
   size_t blocks = (bytes+2047)/2048;
   size_t threads = 256;
@@ -57,6 +70,8 @@ extern "C" void generate_memory_pattern_gpu(char * buf, size_t bytes, int rand_s
       break;
     }
   }
+  if (bytes % sizeof(uint64_t) != 0)
+    cu_generate_memory_tail<<<1, 1>>>(buf, bytes);
 }
 
 extern "C" void update_write_memory_pattern_gpu(uint64_t item, char * buf, size_t bytes, int rand_seed, int rank, ior_dataPacketType_e dataPacketType){
@@ -71,7 +86,7 @@ extern "C" int verify_memory_pattern_gpu(uint64_t item, char * buffer, size_t by
   size_t words = bytes / sizeof(uint64_t);
   size_t blocks = words / threads + (words % threads != 0);
 
-  if (dataPacketType != DATA_TIMESTAMP || bytes % sizeof(uint64_t) != 0)
+  if (dataPacketType != DATA_TIMESTAMP)
     return -1;
   if (bytes == 0)
     return 0;
@@ -81,9 +96,12 @@ extern "C" int verify_memory_pattern_gpu(uint64_t item, char * buffer, size_t by
                                        GPU_MEMCPY_HOST_TO_DEVICE)))
     goto out;
 
-  cu_verify_memory_timestamp<<<blocks, threads>>>(
+  if (words > 0)
+    cu_verify_memory_timestamp<<<blocks, threads>>>(
       item, (uint64_t *)buffer, words, rand_seed,
       ((uint64_t)pretendRank) << 32, derror_found);
+  if (bytes % sizeof(uint64_t) != 0)
+    cu_verify_memory_tail<<<1, 1>>>(buffer, bytes, derror_found);
   if (hipGetLastError() != hipSuccess)
     goto out;
   if (hipDeviceSynchronize() != hipSuccess)

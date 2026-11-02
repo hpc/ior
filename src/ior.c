@@ -1536,12 +1536,8 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
                         ERR("segment count must be positive value");
                 }
         }
-        if ((test->blockSize % sizeof(IOR_size_t)) != 0)
-                ERR("block size must be a multiple of access size");
         if (test->blockSize < 0)
                 ERR("block size must be non-negative integer");
-        if ((test->transferSize % sizeof(IOR_size_t)) != 0)
-                ERR("transfer size must be a multiple of access size");
         if (test->transferSize < 0)
                 ERR("transfer size must be non-negative integer");
         if (test->transferSize == 0) {
@@ -1559,18 +1555,6 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
         if (test->randomPrefillBlocksize && (test->blockSize % test->randomPrefillBlocksize != 0))
           ERR("The randomPrefill option must divide the blockSize");
         /* specific APIs */
-        if ((strcasecmp(test->api, "MPIIO") == 0)
-            && (test->blockSize < sizeof(IOR_size_t)
-                || test->transferSize < sizeof(IOR_size_t)))
-                ERR("block/transfer size may not be smaller than IOR_size_t for MPIIO");
-        if ((strcasecmp(test->api, "HDF5") == 0)
-            && (test->blockSize < sizeof(IOR_size_t)
-                || test->transferSize < sizeof(IOR_size_t)))
-                ERR("block/transfer size may not be smaller than IOR_size_t for HDF5");
-        if ((strcasecmp(test->api, "NCMPI") == 0)
-            && (test->blockSize < sizeof(IOR_size_t)
-                || test->transferSize < sizeof(IOR_size_t)))
-                ERR("block/transfer size may not be smaller than IOR_size_t for NCMPI");
         if (((strcasecmp(test->api, "POSIX") != 0)
             && (strcasecmp(test->api, "MPIIO") != 0)
             && (strcasecmp(test->api, "HDF5") != 0)
