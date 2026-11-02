@@ -28,6 +28,26 @@ void PrintTableHeader(){
 static int indent = 0;
 static int needNextToken = 0;
 
+static void PrintString(const char *value){
+  if(value == NULL){
+    value = "(null)";
+  }
+  if(outputFormat != OUTPUT_JSON){
+    fputs(value, out_resultfile);
+    return;
+  }
+  for(const unsigned char *p = (const unsigned char *)value; *p; p++){
+    if(*p == '"' || *p == '\\'){
+      fputc('\\', out_resultfile);
+    }
+    if(*p < 0x20){
+      fprintf(out_resultfile, "\\u%04x", (unsigned int)*p);
+    }else{
+      fputc(*p, out_resultfile);
+    }
+  }
+}
+
 static void PrintIndent(){
   if(outputFormat != OUTPUT_JSON){
     return;
@@ -82,7 +102,9 @@ void PrintKeyVal(char * key, char * value){
     return;
   }
   if(outputFormat == OUTPUT_JSON){
-    fprintf(out_resultfile, "\"%s\": \"%s\"", key, value);
+    fprintf(out_resultfile, "\"%s\": \"", key);
+    PrintString(value);
+    fputc('"', out_resultfile);
   }else if(outputFormat == OUTPUT_CSV){
     fprintf(out_resultfile, "%s,", value);
   }
@@ -291,9 +313,10 @@ void PrintHeader(int argc, char **argv)
         }
         PrintKeyVal("Began", CurrentTimeString());
         PrintKeyValStart("Command line");
-        fprintf(out_resultfile, "%s", argv[0]);
+        PrintString(argv[0]);
         for (i = 1; i < argc; i++) {
-                fprintf(out_resultfile, " %s", argv[i]);
+                fputc(' ', out_resultfile);
+                PrintString(argv[i]);
         }
         PrintKeyValEnd();
         if (uname(&unamebuf) != 0) {
@@ -301,11 +324,16 @@ void PrintHeader(int argc, char **argv)
                 PrintKeyVal("Machine", "Unknown");
         } else {
                 PrintKeyValStart("Machine");
-                fprintf(out_resultfile, "%s %s", unamebuf.sysname,
-                        unamebuf.nodename);
+                PrintString(unamebuf.sysname);
+                PrintString(" ");
+                PrintString(unamebuf.nodename);
                 if (verbose >= VERBOSE_2) {
-                        fprintf(out_resultfile, " %s %s %s", unamebuf.release,
-                                unamebuf.version, unamebuf.machine);
+                        PrintString(" ");
+                        PrintString(unamebuf.release);
+                        PrintString(" ");
+                        PrintString(unamebuf.version);
+                        PrintString(" ");
+                        PrintString(unamebuf.machine);
                 }
                 PrintKeyValEnd();
         }

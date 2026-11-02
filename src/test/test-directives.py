@@ -55,13 +55,32 @@ with tempfile.TemporaryDirectory(prefix="ior-directives-") as temporary:
         print("%s: complete filename and data verified" % form)
 
     summary = root / "summary with spaces.json"
-    result = run(common + ["-o", str(root / "summary-data"), "-O",
-                          "summaryFormat=JSON, summaryFile = " + str(summary) + " \t"])
+    args = common + ["-o", str(root / "summary-data"), "-O",
+                     "summaryFormat=JSON, summaryFile = " + str(summary) + " \t"]
+    result = run(args)
     if result.returncode != 0:
         raise AssertionError(result.stdout)
-    with summary.open() as stream:
-        json.load(stream)
+    with summary.open(encoding="utf-8") as stream:
+        report = json.load(stream)
+    if report["Command line"] != " ".join([binary] + args):
+        raise AssertionError("command line did not round-trip through JSON")
     print("summaryFile: complete filename and JSON verified")
+
+    strings = ['quote " and backslash \\',
+               "a" + "".join(chr(c) for c in range(1, 32) if c not in (10, 13)) + "z",
+               "Unicode \u03a9 \u4e2d\u6587"]
+    for index, value in enumerate(strings):
+        summary = root / ("escaped-%d.json" % index)
+        args = common + ["-o", str(root / "escape-data"), "-O",
+                         "platform=" + value + ",summaryFormat=JSON,summaryFile=" + str(summary)]
+        result = run(args)
+        if result.returncode != 0:
+            raise AssertionError(result.stdout)
+        with summary.open(encoding="utf-8") as stream:
+            report = json.load(stream)
+        if report["Command line"] != " ".join([binary] + args):
+            raise AssertionError("escaped command line did not round-trip through JSON")
+    print("quotes, backslashes, controls, and Unicode round-trip through JSON")
 
     for directive in ("platform=", "=value", "platform", "bad name=value",
                       "platform=" + "x" * 4096, "x" * 4096 + "=value"):
