@@ -262,7 +262,7 @@ void init_IOR_Param_t(IOR_param_t * p, MPI_Comm com)
 
         memset(p, 0, sizeof(IOR_param_t));
         p->api = strdup(default_aiori);
-        p->platform = strdup("HOST(OSTYPE)");
+        p->platform = GetPlatformName();
         p->testFileName = strdup("testFile");
 
         p->writeFile = p->readFile = FALSE;
@@ -488,7 +488,8 @@ IOR_test_t *CreateTest(IOR_param_t *init_params, int test_num)
         if (newTest == NULL)
                 ERR("malloc() of IOR_test_t failed");
         newTest->params = *init_params;
-        newTest->params.platform = GetPlatformName();
+        newTest->params.platform = init_params->platform
+                ? strdup(init_params->platform) : GetPlatformName();
         newTest->params.id = test_num;
         newTest->next = NULL;
         newTest->results = NULL;

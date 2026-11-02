@@ -379,7 +379,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                                 ((IOR_test_t*) tail)->params.backend_options = airoi_update_module_options(((IOR_test_t*) tail)->params.backend, global_options);
 
                                 tail = tail->next;
-                                *option_p = createGlobalOptions(& ((IOR_test_t*) tail->next)->params);
+                                *option_p = createGlobalOptions(&tail->params);
                         }
                         runflag = 1;
                 } else if (runflag) {
@@ -495,8 +495,6 @@ IOR_test_t *ParseCommandLine(int argc, char **argv, MPI_Comm com)
     init_IOR_Param_t(& initialTestParams, com);
 
     IOR_test_t *tests = NULL;
-
-    initialTestParams.platform = GetPlatformName();
 
     option_help * options = createGlobalOptions( & initialTestParams);
     parameters = & initialTestParams;
