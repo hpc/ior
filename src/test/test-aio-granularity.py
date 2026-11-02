@@ -37,10 +37,10 @@ with tempfile.TemporaryDirectory(prefix="ior-aio-granularity-") as directory:
 
     for value in (1, 8):
         path = os.path.join(directory, "data-%d" % value)
-        command = [ior, "-a", "AIO", "-w", "-r", "-W", "-R", "-k", "-b", "16k", "-t", "4k",
+        command = [ior, "-a", "AIO", "-w", "-r", "-W", "-R", "-k", "-b", "64k", "-t", "4k",
                    "-G", "123", "-o", path, "--aio.max-pending=8", "--aio.granularity=%d" % value]
         proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, env=env, timeout=60)
-        if proc.returncode != 0 or os.path.getsize(path) != 16384:
+        if proc.returncode != 0 or os.path.getsize(path) != 65536:
             raise AssertionError("%s: status=%d\n%s" % (command, proc.returncode, proc.stdout))
         print("ior: accepted granularity %d" % value)
