@@ -249,6 +249,9 @@ static aiori_fd_t *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * m
                        "cannot open file: %s", testFileName);
             if (flags & IOR_TRUNC) {
                 MPI_CHECKF(MPI_File_set_size(mfd->fd, 0), "cannot truncate file: %s", testFileName);
+                /* A collective resize need not synchronize all processes. */
+                if (!hints->filePerProc)
+                    MPI_CHECK(MPI_Barrier(comm), "cannot synchronize after truncating file");
             }
         }
 
