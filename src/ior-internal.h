@@ -9,6 +9,7 @@
 void PrintHeader(int argc, char **argv);
 void ShowTestStart(IOR_param_t *params);
 void ShowTestEnd(IOR_test_t *tptr);
+void ShowTaskToProcessor(IOR_param_t *params);
 void ShowSetup(IOR_param_t *params);
 void PrintRepeatEnd();
 void PrintRepeatStart();
