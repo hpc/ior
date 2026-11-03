@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <sys/stat.h>
 
 #include "ior.h"
@@ -112,10 +113,6 @@ static int MPIIO_check_params(aiori_mod_opt_t * module_options){
         ERR("segment size must be < 2GiB");
   if (param->useSharedFilePointer)
         ERR("shared file pointer not implemented");
-  if (param->useStridedDatatype && (hints->blockSize < sizeof(IOR_size_t)
-                                      || hints->transferSize <
-                                      sizeof(IOR_size_t)))
-          ERR("need larger file size for strided datatype in MPIIO");
   if (hints->randomOffset && hints->collective)
           ERR("random offset not available with collective MPIIO");
   if (hints->randomOffset && param->useFileView)
@@ -277,7 +274,12 @@ static aiori_fd_t *MPIIO_Open(char *testFileName, int flags, aiori_mod_opt_t * m
         /* create file view */
         if (param->useFileView) {
                 /* Create in-memory datatype */
-                MPI_CHECK(MPI_Type_contiguous (hints->transferSize / sizeof(IOR_size_t), MPI_LONG_LONG_INT, & mfd->contigType), "cannot create contiguous datatype");
+                /* Preserve the aligned datatype and describe odd transfers in bytes. */
+                int byteTransfer = hints->transferSize % sizeof(IOR_size_t) != 0;
+                IOR_offset_t count = byteTransfer ? hints->transferSize : hints->transferSize / sizeof(IOR_size_t);
+                if (count > INT_MAX)
+                        ERR("file-view transfer size exceeds MPI datatype count limit");
+                MPI_CHECK(MPI_Type_contiguous(count, byteTransfer ? MPI_BYTE : MPI_LONG_LONG_INT, & mfd->contigType), "cannot create contiguous datatype");
                 MPI_CHECK(MPI_Type_create_resized( mfd->contigType, 0, 0, & mfd->transferType), "cannot create resized type");
                 MPI_CHECK(MPI_Type_commit(& mfd->contigType), "cannot commit datatype");
                 MPI_CHECK(MPI_Type_commit(& mfd->transferType), "cannot commit datatype");

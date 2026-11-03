@@ -23,6 +23,7 @@ const char      *gpu_runtime_strerror(gpu_runtime_status_t status);
 
 gpu_runtime_status_t gpu_runtime_get_device_count(int *count);
 gpu_runtime_status_t gpu_runtime_set_device(int device);
+gpu_runtime_status_t gpu_runtime_synchronize(void);
 
 gpu_runtime_status_t gpu_runtime_malloc(void **ptr, size_t size);
 gpu_runtime_status_t gpu_runtime_malloc_managed(void **ptr, size_t size);

@@ -44,6 +44,14 @@ gpu_runtime_malloc(void **ptr, size_t size)
 }
 
 gpu_runtime_status_t
+gpu_runtime_synchronize(void)
+{
+    gpu_runtime_status_t st;
+    st.code = (int) cudaDeviceSynchronize();
+    return st;
+}
+
+gpu_runtime_status_t
 gpu_runtime_malloc_managed(void **ptr, size_t size)
 {
     gpu_runtime_status_t st;

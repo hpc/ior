@@ -161,6 +161,8 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
 #ifdef HAVE_GPU
   if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
     generate_memory_pattern_gpu(buf, bytes, rand_seed,  pretendRank, dataPacketType);
+    if (!gpu_runtime_ok(gpu_runtime_synchronize()))
+      ERR("GPU buffer initialization failed");
     return;
   }
 #endif
@@ -195,7 +197,9 @@ void generate_memory_pattern(char * buf, size_t bytes, int rand_seed, int preten
 void invalidate_buffer_pattern(char * buffer, size_t bytes, ior_memory_flags type){
   if(type == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY || type == IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU){
 #ifdef HAVE_GPU
-    gpu_runtime_memset(buffer, 0x42, bytes > 512 ? 512 : bytes);
+    if (!gpu_runtime_ok(gpu_runtime_memset(buffer, 0x42, bytes > 512 ? 512 : bytes))
+        || !gpu_runtime_ok(gpu_runtime_synchronize()))
+      ERR("GPU buffer invalidation failed");
 #endif
   }else{
     buffer[0] = ~buffer[0]; // changes the buffer, no memset to reduce the memory pressure
