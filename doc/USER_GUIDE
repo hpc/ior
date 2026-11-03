@@ -47,14 +47,10 @@ Two ways to run IOR:
     E.g., to execute:  IOR -W -f script
     This defaults all tests in 'script' to use write data checking.
 
-  * The Command line supports to specify additional parameters for the chosen API.
-    For example, username and password for the storage.
-    Available options are listed in the help text after selecting the API when running with -h.
-    For example, 'IOR -a DUMMY -h' shows the supported options for the DUMMY backend.
-    The options for the backend must be specified at last and are separated with
-    two dashes '--'. Example: 'IOR -a DUMMY -- -c 1000' defines a delay for the
-    file creation for the plugin. Currently, it is not possible to set these
-    backend options using a command line script (-f option).
+  * Backend-specific options use names prefixed by two dashes and the backend
+    name, for example '--mpiio.showHints'. Run 'IOR -h' or 'IOR --help' to list
+    the options for the backends included in the build. The same prefixed names
+    can be used as directives in an input script, followed by '=value'.
 
 
 
@@ -75,8 +71,7 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -F    filePerProc -- file-per-process
   -g    intraTestBarriers -- use barriers between open, write/read, and close
   -G N  setTimeStampSignature -- set value for time stamp signature
-  -h    showHelp -- displays options and help
-  -H    showHints -- show hints
+  -h, --help  display options and help
   -i N  repetitions -- number of repetitions of test
   -I    individualDataSets -- datasets not shared by all procs [not working]
   -j N  outlierThreshold -- warn on outlier N seconds from mean
@@ -100,7 +95,6 @@ These options are to be used on the command line. E.g., 'IOR -a POSIX -b 4K'.
   -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)
   -T N  maxTimeDuration -- max time in minutes to run tests
   -u    uniqueDir -- use unique directory name for each file-per-process
-  -U S  hintsFileName -- full name for hints file
   -v    verbose -- output information (repeating flag increases level)
   -V    useFileView -- use MPI_File_set_view
   -w    writeFile -- write file
@@ -137,8 +131,6 @@ GENERAL:
   * testFile             - name of the output file [testFile]
                            NOTE: with filePerProc set, the tasks can round
                                  robin across multiple file names '-o S@S@S'
-
-  * hintsFileName        - name of the hints file []
 
   * repetitions          - number of times to run each test [1]
 
@@ -249,8 +241,6 @@ GENERAL:
                                   written in data file; if set to 0, is
                                   disabled
 
-  * showHelp             - display options and help [0=FALSE]
-
   * storeFileOffset      - use file offset as stored signature when writing
                            file [0=FALSE]
                            NOTE: this will affect performance measurements
@@ -343,8 +333,19 @@ MPIIO-, HDF5-, AND NCMPI-ONLY:
 ==============================
   * collective           - uses collective operations for access [0=FALSE]
 
-  * showHints            - show hint/value pairs attached to open file [0=FALSE]
-                           NOTE: available in NCMPI only if PnetCDF is 1.2.0 or later
+  * --mpiio.hintsFileName=FILE / --hdf5.hintsFileName=FILE /
+    --ncmpi.hintsFileName=FILE - read MPI hints from FILE [none]
+
+  * --mpiio.showHints / --hdf5.showHints / --ncmpi.showHints
+                           - show MPI hint/value pairs [0=FALSE]
+                           NOTE: NCMPI can show hints attached to the open file
+                           only with PnetCDF 1.2.0 or later.
+
+    For example, run 'IOR -a MPIIO --mpiio.hintsFileName=hints.txt
+    --mpiio.showHints -w -r -b 16k -t 4k -o testFile'. A hints file may contain
+    'IOR_HINT__MPI__cb_buffer_size=1048576'; supported hints depend on the MPI
+    implementation. In a script, use '--mpiio.hintsFileName=hints.txt' and
+    '--mpiio.showHints=1'. Use the prefix for the selected backend.
 
 LUSTRE-SPECIFIC:
 ================
@@ -439,49 +440,17 @@ various application codes.  Details are included in each script as necessary.
 An example of a script:
 ===============> start script <===============
 IOR START
-  api=[POSIX|MPIIO|HDF5|HDFS|IME|S3|S3_EMC|NCMPI]
+  api=POSIX
   testFile=testFile
-  hintsFileName=hintsFile
-  repetitions=8
-  multiFile=0
-  interTestDelay=5
-  readFile=1
   writeFile=1
-  filePerProc=0
-  checkWrite=0
-  checkRead=0
-  keepFile=1
-  warningAsErrors=0
-  segmentCount=1
+  readFile=1
   blockSize=32k
-  outlierThreshold=0
-  setAlignment=1
-  transferSize=32
-  singleXferAttempt=0
-  individualDataSets=0
-  verbose=0
-  numTasks=32
-  collective=1
-  preallocate=0
-  useFileView=0
-  keepFileWithError=0
-  setTimeStampSignature=0
-  useSharedFilePointer=0
-  useStridedDatatype=0
-  uniqueDir=0
-  fsync=0
-  storeFileOffset=0
-  maxTimeDuration=60
-  deadlineForStonewalling=0
-  useExistingTestFile=0
-  useO_DIRECT=0
-  showHints=0
-  showHelp=0
+  transferSize=4k
+  segmentCount=1
 RUN
-  # additional tests are optional
-  <snip>
-RUN
-  <snip>
+  # Change settings for another test.
+  blockSize=64k
+  transferSize=8k
 RUN
 IOR STOP
 ===============> stop script <===============
