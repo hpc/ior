@@ -19,6 +19,17 @@ or on Read the Docs.
 3. Optionally, run `make install`.  The installation prefix
    can be changed via `./configure --prefix=...`.
 
+The HDF5, PnetCDF, and Linux AIO backends can be enabled with
+`--with-hdf5`, `--with-ncmpi`, and `--with-aio`, respectively.  Each option
+also accepts an installation prefix, for example
+`--with-hdf5=/opt/parallel-hdf5`; the prefix's `include`, `lib`, and `lib64`
+directories are searched.  HDF5 must provide its parallel MPI interface.
+Prefix arguments containing whitespace are rejected explicitly; use a prefix
+path without whitespace.
+The normal `CPPFLAGS`, `LDFLAGS`, and `LIBS` settings remain available for
+other dependency layouts.  At runtime, shared libraries must also be
+discoverable by the system loader or the environment.
+
 ## Testing
 
 * Run `make check` to invoke the unit tests.
