@@ -380,14 +380,24 @@ AM_COND_IF([USE_IME_AIORI],[
 
 # HDF5 support
 AC_ARG_WITH([hdf5],
-        [AS_HELP_STRING([--with-hdf5],
+        [AS_HELP_STRING([--with-hdf5@<:@=PREFIX@:>@],
            [support IO with HDF5 backend @<:@default=no@:>@])],
         [],
         [with_hdf5=no])
-AM_CONDITIONAL([USE_HDF5_AIORI], [test x$with_hdf5 = xyes])
+AS_IF([test "x$with_hdf5" != xyes && test "x$with_hdf5" != xno], [
+        AS_CASE([$with_hdf5], [*@<:@@<:@:space:@:>@@:>@*],
+                [AC_MSG_FAILURE([HDF5 prefix must not contain whitespace])])
+        AS_IF([test ! -d "$with_hdf5"],
+              [AC_MSG_FAILURE([HDF5 prefix directory not found: $with_hdf5])])
+        CPPFLAGS="-I$with_hdf5/include $CPPFLAGS"
+        LDFLAGS="-L$with_hdf5/lib -L$with_hdf5/lib64 $LDFLAGS"
+])
+AM_CONDITIONAL([USE_HDF5_AIORI], [test "x$with_hdf5" != xno])
 AM_COND_IF([USE_HDF5_AIORI],[
         AC_DEFINE([USE_HDF5_AIORI], [], [Build HDF5 backend AIORI])
-	AC_SEARCH_LIBS([H5Pset_all_coll_metadata_ops], [hdf5])
+        AC_CHECK_HEADERS([hdf5.h], [], [AC_MSG_FAILURE([HDF5 backend requested but hdf5.h not found])])
+	AC_SEARCH_LIBS([H5Pset_fapl_mpio], [hdf5], [],
+                       [AC_MSG_FAILURE([HDF5 backend requires a parallel HDF5 library])])
 	AC_CHECK_FUNCS([H5Pset_all_coll_metadata_ops])
 	AC_CHECK_FUNCS([H5Pget_vol_id])
 	AC_CHECK_FUNCS([H5Fis_accessible])
@@ -420,15 +430,25 @@ AM_COND_IF([USE_MPIIO_AIORI],[
 
 # NCMPI (Parallel netcdf) support
 AC_ARG_WITH([ncmpi],
-        [AS_HELP_STRING([--with-ncmpi],
+        [AS_HELP_STRING([--with-ncmpi@<:@=PREFIX@:>@],
            [support IO with NCMPI backend @<:@default=no@:>@])],
         [],
         [with_ncmpi=no])
-AM_CONDITIONAL([USE_NCMPI_AIORI], [test x$with_ncmpi = xyes])
-AS_IF([test "x$with_ncmpi" = xyes ], [
+AS_IF([test "x$with_ncmpi" != xyes && test "x$with_ncmpi" != xno], [
+        AS_CASE([$with_ncmpi], [*@<:@@<:@:space:@:>@@:>@*],
+                [AC_MSG_FAILURE([NCMPI prefix must not contain whitespace])])
+        AS_IF([test ! -d "$with_ncmpi"],
+              [AC_MSG_FAILURE([NCMPI prefix directory not found: $with_ncmpi])])
+        CPPFLAGS="-I$with_ncmpi/include $CPPFLAGS"
+        LDFLAGS="-L$with_ncmpi/lib -L$with_ncmpi/lib64 $LDFLAGS"
+])
+AM_CONDITIONAL([USE_NCMPI_AIORI], [test "x$with_ncmpi" != xno])
+AS_IF([test "x$with_ncmpi" != xno], [
         AC_CHECK_HEADERS([pnetcdf.h], [AC_DEFINE([USE_NCMPI_AIORI], [], [PNetCDF available])], [
             AC_MSG_FAILURE([--with-ncmpi was given but pnetcdf.h not found])
         ])
+        AC_SEARCH_LIBS([ncmpi_create], [pnetcdf], [],
+                       [AC_MSG_FAILURE([NCMPI backend requested but libpnetcdf not found])])
 ])
 
 # MMAP IO support
@@ -469,15 +489,23 @@ AS_IF([test "x$with_pmdk" != xno], [
 
 # LINUX AIO support
 AC_ARG_WITH([aio],
-        [AS_HELP_STRING([--with-aio],
+        [AS_HELP_STRING([--with-aio@<:@=PREFIX@:>@],
            [support Linux AIO @<:@default=no@:>@])],
         [],
         [with_aio=no])
-AM_CONDITIONAL([USE_AIO_AIORI], [test x$with_aio = xyes])
+AS_IF([test "x$with_aio" != xyes && test "x$with_aio" != xno], [
+        AS_CASE([$with_aio], [*@<:@@<:@:space:@:>@@:>@*],
+                [AC_MSG_FAILURE([AIO prefix must not contain whitespace])])
+        AS_IF([test ! -d "$with_aio"],
+              [AC_MSG_FAILURE([AIO prefix directory not found: $with_aio])])
+        CPPFLAGS="-I$with_aio/include $CPPFLAGS"
+        LDFLAGS="-L$with_aio/lib -L$with_aio/lib64 $LDFLAGS"
+])
+AM_CONDITIONAL([USE_AIO_AIORI], [test "x$with_aio" != xno])
 AS_IF([test "x$with_aio" != xno], [
         AC_DEFINE([USE_AIO_AIORI], [], [Build AIO backend])
-        AC_CHECK_HEADERS(libaio.h,, [unset AIO])
-	AC_SEARCH_LIBS([aio],	[io_setup], [AC_MSG_ERROR([Library containing AIO symbol io_setup not found])])
+        AC_CHECK_HEADERS([libaio.h], [], [AC_MSG_FAILURE([AIO backend requested but libaio.h not found])])
+	AC_SEARCH_LIBS([io_setup], [aio], [], [AC_MSG_FAILURE([Library containing AIO symbol io_setup not found])])
 ])
 
 
