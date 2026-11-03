@@ -68,6 +68,41 @@ static void CheckRunSettings(IOR_test_t *tests)
         }
 }
 
+static int ParseDirective(const char *line, char *option, char *value)
+{
+        const char *option_start = line;
+        const char *option_end, *separator, *value_start, *value_end;
+        size_t option_length, value_length;
+
+        while (isspace((unsigned char)*option_start))
+                option_start++;
+        option_end = option_start;
+        while (*option_end && *option_end != '=' && *option_end != '#'
+               && !isspace((unsigned char)*option_end))
+                option_end++;
+        separator = option_end;
+        while (isspace((unsigned char)*separator))
+                separator++;
+        value_start = *separator == '=' ? separator + 1 : separator;
+        while (isspace((unsigned char)*value_start))
+                value_start++;
+        value_end = value_start + strcspn(value_start, "#\r\n");
+        while (value_end > value_start && isspace((unsigned char)value_end[-1]))
+                value_end--;
+
+        option_length = option_end - option_start;
+        value_length = value_end - value_start;
+        if (*separator != '=' || option_length == 0 || value_length == 0
+            || option_length >= MAX_STR || value_length >= MAX_STR)
+                return 0;
+
+        memcpy(option, option_start, option_length);
+        option[option_length] = '\0';
+        memcpy(value, value_start, value_length);
+        value[value_length] = '\0';
+        return 1;
+}
+
 /*
  * Set flags from commandline string/value pairs.
  */
@@ -75,18 +110,16 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
 {
         char option[MAX_STR];
         char value[MAX_STR];
-        int rc;
         int initialized;
 
-        rc = sscanf(line, " %[^=# \t\r\n] = %[^# \t\r\n] ", option, value);
-        if (rc != 2 && rank == 0) {
-                fprintf(out_logfile, "Syntax error in configuration options: %s\n",
-                        line);
+        if (!ParseDirective(line, option, value)) {
+                if (rank == 0)
+                        fprintf(out_logfile, "Syntax error in configuration options: %s\n",
+                                line);
                 MPI_CHECK(MPI_Initialized(&initialized), "MPI_Initialized() error");
                 if (initialized)
                     MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "MPI_Abort() error");
-                else
-                    exit(EXIT_FAILURE);
+                exit(EXIT_FAILURE);
         }
         if (strcasecmp(option, "api") == 0) {
           params->api = strdup(value);
@@ -283,7 +316,8 @@ void ParseLine(char *line, IOR_param_t * test, options_all_t * module_options)
                   exit(EXIT_FAILURE);
                 }
                 DecodeDirective(start, test, module_options);
-                start = end + 1;
+                if (end != NULL)
+                        start = end + 1;
         } while (end != NULL);
         free(newline);
 }
@@ -304,7 +338,7 @@ int contains_only(char *haystack, char *needle)
         end = haystack + strlen(haystack);
         /* skip over leading shitspace */
         for (ptr = haystack; ptr < end; ptr++) {
-                if (!isspace(*ptr))
+                if (!isspace((unsigned char)*ptr))
                         break;
         }
         /* check for "needle" */
@@ -312,11 +346,21 @@ int contains_only(char *haystack, char *needle)
                 return 0;
         /* make sure the rest of the line is only whitespace as well */
         for (ptr += strlen(needle); ptr < end; ptr++) {
-                if (!isspace(*ptr))
+                if (!isspace((unsigned char)*ptr))
                         return 0;
         }
 
         return 1;
+}
+
+static int ReadConfigLine(FILE *file, char **line, size_t *capacity,
+                          const char *scriptName)
+{
+        if (getline(line, capacity, file) >= 0)
+                return 1;
+        if (ferror(file) || !feof(file))
+                ERRF("Cannot read script file '%s': %s", scriptName, strerror(errno));
+        return 0;
 }
 
 /*
@@ -327,8 +371,8 @@ IOR_test_t *ReadConfigScript(char *scriptName)
 {
         int test_num = 0;
         int runflag = 0;
-        char linebuf[MAX_STR];
-        char empty[MAX_STR];
+        char *linebuf = NULL;
+        size_t line_capacity = 0;
         char *ptr;
         FILE *file;
         IOR_test_t *head = NULL;
@@ -347,26 +391,26 @@ IOR_test_t *ReadConfigScript(char *scriptName)
                 ERRF("Cannot open script file '%s': %s", scriptName, strerror(errno));
 
         /* search for the "IOR START" line */
-        while (fgets(linebuf, MAX_STR, file) != NULL) {
+        while (ReadConfigLine(file, &linebuf, &line_capacity, scriptName)) {
                 if (contains_only(linebuf, "ior start")) {
                         break;
                 }
         }
 
         /* Iterate over a block of IOR commands */
-        while (fgets(linebuf, MAX_STR, file) != NULL) {
+        while (ReadConfigLine(file, &linebuf, &line_capacity, scriptName)) {
                 /* skip over leading whitespace */
                 ptr = linebuf;
-                while (isspace(*ptr))
+                while (isspace((unsigned char)*ptr))
                     ptr++;
 
                 /* skip empty lines */
-                if (sscanf(ptr, "%s", empty) == -1)
+                if (*ptr == '\0')
                         continue;
 
                 /* skip lines containing only comments */
-                if (sscanf(ptr, " #%c", empty) == 1)
-                        continue;                
+                if (*ptr == '#')
+                        continue;
 
                 if (contains_only(ptr, "ior stop")) {
                         break;
@@ -399,6 +443,7 @@ IOR_test_t *ReadConfigScript(char *scriptName)
         }
 
         /* close the script */
+        free(linebuf);
         if (fclose(file) != 0)
                 ERR("fclose() of script file failed");
         AllocResults(tail);          /* copy the actual module options into the test */

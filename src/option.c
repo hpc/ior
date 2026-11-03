@@ -404,10 +404,16 @@ int option_parse_key_value(char * key, char *val, options_all_t * opt_all){
   int error = 0;
   int requiredArgsSeen = 0;
   int print_help = 0;
-  char value[1024];
-  sprintf(value, "%s=%s", key, val);
+  size_t value_size = strlen(key) + strlen(val) + 2;
+  char * value = malloc(value_size);
+  if (value == NULL){
+    perror("Cannot allocate option buffer");
+    return 1;
+  }
+  snprintf(value, value_size, "%s=%s", key, val);
   char * argv[2] = {value, NULL};
   option_parse_token(argv, & flag_parsed_next, & requiredArgsSeen, opt_all, & error, & print_help);
+  free(value);
   return error;
 }
 
