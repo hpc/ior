@@ -109,14 +109,16 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
             // check that the file is writeable, truncate it and add header
             FILE* fd = fopen(value, "w");
             if (fd == NULL){
-              FAIL("Cannot open saveRankPerformanceDetailsCSV file for write!");
+              FAIL("Cannot open rank details CSV file '%s': %s", value, strerror(errno));
             }
             char buff[] = "access,rank,runtime-with-openclose,runtime,throughput-withopenclose,throughput\n";
             int ret = fwrite(buff, strlen(buff), 1, fd);
             if(ret != 1){
-              FAIL("Cannot write header to saveRankPerformanceDetailsCSV file");
+              FAIL("Cannot write header to rank details CSV file '%s': %s", value, strerror(errno));
             }
-            fclose(fd);
+            if (fclose(fd) != 0) {
+              FAIL("Cannot close rank details CSV file '%s': %s", value, strerror(errno));
+            }
           }
           params->saveRankDetailsCSV = strdup(value);
         } else if (strcasecmp(option, "savePerOpDataCSV") == 0){

@@ -1467,7 +1467,7 @@ static void StoreRankInformation(int iterations, mdtest_results_t * agg){
   if(rank == 0){
     FILE* fd = fopen(o.saveRankDetailsCSV, "a");
     if (fd == NULL){
-      FAIL("Cannot open saveRankPerformanceDetails file for writes!");
+      FAIL("Cannot open rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
     }
 
     mdtest_results_t * results = safeMalloc(size * o.size);
@@ -1485,6 +1485,9 @@ static void StoreRankInformation(int iterations, mdtest_results_t * agg){
     }
     cpos += sprintf(cpos, "\n");
     int ret = fwrite(buff, cpos - buff, 1, fd);
+    if (ret != 1) {
+      WARNF("Cannot append to rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
+    }
 
     for(int iter = 0; iter < iterations; iter++){
       for(int i=0; i < o.size; i++){
@@ -1501,12 +1504,14 @@ static void StoreRankInformation(int iterations, mdtest_results_t * agg){
         cpos += sprintf(cpos, "\n");
         ret = fwrite(buff, cpos - buff, 1, fd);
         if(ret != 1){
-          WARN("Couln't append to saveRankPerformanceDetailsCSV file\n");
+          WARNF("Cannot append to rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
           break;
         }
       }
     }
-    fclose(fd);
+    if (fclose(fd) != 0) {
+      WARNF("Cannot close rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
+    }
     free(results);
   }else{
     /* this is a hack for now assuming all datatypes in the structure are double */
@@ -1880,10 +1885,13 @@ void md_validate_tests_rank0() {
       // check that the file is writeable, truncate it and add header
       FILE* fd = fopen(o.saveRankDetailsCSV, "w");
       if (fd == NULL){
-        FAIL("Cannot open saveRankPerformanceDetails file for write!");
+        FAIL("Cannot open rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
       }
       char * head = "rank,items";
       int ret = fwrite(head, strlen(head), 1, fd);
+      if (ret != 1) {
+        FAIL("Cannot write header to rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
+      }
       for(int e = 0; e < MDTEST_LAST_NUM; e++){
         char buf[1024];
         const char * str = mdtest_test_name(e);
@@ -1891,11 +1899,15 @@ void md_validate_tests_rank0() {
         sprintf(buf, ",rate-%s,time-%s", str, str);
         ret = fwrite(buf, strlen(buf), 1, fd);
         if(ret != 1){
-          FAIL("Cannot write header to saveRankPerformanceDetails file");
+          FAIL("Cannot write header to rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
         }
       }
-      fwrite("\n", 1, 1, fd);
-      fclose(fd);
+      if (fwrite("\n", 1, 1, fd) != 1) {
+        FAIL("Cannot write header to rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
+      }
+      if (fclose(fd) != 0) {
+        FAIL("Cannot close rank details CSV file '%s': %s", o.saveRankDetailsCSV, strerror(errno));
+      }
     }
 }
 
