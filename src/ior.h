@@ -116,6 +116,7 @@ typedef struct
     IOR_offset_t expectedAggFileSize; /* calculated aggregate file size */
     IOR_offset_t fileSizeForRead;
     IOR_offset_t randomPrefillBlocksize;   /* prefill option for random IO, the amount of data used for prefill */
+    IOR_offset_t blockDataSize;      /* data at the start of each block for -z -z -z -C of a shared file */
 
     char * savePerOpDataCSV;            /* save details about each I/O operation into this file */
     char * saveRankDetailsCSV;       /* save the details about the performance to a file */

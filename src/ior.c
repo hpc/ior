@@ -67,6 +67,8 @@ static char **ParseFileName(char *, int *);
 static void InitTests(IOR_test_t *);
 static void TestIoSys(IOR_test_t *);
 static void ValidateTests(IOR_param_t * params, MPI_Comm com);
+static int RandomTaskBlocks(IOR_param_t *test);
+static IOR_offset_t BlockDataSize(IOR_param_t *test);
 static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *results,
                                 aiori_fd_t *fd, const int access,
                                 IOR_io_buffers *ioBuffers);
@@ -1413,10 +1415,16 @@ static void TestIoSys(IOR_test_t *test)
                           params->fileSizeForRead = backend->get_file_size(params->backend_options, testFileName);
                           if(params->randomOffset == 3 && params->segmentCount == -1){
                             // set maximum number of operations in this case to not exceed the LSFR
-                            params->segmentCount = params->fileSizeForRead / params->blockSize;
+                            if (RandomTaskBlocks(params)) {
+                              // every segment holds one block of each task, the last one may be partial
+                              IOR_offset_t segmentSize = params->numTasks * params->blockSize;
+                              params->segmentCount = (params->fileSizeForRead + segmentSize - 1) / segmentSize;
+                            } else {
+                              params->segmentCount = params->fileSizeForRead / params->blockSize;
+                            }
                           }
                           // each task reads segmentCount blocks, possibly of a different file size
-                          IOR_offset_t taskReadSize = params->segmentCount * params->blockSize;
+                          IOR_offset_t taskReadSize = params->segmentCount * BlockDataSize(params);
                           MPI_CHECK(MPI_Allreduce(&taskReadSize, &params->expectedAggFileSize, 1,
                                                   MPI_LONG_LONG_INT, MPI_SUM, testComm),
                                     "cannot reduce expected read size");
@@ -1592,9 +1600,14 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
         if (test->randomOffset && test->reorderTasksRandom
             && test->filePerProc == FALSE)
                 ERR("random offset and random reorder tasks specified with single-shared-file. Choose one and resubmit");
-        if (test->randomOffset && test->reorderTasks
+        if (test->randomOffset && test->randomOffset != 3 && test->reorderTasks
             && test->filePerProc == FALSE)
-                ERR("random offset and constant reorder tasks specified with single-shared-file. Choose one and resubmit");
+                ERR("random offset and constant reorder tasks specified with single-shared-file. Use -z -z -z or choose one and resubmit");
+        if (test->blockDataSize && (test->blockDataSize > test->blockSize
+                                    || test->blockDataSize % test->transferSize != 0))
+                ERR("blockDataSize must be a multiple of transferSize and not larger than blockSize");
+        if (test->blockDataSize && ! RandomTaskBlocks(test))
+                WARN("blockDataSize is only used by -z -z -z access to a single-shared-file with -C");
         if (test->randomOffset && test->checkRead && test->randomSeed == -1)
                 ERR("random offset with read check option requires to set the random seed");
         if ((strcasecmp(test->api, "HDF5") == 0) && test->randomOffset)
@@ -1613,6 +1626,43 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
             ERR("The backend returned that the test parameters are invalid.");
           }
         }
+}
+
+/*
+ * With -z -z -z each task accesses random blocks of the whole file.  For a
+ * single-shared-file with -C, a task accesses random transfers of the blocks
+ * of task pretendRank instead, as -C does for sequential access, so that it
+ * reads only data that another node wrote.
+ */
+static int RandomTaskBlocks(IOR_param_t *test)
+{
+        return test->randomOffset == 3 && test->reorderTasks && test->filePerProc == FALSE;
+}
+
+/*
+ * The data at the start of each block that random access may use, all of it
+ * unless --blockDataSize says that a write cut short by stonewalling left
+ * the rest of each block empty.
+ */
+static IOR_offset_t BlockDataSize(IOR_param_t *test)
+{
+        if (RandomTaskBlocks(test) && test->blockDataSize)
+                return test->blockDataSize;
+        return test->blockSize;
+}
+
+static IOR_offset_t GetOffsetLFSR(IOR_param_t *test, int pretendRank)
+{
+        uint64_t step = u_lfsr_range_step(test->random_range);
+
+        if (! RandomTaskBlocks(test))
+                return step * test->blockSize;
+
+        IOR_offset_t xfers = BlockDataSize(test) / test->transferSize;
+        IOR_offset_t segment = step / xfers;
+
+        return (segment * test->numTasks + pretendRank) * test->blockSize
+                + (step % xfers) * test->transferSize;
 }
 
 static int init_random_seed(IOR_param_t * test, int pretendRank){
@@ -1807,14 +1857,17 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
         if (test->randomOffset == 1) {
           offsets_rnd = GetOffsetArrayRandom(test, pretendRank, & offsets);
         }else{
-          offsets = (test->blockSize / test->transferSize);
+          offsets = (BlockDataSize(test) / test->transferSize);
         }
         if (test->randomOffset == 2){
           int seed = init_random_seed(test, pretendRank);
           srand(seed + pretendRank);
           srand64(((uint64_t) seed) * (pretendRank + 1));
         }else if (test->randomOffset == 3){
-          test->random_range = u_lfsr_range_init(test->fileSizeForRead / test->blockSize, pretendRank + 1);
+          uint64_t blocks = test->fileSizeForRead / test->blockSize;
+          if (RandomTaskBlocks(test))
+            blocks = test->segmentCount * offsets;
+          test->random_range = u_lfsr_range_init(blocks, pretendRank + 1);
         }
 
         void * randomPrefillBuffer = NULL;
@@ -1889,7 +1942,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
               }else if (test->randomOffset == 2){
                 offset += test->transferSize;
               }else if (test->randomOffset == 3){
-                offset = u_lfsr_range_step (test->random_range) * test->blockSize;
+                offset = GetOffsetLFSR(test, pretendRank);
               }else{
                 offset = j * test->transferSize;
                 if (test->filePerProc) {
@@ -1963,7 +2016,7 @@ static IOR_offset_t WriteOrRead(IOR_param_t *test, int rep, IOR_results_t *resul
                 }else if (test->randomOffset == 2){
                   offset += test->transferSize;
                 }else if (test->randomOffset == 3){
-                  offset = u_lfsr_range_step (test->random_range) * test->blockSize;
+                  offset = GetOffsetLFSR(test, pretendRank);
                 }else{
                   offset = j * test->transferSize;
                   if (test->filePerProc) {

@@ -471,6 +471,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {'Y', NULL,        "fsyncPerWrite -- perform sync operation after every write operation", OPTION_FLAG, 'd', & params->fsyncPerWrite},
     {'z', NULL,        "randomOffset -- access is to shuffled, not sequential, offsets within a file, specify twice for random (potentially overlapping), specify 3x for LFSR permutation", OPTION_FLAG, 'd', & params->randomOffset},
     {0, "randomPrefill", "For random -z access only: Prefill the file with this blocksize, e.g., 2m", OPTION_OPTIONAL_ARGUMENT, 'l', & params->randomPrefillBlocksize},
+    {0, "blockDataSize", "For -z -z -z access to a single-shared-file with -C only: use only this much data at the start of each block, e.g. as written before a stonewall", OPTION_OPTIONAL_ARGUMENT, 'l', & params->blockDataSize},
     {0, "random-offset-seed",        "The seed for -z", OPTION_OPTIONAL_ARGUMENT, 'd', & params->randomSeed},
     {'Z', NULL,        "reorderTasksRandom -- changes task ordering to random select regions for readback, use twice for shuffling", OPTION_FLAG, 'd', & params->reorderTasksRandom},
     {0, "warningAsErrors",        "Any warning should lead to an error.", OPTION_FLAG, 'd', & params->warningAsErrors},
