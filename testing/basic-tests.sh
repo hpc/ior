@@ -15,6 +15,10 @@ source $ROOT/test-lib.sh
 IOR 2 -a POSIX -w     -C              -k -e -i1 -m -t 100k -b 200k
 # Random read the file previously created
 IOR 2 -a POSIX -r                     -k -e -i1 -m -t 100k -b 200k -s 10 -z -z
+# Random read of another task's blocks in a shared file, checking the data
+IOR 3 -a POSIX -w -G 13 -k -e -i1 -t 4k -b 200k -s 2
+IOR 3 -a POSIX -r -R -G 13 -k -i1 -t 4k -b 200k -s -1 -z -z -z -C -Q 1 --random-offset-seed=1
+IOR 3 -a POSIX -r -R -G 13 -k -i1 -t 4k -b 200k -s -1 -z -z -z -C -Q 1 --random-offset-seed=1 --blockDataSize=100k
 
 exit 1
 

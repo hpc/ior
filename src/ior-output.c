@@ -373,6 +373,7 @@ void ShowTestStart(IOR_param_t *test)
     PrintKeyValInt("reorderTasksRandom", test->reorderTasksRandom);
     PrintKeyValInt("reorderTasksRandomSeed", test->reorderTasksRandomSeed);
     PrintKeyValInt("randomOffset", test->randomOffset);
+    PrintKeyValInt("blockDataSize", test->blockDataSize);
     PrintKeyValInt("checkWrite", test->checkWrite);
     PrintKeyValInt("checkRead", test->checkRead);
     PrintKeyValInt("dataPacketType", test->dataPacketType);
