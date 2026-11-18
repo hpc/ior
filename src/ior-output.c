@@ -339,7 +339,7 @@ void ShowTestStart(IOR_param_t *test)
   ShowFileSystemSize(filename, test->backend, test->backend_options);
 
   if (verbose >= VERBOSE_3 || outputFormat == OUTPUT_JSON) {
-    char* data_packets[] = {"g","t","o","i"};
+    char* data_packets[] = {"t","o","i","r"};
 
     PrintNamedSectionStart("Parameters");
     PrintKeyValInt("testID", test->id);
