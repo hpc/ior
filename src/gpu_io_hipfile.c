@@ -78,34 +78,44 @@ hipfile_to_status(hipFileError_t err)
     return st;
 }
 
+static int gpu_io_driver_opened = 0;
+
 gpu_io_status_t
 gpu_io_driver_open(void)
 {
-    hipFileError_t err = hipFileDriverOpen();
-    return hipfile_to_status(err);
+    gpu_io_status_t st;
+
+    if (gpu_io_driver_opened) {
+        memset(&st, 0, sizeof(st));
+        st.ok = 1;
+        return st;
+    }
+    st = hipfile_to_status(hipFileDriverOpen());
+    if (gpu_io_status_ok(st))
+        gpu_io_driver_opened = 1;
+    return st;
 }
 
 gpu_io_status_t
 gpu_io_driver_close(void)
 {
-    hipFileError_t err = hipFileDriverClose();
-    return hipfile_to_status(err);
-}
+    gpu_io_status_t st;
 
-static int gpu_io_driver_opened = 0;
+    if (!gpu_io_driver_opened) {
+        memset(&st, 0, sizeof(st));
+        st.ok = 1;
+        return st;
+    }
+    st = hipfile_to_status(hipFileDriverClose());
+    if (gpu_io_status_ok(st))
+        gpu_io_driver_opened = 0;
+    return st;
+}
 
 gpu_io_status_t
 gpu_io_shutdown(void)
 {
-    gpu_io_status_t st = {0};
-    st.ok = 1;
-    if (!gpu_io_driver_opened)
-        return st;
-
-    st = gpu_io_driver_close();
-    if (gpu_io_status_ok(st))
-        gpu_io_driver_opened = 0;
-    return st;
+    return gpu_io_driver_close();
 }
 
 /* Open lazily and release the owned driver session at shutdown. */
@@ -115,11 +125,10 @@ gpu_io_register_fd(gpu_io_file_t **file, int fd)
     hipFileDescr_t descr;
     hipFileError_t err;
 
-    if (!gpu_io_driver_opened) {
+    {
         gpu_io_status_t open_st = gpu_io_driver_open();
         if (!gpu_io_status_ok(open_st))
             return open_st;
-        gpu_io_driver_opened = 1;
     }
 
     *file = (gpu_io_file_t *) malloc(sizeof(gpu_io_file_t));
