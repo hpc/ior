@@ -454,6 +454,8 @@ void ShowSetup(IOR_param_t *params)
   PrintKeyVal("memoryBuffer", params->gpuMemoryFlags == IOR_MEMORY_TYPE_CPU ? "CPU" :  params->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY ? "GPU" : "Managed");
   PrintKeyVal("dataAccess", params->gpuMemoryFlags > IOR_MEMORY_TYPE_GPU_MANAGED_CHECK_GPU ? "GPU" : "CPU");
   PrintKeyVal("GPUDirect", params->gpuDirect ? "1" : "0");
+  if (params->gpuDirectBufRegister)
+    PrintKeyVal("GPUDirectBufRegister", "1");
 
   PrintKeyValInt("repetitions", params->repetitions);
   PrintKeyVal("xfersize", HumanReadable(params->transferSize, BASE_TWO));

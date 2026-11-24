@@ -36,6 +36,9 @@
 #ifdef HAVE_GPU
 #include "gpu_runtime.h"
 #endif
+#ifdef HAVE_GPU_DIRECT
+#include "gpu_io.h"
+#endif
 
 #include <assert.h>
 
@@ -916,6 +919,17 @@ static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
 {
         aligned_buffer_set_alignment((size_t) test->memoryAlign);
         ioBuffers->buffer = aligned_buffer_alloc(test->transferSize, test->gpuMemoryFlags);
+#ifdef HAVE_GPU_DIRECT
+        if (test->gpuDirectBufRegister) {
+                char errbuf[256];
+                gpu_io_status_t st = gpu_io_buf_register(ioBuffers->buffer,
+                                                         (size_t) test->transferSize);
+                if (! gpu_io_status_ok(st))
+                        ERRF("Could not register %lld-byte GPU buffer: %s",
+                             (long long) test->transferSize,
+                             gpu_io_strerror(st, errbuf, sizeof(errbuf)));
+        }
+#endif
 }
 
 /*
@@ -924,6 +938,10 @@ static void XferBuffersSetup(IOR_io_buffers* ioBuffers, IOR_param_t* test,
 static void XferBuffersFree(IOR_io_buffers* ioBuffers, IOR_param_t* test)
 
 {
+#ifdef HAVE_GPU_DIRECT
+        if (test->gpuDirectBufRegister)
+                gpu_io_buf_deregister(ioBuffers->buffer);
+#endif
         aligned_buffer_free(ioBuffers->buffer, test->gpuMemoryFlags);
 }
 
@@ -1510,6 +1528,14 @@ static void ValidateTests(IOR_param_t * test, MPI_Comm com)
           ERR("GPUDirect requires a non-CPU memory type");
         if (test->gpuMemoryFlags == IOR_MEMORY_TYPE_GPU_DEVICE_ONLY && ! test->gpuDirect )
           ERR("Using GPU Device memory only requires the usage of GPUDirect");
+        if (test->gpuDirectBufRegister && ! test->gpuDirect)
+          ERR("gpuDirectBufRegister requires --gpuDirect");
+        if (test->gpuDirectBufRegister && test->gpuMemoryFlags != IOR_MEMORY_TYPE_GPU_DEVICE_ONLY)
+          ERR("gpuDirectBufRegister requires -O allocateBufferOnGPU=3; managed memory cannot be registered");
+#ifndef HAVE_GPU_DIRECT
+        if (test->gpuDirectBufRegister)
+          ERR("gpuDirectBufRegister requires building with GPUDirect support");
+#endif
         if (test->stoneWallingStatusFile && test->keepFile == 0)
           ERR("a StoneWallingStatusFile is only sensible when splitting write/read into multiple executions of ior, please use -k");
         if (test->stoneWallingStatusFile && test->stoneWallingWearOut == 0 && test->writeFile)
