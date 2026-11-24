@@ -19,7 +19,7 @@ Command line options
 
 These options are to be used on the command line (e.g., ``./ior -a POSIX -b 4K``).
 
-  -a S  api --  API for I/O [POSIX|MPIIO|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]
+  -a S  api --  API for I/O [POSIX|MPIIO|MMAP|HDF5|HDFS|S3|S3_EMC|NCMPI|RADOS]
   -A N  refNum -- user reference number to include in long summary
   -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)
   -c    collective -- collective I/O
@@ -246,6 +246,66 @@ POSIX-ONLY
   * ``fsyncPerWrite`` - perform fsync after each POSIX write (default: 0)
 
   * ``fsync`` - perform fsync after POSIX file close (default: 0)
+
+MMAP-ONLY
+^^^^^^^^^
+
+Select the memory-mapped backend with ``-a MMAP``. IOR opens files through
+POSIX, maps them with ``MAP_SHARED``, and transfers data between its buffers and
+the mapping. MMAP is enabled by default in the configure build; use
+``--with-mmap`` to enable it explicitly. The build requires MPI and a platform
+with the required POSIX mapping interfaces.
+
+The following flags are disabled by default and apply advice to the mapping
+when it is created or opened:
+
+  * ``--mmap.madv_pattern`` - request ``POSIX_MADV_SEQUENTIAL`` for sequential
+    offsets or ``POSIX_MADV_RANDOM`` when ``-z`` selects random offsets.
+
+  * ``--mmap.madv_dont_need`` - request ``POSIX_MADV_DONTNEED``.
+
+These calls use ``posix_madvise()``. They are advice to the system, not a
+promise that pages are evicted or that subsequent reads come from storage.
+Mapped I/O can be affected by page cache; see :ref:`first-steps` when
+interpreting performance results.
+
+With MMAP, ``-e`` requests ``msync(MS_SYNC)`` for the whole mapping after the
+write transfers, before the write timing stops and the mapping is closed.
+``-Y`` requests ``msync(MS_SYNC)`` followed by ``POSIX_MADV_DONTNEED`` for each
+transfer, including reads and data checks. After each successful write transfer,
+``-Y`` also requests ``msync(MS_SYNC)`` for the whole mapping.
+
+With ``-Y`` and per-operation timing enabled by ``-O savePerOpDataCSV=FILE``,
+the CSV ``runtime`` for each write operation includes the per-transfer sync and advice but excludes the
+additional whole-mapping sync. The overall write timing includes both. With
+``-Y``, the transfer size must be a multiple of the system page size, and
+transfer offsets must satisfy the alignment requirements of ``msync()``.
+Synchronization and advice may change timings; neither advice flag guarantees
+a cold cache.
+
+In this IOR version, per-operation CSV names use the prefix, repetition, and
+rank, but not the I/O phase. With per-operation output enabled, each executed
+phase opens its CSV for writing, so a later phase or run that resolves to the
+same CSV path overwrites the earlier file. To keep the write-phase CSV, select
+a write-only test (``-w`` without ``-r``, ``-W``, or ``-R``), and use a CSV
+prefix that produces a different path or disable per-operation output in later
+tests. If a later run needs the test files, use ``-k`` in the write test to
+retain them.
+
+For a small write, read, and data check, run the following from a scratch
+directory, replacing ``/path/to/ior`` with your IOR executable. Choose an
+unused test-file name; IOR removes test files by default.
+
+.. code-block:: shell
+
+   mpiexec -n 1 /path/to/ior -a MMAP -w -r -W -R -F \
+     -b 16k -s 2 -t 4k -G 123 --warningAsErrors -o ./mmap-test
+
+This one-process example checks basic operation on the chosen filesystem; it
+is not a storage performance measurement. In this IOR version, creating files
+with MMAP, multiple ranks, and ``-F`` uses the aggregate size for each per-rank
+file. This can trigger file-size warnings, and ``--warningAsErrors`` can make
+the run fail.
 
 MPIIO-ONLY
 ^^^^^^^^^^
