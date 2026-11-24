@@ -289,7 +289,7 @@ void ParseLine(char *line, IOR_param_t * test, options_all_t * module_options)
 }
 
 
-static void decodeDirectiveWrapper(char *line){
+static void decodeDirectiveWrapper(void *line){
   ParseLine(line, parameters, global_options);
 }
 
