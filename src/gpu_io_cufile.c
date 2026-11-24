@@ -9,6 +9,9 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include <sys/types.h>
+#include <time.h>
+
 #include <cuda_runtime_api.h>
 #include <cufile.h>
 
@@ -34,11 +37,17 @@ gpu_io_strerror(gpu_io_status_t status, char *buf, size_t buflen)
     if (status.message)
         snprintf(buf, buflen, "%s", status.message);
     else if (status.runtime_error)
-        snprintf(buf, buflen, "CUDA error: %s",
-                 cudaGetErrorString((cudaError_t) status.runtime_error));
+        snprintf(buf, buflen, "CUDA driver error (err=%ld)",
+                 status.runtime_error);
     else if (status.backend_error)
+#ifdef CUFILE_ERRSTR
         snprintf(buf, buflen, "cuFile error: %s (err=%ld)",
-                 strerror((int) status.backend_error), status.backend_error);
+                 CUFILE_ERRSTR((int) status.backend_error),
+                 status.backend_error);
+#else
+        snprintf(buf, buflen, "cuFile error (err=%ld)",
+                 status.backend_error);
+#endif
     else if (status.errnum)
         snprintf(buf, buflen, "POSIX error: %s", strerror(status.errnum));
     else
@@ -61,11 +70,12 @@ cufile_to_status(CUfileError_t err)
     st.ok = 0;
 
     if (IS_CUDA_ERR(err)) {
-        st.runtime_error = (long) err.err;
-        st.message = cudaGetErrorString(err.err);
+        st.runtime_error = (long) CU_FILE_CUDA_ERR(err);
     } else {
         st.backend_error = (long) err.err;
-        st.message = strerror(err.err);
+#ifdef CUFILE_ERRSTR
+        st.message = CUFILE_ERRSTR((int) err.err);
+#endif
     }
 
     return st;
