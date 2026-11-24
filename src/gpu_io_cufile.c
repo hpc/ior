@@ -9,6 +9,9 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include <sys/types.h>
+#include <time.h>
+
 #include <cuda_runtime_api.h>
 #include <cufile.h>
 
@@ -34,11 +37,17 @@ gpu_io_strerror(gpu_io_status_t status, char *buf, size_t buflen)
     if (status.message)
         snprintf(buf, buflen, "%s", status.message);
     else if (status.runtime_error)
-        snprintf(buf, buflen, "CUDA error: %s",
-                 cudaGetErrorString((cudaError_t) status.runtime_error));
+        snprintf(buf, buflen, "CUDA driver error (err=%ld)",
+                 status.runtime_error);
     else if (status.backend_error)
+#ifdef CUFILE_ERRSTR
         snprintf(buf, buflen, "cuFile error: %s (err=%ld)",
-                 strerror((int) status.backend_error), status.backend_error);
+                 CUFILE_ERRSTR((int) status.backend_error),
+                 status.backend_error);
+#else
+        snprintf(buf, buflen, "cuFile error (err=%ld)",
+                 status.backend_error);
+#endif
     else if (status.errnum)
         snprintf(buf, buflen, "POSIX error: %s", strerror(status.errnum));
     else
@@ -61,44 +70,55 @@ cufile_to_status(CUfileError_t err)
     st.ok = 0;
 
     if (IS_CUDA_ERR(err)) {
-        st.runtime_error = (long) err.err;
-        st.message = cudaGetErrorString(err.err);
+        st.runtime_error = (long) CU_FILE_CUDA_ERR(err);
     } else {
         st.backend_error = (long) err.err;
-        st.message = strerror(err.err);
+#ifdef CUFILE_ERRSTR
+        st.message = CUFILE_ERRSTR((int) err.err);
+#endif
     }
 
     return st;
 }
 
+static int gpu_io_driver_opened = 0;
+
 gpu_io_status_t
 gpu_io_driver_open(void)
 {
-    CUfileError_t err = cuFileDriverOpen();
-    return cufile_to_status(err);
+    gpu_io_status_t st;
+
+    if (gpu_io_driver_opened) {
+        memset(&st, 0, sizeof(st));
+        st.ok = 1;
+        return st;
+    }
+    st = cufile_to_status(cuFileDriverOpen());
+    if (gpu_io_status_ok(st))
+        gpu_io_driver_opened = 1;
+    return st;
 }
 
 gpu_io_status_t
 gpu_io_driver_close(void)
 {
-    CUfileError_t err = cuFileDriverClose();
-    return cufile_to_status(err);
-}
+    gpu_io_status_t st;
 
-static int gpu_io_driver_opened = 0;
+    if (!gpu_io_driver_opened) {
+        memset(&st, 0, sizeof(st));
+        st.ok = 1;
+        return st;
+    }
+    st = cufile_to_status(cuFileDriverClose());
+    if (gpu_io_status_ok(st))
+        gpu_io_driver_opened = 0;
+    return st;
+}
 
 gpu_io_status_t
 gpu_io_shutdown(void)
 {
-    gpu_io_status_t st = {0};
-    st.ok = 1;
-    if (!gpu_io_driver_opened)
-        return st;
-
-    st = gpu_io_driver_close();
-    if (gpu_io_status_ok(st))
-        gpu_io_driver_opened = 0;
-    return st;
+    return gpu_io_driver_close();
 }
 
 gpu_io_status_t
@@ -107,11 +127,10 @@ gpu_io_register_fd(gpu_io_file_t **file, int fd)
     CUfileDescr_t descr;
     CUfileError_t err;
 
-    if (!gpu_io_driver_opened) {
+    {
         gpu_io_status_t open_st = gpu_io_driver_open();
         if (!gpu_io_status_ok(open_st))
             return open_st;
-        gpu_io_driver_opened = 1;
     }
 
     *file = (gpu_io_file_t *) malloc(sizeof(gpu_io_file_t));

@@ -943,6 +943,15 @@ static unsigned int posix_init_count;
 
 void POSIX_Initialize(aiori_mod_opt_t * options){
 #ifdef HAVE_GPU_DIRECT
+    posix_options_t * o = (posix_options_t*) options;
+    if (o != NULL && o->gpuDirect) {
+        char errbuf[256];
+        gpu_io_status_t st = gpu_io_driver_open();
+        if (!gpu_io_status_ok(st)) {
+            ERRF("Could not initialize GPU Direct driver: %s",
+                 gpu_io_strerror(st, errbuf, sizeof(errbuf)));
+        }
+    }
     ++posix_init_count;
 #endif
 }
