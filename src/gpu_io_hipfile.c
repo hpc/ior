@@ -163,6 +163,27 @@ gpu_io_deregister_fd(gpu_io_file_t **file)
     *file = NULL;
 }
 
+/* Buffer registration is only implemented for the cuFile backend. */
+gpu_io_status_t
+gpu_io_buf_register(void *buffer, size_t size)
+{
+    gpu_io_status_t st;
+
+    (void) buffer;
+    (void) size;
+    memset(&st, 0, sizeof(st));
+    st.ok = 0;
+    st.errnum = ENOTSUP;
+    st.message = "buffer registration is not supported with hipFile";
+    return st;
+}
+
+void
+gpu_io_buf_deregister(void *buffer)
+{
+    (void) buffer;
+}
+
 gpu_io_result_t
 gpu_io_read(gpu_io_file_t *file, void *buffer,
             size_t size, int64_t file_offset, int64_t buffer_offset)
@@ -177,9 +198,10 @@ gpu_io_read(gpu_io_file_t *file, void *buffer,
         return res;
     }
 
-    res.nbytes = (ssize_t) hipFileRead(file->handle, buffer, size,
-                                       (hoff_t) file_offset,
-                                       (hoff_t) buffer_offset);
+    /* No buffers are registered with hipFile, so pass a plain pointer. */
+    res.nbytes = (ssize_t) hipFileRead(file->handle,
+                                       (char *) buffer + buffer_offset, size,
+                                       (hoff_t) file_offset, 0);
 
     if (res.nbytes == -1) {
         res.status.ok = 0;
@@ -213,9 +235,9 @@ gpu_io_write(gpu_io_file_t *file, const void *buffer,
         return res;
     }
 
-    res.nbytes = (ssize_t) hipFileWrite(file->handle, buffer, size,
-                                        (hoff_t) file_offset,
-                                        (hoff_t) buffer_offset);
+    res.nbytes = (ssize_t) hipFileWrite(file->handle,
+                                        (const char *) buffer + buffer_offset,
+                                        size, (hoff_t) file_offset, 0);
 
     if (res.nbytes == -1) {
         res.status.ok = 0;

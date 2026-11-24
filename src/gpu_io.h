@@ -34,6 +34,15 @@ gpu_io_status_t gpu_io_shutdown(void);
 gpu_io_status_t gpu_io_register_fd(gpu_io_file_t **file, int fd);
 void gpu_io_deregister_fd(gpu_io_file_t **file);
 
+/*
+ * Register a device buffer with the GPU Direct Storage library so transfers
+ * into or out of it skip the library's internal bounce buffers. Only one
+ * buffer is tracked at a time; reads and writes that fall inside it are
+ * issued relative to its base address.
+ */
+gpu_io_status_t gpu_io_buf_register(void *buffer, size_t size);
+void gpu_io_buf_deregister(void *buffer);
+
 gpu_io_result_t gpu_io_read(gpu_io_file_t *file, void *buffer,
                              size_t size, int64_t file_offset,
                              int64_t buffer_offset);

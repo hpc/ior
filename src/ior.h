@@ -87,6 +87,7 @@ typedef struct
     int dualMount;                   /* dual mount points */
     ior_memory_flags gpuMemoryFlags;  /* use the GPU to store the data */
     int gpuDirect;                /* use gpuDirect, this influences gpuMemoryFlags as well */
+    int gpuDirectBufRegister;     /* register the transfer buffer with the GPU Direct Storage library */
     int gpuID;                       /* the GPU to use for gpuDirect or memory options */
     int numTasks;                    /* number of tasks for test */
     int numNodes;                    /* number of nodes for test */

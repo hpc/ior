@@ -154,6 +154,74 @@ gpu_io_deregister_fd(gpu_io_file_t **file)
     *file = NULL;
 }
 
+static char  *registered_base = NULL;
+static size_t registered_size = 0;
+
+gpu_io_status_t
+gpu_io_buf_register(void *buffer, size_t size)
+{
+    gpu_io_status_t st;
+
+    if (buffer == NULL || size == 0) {
+        memset(&st, 0, sizeof(st));
+        st.errnum = EINVAL;
+        return st;
+    }
+    if (registered_base != NULL) {
+        memset(&st, 0, sizeof(st));
+        st.errnum = EBUSY;
+        st.message = "a GPU I/O buffer is already registered";
+        return st;
+    }
+    if (!gpu_io_driver_opened) {
+        st = gpu_io_driver_open();
+        if (!gpu_io_status_ok(st))
+            return st;
+        gpu_io_driver_opened = 1;
+    }
+    st = cufile_to_status(cuFileBufRegister(buffer, size, 0));
+    if (gpu_io_status_ok(st)) {
+        registered_base = (char *) buffer;
+        registered_size = size;
+    }
+    return st;
+}
+
+void
+gpu_io_buf_deregister(void *buffer)
+{
+    if (buffer == NULL || (char *) buffer != registered_base)
+        return;
+    (void) cuFileBufDeregister(buffer);
+    registered_base = NULL;
+    registered_size = 0;
+}
+
+/*
+ * cuFile uses a registered buffer only when bufPtr_base is the address that
+ * was registered. Rebase transfers that fall inside the registered buffer to
+ * (registered_base, offset); pass everything else as a plain pointer with
+ * offset 0.
+ */
+static void
+cufile_rebase(const void *buffer, int64_t buffer_offset, size_t size,
+              const void **base, off_t *offset)
+{
+    const char *p = (const char *) buffer + buffer_offset;
+    uintptr_t addr = (uintptr_t) p;
+    uintptr_t reg = (uintptr_t) registered_base;
+
+    if (registered_base != NULL && addr >= reg &&
+        size <= registered_size &&
+        (size_t) (addr - reg) <= registered_size - size) {
+        *base = registered_base;
+        *offset = (off_t) (addr - reg);
+    } else {
+        *base = p;
+        *offset = 0;
+    }
+}
+
 /*
  * cuFileRead/Write return:
  *   >= 0 : bytes transferred
@@ -198,8 +266,14 @@ gpu_io_read(gpu_io_file_t *file, void *buffer,
         return res;
     }
 
-    res.nbytes = (ssize_t) cuFileRead(file->handle, buffer, size,
-                                      file_offset, buffer_offset);
+    {
+        const void *base;
+        off_t offset;
+
+        cufile_rebase(buffer, buffer_offset, size, &base, &offset);
+        res.nbytes = (ssize_t) cuFileRead(file->handle, (void *) base, size,
+                                          file_offset, offset);
+    }
     cufile_xfer_decode(&res);
 
     return res;
@@ -219,8 +293,14 @@ gpu_io_write(gpu_io_file_t *file, const void *buffer,
         return res;
     }
 
-    res.nbytes = (ssize_t) cuFileWrite(file->handle, buffer, size,
-                                       file_offset, buffer_offset);
+    {
+        const void *base;
+        off_t offset;
+
+        cufile_rebase(buffer, buffer_offset, size, &base, &offset);
+        res.nbytes = (ssize_t) cuFileWrite(file->handle, base, size,
+                                           file_offset, offset);
+    }
     cufile_xfer_decode(&res);
 
     return res;

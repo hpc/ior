@@ -147,6 +147,8 @@ void DecodeDirective(char *line, IOR_param_t *params, options_all_t * module_opt
                 params->gpuID = atoi(value);
         } else if (strcasecmp(option, "GPUDirect") == 0) {
                 params->gpuDirect  = atoi(value);
+        } else if (strcasecmp(option, "GPUDirectBufRegister") == 0) {
+                params->gpuDirectBufRegister = atoi(value);
         } else if (strcasecmp(option, "deadlineforstonewalling") == 0) {
                 params->deadlineForStonewalling = atoi(value);
         } else if (strcasecmp(option, "stoneWallingWearOut") == 0) {
@@ -432,6 +434,7 @@ option_help * createGlobalOptions(IOR_param_t * params){
     {.help="  -O GPUid=X                         -- select the GPU to use, use -1 for round-robin among local procs.", .arg = OPTION_OPTIONAL_ARGUMENT},
 #ifdef HAVE_GPU_DIRECT
     {0, "gpuDirect",        "allocate I/O buffers on the GPU and use gpuDirect to store data; this option is incompatible with any option requiring CPU access to data.", OPTION_FLAG, 'd', & params->gpuDirect},
+    {0, "gpuDirectBufRegister", "register the I/O buffer with the GPU Direct Storage library so transfers skip its internal bounce buffers; requires --gpuDirect and -O allocateBufferOnGPU=3.", OPTION_FLAG, 'd', & params->gpuDirectBufRegister},
 #endif
 #endif
     {'e', NULL,        "fsync -- perform a fsync() operation at the end of each read/write phase", OPTION_FLAG, 'd', & params->fsync},
