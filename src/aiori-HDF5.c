@@ -364,7 +364,7 @@ static aiori_fd_t *HDF5_Open(char *testFileName, int flags, aiori_mod_opt_t * pa
         memCount[0] = (hsize_t) 1;
         memStride[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
         memBlock[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
-        memDataSpaceDims[0] = (hsize_t) hints->transferSize;
+        memDataSpaceDims[0] = (hsize_t) (hints->transferSize / sizeof(IOR_size_t));
         fd->memDataSpace = H5Screate_simple(NUM_DIMS, memDataSpaceDims, NULL);
         HDF5_CHECK(fd->memDataSpace, "cannot create simple memory data space");
 
